@@ -422,6 +422,7 @@ export class PlaywrightCLIClient {
 
   private _admissionInterval: ReturnType<typeof setInterval> | null = null;
   private _admittedSet = new Set<string>();
+  private _meetingEndCallback: (() => void) | null = null;
 
   /**
    * Start monitoring for attendee admission requests in Google Meet.
@@ -456,6 +457,21 @@ export class PlaywrightCLIClient {
 
     this._admissionInterval = setInterval(async () => {
       try {
+        // ── Check if meeting has ended (host ended, kicked, network drop) ──
+        if (this._meetingEndCallback) {
+          try {
+            const ended = await this._checkMeetingEnded();
+            if (ended) {
+              console.log("[MeetAdmit] Meeting ended detected — triggering cleanup");
+              const cb = this._meetingEndCallback;
+              this._meetingEndCallback = null;
+              this.stopAdmissionMonitor();
+              cb();
+              return;
+            }
+          } catch {}
+        }
+
         // ── L1: Pure JS eval — no AI model, ~200ms round-trip ──
         const result = await this._admitEval();
 

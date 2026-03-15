@@ -1,5 +1,82 @@
 [
   {
+    "id": "task_mmrw1pu3_s1ad",
+    "task": "Confirm audio settings in Google Meet to use the BlackHole configuration.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Participants",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236108,
+    "updatedAt": 1773587236108
+  },
+  {
+    "id": "task_mmrw1pu3_tmjm",
+    "task": "Check the audio pipeline status to ensure Voice AI functionality.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "AndrewClaw",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236107,
+    "updatedAt": 1773587236107
+  },
+  {
+    "id": "task_mmrw1pu3_znph",
+    "task": "Implement the auto-greeting fix and upgrade to version 2.3.0 or higher.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Development Team",
+    "deadline": "2023-11-20",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236107,
+    "updatedAt": 1773587236107
+  },
+  {
+    "id": "task_mmrw1pu3_94cz",
+    "task": "Explore the option to upgrade to version 2.3.0+ to address audio configuration issues.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Development Team",
+    "deadline": "2023-11-25",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236107,
+    "updatedAt": 1773587236107
+  },
+  {
+    "id": "task_mmrw1pu2_c2nx",
+    "task": "Test the audio bridge connection to ensure that Voice AI can hear.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "All meeting attendees",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236106,
+    "updatedAt": 1773587236106
+  },
+  {
+    "id": "task_mmrw1pu2_g3r8",
+    "task": "Prepare detailed discussion materials on the CallingClaw Context Sync architecture plan.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Meeting Organizer",
+    "deadline": "2023-11-15",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236106,
+    "updatedAt": 1773587236106
+  },
+  {
+    "id": "task_mmrw1pu2_5k3m",
+    "task": "Confirm and discuss the 7 decision points of the architecture.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Meeting Participants",
+    "deadline": "2023-11-16",
+    "sourceMeetingId": "mtg_mmrvra8c_6643",
+    "createdAt": 1773587236106,
+    "updatedAt": 1773587236106
+  },
+  {
     "id": "task_mmp43hcv_o347",
     "task": "Organize and prioritize incoming notifications for more efficient project management.",
     "status": "pending",
