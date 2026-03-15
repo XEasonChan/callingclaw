@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CallingClaw — Async Incremental Context Sync Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --bg-card: #16162a;
+    --bg-card-hover: #1c1c36;
+    --border: #2a2a4a;
+    --purple: #7c3aed;
+    --purple-light: #a78bfa;
+    --purple-glow: rgba(124, 58, 237, 0.25);
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --cyan: #22d3ee;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: var(--purple);
+    color: white;
+  }
+
+  /* ── Navigation ── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(15, 15, 26, 0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    transition: box-shadow 0.3s ease;
+  }
+  nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+  .nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+  }
+  .nav-brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--purple-light);
+    letter-spacing: -0.02em;
+  }
+  .nav-brand span { color: var(--text-dim); font-weight: 400; }
+  .nav-links { display: flex; gap: 0.25rem; }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+  }
+  .nav-links a:hover { color: var(--text); background: rgba(124,58,237,0.15); }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 8rem 2rem 4rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--purple-glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    padding: 0.35rem 1rem;
+    border-radius: 100px;
+    border: 1px solid var(--purple);
+    color: var(--purple-light);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    background: rgba(124,58,237,0.1);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .hero h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #fff 0%, var(--purple-light) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero p {
+    color: var(--text-dim);
+    font-size: 1.15rem;
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.8;
+  }
+  .hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    margin-top: 3rem;
+  }
+  .hero-stat {
+    text-align: center;
+  }
+  .hero-stat .val {
+    font-size: 2.2rem;
+    font-weight: 800;
+    font-family: var(--mono);
+    color: var(--green);
+  }
+  .hero-stat .val.red { color: var(--red); }
+  .hero-stat .val.purple { color: var(--purple-light); }
+  .hero-stat .label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Sections ── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+  section {
+    padding: 5rem 0;
+    position: relative;
+  }
+  section + section {
+    border-top: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--purple-light);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+  .section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    max-width: 700px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.75rem;
+    transition: all 0.3s ease;
+  }
+  .card:hover {
+    background: var(--bg-card-hover);
+    border-color: rgba(124,58,237,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    transform: translateY(-2px);
+  }
+
+  /* ── Mermaid Diagrams ── */
+  .diagram-wrapper {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 2rem 0;
+    overflow-x: auto;
+  }
+  .diagram-wrapper .mermaid {
+    display: flex;
+    justify-content: center;
+  }
+  .diagram-wrapper .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ── Problem Cards ── */
+  .problems-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+  }
+  .problem-card {
+    position: relative;
+    padding-left: 1rem;
+  }
+  .problem-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--red);
+  }
+  .problem-card .problem-id {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--red);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+  .problem-card h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .problem-card p {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .problem-card .metric {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--amber);
+    background: rgba(251,191,36,0.1);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+  }
+
+  /* ── Tables ── */
+  .table-wrapper {
+    overflow-x: auto;
+    margin: 2rem 0;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  thead {
+    background: rgba(124,58,237,0.12);
+  }
+  th {
+    text-align: left;
+    padding: 0.85rem 1rem;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--purple-light);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(42,42,74,0.5);
+    color: var(--text-dim);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(124,58,237,0.04); }
+  td code {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--cyan);
+    background: rgba(34,211,238,0.08);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  /* ── Priority badges ── */
+  .priority {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
+  }
+  .p1 { background: rgba(248,113,113,0.15); color: var(--red); }
+  .p2 { background: rgba(251,191,36,0.15); color: var(--amber); }
+  .p3 { background: rgba(34,211,238,0.15); color: var(--cyan); }
+  .p4 { background: rgba(148,163,184,0.15); color: var(--text-dim); }
+  .p5 { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+  /* ── Timeline ── */
+  .timeline-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+  @media (max-width: 768px) { .timeline-compare { grid-template-columns: 1fr; } }
+  .timeline-col h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .timeline-col h3 .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .timeline-col h3 .dot.red { background: var(--red); }
+  .timeline-col h3 .dot.green { background: var(--green); }
+  .tl-event {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .tl-time {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-width: 48px;
+    padding-top: 0.15rem;
+  }
+  .tl-body {
+    flex: 1;
+    padding-bottom: 1.25rem;
+    border-left: 2px solid var(--border);
+    padding-left: 1rem;
+  }
+  .tl-body:last-child { border-left-color: transparent; }
+  .tl-body .event-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+  }
+  .tl-body .event-tokens {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  .tokens-high {
+    background: rgba(248,113,113,0.12);
+    color: var(--red);
+  }
+  .tokens-low {
+    background: rgba(52,211,153,0.12);
+    color: var(--green);
+  }
+
+  /* ── Roadmap ── */
+  .roadmap {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+  .phase {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  @media (max-width: 600px) { .phase { flex-direction: column; } }
+  .phase-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 100px;
+  }
+  .phase-version {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--purple-light);
+    background: rgba(124,58,237,0.15);
+    padding: 0.35rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid rgba(124,58,237,0.3);
+  }
+  .phase-line {
+    width: 2px;
+    height: 40px;
+    background: var(--border);
+    margin-top: 0.5rem;
+  }
+  .phase:last-child .phase-line { display: none; }
+  .phase-content {
+    flex: 1;
+  }
+  .phase-content h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .phase-content ul {
+    list-style: none;
+    padding: 0;
+  }
+  .phase-content li {
+    font-size: 0.88rem;
+    color: var(--text-dim);
+    padding: 0.3rem 0;
+    padding-left: 1.2rem;
+    position: relative;
+  }
+  .phase-content li::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: var(--purple);
+  }
+
+  /* ── Token bar chart ── */
+  .token-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .token-bar-label {
+    min-width: 80px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-align: right;
+  }
+  .token-bar-track {
+    flex: 1;
+    height: 32px;
+    background: rgba(42,42,74,0.4);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+  .token-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding-left: 0.75rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .token-bar-fill.current {
+    background: linear-gradient(90deg, rgba(248,113,113,0.3), rgba(248,113,113,0.6));
+    color: var(--red);
+  }
+  .token-bar-fill.proposed {
+    background: linear-gradient(90deg, rgba(52,211,153,0.3), rgba(52,211,153,0.6));
+    color: var(--green);
+  }
+
+  /* ── Reduction badge ── */
+  .reduction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(52,211,153,0.1);
+    border: 1px solid rgba(52,211,153,0.3);
+    color: var(--green);
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 1.5rem;
+  }
+  .reduction-badge small {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--text-dim);
+  }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+  footer a { color: var(--purple-light); text-decoration: none; }
+
+  /* ── Animate on scroll ── */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">CallingClaw <span>/ Architecture</span></div>
+    <div class="nav-links">
+      <a href="#current">当前架构</a>
+      <a href="#problems">问题分析</a>
+      <a href="#proposed">Delta 架构</a>
+      <a href="#delta-types">Delta 类型</a>
+      <a href="#tasks">后台任务</a>
+      <a href="#simulation">模拟</a>
+      <a href="#roadmap">路线图</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="hero-badge">Architecture Design RFC</div>
+  <h1>Async Incremental<br>Context Sync</h1>
+  <p>从全量替换到增量 Delta 推送，重新设计 CallingClaw 的上下文同步管线，实现 <strong>73%</strong> 的 token 消耗缩减。</p>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="val red">~45K</div>
+      <div class="label">Current Tokens / 30min</div>
+    </div>
+    <div class="hero-stat">
+      <div class="val">~12K</div>
+      <div class="label">Proposed Tokens / 30min</div>
+    </div>
+    <div class="hero-stat">
+      <div class="val purple">73%</div>
+      <div class="label">Reduction</div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 1: 当前架构 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="current">
+    <div class="fade-in">
+      <div class="section-label">Section 01</div>
+      <h2 class="section-title">当前架构 Current Architecture</h2>
+      <p class="section-desc">CallingClaw 目前的上下文流转管线：音频 → 转写 → 审计 → 视觉 → 摘要 → Voice Brief。</p>
+    </div>
+    <div class="diagram-wrapper fade-in">
+      <pre class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#7c3aed', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#7c3aed', 'lineColor': '#64748b', 'secondaryColor': '#16162a', 'tertiaryColor': '#1c1c36', 'background': '#16162a', 'mainBkg': '#16162a', 'nodeBorder': '#7c3aed', 'clusterBkg': '#1a1a30', 'clusterBorder': '#2a2a4a', 'edgeLabelBackground': '#16162a'}}}%%
+flowchart LR
+    A["🎙️ 会议音频<br/>Meeting Audio"] -->|audio_chunk| B["🐍 Python Sidecar<br/>音频处理"]
+    B -->|audio_chunk| C["🤖 OpenAI Realtime<br/>语音识别 + AI"]
+    C -->|transcript| D["📦 SharedContext<br/>transcript[] max 200"]
+    D -->|"15 entries 批量"| E["🔍 TranscriptAuditor<br/>Haiku"]
+    F["👁️ VisionModule<br/>8s 屏幕截图"] -->|description| G["🧠 Gemini Flash<br/>图像描述"]
+    G -->|"batch 5"| H["🦑 OpenClaw<br/>视觉上下文"]
+    E --> I["📝 ContextSync<br/>MEMORY.md"]
+    H --> I
+    I -->|"全量替换<br/>session.update"| J["🎤 Voice Brief<br/>4K tokens"]
+    I -->|"全量替换<br/>session.update"| K["💻 Computer Brief<br/>8K tokens"]
+      </pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 2: 问题分析 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="problems">
+    <div class="fade-in">
+      <div class="section-label">Section 02</div>
+      <h2 class="section-title">问题分析 Pain Points</h2>
+      <p class="section-desc">当前架构在长会议场景下的五个核心瓶颈。</p>
+    </div>
+    <div class="problems-grid">
+      <div class="card problem-card fade-in">
+        <div class="problem-id">Problem #1 — 无界增长</div>
+        <h4>Transcript 无界膨胀</h4>
+        <p>每次 Haiku 调用发送 15 条 transcript (~3000 tokens)。30 分钟会议产生约 450 条，触发约 30 次调用。</p>
+        <span class="metric">~450 entries / 30min → 30 Haiku calls</span>
+      </div>
+      <div class="card problem-card fade-in">
+        <div class="problem-id">Problem #2 — 视觉延迟</div>
+        <h4>屏幕描述时效性差</h4>
+        <p>VisionModule 每 8 秒截图，batch 5 后约 40 秒才处理一次。上下文到达 OpenClaw 时已经过时。</p>
+        <span class="metric">~40s 延迟 per batch</span>
+      </div>
+      <div class="card problem-card fade-in">
+        <div class="problem-id">Problem #3 — 全量替换</div>
+        <h4>Voice Brief 全量重建</h4>
+        <p>每次 ContextSync 都会 session.update 全量替换 brief。即使只有 1 行变更，也要重新推送 4K~8K tokens。</p>
+        <span class="metric">全量 session.update = 浪费</span>
+      </div>
+      <div class="card problem-card fade-in">
+        <div class="problem-id">Problem #4 — 无优先级</div>
+        <h4>所有内容同等权重</h4>
+        <p>日常寒暄（"嗯好的"）和关键决策（"确认用 Electron 架构"）被同等处理，无法区分优先级。</p>
+        <span class="metric">P1 决策 == P5 闲聊</span>
+      </div>
+      <div class="card problem-card fade-in">
+        <div class="problem-id">Problem #5 — Token 成本</div>
+        <h4>成本线性增长不可控</h4>
+        <p>30min 会议约 30 次 Haiku 调用，每次 ~$0.001。会议越长成本越高且无上限。</p>
+        <span class="metric">30 calls × $0.001 ≈ $0.03 / 30min</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 3: 提案 — 增量 Delta 架构 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="proposed">
+    <div class="fade-in">
+      <div class="section-label">Section 03</div>
+      <h2 class="section-title">提案 — 增量 Delta 架构</h2>
+      <p class="section-desc">通过 ContextDeltaStream 事件总线，将全量替换改为增量 delta 推送，使用优先级队列和 diff-patch 策略。</p>
+    </div>
+    <div class="diagram-wrapper fade-in">
+      <pre class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#7c3aed', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#7c3aed', 'lineColor': '#64748b', 'secondaryColor': '#16162a', 'tertiaryColor': '#1c1c36', 'background': '#16162a', 'mainBkg': '#16162a', 'nodeBorder': '#7c3aed', 'clusterBkg': '#1a1a30', 'clusterBorder': '#2a2a4a', 'edgeLabelBackground': '#16162a'}}}%%
+flowchart TB
+    subgraph sources ["📡 数据源 Sources"]
+        S1["🎙️ Transcript<br/>用户/AI 语音"]
+        S2["👁️ VisionModule<br/>屏幕截图"]
+        S3["⚡ EventBus<br/>自动化事件"]
+    end
+
+    subgraph deltastream ["🔄 ContextDeltaStream 事件总线"]
+        D1["🔴 decision<br/>P1 关键决策"]
+        D2["🟠 requirement<br/>P2 需求提取"]
+        D3["🟡 action_result<br/>P2 执行结果"]
+        D4["🔵 emotion_shift<br/>P3 情绪变化"]
+        D5["⚪ utterance<br/>P4 普通发言"]
+        D6["🔘 screen_obs<br/>P5 屏幕观察"]
+    end
+
+    subgraph accumulator ["📊 DeltaAccumulator"]
+        ACC["优先级队列<br/>500 token budget<br/>30s 时间窗口<br/>去重合并"]
+    end
+
+    subgraph scheduler ["⏰ BackgroundTaskScheduler"]
+        SCH["30s tick<br/>异步执行<br/>不阻塞主线程"]
+    end
+
+    subgraph updater ["🚀 IncrementalBriefUpdater"]
+        UPD["diff-patch 策略<br/>仅推送变更段落<br/>section-level 更新"]
+    end
+
+    S1 --> D1 & D2 & D4 & D5
+    S2 --> D6
+    S3 --> D3
+
+    D1 & D2 & D3 & D4 & D5 & D6 --> ACC
+    ACC -->|"accumulated batch"| SCH
+    SCH -->|"processed deltas"| UPD
+    UPD -->|"incremental<br/>session.update"| VOICE["🎤 Voice Brief"]
+    UPD -->|"incremental<br/>session.update"| COMP["💻 Computer Brief"]
+      </pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 4: Delta 类型定义 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="delta-types">
+    <div class="fade-in">
+      <div class="section-label">Section 04</div>
+      <h2 class="section-title">Delta 类型定义</h2>
+      <p class="section-desc">六种 delta 事件类型，按优先级从 P1 到 P5 排列，高优先级事件优先进入 accumulator。</p>
+    </div>
+    <div class="table-wrapper fade-in">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Priority</th>
+            <th>Source</th>
+            <th>Trigger</th>
+            <th>Token Est.</th>
+            <th>示例 Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>decision</code></td>
+            <td><span class="priority p1">P1</span></td>
+            <td>Transcript</td>
+            <td>关键词检测</td>
+            <td>~50 tokens</td>
+            <td>"确认用 Electron 架构"</td>
+          </tr>
+          <tr>
+            <td><code>requirement</code></td>
+            <td><span class="priority p2">P2</span></td>
+            <td>Transcript</td>
+            <td>关键词检测</td>
+            <td>~80 tokens</td>
+            <td>"需要支持 OAuth scope 预览"</td>
+          </tr>
+          <tr>
+            <td><code>action_result</code></td>
+            <td><span class="priority p2">P2</span></td>
+            <td>EventBus</td>
+            <td>automation.done</td>
+            <td>~30 tokens</td>
+            <td>"[DONE] PRD opened in VS Code"</td>
+          </tr>
+          <tr>
+            <td><code>emotion_shift</code></td>
+            <td><span class="priority p3">P3</span></td>
+            <td>Transcript</td>
+            <td>情绪变化</td>
+            <td>~20 tokens</td>
+            <td>"用户语气变焦虑"</td>
+          </tr>
+          <tr>
+            <td><code>utterance</code></td>
+            <td><span class="priority p4">P4</span></td>
+            <td>Transcript</td>
+            <td>每条用户发言</td>
+            <td>~40 tokens</td>
+            <td>"我们看看下一个议题"</td>
+          </tr>
+          <tr>
+            <td><code>screen_observation</code></td>
+            <td><span class="priority p5">P5</span></td>
+            <td>VisionModule</td>
+            <td>8s 截图</td>
+            <td>~60 tokens</td>
+            <td>"Screen: PRD permission section"</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 5: 后台任务定义 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="tasks">
+    <div class="fade-in">
+      <div class="section-label">Section 05</div>
+      <h2 class="section-title">后台任务定义 Background Tasks</h2>
+      <p class="section-desc">BackgroundTaskScheduler 管理的 5 个异步任务，全部使用 Haiku 以最低成本运行。</p>
+    </div>
+    <div class="table-wrapper fade-in">
+      <table>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>触发条件 Trigger</th>
+            <th>Model</th>
+            <th>Token 预算</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>context_summarize</code></td>
+            <td>每 5min 或累计 2000 tokens</td>
+            <td>Haiku</td>
+            <td>200 tokens out</td>
+            <td>上下文摘要，替换旧摘要段落</td>
+          </tr>
+          <tr>
+            <td><code>intent_classify</code></td>
+            <td>用户发言后 debounce 2.5s</td>
+            <td>Haiku</td>
+            <td>100 tokens out</td>
+            <td>意图标签 + 置信度分数</td>
+          </tr>
+          <tr>
+            <td><code>requirement_extract</code></td>
+            <td>每 2min</td>
+            <td>Haiku</td>
+            <td>150 tokens out</td>
+            <td>结构化需求条目列表</td>
+          </tr>
+          <tr>
+            <td><code>decision_track</code></td>
+            <td>收到 decision delta 时</td>
+            <td>Haiku</td>
+            <td>100 tokens out</td>
+            <td>决策记录 + 关联上下文</td>
+          </tr>
+          <tr>
+            <td><code>follow_up_detect</code></td>
+            <td>每 3min</td>
+            <td>Haiku</td>
+            <td>100 tokens out</td>
+            <td>待办事项 + 负责人</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="diagram-wrapper fade-in">
+      <pre class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#7c3aed', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#7c3aed', 'lineColor': '#64748b', 'secondaryColor': '#16162a', 'tertiaryColor': '#1c1c36', 'background': '#16162a', 'mainBkg': '#16162a', 'nodeBorder': '#7c3aed', 'clusterBkg': '#1a1a30', 'clusterBorder': '#2a2a4a', 'edgeLabelBackground': '#16162a'}}}%%
+flowchart LR
+    subgraph triggers ["⏱️ 触发器"]
+        T1["每 5 分钟"]
+        T2["发言 + 2.5s"]
+        T3["每 2 分钟"]
+        T4["decision delta"]
+        T5["每 3 分钟"]
+    end
+
+    subgraph tasks ["🔧 后台任务"]
+        K1["context_summarize"]
+        K2["intent_classify"]
+        K3["requirement_extract"]
+        K4["decision_track"]
+        K5["follow_up_detect"]
+    end
+
+    subgraph output ["📤 输出"]
+        O1["摘要段落"]
+        O2["意图标签"]
+        O3["需求列表"]
+        O4["决策记录"]
+        O5["待办事项"]
+    end
+
+    T1 --> K1 --> O1
+    T2 --> K2 --> O2
+    T3 --> K3 --> O3
+    T4 --> K4 --> O4
+    T5 --> K5 --> O5
+
+    O1 & O2 & O3 & O4 & O5 -->|"diff-patch"| BRIEF["📝 Incremental<br/>Brief Update"]
+      </pre>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 6: 30 分钟会议时间线模拟 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="simulation">
+    <div class="fade-in">
+      <div class="section-label">Section 06</div>
+      <h2 class="section-title">30 分钟会议时间线模拟</h2>
+      <p class="section-desc">对比当前方案与增量 Delta 方案在同一场会议中的 token 消耗。</p>
+    </div>
+
+    <div class="timeline-compare fade-in">
+      <!-- Current -->
+      <div class="timeline-col card">
+        <h3><span class="dot red"></span> 当前方案 Current</h3>
+        <div class="tl-event">
+          <div class="tl-time">0:00</div>
+          <div class="tl-body">
+            <div class="event-name">会议开始，系统初始化</div>
+            <span class="event-tokens tokens-high">+500 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:05</div>
+          <div class="tl-body">
+            <div class="event-name">5 轮 Haiku 审计 (15×5=75 entries)</div>
+            <span class="event-tokens tokens-high">+4,500 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:10</div>
+          <div class="tl-body">
+            <div class="event-name">持续审计 + 全量 brief rebuild ×3</div>
+            <span class="event-tokens tokens-high">+8,200 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:15</div>
+          <div class="tl-body">
+            <div class="event-name">视觉 batch ×2 + transcript 审计</div>
+            <span class="event-tokens tokens-high">+7,800 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:20</div>
+          <div class="tl-body">
+            <div class="event-name">全量 session.update + Haiku calls</div>
+            <span class="event-tokens tokens-high">+10,500 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:25</div>
+          <div class="tl-body">
+            <div class="event-name">尾声阶段 + 最终全量重建</div>
+            <span class="event-tokens tokens-high">+8,000 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:30</div>
+          <div class="tl-body">
+            <div class="event-name">会议结束 + 最终同步</div>
+            <span class="event-tokens tokens-high">+5,500 tokens</span>
+          </div>
+        </div>
+        <div style="text-align: right; margin-top: 1rem; font-family: var(--mono); font-size: 1.1rem; color: var(--red); font-weight: 700;">
+          总计: ~45,000 tokens
+        </div>
+      </div>
+
+      <!-- Proposed -->
+      <div class="timeline-col card">
+        <h3><span class="dot green"></span> 增量方案 Proposed</h3>
+        <div class="tl-event">
+          <div class="tl-time">0:00</div>
+          <div class="tl-body">
+            <div class="event-name">会议开始，DeltaStream 初始化</div>
+            <span class="event-tokens tokens-low">+300 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:05</div>
+          <div class="tl-body">
+            <div class="event-name">P1 决策 delta + 增量 patch</div>
+            <span class="event-tokens tokens-low">+800 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:10</div>
+          <div class="tl-body">
+            <div class="event-name">context_summarize 触发 + 增量更新</div>
+            <span class="event-tokens tokens-low">+1,500 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:15</div>
+          <div class="tl-body">
+            <div class="event-name">requirement_extract + decision_track</div>
+            <span class="event-tokens tokens-low">+2,200 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:20</div>
+          <div class="tl-body">
+            <div class="event-name">仅变更段落 diff-patch</div>
+            <span class="event-tokens tokens-low">+3,100 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:25</div>
+          <div class="tl-body">
+            <div class="event-name">低优先级 delta 被合并/丢弃</div>
+            <span class="event-tokens tokens-low">+2,400 tokens</span>
+          </div>
+        </div>
+        <div class="tl-event">
+          <div class="tl-time">0:30</div>
+          <div class="tl-body">
+            <div class="event-name">最终增量 sync</div>
+            <span class="event-tokens tokens-low">+1,700 tokens</span>
+          </div>
+        </div>
+        <div style="text-align: right; margin-top: 1rem; font-family: var(--mono); font-size: 1.1rem; color: var(--green); font-weight: 700;">
+          总计: ~12,000 tokens
+        </div>
+      </div>
+    </div>
+
+    <!-- Token bars -->
+    <div class="card fade-in" style="margin-top: 2rem;">
+      <h4 style="margin-bottom: 1.5rem;">Token 消耗对比 Comparison</h4>
+      <div class="token-bar-row">
+        <div class="token-bar-label">Current</div>
+        <div class="token-bar-track">
+          <div class="token-bar-fill current" style="width: 100%;">~45,000 tokens</div>
+        </div>
+      </div>
+      <div class="token-bar-row">
+        <div class="token-bar-label">Proposed</div>
+        <div class="token-bar-track">
+          <div class="token-bar-fill proposed" style="width: 26.7%;">~12,000 tokens</div>
+        </div>
+      </div>
+      <div class="reduction-badge">
+        ↓ 73% <small>token 消耗减少</small>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- Section 7: 实现路径 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section id="roadmap">
+    <div class="fade-in">
+      <div class="section-label">Section 07</div>
+      <h2 class="section-title">实现路径 Implementation Roadmap</h2>
+      <p class="section-desc">分三个阶段渐进式交付，每个阶段独立可用，逐步替换当前管线。</p>
+    </div>
+    <div class="roadmap fade-in">
+      <div class="phase">
+        <div class="phase-marker">
+          <div class="phase-version">v2.5.0</div>
+          <div class="phase-line"></div>
+        </div>
+        <div class="phase-content card">
+          <h4>Phase 1 — Delta 基础设施</h4>
+          <ul>
+            <li>实现 <code>ContextDeltaStream</code> 事件总线（EventEmitter 模式）</li>
+            <li>实现 <code>DeltaAccumulator</code> + 优先级队列（500 token / 30s 窗口）</li>
+            <li>定义 6 种 delta type 的 TypeScript interface</li>
+            <li>在 TranscriptAuditor 中添加 keyword-based decision/requirement 检测</li>
+            <li>unit tests + integration tests with mock transcript stream</li>
+          </ul>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-marker">
+          <div class="phase-version">v2.6.0</div>
+          <div class="phase-line"></div>
+        </div>
+        <div class="phase-content card">
+          <h4>Phase 2 — 后台任务 + 增量更新</h4>
+          <ul>
+            <li>实现 <code>BackgroundTaskScheduler</code>（30s tick，async queue）</li>
+            <li>实现 5 个后台任务（summarize, classify, extract, track, detect）</li>
+            <li>实现 <code>IncrementalBriefUpdater</code>（diff-patch，section-level update）</li>
+            <li>替换当前 ContextSync 的全量 session.update 逻辑</li>
+            <li>A/B 测试框架：同时运行 current + proposed，比较 token 消耗</li>
+          </ul>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-marker">
+          <div class="phase-version">v2.7.0</div>
+        </div>
+        <div class="phase-content card">
+          <h4>Phase 3 — 长会议优化 (Temporal Graph RAG)</h4>
+          <ul>
+            <li>对超过 1 小时的会议引入 Temporal Graph 结构</li>
+            <li>基于时间线的 RAG 检索，按相关性拉取历史上下文</li>
+            <li>自动分段（topic segmentation）+ 段落级别摘要</li>
+            <li>支持跨会议上下文关联（cross-session context linking）</li>
+            <li>实现 context window 的动态伸缩（adaptive budget allocation）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  <p>CallingClaw Architecture RFC — Async Incremental Context Sync &middot; <a href="#">OpenClaw</a> &middot; 2026-03</p>
+</footer>
+
+<!-- Scripts -->
+<script>
+  // Initialize Mermaid
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 13,
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis',
+      padding: 15,
+      nodeSpacing: 30,
+      rankSpacing: 50,
+    },
+    themeVariables: {
+      darkMode: true,
+      background: '#16162a',
+      primaryColor: '#7c3aed',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#7c3aed',
+      lineColor: '#64748b',
+      secondaryColor: '#16162a',
+      tertiaryColor: '#1c1c36',
+    }
+  });
+
+  // Navbar scroll effect
+  const nav = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 20);
+  });
+
+  // Fade-in on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
