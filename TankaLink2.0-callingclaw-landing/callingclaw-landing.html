@@ -1,0 +1,2827 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CallingClaw is a local-first architecture for multimodal meeting intelligence agents. Elevate human-AI interaction from text to real-time audio-visual meetings with zero latency.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="./logo.png">
+  <title>CallingClaw — Multimodal Meeting Intelligence</title>
+  <style>
+    /* ── Design Tokens ─────────────────────────────────── */
+    :root {
+      --bg: #ffffff;
+      --bg-subtle: #faf9f9;
+      --surface: #ffffff;
+      --surface-elevated: #ffffff;
+      --text: #1f2937;
+      --text-secondary: #6b7280;
+      --text-tertiary: #9ca3af;
+      --accent: #dc4a3a;
+      --accent-hover: #c43d2e;
+      --accent-light: #fef2f1;
+      --accent-glow: rgba(220, 74, 58, 0.1);
+      --success: #4aa682;
+      --success-light: #e6f4ee;
+      --danger: #dc4a3a;
+      --border: #e5e7eb;
+      --border-light: #f3f4f6;
+
+      --font-display: "Space Grotesk", system-ui, sans-serif;
+      --font-body: "Inter", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-expo: cubic-bezier(0.19, 1, 0.22, 1);
+      --duration: 300ms;
+      --duration-slow: 500ms;
+
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.04);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
+      --shadow-accent: 0 2px 12px rgba(220, 74, 58, 0.15);
+    }
+
+    /* ── Dark Theme ──────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg: #111113;
+      --bg-subtle: #18181b;
+      --surface: #1f1f23;
+      --surface-elevated: #27272b;
+      --text: #e4e4e7;
+      --text-secondary: #a1a1aa;
+      --text-tertiary: #71717a;
+      --accent: #e85d4c;
+      --accent-hover: #f07a6b;
+      --accent-light: rgba(232, 93, 76, 0.12);
+      --accent-glow: rgba(232, 93, 76, 0.15);
+      --success: #6bb39a;
+      --success-light: rgba(107, 179, 154, 0.12);
+      --danger: #e85d4c;
+      --border: #2d2d32;
+      --border-light: #252529;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    /* ── Reset ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    blockquote { margin: 0; }
+
+    /* ── Base ───────────────────────────────────────────── */
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      transition: background var(--duration) ease, color var(--duration) ease;
+    }
+
+    ::selection {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* ── Typography ─────────────────────────────────────── */
+    h1, h2, h3, h4 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    h1 { font-size: clamp(2.5rem, 5vw, 3.75rem); font-weight: 600; letter-spacing: -0.03em; }
+    h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); }
+    h3 { font-size: clamp(1.125rem, 2vw, 1.375rem); }
+    h4 { font-size: 1rem; font-weight: 600; }
+
+    p { color: var(--text-secondary); max-width: 65ch; }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color var(--duration) var(--ease-out);
+    }
+    a:hover { color: var(--accent-hover); }
+    a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.875em;
+      background: var(--bg-subtle);
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+    }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .container {
+      max-width: 1200px;
+      margin-inline: auto;
+      padding-inline: clamp(1.5rem, 5vw, 3rem);
+    }
+
+    section {
+      padding-block: clamp(4rem, 10vw, 8rem);
+    }
+
+    section[id] {
+      scroll-margin-top: 5rem;
+    }
+
+    /* ── Nav ──────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding-block: 1rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      transition: background var(--duration) ease;
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: transform 0.3s var(--ease-out);
+    }
+    .logo-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .logo:hover .logo-mark {
+      transform: rotate(-5deg) scale(1.05);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      padding: 0.5rem 0;
+      transition: color var(--duration) var(--ease-out);
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .theme-toggle {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .theme-toggle:hover {
+      color: var(--text);
+      border-color: var(--text-tertiary);
+    }
+
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.4s var(--ease-expo);
+    }
+    .theme-toggle:active svg {
+      transform: rotate(180deg) scale(0.85);
+    }
+    .theme-toggle .icon-sun { display: none; }
+    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+    [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+
+    /* ── Hero ───────────────────────────────────────────── */
+    .hero {
+      padding-block: clamp(4rem, 10vw, 6rem) clamp(3rem, 6vw, 5rem);
+    }
+
+    .hero-layout {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+      gap: clamp(3rem, 6vw, 5rem);
+      align-items: center;
+    }
+
+    .hero-content {
+      text-align: left;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent-light);
+      padding: 0.5rem 1rem;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-badge .lobster {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      overflow: hidden;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .hero-badge .lobster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero h1 {
+      margin-bottom: 1.25rem;
+      max-width: 16ch;
+    }
+
+    .hero h1 .gradient {
+      color: var(--accent);
+    }
+
+    .hero-subtitle {
+      font-size: 1.125rem;
+      line-height: 1.7;
+      max-width: 42ch;
+      margin-bottom: 2rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Meeting Frame */
+    .hero-visual {
+      position: relative;
+    }
+
+    .meeting-frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .meeting-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .meeting-title {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .meeting-live {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--success);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .meeting-live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: livePulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .meeting-body {
+      display: grid;
+      grid-template-columns: 1fr;
+      position: relative;
+    }
+
+    /* Screen Share View */
+    .screen-share {
+      background: #f7f6f3;
+      position: relative;
+      overflow: hidden;
+      cursor: none;
+    }
+
+    [data-theme="dark"] .screen-share {
+      background: #191919;
+    }
+
+    /* Browser Chrome */
+    .browser-chrome {
+      background: #dee1e6;
+      padding: 0.5rem 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    [data-theme="dark"] .browser-chrome {
+      background: #323232;
+    }
+
+    .browser-dots {
+      display: flex;
+      gap: 0.375rem;
+      padding: 0 0.25rem;
+    }
+
+    .browser-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .browser-dots .red { background: #ff5f57; }
+    .browser-dots .yellow { background: #febc2e; }
+    .browser-dots .green { background: #28c840; }
+
+    .browser-tabs {
+      display: flex;
+      gap: 2px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .browser-tab {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.75rem;
+      background: #c8ccd3;
+      border: none;
+      border-radius: 8px 8px 0 0;
+      font-family: var(--font-body);
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: #5f6368;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+    }
+
+    [data-theme="dark"] .browser-tab {
+      background: #252525;
+      color: #9ca3af;
+    }
+
+    .browser-tab:hover {
+      background: #d8dce3;
+    }
+
+    [data-theme="dark"] .browser-tab:hover {
+      background: #2d2d2d;
+    }
+
+    .browser-tab.active {
+      background: #f7f6f3;
+      color: #37352f;
+    }
+
+    .browser-tab:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    [data-theme="dark"] .browser-tab.active {
+      background: #191919;
+      color: #e4e4e7;
+    }
+
+    .browser-tab-icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .browser-tab-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Tab Content */
+    .tab-content {
+      display: none;
+      height: 100%;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .screen-content {
+      position: relative;
+      aspect-ratio: 16/9;
+      cursor: none;
+    }
+
+    /* OpenClaw Subtitle Caption */
+    .caption-container {
+      position: absolute;
+      bottom: 0.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 15;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .caption-text {
+      display: inline-block;
+      background: rgba(0, 0, 0, 0.75);
+      color: white;
+      padding: 0.375rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.6875rem;
+      line-height: 1.4;
+      max-width: 280px;
+      animation: captionFadeIn 0.25s var(--ease-out) forwards;
+      backdrop-filter: blur(4px);
+    }
+
+    .caption-text .speaker {
+      color: var(--success);
+      font-weight: 600;
+      margin-right: 0.25rem;
+    }
+
+    @keyframes captionFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .caption-text.fade-out {
+      animation: captionFadeOut 0.2s var(--ease-out) forwards;
+    }
+
+    @keyframes captionFadeOut {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+    }
+
+    .notion-page {
+      padding: 1rem 1.5rem 1.5rem;
+      height: 100%;
+    }
+
+    /* Architecture Diagram Tab */
+    .arch-tab-content {
+      padding: 1rem 1.5rem;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .arch-tab-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #37352f;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    [data-theme="dark"] .arch-tab-title {
+      color: #ffffffcf;
+    }
+
+    .arch-diagram-mini {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    .arch-flow-mini {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .arch-node-mini {
+      background: white;
+      border: 1px solid #e9e9e7;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      text-align: center;
+      font-size: 0.625rem;
+    }
+
+    [data-theme="dark"] .arch-node-mini {
+      background: #2f2f2f;
+      border-color: #373737;
+    }
+
+    .arch-node-mini strong {
+      display: block;
+      color: #37352f;
+      font-weight: 600;
+    }
+
+    [data-theme="dark"] .arch-node-mini strong {
+      color: #ffffffcf;
+    }
+
+    .arch-node-mini span {
+      color: #9b9a97;
+      font-size: 0.5625rem;
+    }
+
+    .arch-node-mini.highlight {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .arch-arrow-mini {
+      color: #9b9a97;
+      font-size: 0.75rem;
+    }
+
+    /* Website Review Tab - OpenClaw Style */
+    .review-tab-content {
+      padding: 0.75rem;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      background: linear-gradient(180deg, #fef7f6 0%, #fff 50%);
+      overflow: hidden;
+    }
+
+    [data-theme="dark"] .review-tab-content {
+      background: linear-gradient(180deg, #1a1415 0%, #191919 50%);
+    }
+
+    .review-hero {
+      text-align: center;
+      padding: 0.5rem 0;
+    }
+
+    .review-logo {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 0.25rem;
+    }
+
+    .review-logo-img {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #e85d4c 0%, #c94435 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .review-brand {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: var(--font-display);
+    }
+
+    .review-tagline {
+      font-size: 0.5rem;
+      color: #9b9a97;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-top: 0.125rem;
+    }
+
+    .review-desc {
+      font-size: 0.5rem;
+      color: #6b7280;
+      line-height: 1.4;
+      margin-top: 0.25rem;
+    }
+
+    [data-theme="dark"] .review-desc {
+      color: #9ca3af;
+    }
+
+    .review-testimonial {
+      display: flex;
+      gap: 0.375rem;
+      align-items: flex-start;
+      background: white;
+      border: 1px solid #e9e9e7;
+      border-radius: 6px;
+      padding: 0.375rem;
+      font-size: 0.5rem;
+    }
+
+    [data-theme="dark"] .review-testimonial {
+      background: #252525;
+      border-color: #373737;
+    }
+
+    .review-testimonial-avatar {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ddd;
+      flex-shrink: 0;
+    }
+
+    .review-testimonial-avatar--lobster {
+      overflow: hidden;
+    }
+    .review-testimonial-avatar--lobster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .review-testimonial-text {
+      color: #37352f;
+      line-height: 1.3;
+    }
+
+    [data-theme="dark"] .review-testimonial-text {
+      color: #e4e4e7;
+    }
+
+    .review-testimonial-author {
+      color: var(--accent);
+      font-weight: 500;
+      margin-top: 0.125rem;
+    }
+
+    .review-quickstart {
+      background: #1e1e2e;
+      border-radius: 6px;
+      padding: 0.375rem 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      color: #a6e3a1;
+      overflow: hidden;
+    }
+
+    .review-quickstart-label {
+      font-size: 0.4375rem;
+      color: #6c7086;
+      margin-bottom: 0.25rem;
+    }
+
+    .review-quickstart-cmd {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .review-quickstart-prompt {
+      color: #f38ba8;
+    }
+
+    .review-comment {
+      background: #fff9c4;
+      border: 1px solid #ffd54f;
+      border-radius: 4px;
+      padding: 0.375rem 0.5rem;
+      font-size: 0.5rem;
+      color: #5d4037;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    [data-theme="dark"] .review-comment {
+      background: #4a4520;
+      border-color: #6b5c00;
+      color: #fcd34d;
+    }
+
+    .notion-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .notion-icon {
+      font-size: 1.25rem;
+    }
+
+    .notion-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #37352f;
+    }
+
+    [data-theme="dark"] .notion-title {
+      color: #ffffffcf;
+    }
+
+    .notion-table {
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #e9e9e7;
+      overflow: hidden;
+      font-size: 0.75rem;
+    }
+
+    [data-theme="dark"] .notion-table {
+      background: #2f2f2f;
+      border-color: #373737;
+    }
+
+    .notion-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1.5fr;
+      border-bottom: 1px solid #e9e9e7;
+    }
+
+    [data-theme="dark"] .notion-row {
+      border-color: #373737;
+    }
+
+    .notion-row:last-child {
+      border-bottom: none;
+    }
+
+    .notion-row.header {
+      background: #f7f6f3;
+      font-weight: 500;
+      color: #9b9a97;
+    }
+
+    [data-theme="dark"] .notion-row.header {
+      background: #252525;
+      color: #9b9b9b;
+    }
+
+    .notion-cell {
+      padding: 0.5rem 0.75rem;
+      color: #37352f;
+      border-right: 1px solid #e9e9e7;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    [data-theme="dark"] .notion-cell {
+      color: #ffffffcf;
+      border-color: #373737;
+    }
+
+    .notion-cell:last-child {
+      border-right: none;
+    }
+
+    .notion-tag {
+      display: inline-block;
+      padding: 0.125rem 0.375rem;
+      border-radius: 3px;
+      font-size: 0.6875rem;
+    }
+
+    .notion-tag.green {
+      background: #dbeddb;
+      color: #1e6b53;
+    }
+
+    .notion-tag.yellow {
+      background: #fdecc8;
+      color: #9a6700;
+    }
+
+    .notion-tag.red {
+      background: #ffe2dd;
+      color: #93291c;
+    }
+
+    [data-theme="dark"] .notion-tag.green {
+      background: #2b593f;
+      color: #6ee7b7;
+    }
+
+    [data-theme="dark"] .notion-tag.yellow {
+      background: #594a2b;
+      color: #fcd34d;
+    }
+
+    [data-theme="dark"] .notion-tag.red {
+      background: #5c2b2b;
+      color: #fca5a5;
+    }
+
+    /* Red Cursor */
+    .claw-cursor {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      z-index: 10;
+      transition: transform 0.05s linear;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .claw-cursor svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Participant Thumbnails */
+    .participant-strip {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .participant-thumb {
+      width: 80px;
+      height: 60px;
+      border-radius: 6px;
+      background: var(--bg-subtle);
+      border: 2px solid transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      box-shadow: var(--shadow-md);
+    }
+
+    .participant-thumb.speaking {
+      border-color: var(--success);
+    }
+
+    .participant-thumb img {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .participant-thumb .lobster-mini {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      overflow: hidden;
+    }
+    .participant-thumb .lobster-mini img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .participant-thumb span {
+      font-size: 0.5625rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .meeting-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: var(--bg-subtle);
+      border-top: 1px solid var(--border);
+    }
+
+    .control-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--surface);
+      color: var(--text-secondary);
+    }
+
+    .control-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .control-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .control-btn.active:hover {
+      background: var(--accent-hover);
+    }
+
+    .control-btn.end-call {
+      background: var(--danger);
+      color: white;
+    }
+
+    .control-btn.end-call:hover {
+      background: #c43d2e;
+    }
+
+    .control-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 900px) {
+      .hero-layout {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+      .hero-content {
+        text-align: center;
+        order: 1;
+      }
+      .hero-visual {
+        order: 0;
+        max-width: 480px;
+        margin-inline: auto;
+      }
+      .hero h1 {
+        max-width: none;
+        margin-inline: auto;
+      }
+      .hero-subtitle {
+        margin-inline: auto;
+      }
+      .hero-actions {
+        justify-content: center;
+      }
+    }
+
+    /* ── Buttons ────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.75rem;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: var(--shadow-accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--text-tertiary);
+      background: var(--bg-subtle);
+    }
+
+    .btn-secondary:active {
+      transform: translateY(1px);
+    }
+
+    /* ── Interview Section ──────────────────────────────── */
+    .interview-section {
+      background: var(--bg-subtle);
+    }
+
+    .interview-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .interview-video {
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow-lg);
+      aspect-ratio: 16/9;
+    }
+
+    .interview-video iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .interview-content {
+      max-width: 480px;
+    }
+
+    .interview-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1rem;
+    }
+
+    .interview-quote {
+      font-size: 1.375rem;
+      font-weight: 500;
+      line-height: 1.5;
+      color: var(--text);
+      margin-bottom: 2rem;
+      position: relative;
+      padding-left: 1.5rem;
+    }
+
+    .interview-quote::before {
+      content: "\201C";
+      position: absolute;
+      left: 0;
+      top: -0.25rem;
+      font-size: 2.5rem;
+      font-family: Georgia, serif;
+      color: var(--accent);
+      opacity: 0.4;
+      line-height: 1;
+    }
+
+    .interview-attribution {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .attribution-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent);
+      object-fit: cover;
+    }
+
+    .attribution-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .attribution-role {
+      font-size: 0.875rem;
+      color: var(--text-tertiary);
+    }
+
+    /* ── Scroll-locked Teaser ───────────────────────────── */
+    .teaser-scroll-container {
+      height: 200vh;
+      position: relative;
+    }
+
+    .teaser-sticky {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-subtle);
+      overflow: hidden;
+    }
+
+    .teaser-content {
+      text-align: center;
+      width: 100%;
+      max-width: 900px;
+      padding: 0 2rem;
+      position: relative;
+      height: 5rem;
+    }
+
+    .teaser-line {
+      font-family: var(--font-display);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+      background: linear-gradient(135deg, var(--accent) 0%, #ff6b5b 50%, #ffa07a 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      transition: opacity 0.6s var(--ease-expo), transform 0.6s var(--ease-expo);
+      position: absolute;
+      width: 100%;
+      left: 0;
+      padding: 0 2rem;
+    }
+
+    .teaser-line-1 {
+      font-size: clamp(1.5rem, 3.5vw, 2.5rem);
+      opacity: 0;
+      transform: translateY(30px);
+    }
+
+    .teaser-line-2 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      opacity: 0;
+      transform: translateY(30px);
+    }
+
+    .teaser-scroll-container[data-phase="1"] .teaser-line-1 {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .teaser-scroll-container[data-phase="2"] .teaser-line-1 {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+
+    .teaser-scroll-container[data-phase="2"] .teaser-line-2 {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Pain Points ────────────────────────────────────── */
+    .pain-section {
+      text-align: center;
+    }
+
+    .section-header {
+      max-width: 600px;
+      margin-inline: auto;
+      margin-bottom: clamp(3rem, 6vw, 4rem);
+    }
+
+    .section-header p {
+      margin-top: 1rem;
+      margin-inline: auto;
+    }
+
+    .pain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .pain-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      text-align: left;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .pain-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .pain-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--accent-light);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      color: var(--accent);
+    }
+
+    .pain-card h4 {
+      margin-bottom: 0.5rem;
+    }
+
+    .pain-card p {
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* Pain Section Layout */
+    .pain-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    .pain-chat-column {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pain-cards-column {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .pain-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Telegram-style Chat */
+    .tg-chat {
+      background: linear-gradient(135deg, #e8dfc8 0%, #c8d9c8 100%);
+      border-radius: 32px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 8px #1a1a1a,
+        0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      aspect-ratio: 9 / 20;
+      max-width: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    [data-theme="dark"] .tg-chat {
+      background: linear-gradient(135deg, #2d2a24 0%, #243024 100%);
+    }
+
+    .tg-header {
+      background: #517da2;
+      padding: 0.75rem 1rem;
+      padding-top: 2rem;
+      display: grid;
+      grid-template-columns: 36px 1fr 36px;
+      align-items: center;
+      gap: 0.75rem;
+      position: relative;
+    }
+
+    .tg-header::before {
+      content: "";
+      position: absolute;
+      top: 0.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80px;
+      height: 20px;
+      background: #1a1a1a;
+      border-radius: 12px;
+    }
+
+    [data-theme="dark"] .tg-header {
+      background: #3d6585;
+    }
+
+    .tg-back {
+      color: white;
+      font-size: 1.25rem;
+      opacity: 0.9;
+      width: 36px;
+      text-align: center;
+    }
+
+    .tg-info {
+      text-align: center;
+    }
+
+    .tg-name {
+      color: white;
+      font-weight: 600;
+      font-size: 0.9375rem;
+    }
+
+    .tg-status {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.75rem;
+    }
+
+    .tg-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e85d4c 0%, #c94435 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .tg-messages {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .tg-msg {
+      max-width: 85%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    .tg-msg.user {
+      align-self: flex-end;
+      margin-left: auto;
+      background: #effdde;
+      border-bottom-right-radius: 4px;
+      color: #1a1a1a;
+      text-align: left;
+    }
+
+    [data-theme="dark"] .tg-msg.user {
+      background: #3d5c3d;
+      color: #e4e4e7;
+    }
+
+    .tg-msg.bot {
+      align-self: flex-start;
+      margin-right: auto;
+      background: white;
+      border-bottom-left-radius: 4px;
+      color: #1a1a1a;
+      text-align: left;
+    }
+
+    [data-theme="dark"] .tg-msg.bot {
+      background: #2d2d32;
+      color: #e4e4e7;
+    }
+
+    .tg-msg .tg-time {
+      font-size: 0.625rem;
+      color: #7eb577;
+      float: right;
+      margin-left: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .tg-msg.bot .tg-time {
+      color: #9ca3af;
+    }
+
+    .tg-msg code {
+      background: rgba(0,0,0,0.06);
+      padding: 0.125rem 0.25rem;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+
+    [data-theme="dark"] .tg-msg code {
+      background: rgba(255,255,255,0.1);
+    }
+
+    .tg-msg.error {
+      background: #ffe4e1;
+      border-left: 3px solid #dc4a3a;
+    }
+
+    [data-theme="dark"] .tg-msg.error {
+      background: #3d2828;
+      border-left-color: #e85d4c;
+    }
+
+    .tg-input {
+      background: #f7f7f7;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    [data-theme="dark"] .tg-input {
+      background: #1f1f23;
+      border-top-color: rgba(255,255,255,0.08);
+    }
+
+    .tg-input-field {
+      flex: 1;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 20px;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      color: var(--text-tertiary);
+    }
+
+    [data-theme="dark"] .tg-input-field {
+      background: #27272b;
+      border-color: #3d3d42;
+    }
+
+    .tg-send {
+      width: 36px;
+      height: 36px;
+      background: #517da2;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    /* ── Insights ────────────────────────────────────────── */
+    .insight-section {
+      background: var(--bg-subtle);
+    }
+
+    .insight-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    .insight-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.5rem;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .insight-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .insight-number {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--success);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1rem;
+    }
+
+    .insight-card h3 {
+      margin-bottom: 0.75rem;
+    }
+
+    .insight-card p {
+      font-size: 0.9375rem;
+      line-height: 1.7;
+    }
+
+    .insight-cards-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Insight Illustration - Zoom Meeting Style */
+    .insight-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .insight-illustration {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .zoom-header {
+      background: #232323;
+      padding: 0.5rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .zoom-title {
+      color: white;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .zoom-controls {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .zoom-controls span {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .zoom-controls .close { background: #ff5f57; }
+    .zoom-controls .minimize { background: #febc2e; }
+    .zoom-controls .maximize { background: #28c840; }
+
+    .zoom-meeting {
+      background: #1a1a2e;
+      position: relative;
+    }
+
+    .zoom-meeting img {
+      width: 100%;
+      display: block;
+    }
+
+    .zoom-bar {
+      background: #232323;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .zoom-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #3d3d3d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .zoom-btn.end {
+      background: #e53935;
+      padding: 0 1.25rem;
+      border-radius: 18px;
+      width: auto;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    @media (max-width: 900px) {
+      .insight-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── CTA ──────────────────────────────────────────── */
+    .cta-section {
+      background: var(--bg-subtle);
+      text-align: center;
+    }
+
+    .cta-section p {
+      margin-inline: auto;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Footer ────────────────────────────────────────── */
+    footer {
+      padding-block: 2rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    footer p {
+      font-size: 0.875rem;
+      color: var(--text-tertiary);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 0.875rem;
+      color: var(--text-tertiary);
+    }
+
+    .footer-links a:hover { color: var(--text-secondary); }
+
+    /* ── Waitlist ──────────────────────────────────────── */
+    .waitlist-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s var(--ease-out);
+    }
+
+    .waitlist-modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .waitlist-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.5rem;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15);
+      transform: translateY(20px) scale(0.97);
+      transition: transform 0.4s var(--ease-expo);
+      position: relative;
+    }
+
+    .waitlist-modal-overlay.open .waitlist-modal {
+      transform: translateY(0) scale(1);
+    }
+
+    .waitlist-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: var(--bg-subtle);
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .waitlist-close:hover {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .waitlist-header {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .waitlist-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .waitlist-header h3 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .waitlist-header p {
+      font-size: 0.9375rem;
+      color: var(--text-secondary);
+      margin-inline: auto;
+    }
+
+    .waitlist-form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.875rem;
+    }
+
+    .waitlist-input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 0.9375rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      outline: none;
+    }
+
+    .waitlist-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .waitlist-input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .waitlist-select {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 0.9375rem;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      padding-right: 2.5rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .waitlist-select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .waitlist-submit {
+      width: 100%;
+      padding: 0.875rem 1.75rem;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-family: var(--font-body);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow-accent);
+      margin-top: 0.25rem;
+    }
+
+    .waitlist-submit:hover {
+      background: var(--accent-hover);
+    }
+
+    .waitlist-submit:active {
+      transform: translateY(1px);
+    }
+
+    .waitlist-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .waitlist-note {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-top: 0.25rem;
+    }
+
+    .waitlist-success {
+      text-align: center;
+      padding: 1rem 0;
+    }
+
+    .waitlist-success .check {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .waitlist-success h3 {
+      font-size: 1.375rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .waitlist-success p {
+      color: var(--text-secondary);
+      margin-inline: auto;
+    }
+
+    .waitlist-counter {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent-light);
+      padding: 0.375rem 0.75rem;
+      border-radius: 100px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--accent);
+      margin-top: 1rem;
+    }
+
+    /* ── Animations ────────────────────────────────────── */
+    [data-animate] {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    [data-animate].visible {
+      animation: fadeUp 0.5s var(--ease-expo) forwards;
+    }
+
+    @keyframes fadeUp {
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    /* ── Responsive ────────────────────────────────────── */
+    @media (max-width: 1024px) {
+      .interview-grid {
+        grid-template-columns: 1fr;
+        gap: 3rem;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .pain-grid {
+        grid-template-columns: 1fr;
+      }
+      .insight-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      footer .container { flex-direction: column; gap: 1rem; text-align: center; }
+      .footer-links { justify-content: center; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      [data-animate] {
+        opacity: 1 !important;
+        transform: none !important;
+      }
+      .hero-badge svg {
+        animation: none !important;
+        opacity: 1 !important;
+      }
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="container">
+      <div class="logo">
+        <div class="logo-mark"><img src="./logo.png" alt="CallingClaw"></div>
+        <span>CallingClaw</span>
+      </div>
+      <div class="nav-right">
+        <ul class="nav-links">
+          <li><a href="callingclaw-landing.html" class="active">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="vision.html">Vision</a></li>
+        </ul>
+        <button class="btn btn-primary" onclick="openWaitlist()" style="padding: 0.625rem 1.25rem; font-size: 0.8125rem;">Join Waitlist</button>
+        <button class="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-layout">
+        <div class="hero-content">
+          <div class="hero-badge" data-animate>
+            <span class="lobster"><img src="./logo.png" alt="CallingClaw"></span>
+            OpenClaw + Real-Time Meetings
+          </div>
+          <h1 data-animate>Call to Your <span class="gradient">OpenClaw</span></h1>
+          <p class="hero-subtitle" data-animate>
+            Let your AI join meetings, share screens, and speak in real-time. CallingClaw gives OpenClaw a voice and a face — directly in Zoom and Meet.
+          </p>
+          <div class="hero-actions" data-animate>
+            <button class="btn btn-primary" onclick="openWaitlist()">Join Waitlist</button>
+            <a class="btn btn-secondary" href="features.html">Explore Features</a>
+          </div>
+        </div>
+        <div class="hero-visual" data-animate>
+          <div class="meeting-frame">
+            <div class="meeting-header">
+              <div class="meeting-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                OpenClaw is sharing screen
+              </div>
+              <div class="meeting-live">Live</div>
+            </div>
+            <div class="meeting-body">
+              <div class="screen-share" id="screenShare">
+                <!-- Browser Chrome -->
+                <div class="browser-chrome">
+                  <div class="browser-dots">
+                    <span class="red"></span>
+                    <span class="yellow"></span>
+                    <span class="green"></span>
+                  </div>
+                  <div class="browser-tabs">
+                    <button class="browser-tab active" data-tab="notion" type="button">
+                      <span class="browser-tab-icon">📋</span>
+                      <span class="browser-tab-title">Sprint Backlog</span>
+                    </button>
+                    <button class="browser-tab" data-tab="architecture" type="button">
+                      <span class="browser-tab-icon">🔧</span>
+                      <span class="browser-tab-title">System Flow</span>
+                    </button>
+                    <button class="browser-tab" data-tab="review" type="button">
+                      <span class="browser-tab-icon">🌐</span>
+                      <span class="browser-tab-title">Website Review</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Screen Content -->
+                <div class="screen-content">
+                  <!-- Red Cursor -->
+                  <div class="claw-cursor" id="clawCursor">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M5.5 3.21V20.79C5.5 21.24 5.76 21.54 6.18 21.54C6.35 21.54 6.53 21.5 6.7 21.4L11.13 18.61L13.96 23.56C14.27 24.11 14.95 24.3 15.5 24C16.05 23.69 16.24 23.01 15.94 22.46L13.11 17.51H18.5C18.95 17.51 19.25 17.25 19.25 16.83C19.25 16.66 19.21 16.48 19.11 16.31L6.61 3.21C6.45 3.07 6.27 3 6.06 3C5.72 3 5.5 3.24 5.5 3.21Z" fill="#dc4a3a"/>
+                      <path d="M5.5 3.21V20.79C5.5 21.24 5.76 21.54 6.18 21.54C6.35 21.54 6.53 21.5 6.7 21.4L11.13 18.61L13.96 23.56C14.27 24.11 14.95 24.3 15.5 24C16.05 23.69 16.24 23.01 15.94 22.46L13.11 17.51H18.5C18.95 17.51 19.25 17.25 19.25 16.83C19.25 16.66 19.21 16.48 19.11 16.31L6.61 3.21" stroke="white" stroke-width="1"/>
+                    </svg>
+                  </div>
+
+                  <!-- OpenClaw Caption/Subtitle -->
+                  <div class="caption-container" id="captionContainer">
+                    <div class="caption-text"><span class="speaker">🦞 OpenClaw:</span> Here's my current sprint plan.</div>
+                  </div>
+
+                  <!-- Tab 1: Notion Page -->
+                  <div class="tab-content active" data-content="notion">
+                    <div class="notion-page">
+                      <div class="notion-header">
+                        <span class="notion-icon">📋</span>
+                        <span class="notion-title">Sprint Backlog</span>
+                      </div>
+                      <div class="notion-table">
+                        <div class="notion-row header">
+                          <div class="notion-cell">Task</div>
+                          <div class="notion-cell">Status</div>
+                          <div class="notion-cell">Priority</div>
+                          <div class="notion-cell">Assignee</div>
+                        </div>
+                        <div class="notion-row">
+                          <div class="notion-cell">Implement voice routing</div>
+                          <div class="notion-cell"><span class="notion-tag green">Done</span></div>
+                          <div class="notion-cell">P0</div>
+                          <div class="notion-cell">🦞 OpenClaw</div>
+                        </div>
+                        <div class="notion-row">
+                          <div class="notion-cell">Add screen share API</div>
+                          <div class="notion-cell"><span class="notion-tag yellow">In Progress</span></div>
+                          <div class="notion-cell">P0</div>
+                          <div class="notion-cell">🦞 OpenClaw</div>
+                        </div>
+                        <div class="notion-row">
+                          <div class="notion-cell">Calendar integration</div>
+                          <div class="notion-cell"><span class="notion-tag red">Blocked</span></div>
+                          <div class="notion-cell">P1</div>
+                          <div class="notion-cell">Peter</div>
+                        </div>
+                        <div class="notion-row">
+                          <div class="notion-cell">Visual diff optimization</div>
+                          <div class="notion-cell"><span class="notion-tag green">Done</span></div>
+                          <div class="notion-cell">P1</div>
+                          <div class="notion-cell">🦞 OpenClaw</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Tab 2: Architecture Diagram -->
+                  <div class="tab-content" data-content="architecture">
+                    <div class="arch-tab-content">
+                      <div class="arch-tab-title">
+                        <span>🔧</span>
+                        CallingClaw System Flow
+                      </div>
+                      <div class="arch-diagram-mini">
+                        <div class="arch-flow-mini">
+                          <div class="arch-node-mini">
+                            <strong>LLM</strong>
+                            <span>Claude / GPT</span>
+                          </div>
+                          <span class="arch-arrow-mini">→</span>
+                          <div class="arch-node-mini">
+                            <strong>TTS</strong>
+                            <span>Voice Gen</span>
+                          </div>
+                          <span class="arch-arrow-mini">→</span>
+                          <div class="arch-node-mini highlight">
+                            <strong>Virtual Mic</strong>
+                            <span>BlackHole</span>
+                          </div>
+                        </div>
+                        <div class="arch-flow-mini">
+                          <div class="arch-node-mini">
+                            <strong>Screen</strong>
+                            <span>1 FPS SSIM</span>
+                          </div>
+                          <span class="arch-arrow-mini">→</span>
+                          <div class="arch-node-mini">
+                            <strong>Vision</strong>
+                            <span>Multimodal</span>
+                          </div>
+                          <span class="arch-arrow-mini">→</span>
+                          <div class="arch-node-mini highlight">
+                            <strong>Meeting</strong>
+                            <span>Zoom / Meet</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Tab 3: Website Review -->
+                  <div class="tab-content" data-content="review">
+                    <div class="review-tab-content">
+                      <!-- Hero -->
+                      <div class="review-hero">
+                        <div class="review-logo">
+                          <div class="review-logo-img">🦞</div>
+                        </div>
+                        <div class="review-brand">CallingClaw</div>
+                        <div class="review-tagline">The AI that joins your meetings.</div>
+                        <div class="review-desc">Zero-latency voice. Real-time screen share. Local-first architecture.</div>
+                      </div>
+
+                      <!-- Testimonial -->
+                      <div class="review-testimonial">
+                        <div class="review-testimonial-avatar review-testimonial-avatar--lobster"><img src="./logo.png" alt="CallingClaw"></div>
+                        <div>
+                          <div class="review-testimonial-text">"Finally, AI that can actually talk in meetings. Game changer."</div>
+                          <div class="review-testimonial-author">@steipete</div>
+                        </div>
+                      </div>
+
+                      <!-- Quick Start -->
+                      <div class="review-quickstart">
+                        <div class="review-quickstart-label"># Quick Start</div>
+                        <div class="review-quickstart-cmd">
+                          <span class="review-quickstart-prompt">$</span>
+                          <span>npx callingclaw init</span>
+                        </div>
+                      </div>
+
+                      <!-- Comment -->
+                      <div class="review-comment">
+                        <span>💡</span>
+                        <span>Suggestion: Add a live demo video in the hero section</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Participant Thumbnails -->
+                  <div class="participant-strip">
+                    <div class="participant-thumb">
+                      <img src="https://steipete.me/peter-avatar.jpg" alt="Peter" loading="lazy">
+                      <span>Peter</span>
+                    </div>
+                    <div class="participant-thumb speaking">
+                      <div class="lobster-mini"><img src="./logo.png" alt="CallingClaw"></div>
+                      <span>OpenClaw</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="meeting-controls">
+              <button class="control-btn" aria-label="Toggle microphone">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </button>
+              <button class="control-btn" aria-label="Toggle camera">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              </button>
+              <button class="control-btn active" aria-label="Stop sharing">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </button>
+              <button class="control-btn end-call" aria-label="End call">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interview Section -->
+  <section class="interview-section" id="origin">
+    <div class="container">
+      <div class="interview-grid">
+        <div class="interview-video" data-animate>
+          <iframe
+            src="https://www.youtube.com/embed/9jgcT0Fqt7U?si=IOwOidK0jlD3Ls4r"
+            title="Peter Steinberger discusses the origin of CallingClaw and OpenClaw"
+            loading="lazy"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen>
+          </iframe>
+        </div>
+        <div class="interview-content" data-animate>
+          <div class="interview-label">The Aha Moment</div>
+          <blockquote class="interview-quote">
+            "The AI received an unprocessed audio file and autonomously deployed an STT service to parse it — then gave a perfect response."
+          </blockquote>
+          <div class="interview-attribution">
+            <img class="attribution-avatar" src="https://steipete.me/peter-avatar.jpg" alt="Peter Steinberger">
+            <div>
+              <div class="attribution-name">Peter Steinberger 🦞</div>
+              <div class="attribution-role">Creator of OpenClaw</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Teaser Scroll Animation -->
+  <div class="teaser-scroll-container" id="teaserScroll" data-phase="0">
+    <div class="teaser-sticky">
+      <div class="teaser-content">
+        <p class="teaser-line teaser-line-1">If semantic understanding is this powerful...</p>
+        <p class="teaser-line teaser-line-2">What if OpenClaw could book a meeting with you? 🦞</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pain Points -->
+  <section class="pain-section" id="pain">
+    <div class="container">
+      <div class="section-header" data-animate>
+        <h2>The Problem with Text-Only AI</h2>
+        <p>As tasks grow complex, the friction of text interaction compounds</p>
+      </div>
+      <div class="pain-layout">
+        <!-- Telegram Chat Mockup -->
+        <div class="pain-chat-column" data-animate>
+          <div class="tg-chat">
+            <div class="tg-header">
+              <span class="tg-back">‹</span>
+              <div class="tg-info">
+                <div class="tg-name">OpenClaw</div>
+                <div class="tg-status">bot</div>
+              </div>
+              <div class="tg-avatar">🦞</div>
+            </div>
+            <div class="tg-messages">
+              <div class="tg-msg user">
+                My landing page is done! How do I publish it so others can see it? <span class="tg-time">14:32</span>
+              </div>
+              <div class="tg-msg bot">
+                You can use Vercel, Netlify, or GitHub Pages. Run <code>npx vercel</code> in your project folder. <span class="tg-time">14:32</span>
+              </div>
+              <div class="tg-msg user">
+                It says "Error: EACCES permission denied" 😵 <span class="tg-time">14:35</span>
+              </div>
+              <div class="tg-msg bot">
+                Try <code>sudo npm install -g vercel</code> then run again. You may need to configure npm permissions. <span class="tg-time">14:35</span>
+              </div>
+              <div class="tg-msg user">
+                Now it asks for login and says "OAuth failed"... Also what is a "deployment token"? <span class="tg-time">14:41</span>
+              </div>
+              <div class="tg-msg bot error">
+                You need to create an account, verify email, set up 2FA, create a project, configure environment variables, add a vercel.json... <span class="tg-time">14:41</span>
+              </div>
+              <div class="tg-msg user">
+                I just wanted to show my mom my website 😢 <span class="tg-time">14:45</span>
+              </div>
+            </div>
+            <div class="tg-input">
+              <div class="tg-input-field">Message</div>
+              <div class="tg-send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21L23 12L2 3V10L17 12L2 14V21Z"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pain Cards -->
+        <div class="pain-cards-column">
+          <div class="pain-card" data-animate>
+            <div class="pain-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </div>
+            <h4>Context Bottleneck</h4>
+            <p>Explaining UI requirements means constant screenshots, annotations, and lengthy prompts.</p>
+          </div>
+          <div class="pain-card" data-animate>
+            <div class="pain-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <h4>Async Latency</h4>
+            <p>Every "Did you mean this?" wastes minutes. Back-and-forth text kills momentum and breaks creative flow.</p>
+          </div>
+          <div class="pain-card" data-animate>
+            <div class="pain-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <h4>Fragmented Context</h4>
+            <p>Diagrams, code, and output scattered across tabs. AI lacks real-time visual perception of what you're building.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Insights -->
+  <section class="insight-section">
+    <div class="container">
+      <div class="section-header" data-animate>
+        <h2>Key Insights</h2>
+        <p>What this moment revealed about the future of human-AI interaction</p>
+      </div>
+      <div class="insight-layout">
+        <!-- Zoom Meeting Illustration -->
+        <div class="insight-illustration" data-animate>
+          <div class="zoom-header">
+            <div class="zoom-controls">
+              <span class="close"></span>
+              <span class="minimize"></span>
+              <span class="maximize"></span>
+            </div>
+            <div class="zoom-title">Zoom Meeting — CallingClaw Demo</div>
+            <div style="width: 48px;"></div>
+          </div>
+          <div class="zoom-meeting">
+            <img src="openclaw-meeting.png" alt="OpenClaw joining a meeting with humans and AI" loading="lazy">
+          </div>
+          <div class="zoom-bar">
+            <div class="zoom-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </div>
+            <div class="zoom-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            </div>
+            <div class="zoom-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <div class="zoom-btn end">End</div>
+          </div>
+        </div>
+
+        <!-- Insight Cards -->
+        <div class="insight-cards-stack">
+          <div class="insight-card" data-animate>
+            <div class="insight-number">Insight 01</div>
+            <h3>Self-Evolving Capabilities</h3>
+            <p>Models can now handle unstructured multimodal input through emergent generalization — no explicit programming required.</p>
+          </div>
+          <div class="insight-card" data-animate>
+            <div class="insight-number">Insight 02</div>
+            <h3>Voice + Vision = Maximum Bandwidth</h3>
+            <p>Combining speech and screen sharing offers the lowest-friction, highest-bandwidth channel for conveying complex context to AI.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA / Vision sections removed — to be redesigned with product-value focused messaging -->
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container" data-animate>
+      <h2>Give Your Lobster a Voice 🦞</h2>
+      <p>Be among the first to let your AI join meetings. Early access starts soon.</p>
+      <button class="btn btn-primary" onclick="openWaitlist()">Join the Waitlist</button>
+    </div>
+  </section>
+
+  <!-- Waitlist Modal -->
+  <div class="waitlist-modal-overlay" id="waitlistModal">
+    <div class="waitlist-modal">
+      <button class="waitlist-close" onclick="closeWaitlist()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+
+      <!-- Form State -->
+      <div id="waitlistForm">
+        <div class="waitlist-header">
+          <div class="waitlist-icon">🦞</div>
+          <h3>Join the CallingClaw Waitlist</h3>
+          <p>Get early access when we launch. No spam, just updates.</p>
+        </div>
+        <form class="waitlist-form" onsubmit="submitWaitlist(event)">
+          <input class="waitlist-input" type="email" name="email" placeholder="your@email.com" required autocomplete="email">
+          <input class="waitlist-input" type="text" name="name" placeholder="Your name (optional)" autocomplete="name">
+          <select class="waitlist-select" name="use_case">
+            <option value="" disabled selected>What excites you most?</option>
+            <option value="ai-meetings">AI joining my meetings</option>
+            <option value="voice-assistant">Real-time voice assistant</option>
+            <option value="meeting-notes">Auto meeting notes & action items</option>
+            <option value="screen-share">AI screen sharing & demos</option>
+            <option value="all">All of the above!</option>
+          </select>
+          <button class="waitlist-submit" type="submit" id="waitlistSubmitBtn">Join Waitlist →</button>
+          <p class="waitlist-note">We respect your inbox. Unsubscribe anytime.</p>
+        </form>
+      </div>
+
+      <!-- Success State -->
+      <div id="waitlistSuccess" style="display: none;">
+        <div class="waitlist-success">
+          <div class="check">✅</div>
+          <h3>You're on the list!</h3>
+          <p>We'll reach out when CallingClaw is ready for you. Stay tuned.</p>
+          <div class="waitlist-counter">🔥 Spot secured</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>🦞 CallingClaw — Call to Your OpenClaw</p>
+      <ul class="footer-links">
+        <li><a href="callingclaw-landing.html">Home</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="vision.html">Vision</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle
+    (function() {
+      const html = document.documentElement;
+      const stored = localStorage.getItem('callingclaw-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const theme = stored || (prefersDark ? 'dark' : 'light');
+      html.setAttribute('data-theme', theme);
+
+      document.querySelector('.theme-toggle').addEventListener('click', function() {
+        const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('callingclaw-theme', next);
+      });
+    })();
+
+    // Scroll-triggered animations
+    (function() {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('[data-animate]').forEach(el => el.classList.add('visible'));
+        return;
+      }
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry, index) => {
+          if (entry.isIntersecting) {
+            setTimeout(() => {
+              entry.target.classList.add('visible');
+            }, index * 50);
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+      document.querySelectorAll('[data-animate]').forEach(el => observer.observe(el));
+    })();
+
+    // Smooth scroll
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Easter egg for the curious
+    console.log('%c🦞 CallingClaw', 'font-size: 24px; font-weight: bold; color: #dc4a3a;');
+    console.log('%cLocal-first AI meeting intelligence.', 'color: #dc4a3a; font-size: 12px;');
+    console.log('%cInterested in the architecture? Scroll to #architecture', 'font-size: 11px; color: #6b7280;');
+
+    // ── Waitlist Modal ──────────────────────────────
+    function openWaitlist() {
+      document.getElementById('waitlistModal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // Focus the email input after transition
+      setTimeout(() => {
+        const emailInput = document.querySelector('#waitlistForm input[name="email"]');
+        if (emailInput) emailInput.focus();
+      }, 300);
+    }
+
+    function closeWaitlist() {
+      document.getElementById('waitlistModal').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // Close on overlay click
+    document.getElementById('waitlistModal').addEventListener('click', function(e) {
+      if (e.target === this) closeWaitlist();
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeWaitlist();
+    });
+
+    // Form submission
+    // ── BACKEND OPTIONS ──
+    // Option 1: Google Apps Script Web App (free, recommended)
+    //   Deploy a Google Sheets script and paste the URL below.
+    //   See: https://github.com/jamiewilson/form-to-google-sheets
+    //
+    // Option 2: Tally.so embed (free, no-code)
+    //   Replace the form with: <iframe data-tally-src="https://tally.so/embed/XXXXX" ...>
+    //
+    // Option 3: Formspree.io (50 free/mo)
+    //   Change action to: https://formspree.io/f/YOUR_FORM_ID
+    //
+    // Set your endpoint here:
+    const WAITLIST_ENDPOINT = ''; // ← paste your Google Apps Script / Formspree URL
+
+    async function submitWaitlist(e) {
+      e.preventDefault();
+      const btn = document.getElementById('waitlistSubmitBtn');
+      const form = e.target;
+      const data = Object.fromEntries(new FormData(form));
+
+      btn.disabled = true;
+      btn.textContent = 'Joining...';
+
+      try {
+        if (WAITLIST_ENDPOINT) {
+          // Send to backend
+          await fetch(WAITLIST_ENDPOINT, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: data.email,
+              name: data.name || '',
+              use_case: data.use_case || '',
+              source: 'callingclaw-landing',
+              timestamp: new Date().toISOString()
+            })
+          });
+        } else {
+          // No backend configured — just log locally
+          console.log('📝 Waitlist signup (no backend):', data);
+        }
+
+        // Show success
+        document.getElementById('waitlistForm').style.display = 'none';
+        document.getElementById('waitlistSuccess').style.display = 'block';
+      } catch (err) {
+        console.error('Waitlist error:', err);
+        // Still show success — don't punish user for backend issues
+        document.getElementById('waitlistForm').style.display = 'none';
+        document.getElementById('waitlistSuccess').style.display = 'block';
+      }
+    }
+
+    // Teaser scroll-locked animation
+    (function() {
+      const container = document.getElementById('teaserScroll');
+      if (!container || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        if (container) container.setAttribute('data-phase', '2');
+        return;
+      }
+
+      function updatePhase() {
+        const rect = container.getBoundingClientRect();
+        const scrollProgress = -rect.top / (rect.height - window.innerHeight);
+
+        if (scrollProgress < 0) {
+          container.setAttribute('data-phase', '0');
+        } else if (scrollProgress < 0.5) {
+          container.setAttribute('data-phase', '1');
+        } else {
+          container.setAttribute('data-phase', '2');
+        }
+      }
+
+      window.addEventListener('scroll', updatePhase, { passive: true });
+      updatePhase();
+    })();
+
+    // Tab switching and auto-presentation with captions
+    (function() {
+      const tabs = document.querySelectorAll('.browser-tab');
+      const contents = document.querySelectorAll('.tab-content');
+      const captionContainer = document.getElementById('captionContainer');
+      const cursor = document.getElementById('clawCursor');
+      const screenContent = document.querySelector('.screen-content');
+
+      // Manual tab switching
+      tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+          switchTab(this.dataset.tab);
+        });
+      });
+
+      function switchTab(targetTab) {
+        tabs.forEach(t => t.classList.remove('active'));
+        document.querySelector(`[data-tab="${targetTab}"]`).classList.add('active');
+        contents.forEach(c => c.classList.remove('active'));
+        document.querySelector(`[data-content="${targetTab}"]`).classList.add('active');
+      }
+
+      // Caption helper
+      function showCaption(text) {
+        if (!captionContainer) return;
+        const caption = captionContainer.querySelector('.caption-text');
+        if (caption) {
+          caption.classList.add('fade-out');
+          setTimeout(() => {
+            caption.innerHTML = '<span class="speaker">🦞 OpenClaw:</span> ' + text;
+            caption.classList.remove('fade-out');
+            caption.style.animation = 'none';
+            caption.offsetHeight;
+            caption.style.animation = 'captionFadeIn 0.25s var(--ease-out) forwards';
+          }, 150);
+        }
+      }
+
+      // Cursor animation helper
+      function animateCursorTo(x, y, duration = 800) {
+        return new Promise(resolve => {
+          cursor.style.transition = `left ${duration}ms cubic-bezier(0.25, 0.1, 0.25, 1), top ${duration}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
+          cursor.style.left = x + 'px';
+          cursor.style.top = y + 'px';
+          setTimeout(resolve, duration);
+        });
+      }
+
+      function simulateClick() {
+        return new Promise(resolve => {
+          cursor.style.transform = 'scale(0.85)';
+          setTimeout(() => {
+            cursor.style.transform = 'scale(1)';
+            setTimeout(resolve, 100);
+          }, 150);
+        });
+      }
+
+      // Auto-presentation sequence with step-by-step captions
+      async function runPresentation() {
+        if (!screenContent || !cursor) return;
+
+        const rect = screenContent.getBoundingClientRect();
+        const screenRect = { width: rect.width, height: rect.height };
+
+        await new Promise(r => setTimeout(r, 2000));
+
+        while (true) {
+          // === NOTION TAB ===
+          showCaption("Here's our current sprint plan.");
+          await animateCursorTo(screenRect.width * 0.3, screenRect.height * 0.35, 800);
+          await new Promise(r => setTimeout(r, 1200));
+
+          showCaption("Voice routing is done — that was the hard part.");
+          await animateCursorTo(screenRect.width * 0.4, screenRect.height * 0.42, 600);
+          await new Promise(r => setTimeout(r, 1500));
+
+          showCaption("Screen share API is in progress now.");
+          await animateCursorTo(screenRect.width * 0.45, screenRect.height * 0.5, 500);
+          await new Promise(r => setTimeout(r, 1500));
+
+          showCaption("Let me show you the architecture...");
+          await new Promise(r => setTimeout(r, 800));
+
+          // === MOVE TO ARCHITECTURE TAB ===
+          const archTab = document.querySelector('[data-tab="architecture"]');
+          const screenContentRect = screenContent.getBoundingClientRect();
+          const archTabRect = archTab.getBoundingClientRect();
+          const archX = archTabRect.left - screenContentRect.left + archTabRect.width / 2;
+          const archY = archTabRect.top - screenContentRect.top + archTabRect.height / 2;
+
+          await animateCursorTo(archX, archY, 600);
+          await simulateClick();
+          switchTab('architecture');
+          await new Promise(r => setTimeout(r, 400));
+
+          showCaption("This is our system architecture.");
+          await animateCursorTo(screenRect.width * 0.2, screenRect.height * 0.4, 800);
+          await new Promise(r => setTimeout(r, 1200));
+
+          showCaption("LLM generates responses, TTS converts to speech...");
+          await animateCursorTo(screenRect.width * 0.5, screenRect.height * 0.4, 900);
+          await new Promise(r => setTimeout(r, 1500));
+
+          showCaption("The key is BlackHole for zero-latency audio routing.");
+          await animateCursorTo(screenRect.width * 0.8, screenRect.height * 0.4, 700);
+          await new Promise(r => setTimeout(r, 1800));
+
+          showCaption("Now let me check our website design...");
+          await new Promise(r => setTimeout(r, 800));
+
+          // === MOVE TO REVIEW TAB ===
+          const reviewTab = document.querySelector('[data-tab="review"]');
+          const reviewTabRect = reviewTab.getBoundingClientRect();
+          const reviewX = reviewTabRect.left - screenContentRect.left + reviewTabRect.width / 2;
+          const reviewY = reviewTabRect.top - screenContentRect.top + reviewTabRect.height / 2;
+
+          await animateCursorTo(reviewX, reviewY, 600);
+          await simulateClick();
+          switchTab('review');
+          await new Promise(r => setTimeout(r, 400));
+
+          showCaption("This is the current landing page.");
+          await animateCursorTo(screenRect.width * 0.35, screenRect.height * 0.5, 800);
+          await new Promise(r => setTimeout(r, 1200));
+
+          showCaption("I think we should add a demo video here.");
+          await animateCursorTo(screenRect.width * 0.4, screenRect.height * 0.7, 600);
+          await new Promise(r => setTimeout(r, 1800));
+
+          showCaption("Let me go back to the plan...");
+          await new Promise(r => setTimeout(r, 800));
+
+          // === BACK TO NOTION ===
+          const notionTab = document.querySelector('[data-tab="notion"]');
+          const notionTabRect = notionTab.getBoundingClientRect();
+          const notionX = notionTabRect.left - screenContentRect.left + notionTabRect.width / 2;
+          const notionY = notionTabRect.top - screenContentRect.top + notionTabRect.height / 2;
+
+          await animateCursorTo(notionX, notionY, 600);
+          await simulateClick();
+          switchTab('notion');
+
+          showCaption("Any questions about the plan?");
+          await animateCursorTo(screenRect.width * 0.5, screenRect.height * 0.45, 800);
+          await new Promise(r => setTimeout(r, 2500));
+        }
+      }
+
+      // Start auto-presentation if not reduced motion
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        cursor.style.left = '50%';
+        cursor.style.top = '40%';
+        runPresentation();
+      }
+
+      // Manual cursor override when user interacts
+      let userInteracting = false;
+      screenContent.addEventListener('mouseenter', () => {
+        userInteracting = true;
+        cursor.style.transition = 'left 0.08s ease-out, top 0.08s ease-out';
+      });
+
+      let rafId = null;
+      let targetX = 0;
+      let targetY = 0;
+
+      screenContent.addEventListener('mousemove', (e) => {
+        if (!userInteracting) return;
+        const rect = screenContent.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const maxX = rect.width - 20;
+        const maxY = rect.height - 20;
+        targetX = Math.max(0, Math.min(x, maxX));
+        targetY = Math.max(0, Math.min(y, maxY));
+
+        if (!rafId) {
+          rafId = requestAnimationFrame(() => {
+            cursor.style.left = targetX + 'px';
+            cursor.style.top = targetY + 'px';
+            rafId = null;
+          });
+        }
+      });
+
+      screenContent.addEventListener('mouseleave', () => {
+        userInteracting = false;
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

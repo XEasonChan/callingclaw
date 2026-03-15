@@ -1,0 +1,229 @@
+[
+  {
+    "id": "task_mmp43hcv_o347",
+    "task": "Organize and prioritize incoming notifications for more efficient project management.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Project Team",
+    "deadline": "March 20, 2023",
+    "createdAt": 1773419356831,
+    "updatedAt": 1773419356831
+  },
+  {
+    "id": "task_mmp43hcv_gv7d",
+    "task": "Ensure all team members are reviewing and acting on relevant notifications daily.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "All Team Members",
+    "deadline": "Ongoing",
+    "createdAt": 1773419356831,
+    "updatedAt": 1773419356831
+  },
+  {
+    "id": "task_mmp42fyp_quy6",
+    "task": "Analyze Duolingo's engagement analytics based on current notifications.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew Chen",
+    "deadline": "March 20, 2023",
+    "sourceMeetingId": "mtg_mmp40pp9_g5gk",
+    "createdAt": 1773419308369,
+    "updatedAt": 1773419308369
+  },
+  {
+    "id": "task_mmp42fyp_bqnm",
+    "task": "Prioritize which app notifications need immediate attention and potential adjustments.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew Chen",
+    "deadline": "March 18, 2023",
+    "sourceMeetingId": "mtg_mmp40pp9_g5gk",
+    "createdAt": 1773419308369,
+    "updatedAt": 1773419308369
+  },
+  {
+    "id": "task_mmp3yrvn_2fkk",
+    "task": "Implement a system to filter and prioritize high-frequency notifications from apps like Tanka and Telegram.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Team Lead",
+    "deadline": "2023-11-15",
+    "sourceMeetingId": "mtg_mmp36w26_37ws",
+    "createdAt": 1773419137187,
+    "updatedAt": 1773419137187
+  },
+  {
+    "id": "task_mmp3yrvm_nyog",
+    "task": "Evaluate and categorize applications based on notification frequency and user interaction importance.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew Chen",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "mtg_mmp36w26_37ws",
+    "createdAt": 1773419137186,
+    "updatedAt": 1773419137186
+  },
+  {
+    "id": "task_mmouafle_l6we",
+    "task": "Ensure all video and audio settings are correctly configured before important meetings.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "xueyi chen",
+    "deadline": "Before the next scheduled meeting",
+    "sourceMeetingId": "mtg_mmou6zjv_rd94",
+    "createdAt": 1773402884978,
+    "updatedAt": 1773402884978
+  },
+  {
+    "id": "task_mmnaa3bk_ibqq",
+    "task": "Set up a feedback collection mechanism for early Apollo users.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Product Team",
+    "deadline": "Ongoing",
+    "sourceMeetingId": "mtg_mmna4zhi_koll",
+    "createdAt": 1773308810576,
+    "updatedAt": 1773308810576
+  },
+  {
+    "id": "task_mmnaa3be_6f21",
+    "task": "Investigate options for automating the deployment process for easier user onboarding.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Engineering Team",
+    "deadline": "2024-01-15",
+    "sourceMeetingId": "mtg_mmna4zhi_koll",
+    "createdAt": 1773308810570,
+    "updatedAt": 1773308810570
+  },
+  {
+    "id": "task_mmnaa3be_wd0z",
+    "task": "Establish a robust support system for Apollo users.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Support Team",
+    "deadline": "2024-01-10",
+    "sourceMeetingId": "mtg_mmna4zhi_koll",
+    "createdAt": 1773308810570,
+    "updatedAt": 1773308810570
+  },
+  {
+    "id": "task_mmnaa3b8_s5a1",
+    "task": "Explore strategies to simplify user interface and create guides for Apollo.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Development Team",
+    "deadline": "2024-01-15",
+    "sourceMeetingId": "mtg_mmna4zhi_koll",
+    "createdAt": 1773308810564,
+    "updatedAt": 1773308810564
+  },
+  {
+    "id": "task_mmn2yo2z_mtac",
+    "task": "Send out a follow-up email with meeting details and next steps.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "xueyi chen",
+    "deadline": "October 5, 2023",
+    "sourceMeetingId": "mtg_mmn2v3l8_2btk",
+    "createdAt": 1773296520299,
+    "updatedAt": 1773296520299
+  },
+  {
+    "id": "task_mmn2yo2y_kbeo",
+    "task": "Resolve technical issues with Google Meet setup to ensure better sharing capabilities.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew CHEN",
+    "deadline": "October 10, 2023",
+    "sourceMeetingId": "mtg_mmn2v3l8_2btk",
+    "createdAt": 1773296520298,
+    "updatedAt": 1773296520298
+  },
+  {
+    "id": "task_mmm5mhpt_atxk",
+    "task": "Test audio input and output for clarity",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "N/A",
+    "sourceMeetingId": "mtg_mmlnswta_76tv",
+    "createdAt": 1773240524849,
+    "updatedAt": 1773240524849
+  },
+  {
+    "id": "task_mmm5mhps_p4sw",
+    "task": "Verify that CallingClaw audio bridge is functioning properly post-testing",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "N/A",
+    "sourceMeetingId": "mtg_mmlnswta_76tv",
+    "createdAt": 1773240524848,
+    "updatedAt": 1773240524848
+  },
+  {
+    "id": "task_mmlnd9rt_iyvl",
+    "task": "Admit Andrew from the waiting list or change host controls to allow users to join without approval.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "user",
+    "deadline": "ASAP",
+    "sourceMeetingId": "mtg_mmlmojts_4t69",
+    "createdAt": 1773209861561,
+    "updatedAt": 1773209861561
+  },
+  {
+    "id": "task_mmlnd9rt_431k",
+    "task": "Change Google Meet settings to allow anyone with the link to join without needing host approval.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "user",
+    "deadline": "By next meeting",
+    "sourceMeetingId": "mtg_mmlmojts_4t69",
+    "createdAt": 1773209861561,
+    "updatedAt": 1773209861561
+  },
+  {
+    "id": "task_mmlnd9rt_kwwn",
+    "task": "Admit Andrew to the meeting using his email and adjust settings if the admit button is not visible.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "user",
+    "deadline": "Immediate",
+    "sourceMeetingId": "mtg_mmlmojts_4t69",
+    "createdAt": 1773209861561,
+    "updatedAt": 1773209861561
+  },
+  {
+    "id": "task_mmlnd9rs_ag68",
+    "task": "Change the meeting setting so anyone with the link can join without needing to be admitted.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "user",
+    "deadline": "ASAP",
+    "sourceMeetingId": "mtg_mmlmojts_4t69",
+    "createdAt": 1773209861560,
+    "updatedAt": 1773209861560
+  },
+  {
+    "id": "task_mmkfmfes_uyer",
+    "task": "Write unit tests for EventBus",
+    "status": "done",
+    "priority": "medium",
+    "assignee": "openclaw",
+    "createdAt": 1773136385668,
+    "updatedAt": 1773136412216,
+    "result": "Refactored to PKCE. See commit abc123."
+  },
+  {
+    "id": "task_mmkfmfdl_iklp",
+    "task": "Refactor auth module to use PKCE flow",
+    "status": "pending",
+    "priority": "high",
+    "assignee": "openclaw",
+    "deadline": "2026-03-12",
+    "createdAt": 1773136385625,
+    "updatedAt": 1773136385625
+  }
+]

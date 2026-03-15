@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw 2.0 — Control Panel</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-subtle: #faf9f9;
+      --surface: #ffffff;
+      --surface-elevated: #ffffff;
+      --text: #1f2937;
+      --text-secondary: #6b7280;
+      --text-tertiary: #9ca3af;
+      --accent: #dc4a3a;
+      --accent-hover: #c43d2e;
+      --accent-light: #fef2f1;
+      --accent-glow: rgba(220, 74, 58, 0.1);
+      --success: #4aa682;
+      --success-light: #e6f4ee;
+      --danger: #dc4a3a;
+      --purple: #7c3aed;
+      --purple-light: #f3f0ff;
+      --blue: #3b82f6;
+      --blue-light: #eff6ff;
+      --orange: #f59e0b;
+      --orange-light: #fffbeb;
+      --border: #e5e7eb;
+      --border-light: #f3f4f6;
+      --font-display: "Space Grotesk", system-ui, sans-serif;
+      --font-body: "Inter", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --duration: 300ms;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.04);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.06);
+      --shadow-accent: 0 2px 12px rgba(220,74,58,0.15);
+    }
+    [data-theme="dark"] {
+      --bg: #111113; --bg-subtle: #18181b; --surface: #1f1f23; --surface-elevated: #27272b;
+      --text: #e4e4e7; --text-secondary: #a1a1aa; --text-tertiary: #71717a;
+      --accent: #e85d4c; --accent-hover: #f07a6b; --accent-light: rgba(232,93,76,0.12);
+      --accent-glow: rgba(232,93,76,0.15); --success: #6bb39a; --success-light: rgba(107,179,154,0.12);
+      --purple: #a78bfa; --purple-light: rgba(167,139,250,0.12);
+      --blue: #60a5fa; --blue-light: rgba(96,165,250,0.12);
+      --orange: #fbbf24; --orange-light: rgba(251,191,36,0.12);
+      --border: #2d2d32; --border-light: #252529;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.15); --shadow-md: 0 4px 12px rgba(0,0,0,0.2);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:16px;-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+    body{font-family:var(--font-body);color:var(--text);background:var(--bg);line-height:1.6;transition:background var(--duration) ease,color var(--duration) ease}
+    ::selection{background:var(--accent);color:#fff}
+
+    /* ══════════════════════════════════════════════════
+       ONBOARDING OVERLAY
+    ══════════════════════════════════════════════════ */
+    .onboarding{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity 0.5s var(--ease-out)}
+    .onboarding.hidden{opacity:0;pointer-events:none}
+    .onboarding-card{max-width:680px;width:100%;margin:2rem;animation:slideUp 0.6s var(--ease-out)}
+    @keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+
+    .ob-logo{text-align:center;margin-bottom:2rem}
+    .ob-logo-mark{width:72px;height:72px;border-radius:18px;overflow:hidden;display:inline-block;margin-bottom:1rem;box-shadow:0 8px 32px rgba(220,74,58,0.2)}
+    .ob-logo-mark img{width:100%;height:100%;object-fit:contain;display:block}
+    .ob-title{font-family:var(--font-display);font-size:1.75rem;font-weight:700;letter-spacing:-0.03em}
+    .ob-subtitle{color:var(--text-secondary);font-size:0.9375rem;margin-top:0.25rem}
+
+    /* Flow diagram */
+    .flow-diagram{display:flex;align-items:center;justify-content:center;gap:0.5rem;margin:2rem 0;flex-wrap:wrap}
+    .flow-node{display:flex;flex-direction:column;align-items:center;gap:0.375rem;padding:0.75rem 1rem;border-radius:12px;background:var(--bg-subtle);border:1px solid var(--border);min-width:100px;text-align:center;transition:all var(--duration) var(--ease-out)}
+    .flow-node:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
+    .flow-node .fn-icon{font-size:1.5rem}
+    .flow-node .fn-label{font-family:var(--font-display);font-size:0.75rem;font-weight:600;color:var(--text)}
+    .flow-node .fn-sub{font-size:0.6875rem;color:var(--text-tertiary)}
+    .flow-node.highlight{background:var(--accent-light);border-color:var(--accent)}
+    .flow-arrow{font-size:1.25rem;color:var(--text-tertiary);flex-shrink:0}
+
+    /* Key inputs */
+    .ob-keys{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;margin-top:1.5rem}
+    .ob-keys-title{font-family:var(--font-display);font-size:0.9375rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem}
+    .ob-key-row{margin-bottom:1rem}
+    .ob-key-row:last-of-type{margin-bottom:0}
+    .ob-key-row label{display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem;font-weight:500;color:var(--text-secondary);margin-bottom:0.375rem}
+    .ob-key-row label .required{color:var(--accent);font-size:0.6875rem;font-weight:600;padding:0.125rem 0.375rem;border-radius:4px;background:var(--accent-light)}
+    .ob-key-row label .optional{color:var(--text-tertiary);font-size:0.6875rem}
+    .ob-key-row input{width:100%;padding:0.625rem 0.875rem;border:1px solid var(--border);border-radius:10px;font-family:var(--font-mono);font-size:0.8125rem;background:var(--bg-subtle);color:var(--text);transition:all var(--duration) var(--ease-out)}
+    .ob-key-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+    .ob-key-row input::placeholder{color:var(--text-tertiary)}
+    .ob-key-hint{font-size:0.75rem;color:var(--text-tertiary);margin-top:0.25rem}
+    .ob-key-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    @media(max-width:640px){.ob-key-grid{grid-template-columns:1fr}}
+
+    .ob-actions{display:flex;align-items:center;gap:1rem;margin-top:1.5rem}
+    .ob-actions .btn{padding:0.625rem 1.5rem;font-size:0.9375rem;border-radius:10px}
+    .ob-actions .skip{font-size:0.8125rem;color:var(--text-tertiary);cursor:pointer;border:none;background:none;font-family:var(--font-body);transition:color var(--duration)}
+    .ob-actions .skip:hover{color:var(--text-secondary)}
+    .ob-status{margin-left:auto;font-size:0.8125rem;color:var(--success);font-weight:500;opacity:0;transition:opacity var(--duration)}
+    .ob-status.show{opacity:1}
+
+    /* ══════════════════════════════════════════════════
+       SETTINGS MODAL
+    ══════════════════════════════════════════════════ */
+    .modal-backdrop{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.3);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity var(--duration) var(--ease-out)}
+    .modal-backdrop.open{opacity:1;pointer-events:auto}
+    .modal-panel{position:fixed;top:0;right:0;bottom:0;width:min(420px,90vw);z-index:901;background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform var(--duration) var(--ease-out);overflow-y:auto;padding:1.5rem}
+    .modal-panel.open{transform:translateX(0)}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+    .modal-title{font-family:var(--font-display);font-size:1.125rem;font-weight:600}
+    .modal-close{background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all var(--duration)}
+    .modal-close:hover{background:var(--border);color:var(--text)}
+    .modal-section{margin-bottom:1.5rem}
+    .modal-section-title{font-family:var(--font-display);font-size:0.8125rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.75rem}
+    .setting-row{margin-bottom:0.875rem}
+    .setting-row label{display:block;font-size:0.8125rem;font-weight:500;color:var(--text-secondary);margin-bottom:0.25rem}
+    .setting-row input{width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:0.8125rem;background:var(--bg-subtle);color:var(--text);transition:all var(--duration)}
+    .setting-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+    .setting-status{display:inline-flex;align-items:center;gap:0.375rem;font-size:0.75rem;margin-left:0.5rem}
+    .setting-status .dot{width:6px;height:6px;border-radius:50%}
+    .setting-status .dot.on{background:var(--success)} .setting-status .dot.off{background:var(--text-tertiary)}
+
+    /* ══════════════════════════════════════════════════
+       MAIN PANEL (same as before, minus API keys card)
+    ══════════════════════════════════════════════════ */
+    .page-wrapper{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:1440px;margin-inline:auto;padding:1.5rem clamp(1rem,3vw,2rem);min-height:100vh}
+    .col-left{min-width:0} .col-right{min-width:0;display:flex;flex-direction:column;gap:1rem}
+    @media(max-width:1024px){.page-wrapper{grid-template-columns:1fr;max-width:720px}}
+
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding-bottom:1rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem}
+    .logo{font-family:var(--font-display);font-weight:700;font-size:1.25rem;letter-spacing:-0.02em;display:flex;align-items:center;gap:0.625rem}
+    .logo-mark{width:36px;height:36px;border-radius:9px;overflow:hidden;flex-shrink:0;transition:transform 0.3s var(--ease-out)}
+    .logo-mark img{width:100%;height:100%;object-fit:contain;display:block}
+    .logo:hover .logo-mark{transform:rotate(-5deg) scale(1.05)}
+    .logo-text span{color:var(--text-tertiary);font-weight:400;font-size:0.875rem;margin-left:0.25rem}
+    .header-right{display:flex;align-items:center;gap:0.75rem}
+    .status-pills{display:flex;gap:0.5rem}
+    .pill{display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.75rem;border-radius:100px;font-size:0.75rem;font-weight:500;background:var(--bg-subtle);border:1px solid var(--border);color:var(--text-secondary);transition:all var(--duration) var(--ease-out)}
+    .dot{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);transition:all var(--duration)}
+    .dot.on{background:var(--success);box-shadow:0 0 6px var(--success)} .dot.off{background:var(--danger)}
+    .meeting-pill{display:none;background:var(--accent-light);border-color:var(--accent)}
+    .meeting-pill .dot{background:var(--accent);animation:pulse 1.5s infinite}
+    .meeting-pill.active{display:inline-flex}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+    .header-btn{background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;width:36px;height:36px;cursor:pointer;color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all var(--duration) var(--ease-out)}
+    .header-btn:hover{color:var(--text);border-color:var(--text-tertiary)}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:0.75rem;transition:all var(--duration) var(--ease-out)}
+    .card:hover{box-shadow:var(--shadow-md)}
+    .card-title{font-family:var(--font-display);font-size:0.9375rem;font-weight:600;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;color:var(--text)}
+    .card-title .icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.875rem}
+    .icon-voice{background:var(--success-light)} .icon-computer{background:var(--purple-light)} .icon-log{background:var(--bg-subtle)} .icon-feed{background:var(--blue-light)} .icon-notes{background:var(--orange-light)} .icon-meeting{background:var(--accent-light)}
+
+    input[type="text"],input[type="password"]{width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:0.8125rem;background:var(--bg-subtle);color:var(--text);transition:all var(--duration) var(--ease-out)}
+    input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+    input::placeholder{color:var(--text-tertiary)}
+    .btn{display:inline-flex;align-items:center;gap:0.375rem;padding:0.4375rem 0.875rem;border-radius:8px;font-family:var(--font-body);font-size:0.8125rem;font-weight:600;border:none;cursor:pointer;transition:all var(--duration) var(--ease-out)}
+    .btn:hover{transform:translateY(-1px)} .btn:active{transform:translateY(0)} .btn:disabled{opacity:0.4;pointer-events:none}
+    .btn-primary{background:var(--accent);color:#fff} .btn-primary:hover{background:var(--accent-hover);box-shadow:var(--shadow-accent)}
+    .btn-success{background:var(--success);color:#fff} .btn-success:hover{box-shadow:0 2px 12px rgba(74,166,130,0.3)}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn-purple{background:var(--purple);color:#fff} .btn-purple:hover{box-shadow:0 2px 12px rgba(124,58,237,0.3)}
+    .btn-blue{background:var(--blue);color:#fff} .btn-blue:hover{box-shadow:0 2px 12px rgba(59,130,246,0.3)}
+    .btn-ghost{background:var(--bg-subtle);color:var(--text-secondary);border:1px solid var(--border)} .btn-ghost:hover{border-color:var(--text-tertiary);color:var(--text)}
+    .btn-sm{padding:0.3125rem 0.625rem;font-size:0.75rem}
+    .btn-row{display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap}
+    .toast{display:inline-flex;align-items:center;gap:0.25rem;font-size:0.75rem;color:var(--success);font-weight:500;opacity:0;transition:opacity var(--duration)}
+    .toast.show{opacity:1}
+    .action-row{display:flex;gap:0.5rem;align-items:stretch}
+    .action-row input{flex:1}
+    .result-box{margin-top:0.75rem;padding:0.75rem;border-radius:8px;background:var(--bg-subtle);font-family:var(--font-mono);font-size:0.75rem;color:var(--text-secondary);display:none;white-space:pre-wrap}
+    .result-box.show{display:block}
+
+    .feed-area{max-height:420px;overflow-y:auto;font-family:var(--font-mono);font-size:0.75rem;display:flex;flex-direction:column;gap:0.25rem;scrollbar-width:thin}
+    .feed-entry{display:flex;gap:0.5rem;padding:0.375rem 0.5rem;border-radius:6px;background:var(--bg-subtle);border-left:3px solid var(--border);transition:all 0.2s;animation:fadeIn 0.3s var(--ease-out)}
+    .feed-entry:hover{background:var(--surface-elevated)}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+    .feed-time{color:var(--text-tertiary);white-space:nowrap;flex-shrink:0}
+    .feed-badge{display:inline-block;padding:0.0625rem 0.375rem;border-radius:4px;font-size:0.6875rem;font-weight:600;white-space:nowrap;flex-shrink:0}
+    .badge-meeting{background:var(--accent-light);color:var(--accent)} .badge-voice{background:var(--success-light);color:var(--success)}
+    .badge-computer{background:var(--purple-light);color:var(--purple)} .badge-task{background:var(--blue-light);color:var(--blue)}
+    .badge-workspace{background:var(--orange-light);color:var(--orange)} .badge-system{background:var(--bg-subtle);color:var(--text-tertiary)}
+    .feed-entry.cat-meeting{border-left-color:var(--accent)} .feed-entry.cat-voice{border-left-color:var(--success)}
+    .feed-entry.cat-computer{border-left-color:var(--purple)} .feed-entry.cat-task{border-left-color:var(--blue)}
+    .feed-entry.cat-workspace{border-left-color:var(--orange)}
+    .feed-text{color:var(--text-secondary);word-break:break-word}
+    .ws-dot{width:8px;height:8px;border-radius:50%;background:var(--text-tertiary)} .ws-dot.connected{background:var(--success);box-shadow:0 0 6px var(--success)}
+
+    /* ── AI Activity Feed — Collapsible Entries ── */
+    .feed-ai{display:flex;flex-direction:column;border-radius:8px;border-left:3px solid var(--border);background:var(--bg-subtle);animation:fadeIn 0.3s var(--ease-out);overflow:hidden;transition:background 0.2s}
+    .feed-ai:hover{background:var(--surface-elevated)}
+    .feed-hdr{display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0.5rem;cursor:pointer;user-select:none}
+    .feed-emoji{font-size:0.875rem;flex-shrink:0;width:1.25rem;text-align:center}
+    .feed-kind{display:inline-block;padding:0.0625rem 0.375rem;border-radius:4px;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;flex-shrink:0}
+    .kind-thinking{background:#f3e8ff;color:#7c3aed} .kind-text{background:#dbeafe;color:#2563eb}
+    .kind-tool{background:#ffedd5;color:#ea580c} .kind-screen{background:#d1fae5;color:#059669}
+    .kind-command{background:#f3f4f6;color:#374151} .kind-openclaw{background:#fef3c7;color:#d97706}
+    .kind-file{background:#fef9c3;color:#a16207} .kind-search{background:#cffafe;color:#0891b2}
+    .kind-step{background:var(--bg-subtle);color:var(--text-tertiary)}
+    .feed-summary{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.75rem;color:var(--text-secondary)}
+    .feed-chevron{font-size:0.625rem;color:var(--text-tertiary);transition:transform 0.2s var(--ease-out);flex-shrink:0}
+    .feed-ai.expanded .feed-chevron{transform:rotate(90deg)}
+    .feed-detail{display:none;padding:0.375rem 0.625rem 0.5rem 2.375rem;border-top:1px solid var(--border-light)}
+    .feed-ai.expanded .feed-detail{display:block}
+    .feed-detail pre{margin:0;font-family:var(--font-mono);font-size:0.6875rem;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;line-height:1.5;scrollbar-width:thin}
+    .feed-ai.cat-thinking{border-left-color:#7c3aed} .feed-ai.cat-text{border-left-color:#2563eb}
+    .feed-ai.cat-tool{border-left-color:#ea580c} .feed-ai.cat-screen{border-left-color:#059669}
+    .feed-ai.cat-command{border-left-color:#374151} .feed-ai.cat-openclaw{border-left-color:#d97706}
+    .feed-ai.cat-file{border-left-color:#a16207} .feed-ai.cat-search{border-left-color:#0891b2}
+    [data-theme="dark"] .kind-thinking{background:#2e1065;color:#c4b5fd} [data-theme="dark"] .kind-text{background:#1e3a5f;color:#93c5fd}
+    [data-theme="dark"] .kind-tool{background:#431407;color:#fdba74} [data-theme="dark"] .kind-screen{background:#064e3b;color:#6ee7b7}
+    [data-theme="dark"] .kind-command{background:#1f2937;color:#d1d5db} [data-theme="dark"] .kind-openclaw{background:#451a03;color:#fcd34d}
+
+    .notes-area{max-height:380px;overflow-y:auto;font-size:0.8125rem;scrollbar-width:thin}
+    .transcript-entry{padding:0.375rem 0.5rem;border-radius:6px;margin-bottom:0.25rem;animation:fadeIn 0.3s var(--ease-out)}
+    .transcript-entry:hover{background:var(--bg-subtle)}
+    .transcript-role{font-weight:600;font-size:0.75rem;margin-right:0.375rem}
+    .role-user{color:var(--blue)} .role-ai{color:var(--purple)} .role-system{color:var(--text-tertiary)}
+    .transcript-text{color:var(--text-secondary)}
+    .action-items{margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)}
+    .action-items-title{font-family:var(--font-display);font-size:0.8125rem;font-weight:600;margin-bottom:0.5rem;color:var(--accent)}
+    .action-item{display:flex;gap:0.5rem;padding:0.375rem 0;font-size:0.8125rem;color:var(--text-secondary)}
+    .action-item::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:0.5rem;flex-shrink:0}
+    .notes-empty{text-align:center;padding:2rem 1rem;color:var(--text-tertiary);font-size:0.8125rem}
+    .meeting-controls{display:flex;gap:0.375rem;margin-left:auto}
+
+    @media(max-width:640px){.status-pills{display:none}.action-row{flex-direction:column}.flow-diagram{flex-direction:column}.flow-arrow{transform:rotate(90deg)}}
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       ONBOARDING OVERLAY
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="onboarding" id="onboarding">
+    <div class="onboarding-card">
+      <div class="ob-logo">
+        <div class="ob-logo-mark"><img src="./logo.png" alt="CallingClaw"></div>
+        <div class="ob-title">Welcome to CallingClaw</div>
+        <div class="ob-subtitle">Your AI-powered voice agent with computer control</div>
+      </div>
+
+      <!-- Flow diagram -->
+      <div class="flow-diagram">
+        <div class="flow-node">
+          <div class="fn-icon">&#127908;</div>
+          <div class="fn-label">Voice AI</div>
+          <div class="fn-sub">OpenAI Realtime</div>
+        </div>
+        <div class="flow-arrow">&#8594;</div>
+        <div class="flow-node highlight">
+          <div class="fn-icon">&#129438;</div>
+          <div class="fn-label">CallingClaw</div>
+          <div class="fn-sub">Orchestrator</div>
+        </div>
+        <div class="flow-arrow">&#8594;</div>
+        <div class="flow-node">
+          <div class="fn-icon">&#128421;</div>
+          <div class="fn-label">Computer Use</div>
+          <div class="fn-sub">Claude Vision</div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:center;gap:2rem;margin:-0.5rem 0 0.5rem;flex-wrap:wrap">
+        <div style="text-align:center">
+          <div style="font-size:1.25rem">&#128197;</div>
+          <div style="font-size:0.6875rem;color:var(--text-tertiary)">Google Calendar</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.25rem">&#128221;</div>
+          <div style="font-size:0.6875rem;color:var(--text-tertiary)">Meeting Notes</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.25rem">&#129438;</div>
+          <div style="font-size:0.6875rem;color:var(--text-tertiary)">OpenClaw Tools</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.25rem">&#128187;</div>
+          <div style="font-size:0.6875rem;color:var(--text-tertiary)">Bash + Screen</div>
+        </div>
+      </div>
+
+      <!-- API Key inputs -->
+      <div class="ob-keys">
+        <div class="ob-keys-title">&#128273; Connect your AI providers</div>
+
+        <div class="ob-key-row">
+          <label>OpenAI API Key <span class="required">Required</span></label>
+          <input type="password" id="ob-openai" placeholder="sk-..." autocomplete="off">
+          <div class="ob-key-hint">Powers voice conversations (Realtime API) and vision analysis</div>
+        </div>
+
+        <div class="ob-key-grid">
+          <div class="ob-key-row">
+            <label>OpenRouter API Key <span class="optional">Recommended</span></label>
+            <input type="password" id="ob-openrouter" placeholder="sk-or-v1-..." autocomplete="off">
+            <div class="ob-key-hint">Claude Computer Use via OpenRouter</div>
+          </div>
+          <div class="ob-key-row">
+            <label>Anthropic API Key <span class="optional">Optional</span></label>
+            <input type="password" id="ob-anthropic" placeholder="sk-ant-..." autocomplete="off">
+            <div class="ob-key-hint">Direct Claude API (if you have an account)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ob-actions">
+        <button onclick="completeOnboarding()" class="btn btn-primary" id="ob-complete-btn">Complete Setup</button>
+        <button onclick="skipOnboarding()" class="skip">Skip for now</button>
+        <span class="ob-status" id="ob-status">&#10003; Keys saved</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SETTINGS SLIDE-OVER (accessible from header gear icon)
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-backdrop" id="settings-backdrop" onclick="closeSettings()"></div>
+  <div class="modal-panel" id="settings-panel">
+    <div class="modal-header">
+      <div class="modal-title">&#9881; Settings</div>
+      <button class="modal-close" onclick="closeSettings()">&times;</button>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">API Keys</div>
+      <div class="setting-row">
+        <label>OpenAI API Key
+          <span class="setting-status"><span class="dot off" id="key-dot-openai"></span> <span id="key-label-openai">Not set</span></span>
+        </label>
+        <input type="password" id="set-openai" placeholder="sk-...">
+      </div>
+      <div class="setting-row">
+        <label>OpenRouter API Key
+          <span class="setting-status"><span class="dot off" id="key-dot-openrouter"></span> <span id="key-label-openrouter">Not set</span></span>
+        </label>
+        <input type="password" id="set-openrouter" placeholder="sk-or-v1-...">
+      </div>
+      <div class="setting-row">
+        <label>Anthropic API Key
+          <span class="setting-status"><span class="dot off" id="key-dot-anthropic"></span> <span id="key-label-anthropic">Not set</span></span>
+        </label>
+        <input type="password" id="set-anthropic" placeholder="sk-ant-...">
+      </div>
+      <div class="btn-row" style="margin-top:1rem">
+        <button onclick="saveSettingsKeys()" class="btn btn-primary">Save Keys</button>
+        <span class="toast" id="settings-toast">&#10003; Saved</span>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Service Status</div>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.8125rem">
+        <div style="display:flex;align-items:center;gap:0.5rem"><span class="dot off" id="set-dot-bridge"></span> Python Bridge</div>
+        <div style="display:flex;align-items:center;gap:0.5rem"><span class="dot off" id="set-dot-voice"></span> Voice (OpenAI Realtime)</div>
+        <div style="display:flex;align-items:center;gap:0.5rem"><span class="dot off" id="set-dot-calendar"></span> Google Calendar</div>
+        <div style="display:flex;align-items:center;gap:0.5rem"><span class="dot off" id="set-dot-openclaw"></span> OpenClaw Agent</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       MAIN PANEL
+  ══════════════════════════════════════════════════════════════════ -->
+  <div class="page-wrapper" id="main-panel">
+    <header>
+      <div class="logo">
+        <div class="logo-mark"><img src="./logo.png" alt="CallingClaw"></div>
+        <div class="logo-text">CallingClaw <span>Control Panel</span></div>
+      </div>
+      <div class="header-right">
+        <div class="status-pills">
+          <span class="pill"><span class="dot off" id="dot-bridge"></span> Bridge</span>
+          <span class="pill"><span class="dot off" id="dot-realtime"></span> Voice</span>
+          <span class="pill"><span class="dot off" id="dot-calendar"></span> Calendar</span>
+          <span class="pill meeting-pill" id="meeting-pill"><span class="dot"></span> Recording</span>
+        </div>
+        <button class="header-btn" onclick="openSettings()" title="Settings">&#9881;</button>
+        <button class="header-btn" onclick="toggleTheme()" title="Toggle theme">
+          <span class="icon-moon">&#9790;</span><span class="icon-sun" style="display:none">&#9728;</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- LEFT COLUMN -->
+    <div class="col-left">
+      <!-- Voice Session -->
+      <div class="card">
+        <div class="card-title"><span class="icon icon-voice">&#127908;</span> Voice Session</div>
+        <div class="action-row" style="margin-bottom:0.5rem">
+          <label style="font-size:0.8125rem;font-weight:500;color:var(--text-secondary);white-space:nowrap">Voice</label>
+          <select id="voice-select" title="Select voice" onchange="changeVoice(this.value)" style="padding:0.375rem 0.625rem;border:1px solid var(--border);border-radius:8px;font-family:var(--font-body);font-size:0.8125rem;background:var(--bg-subtle);color:var(--text);cursor:pointer;min-width:120px">
+            <option value="alloy">Alloy</option>
+            <option value="ash">Ash</option>
+            <option value="ballad">Ballad</option>
+            <option value="coral">Coral</option>
+            <option value="echo">Echo</option>
+            <option value="fable">Fable</option>
+            <option value="marin" selected>Marin</option>
+            <option value="nova">Nova</option>
+            <option value="onyx">Onyx</option>
+            <option value="sage">Sage</option>
+            <option value="shimmer">Shimmer</option>
+            <option value="verse">Verse</option>
+          </select>
+          <span id="voice-change-status" style="font-size:0.75rem;color:var(--text-tertiary)"></span>
+        </div>
+        <div class="action-row">
+          <button onclick="startVoice()" id="btn-voice-start" class="btn btn-success">Start Voice</button>
+          <button onclick="stopVoice()" id="btn-voice-stop" class="btn btn-danger" disabled>Stop</button>
+          <a href="/voice-test" target="_blank" style="padding:0.375rem 0.75rem;border:1px solid var(--border);border-radius:8px;font-size:0.8125rem;color:var(--text-secondary);text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">&#127897; Browser Voice Test</a>
+        </div>
+        <div class="action-row" style="margin-top:0.375rem">
+          <input type="text" id="voice-text" placeholder="Type a message to the voice AI..." onkeydown="if(event.key==='Enter')sendVoiceText()">
+          <button onclick="sendVoiceText()" class="btn btn-ghost">Send</button>
+        </div>
+      </div>
+
+      <!-- Computer Use -->
+      <div class="card">
+        <div class="card-title"><span class="icon icon-computer">&#128421;</span> Computer Use</div>
+        <div class="action-row">
+          <input type="text" id="cu-instruction" placeholder="What should CallingClaw do on your computer?" onkeydown="if(event.key==='Enter')runComputerUse()">
+          <button onclick="runComputerUse()" class="btn btn-purple">Execute</button>
+        </div>
+        <div class="result-box" id="cu-result"></div>
+      </div>
+
+      <!-- Join Meeting -->
+      <div class="card">
+        <div class="card-title"><span class="icon icon-meeting">&#128222;</span> Join Meeting</div>
+        <div class="action-row">
+          <input type="text" id="join-url" placeholder="Paste Google Meet or Zoom link..." oninput="validateJoinUrl()">
+          <button onclick="joinMeeting()" id="btn-join" class="btn btn-primary btn-sm" disabled>Join</button>
+        </div>
+        <div id="join-hint" style="font-size:0.6875rem;margin-top:0.375rem;color:var(--text-tertiary);display:flex;align-items:center;justify-content:space-between">
+          <span>Supports: meet.google.com/xxx-xxxx-xxx &bull; zoom.us/j/123456789</span>
+          <a href="/meeting-join-test" target="_blank" style="color:var(--text-secondary);text-decoration:none;font-size:0.6875rem;white-space:nowrap">A/B Test &#8594;</a>
+        </div>
+        <div id="join-status" style="display:none;margin-top:0.5rem">
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <span id="join-platform-icon"></span>
+            <span id="join-platform-text" style="font-size:0.8125rem;font-weight:500"></span>
+            <button onclick="leaveMeeting()" id="btn-leave" class="btn btn-danger btn-sm" style="margin-left:auto;display:none">Leave</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meeting Controls -->
+      <div class="card">
+        <div class="card-title"><span class="icon icon-meeting">&#128197;</span> Meeting Controls</div>
+        <div class="btn-row">
+          <button onclick="startMeeting()" id="btn-mtg-start" class="btn btn-success btn-sm">Start Recording</button>
+          <button onclick="stopMeeting()" id="btn-mtg-stop" class="btn btn-danger btn-sm" disabled>Stop Recording</button>
+          <button onclick="exportMeeting()" class="btn btn-blue btn-sm">Export Notes</button>
+          <button onclick="generateSummary()" class="btn btn-ghost btn-sm">Summary</button>
+        </div>
+        <div class="result-box" id="mtg-result"></div>
+      </div>
+
+      <!-- Tasks -->
+      <div class="card">
+        <div class="card-title"><span class="icon icon-log">&#128203;</span> Tasks <span id="task-count" style="font-weight:400;font-size:0.75rem;color:var(--text-tertiary);margin-left:auto"></span></div>
+        <div id="task-list" style="max-height:200px;overflow-y:auto;font-size:0.8125rem"></div>
+        <div class="btn-row" style="margin-top:0.5rem">
+          <button onclick="refreshTasks()" class="btn btn-ghost btn-sm">Refresh</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col-right">
+      <!-- AI Activity Feed -->
+      <div class="card" style="flex:1;display:flex;flex-direction:column">
+        <div class="card-title">
+          <span class="icon icon-feed">&#9889;</span> AI Activity Feed
+          <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem">
+            <span class="ws-dot" id="ws-dot"></span>
+            <span id="ws-label" style="font-size:0.6875rem;font-weight:400;color:var(--text-tertiary)">Connecting...</span>
+          </div>
+        </div>
+        <div class="feed-area" id="feed">
+          <div class="feed-entry cat-system">
+            <span class="feed-time">--:--:--</span>
+            <span class="feed-badge badge-system">SYS</span>
+            <span class="feed-text">Waiting for WebSocket connection...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Meeting Notes -->
+      <div class="card" style="flex:1;display:flex;flex-direction:column">
+        <div class="card-title">
+          <span class="icon icon-notes">&#128221;</span> Live Meeting Notes
+          <div class="meeting-controls">
+            <button onclick="scrollNotesBottom()" class="btn btn-ghost btn-sm" title="Scroll to bottom">&#8595;</button>
+          </div>
+        </div>
+        <div class="notes-area" id="notes">
+          <div class="notes-empty">No active meeting. Start recording to see live transcript and action items here.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    let ws = null;
+    let wsReconnectTimer = null;
+    let notesPoller = null;
+    let lastTranscriptCount = 0;
+
+    // ══════════════════════════════════════════════════
+    // ONBOARDING
+    // ══════════════════════════════════════════════════
+    async function checkOnboarding() {
+      try {
+        const r = await fetch(`${API}/api/keys`);
+        const keys = await r.json();
+        // Show onboarding if no OpenAI key (required)
+        if (keys.openai) {
+          // Keys already configured — hide onboarding
+          document.getElementById('onboarding').classList.add('hidden');
+          setTimeout(() => document.getElementById('onboarding').style.display = 'none', 500);
+        }
+        // Pre-fill settings panel status
+        updateKeyStatus(keys);
+      } catch {
+        // Server not ready yet — show onboarding
+      }
+    }
+
+    async function completeOnboarding() {
+      const btn = document.getElementById('ob-complete-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      const body = {};
+      const oai = document.getElementById('ob-openai').value.trim();
+      const orr = document.getElementById('ob-openrouter').value.trim();
+      const ant = document.getElementById('ob-anthropic').value.trim();
+      if (oai) body.openai_api_key = oai;
+      if (orr) body.openrouter_api_key = orr;
+      if (ant) body.anthropic_api_key = ant;
+
+      if (!oai) {
+        btn.disabled = false;
+        btn.textContent = 'Complete Setup';
+        document.getElementById('ob-openai').style.borderColor = 'var(--danger)';
+        document.getElementById('ob-openai').focus();
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API}/api/keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (r.ok) {
+          const status = document.getElementById('ob-status');
+          status.classList.add('show');
+          localStorage.setItem('cc-onboarded', '1');
+          setTimeout(() => {
+            document.getElementById('onboarding').classList.add('hidden');
+            setTimeout(() => document.getElementById('onboarding').style.display = 'none', 500);
+          }, 800);
+          fetchStatus();
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Complete Setup';
+      }
+    }
+
+    function skipOnboarding() {
+      localStorage.setItem('cc-onboarded', '1');
+      document.getElementById('onboarding').classList.add('hidden');
+      setTimeout(() => document.getElementById('onboarding').style.display = 'none', 500);
+    }
+
+    // ══════════════════════════════════════════════════
+    // SETTINGS PANEL
+    // ══════════════════════════════════════════════════
+    function openSettings() {
+      document.getElementById('settings-backdrop').classList.add('open');
+      document.getElementById('settings-panel').classList.add('open');
+      loadSettingsKeys();
+    }
+
+    function closeSettings() {
+      document.getElementById('settings-backdrop').classList.remove('open');
+      document.getElementById('settings-panel').classList.remove('open');
+    }
+
+    async function loadSettingsKeys() {
+      try {
+        const r = await fetch(`${API}/api/keys`);
+        const keys = await r.json();
+        // Show masked values as placeholders
+        if (keys.openai) document.getElementById('set-openai').placeholder = keys.openai;
+        if (keys.openrouter) document.getElementById('set-openrouter').placeholder = keys.openrouter;
+        if (keys.anthropic) document.getElementById('set-anthropic').placeholder = keys.anthropic;
+        updateKeyStatus(keys);
+      } catch {}
+    }
+
+    function updateKeyStatus(keys) {
+      const items = [
+        ['openai', keys.openai],
+        ['openrouter', keys.openrouter],
+        ['anthropic', keys.anthropic]
+      ];
+      for (const [name, val] of items) {
+        const dot = document.getElementById(`key-dot-${name}`);
+        const label = document.getElementById(`key-label-${name}`);
+        if (dot && label) {
+          if (val) {
+            dot.className = 'dot on';
+            label.textContent = val;
+            label.style.color = 'var(--success)';
+          } else {
+            dot.className = 'dot off';
+            label.textContent = 'Not set';
+            label.style.color = '';
+          }
+        }
+      }
+    }
+
+    async function saveSettingsKeys() {
+      const body = {};
+      const oai = document.getElementById('set-openai').value.trim();
+      const orr = document.getElementById('set-openrouter').value.trim();
+      const ant = document.getElementById('set-anthropic').value.trim();
+      if (oai) body.openai_api_key = oai;
+      if (orr) body.openrouter_api_key = orr;
+      if (ant) body.anthropic_api_key = ant;
+      if (Object.keys(body).length === 0) return;
+
+      const r = await fetch(`${API}/api/keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (r.ok) {
+        showToast('settings-toast');
+        loadSettingsKeys();
+        // Clear inputs after save
+        document.getElementById('set-openai').value = '';
+        document.getElementById('set-openrouter').value = '';
+        document.getElementById('set-anthropic').value = '';
+        addFeedEntry('system', 'KEYS', 'API keys updated');
+      }
+    }
+
+    // ══════════════════════════════════════════════════
+    // THEME
+    // ══════════════════════════════════════════════════
+    function toggleTheme() {
+      const h = document.documentElement, c = h.getAttribute('data-theme'), n = c === 'dark' ? 'light' : 'dark';
+      h.setAttribute('data-theme', n);
+      localStorage.setItem('cc-theme', n);
+      document.querySelector('.icon-moon').style.display = n === 'dark' ? 'none' : '';
+      document.querySelector('.icon-sun').style.display = n === 'dark' ? '' : 'none';
+    }
+    (function() {
+      const s = localStorage.getItem('cc-theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme:dark)').matches)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.querySelector('.icon-moon').style.display = 'none';
+        document.querySelector('.icon-sun').style.display = '';
+      }
+    })();
+
+    function showToast(id) {
+      const e = document.getElementById(id);
+      e.classList.add('show');
+      setTimeout(() => e.classList.remove('show'), 2000);
+    }
+
+    // ══════════════════════════════════════════════════
+    // WEBSOCKET ACTIVITY FEED
+    // ══════════════════════════════════════════════════
+
+    // AI activity event → emoji / badge / color mapping
+    const AI_KINDS = {
+      'ai.thinking':    { emoji: '\u{1F9E0}', kind: 'Thinking',  cls: 'thinking' },
+      'ai.text':        { emoji: '\u{1F4DD}', kind: 'Output',    cls: 'text' },
+      'ai.tool_call':   { emoji: '\u{1F527}', kind: 'Tool',      cls: 'tool' },
+      'ai.computer':    { emoji: '\u{1F5B1}\uFE0F', kind: 'Screen', cls: 'screen' },
+      'ai.bash':        { emoji: '\u{1F4BB}', kind: 'Command',   cls: 'command' },
+      'ai.openclaw':    { emoji: '\u26A1',     kind: 'OpenClaw',  cls: 'openclaw' },
+      'ai.file':        { emoji: '\u{1F4C2}', kind: 'File',      cls: 'file' },
+      'ai.search':      { emoji: '\u{1F50D}', kind: 'Search',    cls: 'search' },
+      'ai.step':        { emoji: '\u25B6',     kind: 'Step',      cls: 'step' },
+      'openclaw.delta':  { emoji: '\u26A1',     kind: 'OpenClaw',  cls: 'openclaw' },
+      'openclaw.done':   { emoji: '\u2705',     kind: 'OpenClaw',  cls: 'openclaw' },
+      'openclaw.error':  { emoji: '\u274C',     kind: 'OpenClaw',  cls: 'openclaw' },
+    };
+
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = location.host || 'localhost:4000';
+      ws = new WebSocket(`${proto}//${host}/ws/events`);
+
+      ws.onopen = () => {
+        document.getElementById('ws-dot').classList.add('connected');
+        document.getElementById('ws-label').textContent = 'Connected';
+        addFeedEntry('system', 'SYS', 'WebSocket connected');
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const event = JSON.parse(e.data);
+
+          // AI activity events → collapsible entries with emoji
+          if (AI_KINDS[event.type]) {
+            const d = event.data || {};
+            addAIEntry(event.type, d.summary || '', d.detail || '');
+            return;
+          }
+
+          // Regular events → simple entries
+          const category = event.type.split('.')[0];
+          const label = event.type.split('.').pop().toUpperCase();
+          addFeedEntry(category, label, formatEventData(event));
+
+          if (event.type === 'meeting.started' || event.type === 'meeting.joining')
+            document.getElementById('meeting-pill').classList.add('active');
+          if (event.type === 'meeting.ended' || event.type === 'meeting.stopped')
+            document.getElementById('meeting-pill').classList.remove('active');
+        } catch {}
+      };
+
+      ws.onclose = () => {
+        document.getElementById('ws-dot').classList.remove('connected');
+        document.getElementById('ws-label').textContent = 'Disconnected';
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(connectWS, 3000);
+      };
+      ws.onerror = () => ws.close();
+    }
+
+    function formatEventData(event) {
+      const d = event.data || {};
+      switch (event.type) {
+        case 'voice.started': return `Voice started (${d.audio_mode || 'default'})`;
+        case 'voice.stopped': return 'Voice stopped';
+        case 'meeting.joining': return `Joining: ${d.meet_url || ''}`;
+        case 'meeting.creating': return `Creating: "${d.summary || ''}"`;
+        case 'meeting.started': return `In meeting${d.meet_url ? ': ' + d.meet_url : ''}`;
+        case 'meeting.stopped': return 'Recording stopped';
+        case 'meeting.ended': return `Meeting ended. ${d.filepath ? 'Notes: ' + d.filepath : ''}`;
+        case 'meeting.action_item': return `Action: ${d.text || ''}${d.assignee ? ' (' + d.assignee + ')' : ''}`;
+        case 'computer.task_started': return `Executing: "${d.instruction || ''}"`;
+        case 'computer.task_done': return `Done: ${d.summary || ''}`;
+        case 'task.created': return `New: "${(d.task && d.task.task) || ''}"`;
+        case 'task.updated': return `Task ${(d.task && d.task.id) || ''} -> ${(d.task && d.task.status) || ''}`;
+        default: return JSON.stringify(d).slice(0, 200);
+      }
+    }
+
+    /** Add a collapsible AI activity entry with emoji badge */
+    function addAIEntry(eventType, summary, detail) {
+      const feed = document.getElementById('feed');
+      const isAtBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 50;
+      const cfg = AI_KINDS[eventType] || { emoji: '\u2699\uFE0F', kind: 'AI', cls: 'step' };
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const hasDetail = detail && detail.length > 0;
+
+      const div = document.createElement('div');
+      div.className = `feed-ai cat-${cfg.cls}`;
+
+      let html = '<div class="feed-hdr" onclick="this.parentElement.classList.toggle(\'expanded\')">';
+      html += `<span class="feed-time">${time}</span>`;
+      html += `<span class="feed-emoji">${cfg.emoji}</span>`;
+      html += `<span class="feed-kind kind-${cfg.cls}">${cfg.kind}</span>`;
+      html += `<span class="feed-summary">${escapeHtml(summary)}</span>`;
+      if (hasDetail) html += '<span class="feed-chevron">\u25B6</span>';
+      html += '</div>';
+      if (hasDetail) html += `<div class="feed-detail"><pre>${escapeHtml(detail)}</pre></div>`;
+
+      div.innerHTML = html;
+      feed.appendChild(div);
+      while (feed.children.length > 300) feed.removeChild(feed.firstChild);
+      if (isAtBottom) feed.scrollTop = feed.scrollHeight;
+    }
+
+    /** Add a simple (non-collapsible) feed entry for system/meeting/voice events */
+    function addFeedEntry(category, label, text) {
+      const feed = document.getElementById('feed');
+      const isAtBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 50;
+      const div = document.createElement('div');
+      div.className = `feed-entry cat-${category}`;
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const badgeClass = { meeting:'badge-meeting', voice:'badge-voice', computer:'badge-computer', task:'badge-task', workspace:'badge-workspace' }[category] || 'badge-system';
+      div.innerHTML = `<span class="feed-time">${time}</span><span class="feed-badge ${badgeClass}">${label}</span><span class="feed-text">${escapeHtml(text)}</span>`;
+      feed.appendChild(div);
+      while (feed.children.length > 300) feed.removeChild(feed.firstChild);
+      if (isAtBottom) feed.scrollTop = feed.scrollHeight;
+    }
+
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    // ══════════════════════════════════════════════════
+    // MEETING NOTES POLLING
+    // ══════════════════════════════════════════════════
+    function startNotesPolling() {
+      if (notesPoller) return;
+      notesPoller = setInterval(pollNotes, 2000);
+      pollNotes();
+    }
+
+    async function pollNotes() {
+      try {
+        const [trRes, statusRes] = await Promise.all([
+          fetch(`${API}/api/meeting/transcript?count=100`),
+          fetch(`${API}/api/meeting/status`)
+        ]);
+        const transcript = await trRes.json();
+        const status = await statusRes.json();
+        const entries = transcript.entries || [];
+
+        if (entries.length !== lastTranscriptCount || entries.length === 0) {
+          lastTranscriptCount = entries.length;
+          renderNotes(entries, status);
+        }
+
+        if (status.isRecording) {
+          document.getElementById('meeting-pill').classList.add('active');
+          document.getElementById('btn-mtg-start').disabled = true;
+          document.getElementById('btn-mtg-stop').disabled = false;
+        } else {
+          document.getElementById('btn-mtg-start').disabled = false;
+          document.getElementById('btn-mtg-stop').disabled = true;
+        }
+      } catch {}
+    }
+
+    function renderNotes(entries, status) {
+      const notes = document.getElementById('notes');
+      const isAtBottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 50;
+      if (entries.length === 0 && !status.isRecording) {
+        notes.innerHTML = '<div class="notes-empty">No active meeting. Start recording to see live transcript.</div>';
+        return;
+      }
+      let html = '';
+      for (const e of entries) {
+        const rc = e.role === 'user' ? 'role-user' : e.role === 'assistant' ? 'role-ai' : 'role-system';
+        const rn = e.role === 'user' ? 'Speaker' : e.role === 'assistant' ? 'CallingClaw' : 'System';
+        html += `<div class="transcript-entry"><span class="transcript-role ${rc}">${rn}</span><span class="transcript-text">${escapeHtml(e.text || e.content || '')}</span></div>`;
+      }
+      const items = status.actionItems || [];
+      if (items.length > 0) {
+        html += '<div class="action-items"><div class="action-items-title">Action Items</div>';
+        for (const i of items) html += `<div class="action-item">${escapeHtml(i.task || i.text || '')}${i.assignee ? ' <b>(' + escapeHtml(i.assignee) + ')</b>' : ''}</div>`;
+        html += '</div>';
+      }
+      notes.innerHTML = html;
+      if (isAtBottom) notes.scrollTop = notes.scrollHeight;
+    }
+
+    function scrollNotesBottom() { document.getElementById('notes').scrollTop = 99999; }
+
+    // ══════════════════════════════════════════════════
+    // STATUS POLLING
+    // ══════════════════════════════════════════════════
+    async function fetchStatus() {
+      try {
+        const r = await fetch(`${API}/api/status`);
+        const d = await r.json();
+        document.getElementById('dot-bridge').className = `dot ${d.bridge === 'connected' ? 'on' : 'off'}`;
+        document.getElementById('dot-realtime').className = `dot ${d.realtime === 'connected' ? 'on' : 'off'}`;
+        document.getElementById('dot-calendar').className = `dot ${d.calendar === 'connected' ? 'on' : 'off'}`;
+
+        // Settings panel status dots
+        document.getElementById('set-dot-bridge').className = `dot ${d.bridge === 'connected' ? 'on' : 'off'}`;
+        document.getElementById('set-dot-voice').className = `dot ${d.realtime === 'connected' ? 'on' : 'off'}`;
+        document.getElementById('set-dot-calendar').className = `dot ${d.calendar === 'connected' ? 'on' : 'off'}`;
+        document.getElementById('set-dot-openclaw').className = `dot ${d.openclaw === 'connected' ? 'on' : 'off'}`;
+
+        if (d.meeting === 'recording') document.getElementById('meeting-pill').classList.add('active');
+        if (d.taskStats) document.getElementById('task-count').textContent = `${d.taskStats.pending} pending / ${d.taskStats.total} total`;
+      } catch {}
+    }
+
+    // ══════════════════════════════════════════════════
+    // API ACTIONS
+    // ══════════════════════════════════════════════════
+    async function changeVoice(voice) {
+      const status = document.getElementById('voice-change-status');
+      status.textContent = 'saving...';
+      try {
+        const r = await fetch(`${API}/api/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_voice: voice }) });
+        const d = await r.json();
+        if (d.ok) {
+          status.textContent = `✓ ${voice}`;
+          addFeedEntry('voice', 'CONFIG', `Voice changed to: ${voice}`);
+        } else {
+          status.textContent = 'failed';
+        }
+      } catch { status.textContent = 'error'; }
+      setTimeout(() => { status.textContent = ''; }, 2000);
+    }
+
+    // Load current voice config on startup
+    async function loadVoiceConfig() {
+      try {
+        const r = await fetch(`${API}/api/config`);
+        const d = await r.json();
+        if (d.openai_voice) {
+          document.getElementById('voice-select').value = d.openai_voice;
+        }
+      } catch {}
+    }
+    loadVoiceConfig();
+
+    async function startVoice() {
+      addFeedEntry('voice', 'START', 'Starting voice session...');
+      const r = await fetch(`${API}/api/voice/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const d = await r.json();
+      if (d.ok) {
+        document.getElementById('btn-voice-start').disabled = true;
+        document.getElementById('btn-voice-stop').disabled = false;
+        addFeedEntry('voice', 'ACTIVE', 'Voice session connected');
+      } else {
+        addFeedEntry('voice', 'ERROR', `Voice error: ${d.error}`);
+      }
+      fetchStatus();
+    }
+
+    async function stopVoice() {
+      await fetch(`${API}/api/voice/stop`, { method: 'POST' });
+      document.getElementById('btn-voice-start').disabled = false;
+      document.getElementById('btn-voice-stop').disabled = true;
+      addFeedEntry('voice', 'STOP', 'Voice stopped');
+      fetchStatus();
+    }
+
+    async function sendVoiceText() {
+      const i = document.getElementById('voice-text'), t = i.value.trim();
+      if (!t) return;
+      await fetch(`${API}/api/voice/text`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t }) });
+      addFeedEntry('voice', 'TEXT', `Sent: "${t}"`);
+      i.value = '';
+    }
+
+    async function runComputerUse() {
+      const i = document.getElementById('cu-instruction'), inst = i.value.trim();
+      if (!inst) return;
+      addFeedEntry('computer', 'EXEC', `Executing: "${inst}"`);
+      const rd = document.getElementById('cu-result');
+      rd.classList.add('show');
+      rd.textContent = 'Executing...';
+      try {
+        const r = await fetch(`${API}/api/computer/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction: inst }) });
+        const d = await r.json();
+        rd.textContent = `Result: ${d.summary}\nSteps: ${(d.steps || []).join(' -> ')}`;
+        addFeedEntry('computer', 'DONE', d.summary);
+      } catch (e) {
+        rd.textContent = `Error: ${e.message}`;
+        addFeedEntry('computer', 'ERROR', e.message);
+      }
+      i.value = '';
+    }
+
+    // ══════════════════════════════════════════════════
+    // JOIN MEETING
+    // ══════════════════════════════════════════════════
+
+    const MEET_RE = /https?:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/;
+    const ZOOM_RE = /https?:\/\/(?:[\w-]+\.)?zoom\.us\/(?:j|my)\/[\w./?=&%-]+/;
+
+    function validateJoinUrl() {
+      const input = document.getElementById('join-url');
+      const btn = document.getElementById('btn-join');
+      const hint = document.getElementById('join-hint');
+      const val = input.value.trim();
+
+      if (!val) {
+        btn.disabled = true;
+        hint.style.color = 'var(--text-tertiary)';
+        hint.textContent = 'Supports: meet.google.com/xxx-xxxx-xxx \u2022 zoom.us/j/123456789';
+        return;
+      }
+
+      if (MEET_RE.test(val)) {
+        btn.disabled = false;
+        hint.style.color = 'var(--success)';
+        hint.innerHTML = '\u2713 Google Meet link detected';
+      } else if (ZOOM_RE.test(val)) {
+        btn.disabled = false;
+        hint.style.color = 'var(--success)';
+        hint.innerHTML = '\u2713 Zoom meeting link detected';
+      } else {
+        btn.disabled = true;
+        hint.style.color = 'var(--danger)';
+        hint.textContent = '\u2717 Invalid link \u2014 paste a Google Meet or Zoom URL';
+      }
+    }
+
+    async function joinMeeting() {
+      const input = document.getElementById('join-url');
+      const url = input.value.trim();
+      if (!url) return;
+
+      const btn = document.getElementById('btn-join');
+      btn.disabled = true;
+      btn.textContent = 'Joining...';
+      addFeedEntry('meeting', 'JOIN', `Joining: ${url}`);
+
+      try {
+        const r = await fetch(`${API}/api/meeting/join`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const d = await r.json();
+
+        if (d.error) {
+          addFeedEntry('meeting', 'ERROR', d.error);
+          btn.textContent = 'Join';
+          btn.disabled = false;
+          return;
+        }
+
+        const statusEl = document.getElementById('join-status');
+        const iconEl = document.getElementById('join-platform-icon');
+        const textEl = document.getElementById('join-platform-text');
+        const leaveBtn = document.getElementById('btn-leave');
+
+        statusEl.style.display = 'block';
+        iconEl.textContent = d.platform === 'zoom' ? '\uD83D\uDCF9' : '\uD83C\uDFA5';
+        textEl.textContent = d.status === 'in_meeting'
+          ? `Connected to ${d.platform === 'zoom' ? 'Zoom' : 'Google Meet'}`
+          : `Status: ${d.status}${d.error ? ' — ' + d.error : ''}`;
+        textEl.style.color = d.status === 'in_meeting' ? 'var(--success)' : 'var(--danger)';
+
+        if (d.status === 'in_meeting') {
+          leaveBtn.style.display = '';
+          input.disabled = true;
+          btn.textContent = 'Joined';
+          document.getElementById('meeting-pill').classList.add('active');
+          document.getElementById('btn-mtg-start').disabled = true;
+          document.getElementById('btn-mtg-stop').disabled = false;
+          addFeedEntry('meeting', 'JOINED', `In meeting (${d.platform === 'zoom' ? 'Zoom' : 'Meet'})`);
+        } else {
+          btn.textContent = 'Join';
+          btn.disabled = false;
+          addFeedEntry('meeting', 'ERROR', d.error || 'Join failed');
+        }
+      } catch (e) {
+        addFeedEntry('meeting', 'ERROR', e.message);
+        btn.textContent = 'Join';
+        btn.disabled = false;
+      }
+    }
+
+    async function leaveMeeting() {
+      addFeedEntry('meeting', 'LEAVE', 'Leaving meeting...');
+      try {
+        const r = await fetch(`${API}/api/meeting/leave`, { method: 'POST' });
+        const d = await r.json();
+
+        document.getElementById('join-status').style.display = 'none';
+        document.getElementById('btn-leave').style.display = 'none';
+        document.getElementById('join-url').disabled = false;
+        document.getElementById('join-url').value = '';
+        document.getElementById('btn-join').textContent = 'Join';
+        document.getElementById('btn-join').disabled = true;
+        document.getElementById('join-hint').style.color = 'var(--text-tertiary)';
+        document.getElementById('join-hint').textContent = 'Supports: meet.google.com/xxx-xxxx-xxx \u2022 zoom.us/j/123456789';
+        document.getElementById('meeting-pill').classList.remove('active');
+        document.getElementById('btn-mtg-start').disabled = false;
+        document.getElementById('btn-mtg-stop').disabled = true;
+        addFeedEntry('meeting', 'LEFT', `Left meeting. Notes: ${d.filepath || 'saved'}`);
+      } catch (e) {
+        addFeedEntry('meeting', 'ERROR', e.message);
+      }
+    }
+
+    async function startMeeting() {
+      const r = await fetch(`${API}/api/meeting/start`, { method: 'POST' });
+      const d = await r.json();
+      if (d.ok) {
+        document.getElementById('btn-mtg-start').disabled = true;
+        document.getElementById('btn-mtg-stop').disabled = false;
+        document.getElementById('meeting-pill').classList.add('active');
+        addFeedEntry('meeting', 'REC', 'Recording started');
+      }
+    }
+
+    async function stopMeeting() {
+      const r = await fetch(`${API}/api/meeting/stop`, { method: 'POST' });
+      const d = await r.json();
+      if (d.ok) {
+        document.getElementById('btn-mtg-start').disabled = false;
+        document.getElementById('btn-mtg-stop').disabled = true;
+        document.getElementById('meeting-pill').classList.remove('active');
+        addFeedEntry('meeting', 'STOP', 'Recording stopped');
+      }
+    }
+
+    async function exportMeeting() {
+      addFeedEntry('meeting', 'EXPORT', 'Exporting...');
+      const rd = document.getElementById('mtg-result');
+      rd.classList.add('show'); rd.textContent = 'Exporting...';
+      try {
+        const r = await fetch(`${API}/api/meeting/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const d = await r.json();
+        rd.textContent = `Exported: ${d.filepath || 'done'}`;
+        addFeedEntry('meeting', 'EXPORT', `Notes: ${d.filepath || 'success'}`);
+      } catch (e) { rd.textContent = `Error: ${e.message}`; }
+    }
+
+    async function generateSummary() {
+      addFeedEntry('meeting', 'SUMMARY', 'Generating...');
+      const rd = document.getElementById('mtg-result');
+      rd.classList.add('show'); rd.textContent = 'Generating summary...';
+      try {
+        const r = await fetch(`${API}/api/meeting/summary`, { method: 'POST' });
+        const d = await r.json();
+        const text = d.summary || d.title || JSON.stringify(d, null, 2);
+        rd.textContent = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
+        addFeedEntry('meeting', 'SUMMARY', 'Summary generated');
+      } catch (e) { rd.textContent = `Error: ${e.message}`; }
+    }
+
+    async function refreshTasks() {
+      try {
+        const r = await fetch(`${API}/api/tasks`);
+        const d = await r.json();
+        const list = document.getElementById('task-list');
+        const tasks = d.tasks || [];
+        if (tasks.length === 0) {
+          list.innerHTML = '<div style="color:var(--text-tertiary);padding:0.5rem;font-size:0.8125rem">No tasks yet.</div>';
+          return;
+        }
+        list.innerHTML = tasks.slice(0, 20).map(t => {
+          const si = { pending:'&#9711;', in_progress:'&#9654;', done:'&#10003;', cancelled:'&#10005;' }[t.status] || '?';
+          const sc = { pending:'var(--text-tertiary)', in_progress:'var(--blue)', done:'var(--success)', cancelled:'var(--danger)' }[t.status];
+          return `<div style="display:flex;gap:0.5rem;padding:0.375rem 0;border-bottom:1px solid var(--border-light)"><span style="color:${sc};flex-shrink:0">${si}</span><span style="flex:1">${escapeHtml(t.task)}</span>${t.assignee ? '<span style="color:var(--text-tertiary);font-size:0.75rem">' + escapeHtml(t.assignee) + '</span>' : ''}</div>`;
+        }).join('');
+        if (d.stats) document.getElementById('task-count').textContent = `${d.stats.pending} pending / ${d.stats.total} total`;
+      } catch {}
+    }
+
+    // ══════════════════════════════════════════════════
+    // INIT
+    // ══════════════════════════════════════════════════
+    checkOnboarding();
+    connectWS();
+    startNotesPolling();
+    fetchStatus();
+    refreshTasks();
+    setInterval(fetchStatus, 5000);
+    setInterval(refreshTasks, 10000);
+  </script>
+</body>
+</html>

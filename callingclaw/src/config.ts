@@ -1,0 +1,70 @@
+// CallingClaw 2.0 — Central Configuration
+
+export const CONFIG = {
+  // Server
+  port: parseInt(process.env.PORT || "4000"),
+  bridgePort: parseInt(process.env.BRIDGE_PORT || "4001"),
+
+  // OpenAI (Realtime voice + GPT-4o vision)
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || "",
+    realtimeModel: "gpt-4o-realtime-preview-2024-12-17",
+    realtimeUrl: "wss://api.openai.com/v1/realtime",
+    voice: "marin",
+  },
+
+  // Anthropic Computer Use (direct API — optional)
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || "",
+    model: "claude-sonnet-4-6-20250627",
+  },
+
+  // OpenRouter (alternative gateway for Claude — no Anthropic key needed)
+  openrouter: {
+    apiKey: process.env.OPENROUTER_API_KEY || "",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "anthropic/claude-sonnet-4.6",
+  },
+
+  // Vision analysis (screen/meeting screenshots → Gemini Flash via OpenRouter)
+  vision: {
+    model: process.env.VISION_MODEL || "google/gemini-3-flash-preview",
+    // Falls back to OpenRouter config for API key/base URL
+  },
+
+  // Google OAuth (Calendar + Meet)
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || "",
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    refreshToken: process.env.GOOGLE_REFRESH_TOKEN || "",
+  },
+
+  // Screen
+  screen: {
+    width: parseInt(process.env.SCREEN_WIDTH || "1920"),
+    height: parseInt(process.env.SCREEN_HEIGHT || "1080"),
+    captureFps: 1,
+    ssimThreshold: 0.95,
+  },
+
+  // Audio
+  audio: {
+    sampleRate: 16000,
+    channels: 1,
+    chunkMs: 20,
+  },
+
+  // Automation Layers
+  playwright: {
+    // Path to a persistent Chrome user-data-dir (for staying logged into Google, etc.)
+    userDataDir: process.env.PLAYWRIGHT_USER_DATA_DIR || "",
+    headless: process.env.PLAYWRIGHT_HEADLESS === "true",
+  },
+
+  peekaboo: {
+    // Peekaboo CLI path (defaults to system PATH)
+    cliPath: process.env.PEEKABOO_PATH || "peekaboo",
+  },
+};
+
+export type CallingClawConfig = typeof CONFIG;

@@ -1,0 +1,44 @@
+{
+  "name": "callingclaw-desktop",
+  "version": "2.2.1",
+  "description": "CallingClaw Desktop — Electron shell for the CallingClaw AI meeting assistant",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
+    "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev",
+    "build": "electron-builder --mac",
+    "pack": "electron-builder --dir"
+  },
+  "author": "Tanka",
+  "license": "PRIVATE",
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.tanka.callingclaw",
+    "productName": "CallingClaw",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dmg"
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "CallingClaw needs microphone access for AI voice meetings",
+        "NSCameraUsageDescription": "CallingClaw needs camera access for video meetings",
+        "NSScreenCaptureUsageDescription": "CallingClaw needs screen recording for meeting analysis"
+      },
+      "extraResources": [
+        {
+          "from": "resources/bun",
+          "to": "bun"
+        }
+      ]
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ]
+  }
+}

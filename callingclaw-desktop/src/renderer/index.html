@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw</title>
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+      --border: #2a2a2a; --text: #e5e5e5; --text2: #888;
+      --accent: #6366f1; --accent-dim: #4f46e5;
+      --green: #22c55e; --red: #ef4444; --yellow: #eab308; --blue: #3b82f6;
+      --radius: 12px; --radius-sm: 8px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background: var(--bg); color: var(--text);
+      -webkit-app-region: drag; overflow: hidden; height: 100vh;
+    }
+    button, input, a { -webkit-app-region: no-drag; }
+    a { color: var(--accent); text-decoration: none; }
+
+    /* ── Title Bar ─────────────────────────────────────────── */
+    .titlebar {
+      height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 0 80px; border-bottom: 1px solid var(--border);
+      font-size: 13px; color: var(--text2); font-weight: 500;
+    }
+    .titlebar-logo { width: 20px; height: 20px; border-radius: 4px; }
+    .titlebar-version { font-size: 11px; color: #555; font-weight: 400; }
+
+    /* ── Content Area ──────────────────────────────────────── */
+    .content { height: calc(100vh - 52px); overflow-y: auto; padding: 24px; }
+
+    /* ── Tabs ──────────────────────────────────────────────── */
+    .tabs {
+      display: flex; gap: 4px; margin-bottom: 24px;
+      border-bottom: 1px solid var(--border); padding-bottom: 0;
+    }
+    .tab {
+      padding: 8px 16px; font-size: 13px; font-weight: 500;
+      color: var(--text2); background: none; border: none; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all 0.15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Cards ─────────────────────────────────────────────── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); }
+    .card-value { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .card-desc { font-size: 12px; color: var(--text2); }
+
+    /* ── Status Indicators ─────────────────────────────────── */
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+    .dot.gray { background: #555; }
+
+    /* ── Buttons ────────────────────────────────────────────── */
+    .btn {
+      padding: 8px 20px; border-radius: var(--radius-sm); font-size: 13px;
+      font-weight: 500; cursor: pointer; border: 1px solid var(--border);
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-dim); }
+    .btn-ghost { background: transparent; color: var(--text); }
+    .btn-ghost:hover { background: var(--surface2); }
+    .btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
+    .btn-sm { padding: 4px 12px; font-size: 12px; }
+
+    /* ── Setup Wizard ──────────────────────────────────────── */
+    .wizard { max-width: 560px; margin: 0 auto; }
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; }
+    .wizard-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .wizard-desc { font-size: 14px; color: var(--text2); margin-bottom: 24px; line-height: 1.6; }
+    .wizard-nav { display: flex; justify-content: space-between; margin-top: 32px; }
+
+    .check-list { list-style: none; }
+    .check-item {
+      display: flex; align-items: center; gap: 12px; padding: 14px 0;
+      border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .check-item:last-child { border-bottom: none; }
+    .check-icon { width: 20px; text-align: center; font-size: 16px; }
+    .check-label { flex: 1; }
+    .check-status { font-size: 12px; color: var(--text2); }
+
+    /* ── Log Console ───────────────────────────────────────── */
+    .log-console {
+      background: #000; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px; font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px;
+      color: #aaa; max-height: 240px; overflow-y: auto; line-height: 1.6;
+      margin-top: 16px;
+    }
+    .log-line { white-space: pre-wrap; word-break: break-all; }
+    .log-line.error { color: var(--red); }
+
+    /* ── Progress Steps ────────────────────────────────────── */
+    .steps {
+      display: flex; gap: 8px; margin-bottom: 32px;
+    }
+    .step-dot {
+      width: 32px; height: 4px; border-radius: 2px; background: var(--border);
+      transition: background 0.3s;
+    }
+    .step-dot.active { background: var(--accent); }
+    .step-dot.done { background: var(--green); }
+
+    /* ── Input ─────────────────────────────────────────────── */
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 10px 14px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-size: 14px; outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: var(--accent); }
+    .input-group { margin-bottom: 16px; }
+    .input-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+
+    /* Toggle switch */
+    .layer-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .layer-row:last-child { border-bottom: none; }
+    .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute; inset: 0; background: #333; border-radius: 10px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .toggle .slider::before {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      left: 2px; top: 2px; background: #888; border-radius: 50%;
+      transition: all 0.2s;
+    }
+    .toggle input:checked + .slider { background: var(--accent); }
+    .toggle input:checked + .slider::before { transform: translateX(16px); background: #fff; }
+    .toggle input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+    .layer-info { flex: 1; min-width: 0; }
+    .layer-name { font-size: 13px; font-weight: 500; }
+    .layer-meta { font-size: 11px; color: var(--text2); margin-top: 1px; }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <img class="titlebar-logo" src="../../assets/icon.png" alt="CallingClaw">
+    CallingClaw
+    <span class="titlebar-version" id="titlebar-version"></span>
+  </div>
+
+  <div class="content">
+    <!-- ── Tab Navigation ──────────────────────────────────── -->
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">状态</button>
+      <button class="tab" data-tab="voice">语音测试</button>
+      <button class="tab" data-tab="setup">设置向导</button>
+      <button class="tab" data-tab="logs">日志</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ── Dashboard Tab ───────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="dashboard" class="tab-panel active">
+      <div class="cards">
+        <!-- Engine Status -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">引擎状态</span>
+            <span class="dot gray" id="engine-dot"></span>
+          </div>
+          <div class="card-value" id="engine-status">检查中...</div>
+          <div class="card-desc" id="engine-desc">localhost:4000</div>
+          <div style="margin-top: 12px">
+            <button class="btn btn-primary btn-sm" id="btn-engine-toggle">启动引擎</button>
+            <button class="btn btn-ghost btn-sm" id="btn-engine-restart" style="display:none">重启</button>
+          </div>
+        </div>
+
+        <!-- Voice Status -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">语音 AI</span>
+            <span class="dot gray" id="voice-dot"></span>
+          </div>
+          <div class="card-value" id="voice-status">--</div>
+          <div class="card-desc" id="voice-desc">OpenAI Realtime</div>
+        </div>
+
+        <!-- OpenClaw -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">OpenClaw</span>
+            <span class="dot gray" id="openclaw-dot"></span>
+          </div>
+          <div class="card-value" id="openclaw-status">--</div>
+          <div class="card-desc">System 2 慢思考</div>
+        </div>
+
+        <!-- Audio -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">音频桥接</span>
+            <span class="dot gray" id="audio-dot"></span>
+          </div>
+          <div class="card-value" id="audio-status">--</div>
+          <div class="card-desc">BlackHole 2ch / 16ch</div>
+        </div>
+
+        <!-- Permissions -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">系统权限</span>
+          </div>
+          <div id="perm-list" style="font-size: 13px;">
+            <div class="check-item" style="padding: 6px 0; border: none;">
+              <span class="dot gray" id="perm-mic-dot"></span>
+              <span>麦克风</span>
+              <span class="check-status" id="perm-mic-text">--</span>
+            </div>
+            <div class="check-item" style="padding: 6px 0; border: none;">
+              <span class="dot gray" id="perm-screen-dot"></span>
+              <span>屏幕录制</span>
+              <span class="check-status" id="perm-screen-text">--</span>
+            </div>
+            <div class="check-item" style="padding: 6px 0; border: none;">
+              <span class="dot gray" id="perm-access-dot"></span>
+              <span>辅助功能</span>
+              <span class="check-status" id="perm-access-text">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meeting -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">会议</span>
+            <span class="dot gray" id="meeting-dot"></span>
+          </div>
+          <div class="card-value" id="meeting-status">未在会议中</div>
+          <div class="card-desc" id="meeting-desc"></div>
+          <div style="margin-top: 12px">
+            <button class="btn btn-ghost btn-sm" id="btn-overlay">显示悬浮窗</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ── Voice Test Tab ────────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="voice" class="tab-panel">
+      <div style="display:flex; gap:16px; height: calc(100vh - 130px);">
+        <!-- Left: Controls -->
+        <div style="width: 300px; flex-shrink: 0;">
+          <div class="card" style="margin-bottom: 12px;">
+            <div class="card-header">
+              <span class="card-title">语音设置</span>
+              <span class="dot gray" id="vt-status-dot"></span>
+            </div>
+
+            <!-- Voice -->
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 12px; color: var(--text2); margin-bottom: 4px;">Voice</div>
+              <select id="vt-voice" style="width: 100%; padding: 6px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                <option value="alloy">Alloy</option><option value="ash">Ash</option>
+                <option value="ballad">Ballad</option><option value="coral">Coral</option>
+                <option value="echo">Echo</option><option value="fable">Fable</option>
+                <option value="marin" selected>Marin</option><option value="nova">Nova</option>
+                <option value="onyx">Onyx</option><option value="sage">Sage</option>
+                <option value="shimmer">Shimmer</option><option value="verse">Verse</option>
+              </select>
+            </div>
+
+            <!-- Instructions -->
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 12px; color: var(--text2); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                System Instructions
+                <span style="font-size: 11px; color: var(--accent); cursor: pointer;" onclick="document.getElementById('vt-instr').rows = document.getElementById('vt-instr').rows === 3 ? 12 : 3">toggle</span>
+              </div>
+              <textarea id="vt-instr" rows="3" style="width: 100%; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; font-family: 'SF Mono', monospace; resize: vertical; line-height: 1.5;">You are CallingClaw, an AI assistant. Speak naturally and concisely in the user's language.</textarea>
+              <button class="btn btn-ghost btn-sm" style="margin-top: 6px;" onclick="vtUpdateInstructions()">Update</button>
+              <span id="vt-instr-status" style="font-size: 11px; color: var(--text2); margin-left: 6px;"></span>
+            </div>
+
+            <!-- Mic Level -->
+            <div style="margin-bottom: 16px;">
+              <div style="font-size: 12px; color: var(--text2); margin-bottom: 4px;">Microphone</div>
+              <div style="height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden;">
+                <div id="vt-mic-bar" style="height: 100%; width: 0%; background: var(--green); border-radius: 2px; transition: width 50ms;"></div>
+              </div>
+            </div>
+
+            <!-- Start/Stop -->
+            <button class="btn btn-primary" id="vt-btn-start" onclick="vtStart()" style="width: 100%; justify-content: center;">开始语音</button>
+            <button class="btn btn-danger" id="vt-btn-stop" onclick="vtStop()" style="width: 100%; justify-content: center; display: none;">停止</button>
+          </div>
+
+          <!-- Layer Toggles -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">能力层</span>
+              <span id="vt-layer-count" style="font-size: 11px; color: var(--text2);">0/16 tools</span>
+            </div>
+            <div id="vt-layers" style="font-size: 13px;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Transcript -->
+        <div style="flex: 1; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+          <div style="padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text2);">
+            对话记录 <span id="vt-ws-status" style="font-size: 11px; font-weight: 400; color: #555; margin-left: 8px;">--</span>
+          </div>
+          <div id="vt-transcript" style="flex: 1; overflow-y: auto; padding: 16px;">
+            <div style="color: #555; text-align: center; margin-top: 40px; font-size: 13px;">点击「开始语音」来测试 AI 语音对话</div>
+          </div>
+          <div style="padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px;">
+            <input type="text" id="vt-text-input" placeholder="输入文字消息..." style="flex: 1; padding: 6px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;" onkeydown="if(event.key==='Enter')vtSendText()">
+            <button class="btn btn-ghost btn-sm" onclick="vtSendText()">发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ── Setup Wizard Tab ────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="setup" class="tab-panel">
+      <div class="wizard">
+        <div class="steps" id="wizard-steps"></div>
+
+        <!-- Step 0: Welcome -->
+        <div class="wizard-step active" data-step="0">
+          <div class="wizard-title">欢迎使用 CallingClaw</div>
+          <div class="wizard-desc">
+            CallingClaw 是你的 AI 会议助手。它可以自动加入会议、实时语音对话、
+            分析屏幕内容，并与 OpenClaw 协同完成复杂任务。<br><br>
+            接下来我们会帮你检查环境、配置权限和连接服务。
+          </div>
+          <div class="wizard-nav">
+            <span></span>
+            <button class="btn btn-primary" onclick="wizardNext()">开始配置 →</button>
+          </div>
+        </div>
+
+        <!-- Step 1: Environment Check -->
+        <div class="wizard-step" data-step="1">
+          <div class="wizard-title">环境检测</div>
+          <div class="wizard-desc">检查运行 CallingClaw 所需的依赖。</div>
+          <ul class="check-list" id="env-checks"></ul>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← 上一步</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost" onclick="runEnvCheck()">重新检测</button>
+              <button class="btn btn-primary" onclick="wizardNext()">下一步 →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Permissions -->
+        <div class="wizard-step" data-step="2">
+          <div class="wizard-title">系统权限</div>
+          <div class="wizard-desc">CallingClaw 需要以下 macOS 权限才能正常工作。</div>
+          <ul class="check-list" id="perm-checks"></ul>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← 上一步</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost" onclick="runPermCheck()">重新检测</button>
+              <button class="btn btn-primary" onclick="wizardNext()">下一步 →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: API Keys -->
+        <div class="wizard-step" data-step="3">
+          <div class="wizard-title">AI 服务密钥</div>
+          <div class="wizard-desc">
+            如果你已经在 .env 中配置了密钥，可以跳过此步骤。
+          </div>
+          <div class="input-group">
+            <div class="input-label">OpenAI API Key</div>
+            <input type="password" id="key-openai" placeholder="sk-...">
+          </div>
+          <div class="input-group">
+            <div class="input-label">OpenRouter API Key (可选)</div>
+            <input type="password" id="key-openrouter" placeholder="sk-or-v1-...">
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← 上一步</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost" onclick="wizardNext()">跳过</button>
+              <button class="btn btn-primary" onclick="saveKeys(); wizardNext()">保存并继续 →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: OpenClaw Detection -->
+        <div class="wizard-step" data-step="4">
+          <div class="wizard-title">OpenClaw 连接</div>
+          <div class="wizard-desc">
+            OpenClaw 提供深度推理能力（System 2）。CallingClaw 会自动检测并连接。
+          </div>
+          <div id="openclaw-check" style="padding: 20px 0;">
+            <div class="check-item" style="border: none;">
+              <span class="dot gray" id="oc-config-dot"></span>
+              <span class="check-label">OpenClaw 配置文件</span>
+              <span class="check-status" id="oc-config-text">检查中...</span>
+            </div>
+            <div class="check-item" style="border: none;">
+              <span class="dot gray" id="oc-gateway-dot"></span>
+              <span class="check-label">Gateway (ws://localhost:18789)</span>
+              <span class="check-status" id="oc-gateway-text">检查中...</span>
+            </div>
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← 上一步</button>
+            <button class="btn btn-primary" onclick="wizardNext()">下一步 →</button>
+          </div>
+        </div>
+
+        <!-- Step 5: Audio Check -->
+        <div class="wizard-step" data-step="5">
+          <div class="wizard-title">音频设备</div>
+          <div class="wizard-desc">
+            CallingClaw 使用 BlackHole 虚拟音频设备桥接会议音频与 AI。
+          </div>
+          <div id="audio-check">
+            <div class="check-item">
+              <span class="dot gray" id="bh2-dot"></span>
+              <span class="check-label">BlackHole 2ch</span>
+              <span class="check-status" id="bh2-text">--</span>
+            </div>
+            <div class="check-item">
+              <span class="dot gray" id="bh16-dot"></span>
+              <span class="check-label">BlackHole 16ch</span>
+              <span class="check-status" id="bh16-text">--</span>
+            </div>
+            <div class="check-item">
+              <span class="dot gray" id="sas-dot"></span>
+              <span class="check-label">SwitchAudioSource</span>
+              <span class="check-status" id="sas-text">--</span>
+            </div>
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← 上一步</button>
+            <button class="btn btn-primary" onclick="wizardNext()">下一步 →</button>
+          </div>
+        </div>
+
+        <!-- Step 6: Ready -->
+        <div class="wizard-step" data-step="6">
+          <div class="wizard-title">✅ 配置完成</div>
+          <div class="wizard-desc">
+            CallingClaw 已准备就绪。你可以启动引擎开始使用。<br><br>
+            引擎启动后，所有服务将在 localhost:4000 上可用。
+          </div>
+          <div style="margin-top: 24px;">
+            <button class="btn btn-primary" id="btn-launch" onclick="launchDaemon()">🚀 启动引擎</button>
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← 上一步</button>
+            <button class="btn btn-ghost" onclick="switchTab('dashboard')">前往状态页 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- ── Logs Tab ────────────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="logs" class="tab-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-size:14px; font-weight:600;">引擎日志</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearLogs()">清空</button>
+      </div>
+      <div class="log-console" id="log-console"></div>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════
+    // CallingClaw Desktop — Renderer Logic
+    // ═══════════════════════════════════════════════════════════
+
+    const DAEMON_URL = 'http://localhost:4000';
+    const TOTAL_WIZARD_STEPS = 7;
+    let currentStep = 0;
+
+    // ── Tab Switching ────────────────────────────────────────
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+    });
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === name));
+      if (name === 'setup') initWizard();
+      if (name === 'dashboard') refreshDashboard();
+    }
+
+    // ── Wizard ───────────────────────────────────────────────
+
+    function initWizard() {
+      const stepsEl = document.getElementById('wizard-steps');
+      stepsEl.innerHTML = '';
+      for (let i = 0; i < TOTAL_WIZARD_STEPS; i++) {
+        const dot = document.createElement('div');
+        dot.className = `step-dot ${i < currentStep ? 'done' : ''} ${i === currentStep ? 'active' : ''}`;
+        stepsEl.appendChild(dot);
+      }
+      showStep(currentStep);
+
+      // Auto-run checks for current step
+      if (currentStep === 1) runEnvCheck();
+      if (currentStep === 2) runPermCheck();
+      if (currentStep === 4) runOpenClawCheck();
+      if (currentStep === 5) runAudioCheck();
+    }
+
+    function showStep(n) {
+      document.querySelectorAll('.wizard-step').forEach(s => {
+        s.classList.toggle('active', parseInt(s.dataset.step) === n);
+      });
+    }
+
+    function wizardNext() {
+      if (currentStep < TOTAL_WIZARD_STEPS - 1) {
+        currentStep++;
+        initWizard();
+      }
+    }
+
+    function wizardPrev() {
+      if (currentStep > 0) {
+        currentStep--;
+        initWizard();
+      }
+    }
+
+    // ── Environment Check ────────────────────────────────────
+
+    async function runEnvCheck() {
+      const el = document.getElementById('env-checks');
+      el.innerHTML = '<div style="color:var(--text2);padding:12px;">检测中...</div>';
+
+      const checks = await window.callingclaw.env.check();
+      el.innerHTML = '';
+
+      const items = [
+        { key: 'bun', label: 'Bun Runtime', detail: checks.bun?.version || checks.bun?.error },
+        { key: 'python', label: 'Python 3', detail: checks.python?.version || checks.python?.error },
+        { key: 'daemonDir', label: 'CallingClaw Daemon', detail: checks.daemonDir?.ok ? '已找到' : '未找到' },
+        { key: 'envFile', label: '.env 配置文件', detail: checks.envFile?.ok ? '已存在' : '未找到' },
+      ];
+
+      for (const item of items) {
+        const ok = checks[item.key]?.ok;
+        el.innerHTML += `
+          <li class="check-item">
+            <span class="check-icon">${ok ? '✅' : '❌'}</span>
+            <span class="check-label">${item.label}</span>
+            <span class="check-status">${item.detail || ''}</span>
+          </li>`;
+      }
+    }
+
+    // ── Permission Check ─────────────────────────────────────
+
+    async function runPermCheck() {
+      const el = document.getElementById('perm-checks');
+      el.innerHTML = '<div style="color:var(--text2);padding:12px;">检测中...</div>';
+
+      const perms = await window.callingclaw.permissions.check();
+      el.innerHTML = '';
+
+      const items = [
+        { key: 'microphone', label: '麦克风', perm: perms.microphone },
+        { key: 'screenRecording', label: '屏幕录制', perm: perms.screenRecording },
+        { key: 'accessibility', label: '辅助功能', perm: perms.accessibility },
+      ];
+
+      for (const item of items) {
+        const granted = item.perm.granted;
+        const canRequest = item.perm.canRequest;
+        let actionBtn = '';
+        if (!granted && canRequest) {
+          actionBtn = `<button class="btn btn-sm btn-primary" onclick="requestPerm('${item.key}')">授权</button>`;
+        } else if (!granted) {
+          actionBtn = `<button class="btn btn-sm btn-ghost" onclick="openPermSettings('${item.key}')">去设置</button>`;
+        }
+
+        el.innerHTML += `
+          <li class="check-item">
+            <span class="check-icon">${granted ? '✅' : '⚠️'}</span>
+            <span class="check-label">${item.label}</span>
+            <span class="check-status">${item.perm.status}</span>
+            ${actionBtn}
+          </li>`;
+      }
+
+      // Also update dashboard permission dots
+      updatePermDot('mic', perms.microphone.granted);
+      updatePermDot('screen', perms.screenRecording.granted);
+      updatePermDot('access', perms.accessibility.granted);
+    }
+
+    async function requestPerm(name) {
+      await window.callingclaw.permissions.request(name);
+      setTimeout(runPermCheck, 1000);
+    }
+
+    function openPermSettings(name) {
+      window.callingclaw.permissions.openSettings(name);
+    }
+
+    function updatePermDot(id, granted) {
+      const dot = document.getElementById(`perm-${id}-dot`);
+      const text = document.getElementById(`perm-${id}-text`);
+      if (dot) { dot.className = `dot ${granted ? 'green' : 'red'}`; }
+      if (text) { text.textContent = granted ? '已授权' : '未授权'; }
+    }
+
+    // ── OpenClaw Check ───────────────────────────────────────
+
+    async function runOpenClawCheck() {
+      const envChecks = await window.callingclaw.env.check();
+
+      const configOk = envChecks.openclaw?.ok;
+      setDotAndText('oc-config', configOk, configOk ? '已找到' : '未找到');
+
+      // Try to reach gateway
+      try {
+        const res = await fetch('http://localhost:18789', { signal: AbortSignal.timeout(3000) });
+        setDotAndText('oc-gateway', true, '已连接');
+      } catch {
+        setDotAndText('oc-gateway', false, '未连接');
+      }
+    }
+
+    // ── Audio Check ──────────────────────────────────────────
+
+    async function runAudioCheck() {
+      const envChecks = await window.callingclaw.env.check();
+      setDotAndText('bh2', envChecks.blackhole2ch?.ok, envChecks.blackhole2ch?.ok ? '已安装' : '未安装');
+      setDotAndText('bh16', envChecks.blackhole16ch?.ok, envChecks.blackhole16ch?.ok ? '已安装' : '未安装');
+      setDotAndText('sas', envChecks.switchAudioSource?.ok, envChecks.switchAudioSource?.ok ? '已安装' : '未安装');
+    }
+
+    // ── Save Keys ────────────────────────────────────────────
+
+    async function saveKeys() {
+      const openaiKey = document.getElementById('key-openai').value.trim();
+      const openrouterKey = document.getElementById('key-openrouter').value.trim();
+      if (!openaiKey && !openrouterKey) return;
+
+      try {
+        const body = {};
+        if (openaiKey) body.OPENAI_API_KEY = openaiKey;
+        if (openrouterKey) body.OPENROUTER_API_KEY = openrouterKey;
+
+        await fetch(`${DAEMON_URL}/api/keys`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        // Daemon might not be running yet — keys saved when it starts
+      }
+    }
+
+    // ── Launch Daemon ────────────────────────────────────────
+
+    async function launchDaemon() {
+      const btn = document.getElementById('btn-launch');
+      btn.textContent = '启动中...';
+      btn.disabled = true;
+      try {
+        await window.callingclaw.daemon.start();
+        btn.textContent = '✅ 引擎已启动';
+      } catch (e) {
+        btn.textContent = '❌ 启动失败';
+        btn.disabled = false;
+      }
+    }
+
+    // ── Dashboard ────────────────────────────────────────────
+
+    async function refreshDashboard() {
+      // Check daemon status
+      const daemonStatus = await window.callingclaw.daemon.status();
+      const engineDot = document.getElementById('engine-dot');
+      const engineStatus = document.getElementById('engine-status');
+      const btnToggle = document.getElementById('btn-engine-toggle');
+      const btnRestart = document.getElementById('btn-engine-restart');
+
+      if (daemonStatus.running) {
+        engineDot.className = 'dot green';
+        engineStatus.textContent = '运行中';
+        btnToggle.textContent = '停止引擎';
+        btnToggle.className = 'btn btn-danger btn-sm';
+        btnRestart.style.display = '';
+      } else {
+        engineDot.className = 'dot red';
+        engineStatus.textContent = '已停止';
+        btnToggle.textContent = '启动引擎';
+        btnToggle.className = 'btn btn-primary btn-sm';
+        btnRestart.style.display = 'none';
+      }
+
+      // If daemon is running, fetch full status from API
+      if (daemonStatus.running) {
+        try {
+          const res = await fetch(`${DAEMON_URL}/api/status`);
+          const data = await res.json();
+
+          // Voice
+          const voiceConnected = data.voice?.connected;
+          setDotAndText2('voice', voiceConnected, voiceConnected ? '已连接' : '未启动');
+
+          // OpenClaw
+          const ocConnected = data.openclaw?.connected;
+          setDotAndText2('openclaw', ocConnected, ocConnected ? '已连接' : '未连接');
+
+          // Meeting
+          const inMeeting = data.meeting?.active;
+          const meetingDot = document.getElementById('meeting-dot');
+          const meetingStatus = document.getElementById('meeting-status');
+          meetingDot.className = `dot ${inMeeting ? 'green' : 'gray'}`;
+          meetingStatus.textContent = inMeeting ? '会议中' : '未在会议中';
+
+          // Audio
+          const audioOk = data.audio?.bridgeActive || data.sidecar?.connected;
+          setDotAndText2('audio', audioOk, audioOk ? '桥接中' : '未激活');
+        } catch {
+          // Daemon responded but API error
+        }
+      }
+
+      // Permissions
+      const perms = await window.callingclaw.permissions.check();
+      updatePermDot('mic', perms.microphone.granted);
+      updatePermDot('screen', perms.screenRecording.granted);
+      updatePermDot('access', perms.accessibility.granted);
+    }
+
+    // ── Engine Toggle / Restart ──────────────────────────────
+
+    document.getElementById('btn-engine-toggle').addEventListener('click', async () => {
+      const status = await window.callingclaw.daemon.status();
+      if (status.running) {
+        await window.callingclaw.daemon.stop();
+      } else {
+        await window.callingclaw.daemon.start();
+      }
+      setTimeout(refreshDashboard, 1000);
+    });
+
+    document.getElementById('btn-engine-restart').addEventListener('click', async () => {
+      await window.callingclaw.daemon.restart();
+      setTimeout(refreshDashboard, 2000);
+    });
+
+    document.getElementById('btn-overlay').addEventListener('click', () => {
+      window.callingclaw.overlay.show();
+    });
+
+    // ── Logs ─────────────────────────────────────────────────
+
+    const logConsole = document.getElementById('log-console');
+    const MAX_LOG_LINES = 500;
+
+    window.callingclaw.daemon.onLog((line) => {
+      const div = document.createElement('div');
+      div.className = `log-line ${line.includes('ERROR') || line.includes('[stderr]') ? 'error' : ''}`;
+      div.textContent = line;
+      logConsole.appendChild(div);
+      if (logConsole.children.length > MAX_LOG_LINES) {
+        logConsole.removeChild(logConsole.firstChild);
+      }
+      logConsole.scrollTop = logConsole.scrollHeight;
+    });
+
+    function clearLogs() {
+      logConsole.innerHTML = '';
+    }
+
+    // ── Daemon Status Events ─────────────────────────────────
+
+    window.callingclaw.daemon.onStatus((running) => {
+      refreshDashboard();
+    });
+
+    window.callingclaw.daemon.onError((err) => {
+      const div = document.createElement('div');
+      div.className = 'log-line error';
+      div.textContent = `[ERROR] ${err}`;
+      logConsole.appendChild(div);
+    });
+
+    // ── Helpers ──────────────────────────────────────────────
+
+    function setDotAndText(id, ok, text) {
+      const dot = document.getElementById(`${id}-dot`);
+      const el = document.getElementById(`${id}-text`);
+      if (dot) dot.className = `dot ${ok ? 'green' : 'red'}`;
+      if (el) el.textContent = text;
+    }
+
+    function setDotAndText2(id, ok, text) {
+      const dot = document.getElementById(`${id}-dot`);
+      const el = document.getElementById(`${id}-status`);
+      if (dot) dot.className = `dot ${ok ? 'green' : 'gray'}`;
+      if (el) el.textContent = text;
+    }
+
+    // ── Version Display ──────────────────────────────────────
+
+    (async () => {
+      try {
+        const info = await window.callingclaw.app.info();
+        document.getElementById('titlebar-version').textContent = `v${info.version}`;
+      } catch {}
+    })();
+
+    // ── Auto-refresh ─────────────────────────────────────────
+
+    refreshDashboard();
+    setInterval(refreshDashboard, 10000);
+
+    // ═══════════════════════════════════════════════════════
+    // Voice Test — Browser Audio + WebSocket Relay
+    // ═══════════════════════════════════════════════════════
+
+    let vtWs = null, vtAudioCtx = null, vtMicStream = null, vtMicSource = null;
+    let vtMicProcessor = null, vtMicAnalyser = null, vtPlaybackNode = null;
+    let vtPlaybackQueue = [], vtIsPlaying = false, vtSessionActive = false, vtMicRAF = null;
+
+    // ── Layer state ──
+    let vtLayerInfo = null; // from server
+    let vtEnabledLayers = new Set(); // user selections
+
+    // Load voice config
+    (async () => {
+      try {
+        const r = await fetch(`${DAEMON_URL}/api/config`);
+        const d = await r.json();
+        if (d.openai_voice) document.getElementById('vt-voice').value = d.openai_voice;
+      } catch {}
+      try {
+        const r = await fetch(`${DAEMON_URL}/api/voice/instructions`);
+        const d = await r.json();
+        if (d.instructions) document.getElementById('vt-instr').value = d.instructions;
+      } catch {}
+    })();
+
+    function vtUpdateInstructions() {
+      const text = document.getElementById('vt-instr').value.trim();
+      if (!text) return;
+      if (vtWs && vtWs.readyState === WebSocket.OPEN) {
+        vtWs.send(JSON.stringify({ type: 'update_instructions', instructions: text }));
+        document.getElementById('vt-instr-status').textContent = 'sent';
+      } else {
+        fetch(`${DAEMON_URL}/api/voice/instructions`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instructions: text })
+        }).then(() => { document.getElementById('vt-instr-status').textContent = 'updated'; }).catch(() => {});
+      }
+      setTimeout(() => document.getElementById('vt-instr-status').textContent = '', 2000);
+    }
+
+    async function vtStart() {
+      const btnStart = document.getElementById('vt-btn-start');
+      const btnStop = document.getElementById('vt-btn-stop');
+      btnStart.disabled = true; btnStart.textContent = '连接中...';
+
+      try {
+        vtMicStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+        });
+
+        vtAudioCtx = new AudioContext({ sampleRate: 24000 });
+        vtMicSource = vtAudioCtx.createMediaStreamSource(vtMicStream);
+        vtMicAnalyser = vtAudioCtx.createAnalyser();
+        vtMicAnalyser.fftSize = 256;
+        vtMicSource.connect(vtMicAnalyser);
+
+        vtMicProcessor = vtAudioCtx.createScriptProcessor(4096, 1, 1);
+        vtMicSource.connect(vtMicProcessor);
+        vtMicProcessor.connect(vtAudioCtx.destination);
+        vtMicProcessor.onaudioprocess = (e) => {
+          if (!vtSessionActive || !vtWs || vtWs.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const pcm16 = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const s = Math.max(-1, Math.min(1, input[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          const bytes = new Uint8Array(pcm16.buffer);
+          let binary = ''; for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          vtWs.send(JSON.stringify({ type: 'audio', audio: btoa(binary) }));
+        };
+
+        vtPlaybackNode = vtAudioCtx.createScriptProcessor(4096, 1, 1);
+        vtPlaybackNode.onaudioprocess = (e) => {
+          const output = e.outputBuffer.getChannelData(0);
+          if (vtPlaybackQueue.length > 0) {
+            const chunk = vtPlaybackQueue.shift();
+            const len = Math.min(chunk.length, output.length);
+            for (let i = 0; i < len; i++) output[i] = chunk[i];
+            for (let i = len; i < output.length; i++) output[i] = 0;
+          } else {
+            for (let i = 0; i < output.length; i++) output[i] = 0;
+          }
+        };
+        vtPlaybackNode.connect(vtAudioCtx.destination);
+
+        vtWs = new WebSocket(`ws://localhost:4000/ws/voice-test`);
+        vtWs.onopen = () => {
+          document.getElementById('vt-ws-status').textContent = 'WS Connected';
+          // Request layer info from server
+          vtWs.send(JSON.stringify({ type: 'get_layers' }));
+          const voice = document.getElementById('vt-voice').value;
+          fetch(`${DAEMON_URL}/api/config`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ openai_voice: voice })
+          }).catch(() => {});
+          const instructions = document.getElementById('vt-instr').value.trim();
+          vtWs.send(JSON.stringify({ type: 'start', instructions: instructions || undefined }));
+        };
+
+        vtWs.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'audio' && msg.audio) {
+              const binary = atob(msg.audio);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              const pcm16 = new Int16Array(bytes.buffer);
+              const float32 = new Float32Array(pcm16.length);
+              for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / (pcm16[i] < 0 ? 0x8000 : 0x7FFF);
+              vtPlaybackQueue.push(float32);
+              while (vtPlaybackQueue.length > 12) vtPlaybackQueue.shift();
+            } else if (msg.type === 'transcript') {
+              vtAddTranscript(msg.role, msg.text, msg.ts);
+            } else if (msg.type === 'status') {
+              vtSessionActive = msg.voiceConnected;
+              const dot = document.getElementById('vt-status-dot');
+              dot.className = msg.voiceConnected ? 'dot green' : 'dot gray';
+              if (msg.voiceConnected) {
+                btnStart.style.display = 'none'; btnStop.style.display = '';
+                vtStartMicLevel();
+                vtEnableLayerToggles(true);
+                // Apply initial layers if any selected
+                if (vtEnabledLayers.size > 0) vtApplyLayers();
+              }
+            } else if (msg.type === 'layers_info') {
+              vtRenderLayers(msg.layers);
+              if (vtSessionActive) vtEnableLayerToggles(true);
+            } else if (msg.type === 'layers_updated') {
+              vtUpdateLayerCount();
+              const names = (msg.activeLayers || []).join(', ') || 'none';
+              vtAddTranscript('system', `Layers updated: [${names}] — ${msg.activeTools?.length || 0} tools active`);
+            } else if (msg.type === 'error') {
+              vtAddTranscript('system', 'Error: ' + msg.message);
+              vtResetUI();
+            }
+          } catch {}
+        };
+
+        vtWs.onclose = () => {
+          document.getElementById('vt-ws-status').textContent = '--';
+          if (vtSessionActive) vtStop();
+        };
+      } catch (e) {
+        alert('Failed: ' + e.message);
+        vtResetUI();
+      }
+    }
+
+    function vtStop() {
+      vtSessionActive = false;
+      if (vtWs && vtWs.readyState === WebSocket.OPEN) {
+        vtWs.send(JSON.stringify({ type: 'stop' })); vtWs.close();
+      }
+      vtWs = null;
+      if (vtMicProcessor) { vtMicProcessor.disconnect(); vtMicProcessor = null; }
+      if (vtMicSource) { vtMicSource.disconnect(); vtMicSource = null; }
+      if (vtMicAnalyser) { vtMicAnalyser.disconnect(); vtMicAnalyser = null; }
+      if (vtPlaybackNode) { vtPlaybackNode.disconnect(); vtPlaybackNode = null; }
+      if (vtMicStream) { vtMicStream.getTracks().forEach(t => t.stop()); vtMicStream = null; }
+      if (vtAudioCtx) { vtAudioCtx.close(); vtAudioCtx = null; }
+      vtPlaybackQueue = []; vtIsPlaying = false;
+      vtResetUI();
+      document.getElementById('vt-status-dot').className = 'dot gray';
+    }
+
+    function vtSendText() {
+      const input = document.getElementById('vt-text-input'), text = input.value.trim();
+      if (!text) return;
+      fetch(`${DAEMON_URL}/api/voice/text`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      vtAddTranscript('user', text); input.value = '';
+    }
+
+    function vtAddTranscript(role, text, ts) {
+      const area = document.getElementById('vt-transcript');
+      const placeholder = area.querySelector('div[style*="text-align: center"]');
+      if (placeholder) placeholder.remove();
+      const entry = document.createElement('div');
+      entry.style.cssText = 'margin-bottom:10px;';
+      const time = ts ? new Date(ts).toLocaleTimeString('zh-CN') : new Date().toLocaleTimeString('zh-CN');
+      const roleColors = { user: 'var(--blue)', assistant: 'var(--green)', system: 'var(--yellow)' };
+      const roleNames = { user: 'You', assistant: 'AI', system: 'System' };
+      entry.innerHTML = `<div style="font-size:11px;font-weight:600;color:${roleColors[role]||'var(--text2)'};margin-bottom:2px;">${roleNames[role]||role}</div><div style="font-size:13px;line-height:1.5;">${text.replace(/</g,'&lt;')}</div><div style="font-size:10px;color:#555;margin-top:1px;">${time}</div>`;
+      area.appendChild(entry);
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function vtStartMicLevel() {
+      if (!vtMicAnalyser) return;
+      const data = new Uint8Array(vtMicAnalyser.frequencyBinCount);
+      const bar = document.getElementById('vt-mic-bar');
+      function tick() {
+        if (!vtMicAnalyser) return;
+        vtMicAnalyser.getByteFrequencyData(data);
+        let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i];
+        bar.style.width = Math.min(100, (sum / data.length / 128) * 100) + '%';
+        vtMicRAF = requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
+    function vtResetUI() {
+      const btnStart = document.getElementById('vt-btn-start');
+      const btnStop = document.getElementById('vt-btn-stop');
+      btnStart.style.display = ''; btnStart.disabled = false; btnStart.textContent = '开始语音';
+      btnStop.style.display = 'none';
+      if (vtMicRAF) { cancelAnimationFrame(vtMicRAF); vtMicRAF = null; }
+      document.getElementById('vt-mic-bar').style.width = '0%';
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Layer Toggle Management
+    // ═══════════════════════════════════════════════════════
+
+    const LAYER_ICONS = {
+      memory: '&#128218;', calendar: '&#128197;', meeting: '&#128222;',
+      automation: '&#9881;', zoom: '&#127909;',
+    };
+    const LAYER_DESCRIPTIONS = {
+      memory: 'recall_context — 记忆检索',
+      calendar: '日程安排 / 查看日历',
+      meeting: '加入/创建/离开会议',
+      automation: '屏幕操作 / 浏览器 / 文件',
+      zoom: 'Zoom 快捷键控制',
+    };
+
+    function vtRenderLayers(layerInfo) {
+      vtLayerInfo = layerInfo;
+      const container = document.getElementById('vt-layers');
+      container.innerHTML = '';
+      for (const [key, info] of Object.entries(layerInfo)) {
+        const checked = vtEnabledLayers.has(key);
+        const statusText = info.status ? ` · ${info.status}` : '';
+        const row = document.createElement('div');
+        row.className = 'layer-row';
+        row.innerHTML = `
+          <label class="toggle">
+            <input type="checkbox" data-layer="${key}" ${checked ? 'checked' : ''} ${!vtSessionActive ? 'disabled' : ''} onchange="vtToggleLayer('${key}', this.checked)">
+            <span class="slider"></span>
+          </label>
+          <div class="layer-info">
+            <div class="layer-name">${LAYER_ICONS[key] || ''} ${info.label}</div>
+            <div class="layer-meta">${info.toolCount} tools · ${LAYER_DESCRIPTIONS[key] || ''}${statusText}</div>
+          </div>
+        `;
+        container.appendChild(row);
+      }
+      vtUpdateLayerCount();
+    }
+
+    function vtToggleLayer(layerName, enabled) {
+      if (enabled) vtEnabledLayers.add(layerName);
+      else vtEnabledLayers.delete(layerName);
+      vtApplyLayers();
+    }
+
+    function vtApplyLayers() {
+      if (!vtWs || vtWs.readyState !== WebSocket.OPEN) return;
+      vtWs.send(JSON.stringify({ type: 'set_layers', layers: [...vtEnabledLayers] }));
+    }
+
+    function vtUpdateLayerCount() {
+      let activeCount = 0;
+      let totalCount = 0;
+      if (vtLayerInfo) {
+        for (const [key, info] of Object.entries(vtLayerInfo)) {
+          totalCount += info.toolCount;
+          if (vtEnabledLayers.has(key)) activeCount += info.toolCount;
+        }
+      }
+      document.getElementById('vt-layer-count').textContent = `${activeCount}/${totalCount} tools`;
+    }
+
+    function vtEnableLayerToggles(enabled) {
+      document.querySelectorAll('#vt-layers input[type="checkbox"]').forEach(el => {
+        el.disabled = !enabled;
+      });
+    }
+
+    // Fetch layer info on tab load
+    async function vtLoadLayers() {
+      try {
+        // Use a temporary WS just to get layer info, or use REST
+        // For simplicity, we'll request via the voice-test WS when it connects
+        // For now, render a placeholder from known structure
+        vtRenderLayers({
+          memory:     { label: 'Memory',     toolCount: 1,  tools: ['recall_context'], status: '...' },
+          calendar:   { label: 'Calendar',   toolCount: 2,  tools: ['schedule_meeting', 'check_calendar'], status: '...' },
+          meeting:    { label: 'Meeting',    toolCount: 4,  tools: ['join_meeting', 'create_and_join_meeting', 'leave_meeting', 'save_meeting_notes'] },
+          automation: { label: 'Automation', toolCount: 6,  tools: ['computer_action', 'browser_action', 'open_file', 'share_screen', 'stop_sharing', 'take_screenshot'], status: '...' },
+          zoom:       { label: 'Zoom',       toolCount: 1,  tools: ['zoom_control'] },
+        });
+      } catch {}
+    }
+    vtLoadLayers();
+  </script>
+</body>
+</html>

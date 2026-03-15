@@ -1,0 +1,14 @@
+{
+  "browser": "chrome",
+  "launchOptions": {
+    "args": [
+      "--use-fake-ui-for-media-stream",
+      "--auto-select-desktop-capture-source=Entire screen",
+      "--enable-usermedia-screen-capturing",
+      "--allow-http-screen-capture"
+    ]
+  },
+  "contextOptions": {
+    "permissions": ["microphone", "camera"]
+  }
+}

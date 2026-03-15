@@ -1,0 +1,47 @@
+# ── Dependencies ──
+node_modules/
+bun.lock
+
+# ── Environment / Secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Build output ──
+out/
+dist/
+*.tgz
+
+# ── OS / IDE ──
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# ── Playwright ──
+.playwright-cli/
+
+# ── Runtime data ──
+meeting_notes/
+data/tasks.json
+logs/
+*.log
+
+# ── Coverage ──
+coverage/
+*.lcov
+
+# ── Cache ──
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# ── Excalidraw log ──
+excalidraw.log

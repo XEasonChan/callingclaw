@@ -1,0 +1,9 @@
+# CallingClaw 2.0 Python Dependencies
+# Install: pip3 install -r requirements.txt
+# System dep: brew install portaudio (for pyaudio)
+
+websockets>=15.0
+pyautogui>=0.9.54
+mss>=10.0
+Pillow>=12.0
+pyaudio>=0.2.14

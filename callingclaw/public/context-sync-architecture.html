@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CallingClaw — 增量 Context Sync 架构设计</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --accent: #4f8cff;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --accent4: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 40px 24px 32px;
+    text-align: center;
+  }
+  .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .header .subtitle { color: var(--text2); font-size: 15px; }
+  .header .version { color: var(--accent); font-size: 13px; margin-top: 8px; font-family: monospace; }
+
+  /* ── Navigation ── */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(15, 17, 23, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    padding: 0 16px;
+  }
+  .nav a {
+    color: var(--text2);
+    text-decoration: none;
+    padding: 12px 16px;
+    font-size: 13px;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .nav a:hover, .nav a.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── Sections ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  section { margin-bottom: 48px; scroll-margin-top: 60px; }
+  section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section h2 .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .badge-current { background: rgba(79,140,255,0.15); color: var(--accent); }
+  .badge-problem { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .badge-proposed { background: rgba(52,211,153,0.15); color: var(--accent3); }
+  .badge-detail { background: rgba(167,139,250,0.15); color: var(--accent2); }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 20px 0 10px;
+    color: var(--text);
+  }
+  p, li { color: var(--text2); font-size: 14px; margin-bottom: 8px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  code {
+    background: rgba(79,140,255,0.1);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .card-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-header .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-blue { background: var(--accent); }
+  .dot-purple { background: var(--accent2); }
+  .dot-green { background: var(--accent3); }
+  .dot-yellow { background: var(--accent4); }
+  .dot-red { background: var(--danger); }
+
+  /* ── Comparison Table ── */
+  .comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  .comp-table th, .comp-table td {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  .comp-table th {
+    background: rgba(79,140,255,0.08);
+    color: var(--text);
+    font-weight: 600;
+  }
+  .comp-table td { color: var(--text2); }
+  .comp-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── Mermaid ── */
+  .mermaid-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .mermaid-wrap .title {
+    font-size: 13px;
+    color: var(--text3);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .mermaid { text-align: center; }
+
+  /* ── Timeline ── */
+  .timeline {
+    position: relative;
+    padding-left: 28px;
+    margin: 16px 0;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: var(--bg);
+  }
+  .timeline-item.active::before {
+    background: var(--accent);
+  }
+  .timeline-item .time {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: monospace;
+  }
+  .timeline-item .desc {
+    font-size: 14px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  /* ── Metrics Bar ── */
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .metric-label { color: var(--text3); width: 140px; flex-shrink: 0; }
+  .metric-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .metric-bar .fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+  .metric-value { color: var(--text2); width: 80px; text-align: right; font-family: monospace; }
+
+  /* ── Alert ── */
+  .alert {
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 13px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .alert-warn {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.25);
+    color: var(--accent4);
+  }
+  .alert-info {
+    background: rgba(79,140,255,0.08);
+    border: 1px solid rgba(79,140,255,0.25);
+    color: var(--accent);
+  }
+  .alert-success {
+    background: rgba(52,211,153,0.08);
+    border: 1px solid rgba(52,211,153,0.25);
+    color: var(--accent3);
+  }
+
+  /* ── Token Budget Viz ── */
+  .token-viz {
+    display: flex;
+    gap: 4px;
+    margin: 12px 0;
+    align-items: flex-end;
+    height: 120px;
+  }
+  .token-block {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 40px;
+    transition: all 0.3s;
+  }
+  .token-block:hover { opacity: 0.85; }
+  .token-block .label {
+    position: absolute;
+    bottom: -24px;
+    font-size: 10px;
+    color: var(--text3);
+    white-space: nowrap;
+    text-align: center;
+  }
+  .token-block .value {
+    font-size: 11px;
+    color: white;
+    font-weight: 600;
+    padding: 4px;
+    text-align: center;
+  }
+
+  /* ── Interactive Controls ── */
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text2);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.active { background: rgba(79,140,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .card-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 22px; }
+    .nav a { padding: 10px 12px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>CallingClaw 增量 Context Sync 架构</h1>
+  <div class="subtitle">会议中三层思维系统的异步增量上下文同步方案</div>
+  <div class="version">CallingClaw v2.2.1 · feat/electron-shell · 2026-03-15</div>
+</div>
+
+<nav class="nav">
+  <a href="#current" class="active">当前架构</a>
+  <a href="#problem">核心问题</a>
+  <a href="#proposal">增量方案</a>
+  <a href="#chunk">Chunk 策略</a>
+  <a href="#tasks">任务定义</a>
+  <a href="#background">后台 Tool Call</a>
+  <a href="#budget">Token 预算</a>
+  <a href="#timeline">时间线</a>
+</nav>
+
+<div class="container">
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 1: Current Architecture -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="current">
+  <h2>当前架构 — 三条并行路径 <span class="badge badge-current">CURRENT v2.2.1</span></h2>
+
+  <p>会议期间，context 通过三条并行路径从不同来源流入 Voice AI：</p>
+
+  <div class="mermaid-wrap">
+    <div class="title">Data Flow: Meeting Context Sync (Current)</div>
+    <div class="mermaid">
+flowchart TB
+  subgraph Input["输入源"]
+    U["🎤 User Speech<br/>(Whisper STT)"]
+    S["📷 Screen Capture<br/>(Python Sidecar)"]
+    O["🧠 OpenClaw<br/>(System 2)"]
+  end
+
+  subgraph SC["SharedContext (200 entries max)"]
+    T["transcript[]"]
+  end
+
+  U -->|"每句话"| T
+  S -->|"[Screen] 描述"| T
+
+  subgraph P1["路径 1: 即时 · Immediate"]
+    direction TB
+    V1["Voice AI (OpenAI Realtime)<br/>延迟: ~300ms"]
+    V1 -->|"session.update<br/>全量替换 instructions"| RT["OpenAI Realtime<br/>Session"]
+  end
+
+  subgraph P2["路径 2: 中速 · Medium"]
+    direction TB
+    TA["TranscriptAuditor<br/>(Claude Haiku 4.5)"]
+    TA -->|"confidence ≥ 0.85<br/>→ AutomationRouter"| AR["自动执行"]
+    TA -->|"0.6-0.85<br/>→ liveNote [SUGGEST]"| LN["推送到 Voice"]
+  end
+
+  subgraph P3["路径 3: 延迟 · Deferred"]
+    direction TB
+    VI["VisionModule<br/>(Gemini Flash)"]
+    VI -->|"每5条描述<br/>batch → OpenClaw"| OC["OpenClaw 处理<br/>→ MEMORY.md"]
+  end
+
+  T --> P1
+  T -->|"15 entries window<br/>2.5s debounce"| P2
+  S -->|"8s 间隔<br/>Jaccard >70% 去重"| P3
+
+  classDef input fill:#1e3a5f,stroke:#4f8cff,color:#e2e8f0
+  classDef sc fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+  classDef p1 fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef p2 fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+  classDef p3 fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+
+  class U,S,O input
+  class T sc
+  class V1,RT p1
+  class TA,AR,LN p2
+  class VI,OC p3
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><span class="dot dot-green"></span>路径 1: 即时路径 (Voice)</div>
+      <ul>
+        <li>延迟: <code>~300ms</code></li>
+        <li>触发: 每次 <code>pushContextUpdate()</code></li>
+        <li>方式: <code>session.update</code> 全量替换 instructions</li>
+        <li>Token 预算: 系统 prompt ~2000-4000 chars</li>
+        <li>问题: <strong>全量替换，包括 liveNotes 越来越长</strong></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-purple"></span>路径 2: 中速路径 (Haiku Auditor)</div>
+      <ul>
+        <li>延迟: <code>2.5s debounce + ~1s Haiku</code> = ~3.5s</li>
+        <li>触发: 用户说话 → 2.5s 去抖 → classifyIntent</li>
+        <li>输入窗口: 最近 <code>15 entries</code></li>
+        <li>输出: action + params + confidence</li>
+        <li>问题: <strong>15条窗口 = 固定大小，不分类</strong></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>路径 3: 延迟路径 (Vision → OpenClaw)</div>
+      <ul>
+        <li>延迟: <code>8s capture + ~2s Gemini + batch</code> = ~40s</li>
+        <li>触发: 每 8 秒截屏 → Gemini Flash 分析</li>
+        <li>输出: 每 5 条描述 batch → OpenClaw</li>
+        <li>OpenClaw 写入 MEMORY.md</li>
+        <li>问题: <strong>batch 太大，无增量策略</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>session.update 的关键限制</h3>
+  <div class="alert alert-warn">
+    <span>⚠️</span>
+    <div>OpenAI Realtime 的 <code>session.update</code> 是<strong>全量替换</strong>（不是 patch）——每次 push 必须重建完整 instructions + tools。随着 liveNotes 累积，每次 push 的 token 开销线性增长。当前没有"只推增量"的能力。</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: Problem -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="problem">
+  <h2>核心问题 <span class="badge badge-problem">PROBLEM</span></h2>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><span class="dot dot-red"></span>问题 1: Context 窗口 Chunk 太大</div>
+      <p>TranscriptAuditor 每次给 Haiku 发送 15 条 transcript entries（~500-700 input tokens），不区分内容类型。</p>
+      <ul>
+        <li>15 条中可能 10 条是闲聊，2 条是 automation 指令</li>
+        <li>Haiku 需要从噪声中找信号 → 浪费 tokens + 降低准确率</li>
+        <li>没有把 context 按"信息类型"拆分成小块</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-red"></span>问题 2: 没有增量任务定义</div>
+      <p>当前所有任务只有一种"通用 audit"：判断用户是否在发指令。</p>
+      <ul>
+        <li>缺少：需求捕捉、决策记录、action item 提取、topic 切换检测</li>
+        <li>这些任务各自需要不同大小的 context chunk</li>
+        <li>应该<strong>定义不同的任务类型</strong>，而不是一个万能 audit</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-red"></span>问题 3: System 2 无周期性检查点</div>
+      <p>OpenClaw (System 2) 目前只在会前/会后参与，会议中被动等 batch push。</p>
+      <ul>
+        <li>缺少 "每 N 条 / 每 M 秒" 的周期性 checkpoint</li>
+        <li>无法及时发现 topic 转换、需求变化</li>
+        <li>应该有<strong>固定间隔的 bit-sized 任务</strong>重新评估状态</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-red"></span>问题 4: Background Tool Call 不够细粒度</div>
+      <p>Voice AI 的 tool call 是顺序阻塞的，TranscriptAuditor 有 5s cooldown。</p>
+      <ul>
+        <li>无法同时处理 "打开文件" + "记录需求" + "更新 brief"</li>
+        <li>需要将后台任务拆成<strong>独立的微任务队列</strong></li>
+        <li>让不同类型的任务有独立的执行通道</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>当前 vs 目标: Token 消耗趋势</h3>
+  <div class="card">
+    <div class="card-header">30 分钟会议的 token 消耗对比</div>
+    <div class="metric-row">
+      <span class="metric-label">当前: Haiku Audit</span>
+      <div class="metric-bar"><div class="fill" style="width:85%; background: var(--danger);"></div></div>
+      <span class="metric-value">~12K tok</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">当前: session.update</span>
+      <div class="metric-bar"><div class="fill" style="width:70%; background: var(--accent4);"></div></div>
+      <span class="metric-value">~8K tok</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">当前: Vision batch</span>
+      <div class="metric-bar"><div class="fill" style="width:40%; background: var(--accent2);"></div></div>
+      <span class="metric-value">~4K tok</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label" style="color: var(--accent3);">目标: 增量 Audit</span>
+      <div class="metric-bar"><div class="fill" style="width:45%; background: var(--accent3);"></div></div>
+      <span class="metric-value">~6K tok</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label" style="color: var(--accent3);">目标: Delta Push</span>
+      <div class="metric-bar"><div class="fill" style="width:25%; background: var(--accent3);"></div></div>
+      <span class="metric-value">~3K tok</span>
+    </div>
+    <p style="margin-top: 12px; font-size: 12px; color: var(--text3);">Token 估算基于 30 分钟会议、用户发言 ~60 次、屏幕变化 ~20 次</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: Proposed Architecture -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="proposal">
+  <h2>增量 Context Sync 方案 <span class="badge badge-proposed">PROPOSED</span></h2>
+
+  <p>核心思路：把一个大的"通用 audit"拆成<strong>多个小的、有类型的 micro-task</strong>，每个任务只消耗它需要的 context chunk。引入<strong>周期性 checkpoint</strong>让 System 2 定期评估会议状态。</p>
+
+  <div class="mermaid-wrap">
+    <div class="title">Proposed: Incremental Context Sync Architecture</div>
+    <div class="mermaid">
+flowchart TB
+  subgraph Input["输入层"]
+    SP["🎤 User Speech"]
+    SC["📷 Screen Capture"]
+  end
+
+  subgraph Classifier["分类层 (新增)"]
+    direction TB
+    EC["EntryClassifier<br/>(本地规则引擎, ~0ms)"]
+    EC -->|"type: command"| Q1["🔧 CommandQueue"]
+    EC -->|"type: requirement"| Q2["📋 RequirementQueue"]
+    EC -->|"type: decision"| Q3["✅ DecisionQueue"]
+    EC -->|"type: topic_shift"| Q4["🔄 TopicQueue"]
+    EC -->|"type: chat"| Q5["💬 (丢弃/压缩)"]
+  end
+
+  subgraph MicroTasks["微任务层 (Haiku)"]
+    direction TB
+    MT1["CommandAudit<br/>~200 tok input<br/>2.5s debounce"]
+    MT2["RequirementExtract<br/>~300 tok input<br/>10s debounce"]
+    MT3["DecisionCapture<br/>~250 tok input<br/>15s debounce"]
+    MT4["TopicDetect<br/>~150 tok input<br/>20s debounce"]
+  end
+
+  subgraph Checkpoint["Checkpoint 层 (System 2)"]
+    direction TB
+    CP["PeriodicCheckpoint<br/>每 60s / 每 20 条<br/>(OpenClaw or Haiku)"]
+    CP --> SB["State Brief 更新"]
+    CP --> LP["liveNotes 压缩"]
+    CP --> NB["Next-topic 建议"]
+  end
+
+  subgraph Output["输出层"]
+    direction TB
+    DP["Delta Push<br/>(只推差异到 Voice)"]
+    AU["AutomationRouter<br/>(执行 commands)"]
+    MEM["MEMORY.md<br/>(持久化)"]
+  end
+
+  SP --> EC
+  SC -->|"[Screen] entry"| EC
+  Q1 --> MT1
+  Q2 --> MT2
+  Q3 --> MT3
+  Q4 --> MT4
+  MT1 -->|"auto-execute"| AU
+  MT2 -->|"[REQ] note"| DP
+  MT3 -->|"[DECISION] note"| DP
+  MT4 -->|"topic change"| DP
+  MT1 -->|"[DONE] note"| DP
+
+  DP -->|"session.update<br/>(增量 liveNotes)"| Voice["Voice AI"]
+  SB --> DP
+  LP --> DP
+  MT2 -->|"batch"| MEM
+  MT3 -->|"batch"| MEM
+
+  classDef input fill:#1e3a5f,stroke:#4f8cff,color:#e2e8f0
+  classDef classify fill:#2d2244,stroke:#a78bfa,color:#e2e8f0
+  classDef queue fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+  classDef micro fill:#1d3340,stroke:#34d399,color:#e2e8f0
+  classDef check fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+  classDef output fill:#1a3324,stroke:#34d399,color:#e2e8f0
+
+  class SP,SC input
+  class EC classify
+  class Q1,Q2,Q3,Q4,Q5 queue
+  class MT1,MT2,MT3,MT4 micro
+  class CP,SB,LP,NB check
+  class DP,AU,MEM,Voice output
+    </div>
+  </div>
+
+  <h3>架构变更总结</h3>
+  <table class="comp-table">
+    <tr>
+      <th>组件</th>
+      <th>当前 (v2.2.1)</th>
+      <th>增量方案 (Proposed)</th>
+      <th>变化</th>
+    </tr>
+    <tr>
+      <td>Transcript 分类</td>
+      <td>无 — 所有 entry 平等对待</td>
+      <td>EntryClassifier 本地规则引擎，按类型路由</td>
+      <td style="color: var(--accent3);">新增</td>
+    </tr>
+    <tr>
+      <td>Haiku 审计</td>
+      <td>1 个通用 audit (15 entries, ~600 tok)</td>
+      <td>4 个 micro-task (各 150-300 tok, 独立 debounce)</td>
+      <td style="color: var(--accent4);">重构</td>
+    </tr>
+    <tr>
+      <td>Debounce 策略</td>
+      <td>统一 2.5s</td>
+      <td>按类型: command 2.5s / requirement 10s / decision 15s / topic 20s</td>
+      <td style="color: var(--accent4);">细化</td>
+    </tr>
+    <tr>
+      <td>Context Push</td>
+      <td>全量 session.update (整个 instructions)</td>
+      <td>Delta Push: 只追加新 liveNotes + 周期压缩</td>
+      <td style="color: var(--accent4);">优化</td>
+    </tr>
+    <tr>
+      <td>周期检查</td>
+      <td>无 (仅 MEMORY.md 60s 刷新)</td>
+      <td>PeriodicCheckpoint: 60s/20条 → 状态评估 + 压缩</td>
+      <td style="color: var(--accent3);">新增</td>
+    </tr>
+    <tr>
+      <td>Chat 条目</td>
+      <td>全部进入 Haiku 窗口</td>
+      <td>分类后丢弃/压缩 (只保留摘要)</td>
+      <td style="color: var(--accent3);">新增</td>
+    </tr>
+    <tr>
+      <td>任务队列</td>
+      <td>无 (单线程 cooldown)</td>
+      <td>4 个独立队列，各自 cooldown</td>
+      <td style="color: var(--accent3);">新增</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 4: Chunk Strategy -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="chunk">
+  <h2>Chunk 分类策略 <span class="badge badge-detail">DETAIL</span></h2>
+
+  <p>关键创新：在进入 Haiku 之前，先用<strong>零成本的本地规则</strong>将 transcript entries 分类，只给每个 micro-task 发送它需要的 entries。</p>
+
+  <div class="mermaid-wrap">
+    <div class="title">EntryClassifier: 本地规则引擎 (零 LLM 调用)</div>
+    <div class="mermaid">
+flowchart LR
+  E["TranscriptEntry<br/>{role, text, ts}"]
+
+  E --> R1{"包含命令关键词?<br/>帮我/打开/展示/切换/共享"}
+  R1 -->|Yes| CMD["type: command ⚡"]
+  R1 -->|No| R2{"包含需求关键词?<br/>要/需要/应该/必须/改成"}
+  R2 -->|Yes| REQ["type: requirement 📋"]
+  R2 -->|No| R3{"包含决策关键词?<br/>就这样/确定/同意/决定"}
+  R3 -->|Yes| DEC["type: decision ✅"]
+  R3 -->|No| R4{"与上一个 topic<br/>差异 > 阈值?"}
+  R4 -->|Yes| TOP["type: topic_shift 🔄"]
+  R4 -->|No| CHT["type: chat 💬"]
+
+  classDef cmd fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef req fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+  classDef dec fill:#1e3a5f,stroke:#4f8cff,color:#e2e8f0
+  classDef top fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+  classDef chat fill:#1a1d27,stroke:#64748b,color:#94a3b8
+
+  class CMD cmd
+  class REQ req
+  class DEC dec
+  class TOP top
+  class CHT chat
+    </div>
+  </div>
+
+  <h3>分类规则 (TypeScript 伪代码)</h3>
+  <div class="card">
+<pre style="color: var(--text2); font-size: 13px; line-height: 1.7; overflow-x: auto;">
+<span style="color: var(--accent);">interface</span> ClassifiedEntry {
+  entry: TranscriptEntry;
+  type: <span style="color: var(--accent3);">"command"</span> | <span style="color: var(--accent2);">"requirement"</span> | <span style="color: var(--accent);">"decision"</span> | <span style="color: var(--accent4);">"topic_shift"</span> | <span style="color: var(--text3);">"chat"</span>;
+  confidence: number;      <span style="color: var(--text3);">// 规则匹配置信度 0-1</span>
+}
+
+<span style="color: var(--accent);">const</span> COMMAND_PATTERNS = [
+  <span style="color: var(--accent3);">/帮我(打开|展示|切换|看看|搜索|关闭)/</span>,
+  <span style="color: var(--accent3);">/我们(看看|打开|切到|展示一下)/</span>,
+  <span style="color: var(--accent3);">/开始(投屏|共享|录制)/</span>,
+  <span style="color: var(--accent3);">/停止(投屏|共享|录制)/</span>,
+  <span style="color: var(--accent3);">/(open|show|switch|navigate|scroll)\s/i</span>,
+];
+
+<span style="color: var(--accent);">const</span> REQUIREMENT_PATTERNS = [
+  <span style="color: var(--accent3);">/这个(要|需要|应该|必须)(改|加|删|换)/</span>,
+  <span style="color: var(--accent3);">/我们需要/</span>,
+  <span style="color: var(--accent3);">/(feature|requirement|需求|功能).*?(是|要)/</span>,
+  <span style="color: var(--accent3);">/deadline.*(是|在)/i</span>,
+];
+
+<span style="color: var(--accent);">const</span> DECISION_PATTERNS = [
+  <span style="color: var(--accent3);">/就(这样|这么)(吧|办|做|定)/</span>,
+  <span style="color: var(--accent3);">/(确定|同意|决定|approved|agreed)/</span>,
+  <span style="color: var(--accent3);">/那就用/</span>,
+];
+</pre>
+  </div>
+
+  <h3>每个 Micro-Task 的 Context Chunk 大小</h3>
+  <table class="comp-table">
+    <tr>
+      <th>Micro-Task</th>
+      <th>输入 Chunk</th>
+      <th>Input Tokens</th>
+      <th>Debounce</th>
+      <th>Cooldown</th>
+      <th>输出</th>
+    </tr>
+    <tr>
+      <td>CommandAudit</td>
+      <td>最近 3-5 条 command entries + meeting brief URLs/files</td>
+      <td>~200</td>
+      <td>2.5s</td>
+      <td>5s</td>
+      <td>action + params + confidence</td>
+    </tr>
+    <tr>
+      <td>RequirementExtract</td>
+      <td>最近 5-8 条 requirement entries + topic context</td>
+      <td>~300</td>
+      <td>10s</td>
+      <td>15s</td>
+      <td>[REQ] structured requirement</td>
+    </tr>
+    <tr>
+      <td>DecisionCapture</td>
+      <td>最近 3-5 条 decision entries + 相关 requirements</td>
+      <td>~250</td>
+      <td>15s</td>
+      <td>20s</td>
+      <td>[DECISION] what + who + context</td>
+    </tr>
+    <tr>
+      <td>TopicDetect</td>
+      <td>最近 2 条 + 当前 topic 摘要</td>
+      <td>~150</td>
+      <td>20s</td>
+      <td>30s</td>
+      <td>topic changed? new_topic string</td>
+    </tr>
+  </table>
+
+  <div class="alert alert-success">
+    <span>✅</span>
+    <div><strong>Token 节省估算</strong>：30 分钟会议，用户发言 ~60 次。当前: 60÷(2.5s debounce) ≈ ~20 次 Haiku 调用 × 600 tok = <strong>12,000 tok</strong>。增量方案: command ~10 次×200 + req ~5 次×300 + decision ~3 次×250 + topic ~2 次×150 = <strong>~4,550 tok</strong> (节省 62%)</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: Task Definition -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="tasks">
+  <h2>会议中任务定义 <span class="badge badge-detail">DETAIL</span></h2>
+
+  <p>将原来单一的 "TranscriptAuditor.runAudit()" 拆分成<strong>六类独立任务</strong>，每类有自己的触发条件、context 需求和输出格式。</p>
+
+  <div class="mermaid-wrap">
+    <div class="title">Task Type Hierarchy</div>
+    <div class="mermaid">
+flowchart TB
+  subgraph Realtime["⚡ 实时任务 (< 5s)"]
+    T1["T1: CommandDispatch<br/>用户下达自动化指令<br/>debounce: 2.5s"]
+    T2["T2: QuickRecall<br/>用户问 context 问题<br/>debounce: 1s"]
+  end
+
+  subgraph NearRT["🔄 近实时任务 (5-15s)"]
+    T3["T3: RequirementCapture<br/>捕捉用户需求/期望<br/>debounce: 10s"]
+    T4["T4: DecisionRecord<br/>记录达成的决策<br/>debounce: 15s"]
+  end
+
+  subgraph Periodic["📊 周期任务 (30-60s)"]
+    T5["T5: TopicTracker<br/>检测话题切换<br/>interval: 20-30s"]
+    T6["T6: StateCheckpoint<br/>全局状态评估 + 压缩<br/>interval: 60s / 20 entries"]
+  end
+
+  T1 -->|"[DONE]"| Voice["Voice liveNotes"]
+  T2 -->|"context result"| Voice
+  T3 -->|"[REQ]"| Voice
+  T3 -->|"batch"| MEM["MEMORY.md"]
+  T4 -->|"[DECISION]"| Voice
+  T4 -->|"batch"| MEM
+  T5 -->|"topic update"| Voice
+  T6 -->|"compressed notes"| Voice
+  T6 -->|"checkpoint"| MEM
+
+  classDef rt fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef nrt fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+  classDef per fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+  classDef out fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+
+  class T1,T2 rt
+  class T3,T4 nrt
+  class T5,T6 per
+  class Voice,MEM out
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><span class="dot dot-green"></span>T1: CommandDispatch (实时)</div>
+      <p><strong>触发</strong>: EntryClassifier 检测到 command 类型</p>
+      <p><strong>Context Chunk</strong>:</p>
+      <ul>
+        <li>最近 3-5 条 command entries</li>
+        <li>Meeting brief 的 filePaths[] + browserUrls[]</li>
+        <li>最近 5 条 [DONE] actions (去重参考)</li>
+      </ul>
+      <p><strong>Haiku 输出</strong>: <code>{ action, params, confidence }</code></p>
+      <p><strong>执行</strong>: confidence ≥ 0.85 → AutomationRouter</p>
+      <p><strong>回推</strong>: <code>[DONE] task: result</code> → Voice liveNotes</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-green"></span>T2: QuickRecall (实时)</div>
+      <p><strong>触发</strong>: Voice AI 的 <code>recall_context</code> tool call</p>
+      <p><strong>Context Chunk</strong>:</p>
+      <ul>
+        <li>query 关键词</li>
+        <li>ContextSync.searchMemory() 结果 (本地, ~0ms)</li>
+        <li>如果本地无结果 → 升级到 OpenClaw thorough</li>
+      </ul>
+      <p><strong>执行路径</strong>: 直接返回，不经过 Haiku</p>
+      <p><strong>回推</strong>: tool result → Voice AI 回答</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-purple"></span>T3: RequirementCapture (近实时)</div>
+      <p><strong>触发</strong>: 累积 3+ requirement entries 或 10s debounce</p>
+      <p><strong>Context Chunk</strong>:</p>
+      <ul>
+        <li>最近 5-8 条 requirement entries</li>
+        <li>当前 topic 摘要</li>
+        <li>已记录的 requirements (避免重复)</li>
+      </ul>
+      <p><strong>Haiku 输出</strong>: <code>{ requirements: [{text, priority, assignee?}] }</code></p>
+      <p><strong>回推</strong>: <code>[REQ] text</code> → Voice + batch → MEMORY.md</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-purple"></span>T4: DecisionRecord (近实时)</div>
+      <p><strong>触发</strong>: 检测到 decision entries 或 15s debounce</p>
+      <p><strong>Context Chunk</strong>:</p>
+      <ul>
+        <li>最近 3-5 条 decision entries</li>
+        <li>相关的 requirements (提供背景)</li>
+        <li>已记录的 decisions (避免重复)</li>
+      </ul>
+      <p><strong>Haiku 输出</strong>: <code>{ decision, rationale, relatedReqs[] }</code></p>
+      <p><strong>回推</strong>: <code>[DECISION] text</code> → Voice + batch → MEMORY.md</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>T5: TopicTracker (周期)</div>
+      <p><strong>触发</strong>: 每 20-30 秒，或检测到明显话题切换</p>
+      <p><strong>Context Chunk</strong>:</p>
+      <ul>
+        <li>最近 2 条 entries</li>
+        <li>当前 topic + keyPoints (from brief)</li>
+        <li>极小输入: ~150 tokens</li>
+      </ul>
+      <p><strong>Haiku 输出</strong>: <code>{ changed: bool, newTopic?, keyPoints? }</code></p>
+      <p><strong>回推</strong>: 更新 brief.topic → Voice system prompt 更新</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>T6: StateCheckpoint (周期)</div>
+      <p><strong>触发</strong>: 每 60 秒或累积 20 条新 entries</p>
+      <p><strong>Context Chunk</strong>:</p>
+      <ul>
+        <li>当前全部 liveNotes</li>
+        <li>最近 10 条 entries 摘要</li>
+        <li>当前 requirements + decisions 列表</li>
+      </ul>
+      <p><strong>执行</strong>: Haiku or OpenClaw</p>
+      <ul>
+        <li>压缩 liveNotes (合并重复、移除过时)</li>
+        <li>生成状态摘要 (State Brief)</li>
+        <li>建议下一步讨论方向</li>
+      </ul>
+      <p><strong>回推</strong>: 压缩后的 liveNotes → session.update (减少 token)</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 6: Background Tool Calling -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="background">
+  <h2>Background Tool Call 机制 <span class="badge badge-detail">DETAIL</span></h2>
+
+  <p>当前的 TranscriptAuditor 是单线程顺序执行（processing lock + cooldown）。增量方案引入<strong>微任务调度器</strong>，让不同类型的任务独立并行。</p>
+
+  <div class="mermaid-wrap">
+    <div class="title">MicroTaskScheduler: 独立并行执行</div>
+    <div class="mermaid">
+sequenceDiagram
+  participant U as User Speech
+  participant EC as EntryClassifier
+  participant CQ as CommandQueue
+  participant RQ as RequirementQueue
+  participant DQ as DecisionQueue
+  participant H as Haiku API
+  participant AR as AutomationRouter
+  participant V as Voice AI
+
+  Note over EC: t=0s 用户说 "帮我打开那个PRD"
+  U->>EC: {role:"user", text:"帮我打开那个PRD"}
+  EC->>CQ: type: command (规则匹配)
+
+  Note over EC: t=3s 用户说 "这个认证要改成SSO"
+  U->>EC: {role:"user", text:"这个认证要改成SSO"}
+  EC->>RQ: type: requirement (规则匹配)
+
+  Note over CQ: t=2.5s CommandAudit debounce 触发
+  CQ->>H: classifyCommand(3 entries, brief.files)
+  H-->>CQ: {action:"open_file", path:"/PRD.md", conf:0.92}
+  CQ->>AR: execute("open /PRD.md")
+  AR-->>CQ: "opened in VS Code"
+  CQ->>V: pushDelta([DONE] open PRD: opened in VS Code)
+
+  Note over EC: t=8s 用户说 "就用OAuth2吧"
+  U->>EC: {role:"user", text:"就用OAuth2吧"}
+  EC->>DQ: type: decision (规则匹配)
+
+  Note over RQ: t=13s RequirementExtract debounce 触发
+  RQ->>H: extractRequirements(5 req entries)
+  H-->>RQ: {requirements: [{text:"认证改SSO", priority:"high"}]}
+  RQ->>V: pushDelta([REQ] 认证改SSO - high priority)
+
+  Note over DQ: t=23s DecisionCapture debounce 触发
+  DQ->>H: captureDecision(3 dec entries + reqs)
+  H-->>DQ: {decision:"使用 OAuth2 SSO", rationale:"..."}
+  DQ->>V: pushDelta([DECISION] 使用 OAuth2 SSO)
+    </div>
+  </div>
+
+  <h3>关键设计: Delta Push vs 全量 Push</h3>
+  <div class="card">
+    <div class="card-header">session.update 优化策略</div>
+    <p>由于 OpenAI Realtime 的 <code>session.update</code> 是全量替换，我们无法真正只推"增量"。但可以通过以下策略<strong>减少每次 push 的 token 量</strong>：</p>
+
+    <h3 style="margin-top:16px;">策略 A: liveNotes 压缩 (StateCheckpoint)</h3>
+    <ul>
+      <li>每 60 秒，T6 将 liveNotes 压缩：合并类似条目，移除已完成的 [DONE]，摘要化旧内容</li>
+      <li>效果：liveNotes 维持在 ~15 条以内，不会无限增长</li>
+    </ul>
+
+    <h3 style="margin-top:16px;">策略 B: 分层 liveNotes</h3>
+<pre style="color: var(--text2); font-size: 13px; line-height: 1.7; margin-top: 8px;">
+liveNotes = {
+  <span style="color: var(--accent3);">pinned</span>: [          <span style="color: var(--text3);">// 始终包含 (关键决策/需求)</span>
+    "[DECISION] 使用 OAuth2 SSO",
+    "[REQ] 认证必须在 Q3 前完成",
+  ],
+  <span style="color: var(--accent4);">recent</span>: [          <span style="color: var(--text3);">// 最近 5 条 (滚动窗口)</span>
+    "[DONE] opened PRD in VS Code",
+    "[SCREEN] 正在展示架构图",
+  ],
+  <span style="color: var(--text3);">archived</span>: "..."    <span style="color: var(--text3);">// 压缩摘要 (只在 checkpoint 更新)</span>
+}
+</pre>
+    <p style="margin-top: 12px;">这样每次 session.update 只需要 pinned + recent + archived_summary，而不是全部历史 liveNotes。</p>
+
+    <h3 style="margin-top:16px;">策略 C: Push 频率控制</h3>
+    <table class="comp-table" style="margin-top: 8px;">
+      <tr><th>事件类型</th><th>Push 策略</th><th>原因</th></tr>
+      <tr><td>[DONE] command</td><td>立即 push</td><td>用户等待确认</td></tr>
+      <tr><td>[REQ] requirement</td><td>批量 push (3 条或 15s)</td><td>不紧急，减少 push 频率</td></tr>
+      <tr><td>[DECISION] decision</td><td>批量 push (同上)</td><td>同上</td></tr>
+      <tr><td>Topic 切换</td><td>立即 push</td><td>Voice 需要知道当前在讨论什么</td></tr>
+      <tr><td>Checkpoint 压缩</td><td>立即 push</td><td>替换整个 liveNotes (减少 token)</td></tr>
+    </table>
+  </div>
+
+  <h3>并发安全设计</h3>
+  <div class="alert alert-info">
+    <span>ℹ️</span>
+    <div>
+      <strong>Bun 是单线程</strong>，所有微任务在同一个 event loop 中执行。并发安全通过以下方式保证：
+      <ul style="margin-top: 8px;">
+        <li>每个 Queue 有独立的 <code>_processing</code> lock（和当前 TranscriptAuditor 相同模式）</li>
+        <li>liveNotes 写入是顺序的（先 push 到 array → 再 session.update）</li>
+        <li>session.update 的 <code>updateInstructions()</code> 内部已经是 atomic 的</li>
+        <li>不同 Queue 可以同时各自 debounce，但 Haiku API 调用在 await 时自动 yield</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 7: Token Budget -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="budget">
+  <h2>Token 预算对比 <span class="badge badge-detail">DETAIL</span></h2>
+
+  <p>以 30 分钟会议为例（用户发言 ~60 次，屏幕变化 ~20 次），对比当前和增量方案的 token 消耗。</p>
+
+  <div class="card">
+    <div class="card-header">Haiku API Token 消耗对比</div>
+    <div id="tokenViz" style="display: flex; gap: 40px; margin: 20px 0;">
+      <!-- Current -->
+      <div style="flex:1;">
+        <div style="text-align: center; margin-bottom: 12px; font-size: 13px; color: var(--text3);">当前 (v2.2.1)</div>
+        <div class="token-viz" style="height: 160px;">
+          <div class="token-block" style="height: 100%; background: var(--danger);">
+            <span class="value">12K</span>
+            <span class="label">Audit<br/>20×600</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 32px; font-size: 15px; font-weight: 600; color: var(--danger);">~12,000 tokens</div>
+        <div style="text-align: center; font-size: 12px; color: var(--text3);">~$0.012 (Haiku)</div>
+      </div>
+
+      <!-- Proposed -->
+      <div style="flex:1;">
+        <div style="text-align: center; margin-bottom: 12px; font-size: 13px; color: var(--text3);">增量方案 (Proposed)</div>
+        <div class="token-viz" style="height: 160px;">
+          <div class="token-block" style="height: 33%; background: var(--accent3);">
+            <span class="value">2K</span>
+            <span class="label">Cmd<br/>10×200</span>
+          </div>
+          <div class="token-block" style="height: 25%; background: var(--accent2);">
+            <span class="value">1.5K</span>
+            <span class="label">Req<br/>5×300</span>
+          </div>
+          <div class="token-block" style="height: 12.5%; background: var(--accent);">
+            <span class="value">750</span>
+            <span class="label">Dec<br/>3×250</span>
+          </div>
+          <div class="token-block" style="height: 5%; background: var(--accent4);">
+            <span class="value">300</span>
+            <span class="label">Topic<br/>2×150</span>
+          </div>
+          <div class="token-block" style="height: 8.3%; background: var(--text3);">
+            <span class="value">500</span>
+            <span class="label">Check<br/>1×500</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 32px; font-size: 15px; font-weight: 600; color: var(--accent3);">~5,050 tokens</div>
+        <div style="text-align: center; font-size: 12px; color: var(--text3);">~$0.005 (Haiku) · 节省 58%</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>session.update Token 消耗对比</h3>
+  <div class="card">
+    <div class="card-header">Voice AI System Prompt 大小趋势 (30分钟会议)</div>
+    <div style="margin: 16px 0;">
+      <div class="metric-row">
+        <span class="metric-label">t=0 (开始)</span>
+        <div class="metric-bar"><div class="fill" style="width:30%; background: var(--accent);"></div></div>
+        <span class="metric-value">~3K chars</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">MEETING_PERSONA + brief (两方案相同)</div>
+
+      <div class="metric-row">
+        <span class="metric-label" style="color: var(--danger);">当前 t=15m</span>
+        <div class="metric-bar"><div class="fill" style="width:65%; background: var(--danger);"></div></div>
+        <span class="metric-value">~6.5K chars</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">liveNotes 持续增长 (~35 条)</div>
+
+      <div class="metric-row">
+        <span class="metric-label" style="color: var(--accent3);">增量 t=15m</span>
+        <div class="metric-bar"><div class="fill" style="width:40%; background: var(--accent3);"></div></div>
+        <span class="metric-value">~4K chars</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">pinned(5) + recent(5) + archived_summary</div>
+
+      <div class="metric-row">
+        <span class="metric-label" style="color: var(--danger);">当前 t=30m</span>
+        <div class="metric-bar"><div class="fill" style="width:95%; background: var(--danger);"></div></div>
+        <span class="metric-value">~9.5K chars</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">liveNotes ~70 条，逼近 Voice 上下文限制</div>
+
+      <div class="metric-row">
+        <span class="metric-label" style="color: var(--accent3);">增量 t=30m</span>
+        <div class="metric-bar"><div class="fill" style="width:45%; background: var(--accent3);"></div></div>
+        <span class="metric-value">~4.5K chars</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">Checkpoint 压缩后保持稳定</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 8: Implementation Timeline -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="timeline">
+  <h2>实现时间线 <span class="badge badge-proposed">ROADMAP</span></h2>
+
+  <div class="mermaid-wrap">
+    <div class="title">Implementation Phases</div>
+    <div class="mermaid">
+gantt
+  title CallingClaw 增量 Context Sync 实现计划
+  dateFormat YYYY-MM-DD
+  axisFormat %m-%d
+
+  section Phase 1: 基础设施
+    EntryClassifier (本地规则引擎)     :p1a, 2026-03-16, 2d
+    MicroTaskScheduler 框架            :p1b, 2026-03-16, 2d
+    分层 liveNotes 数据结构            :p1c, after p1a, 1d
+
+  section Phase 2: Micro-Tasks
+    CommandAudit (从 TranscriptAuditor 拆分) :p2a, after p1b, 2d
+    RequirementExtract                       :p2b, after p2a, 1d
+    DecisionCapture                          :p2c, after p2b, 1d
+    TopicTracker                             :p2d, after p2c, 1d
+
+  section Phase 3: Checkpoint + Push
+    StateCheckpoint (60s / 20条)       :p3a, after p2d, 2d
+    Delta Push 优化                    :p3b, after p3a, 1d
+    Push 频率控制                      :p3c, after p3b, 1d
+
+  section Phase 4: 测试 + 调优
+    集成测试 (模拟 30 分钟会议)        :p4a, after p3c, 2d
+    Token 统计 + 阈值调优              :p4b, after p4a, 2d
+    实际会议验证                       :p4c, after p4b, 3d
+    </div>
+  </div>
+
+  <h3>Phase 1: 基础设施 (估计文件变更)</h3>
+  <div class="card">
+    <table class="comp-table">
+      <tr><th>文件</th><th>变更类型</th><th>说明</th></tr>
+      <tr>
+        <td><code>src/modules/entry-classifier.ts</code></td>
+        <td style="color: var(--accent3);">新增</td>
+        <td>TranscriptEntry 分类器 (正则规则引擎)</td>
+      </tr>
+      <tr>
+        <td><code>src/modules/micro-task-scheduler.ts</code></td>
+        <td style="color: var(--accent3);">新增</td>
+        <td>微任务调度器 + Queue 管理</td>
+      </tr>
+      <tr>
+        <td><code>src/modules/transcript-auditor.ts</code></td>
+        <td style="color: var(--accent4);">重构</td>
+        <td>拆分为 CommandAudit micro-task + 保留 _admitEval 结构</td>
+      </tr>
+      <tr>
+        <td><code>src/voice-persona.ts</code></td>
+        <td style="color: var(--accent4);">修改</td>
+        <td>支持分层 liveNotes (pinned + recent + archived)</td>
+      </tr>
+      <tr>
+        <td><code>src/skills/meeting-prep.ts</code></td>
+        <td style="color: var(--accent4);">修改</td>
+        <td>MeetingPrepBrief.liveNotes → 分层结构</td>
+      </tr>
+      <tr>
+        <td><code>src/callingclaw.ts</code></td>
+        <td style="color: var(--accent4);">修改</td>
+        <td>接入 MicroTaskScheduler，替换 TranscriptAuditor 直接调用</td>
+      </tr>
+    </table>
+  </div>
+
+  <h3>向后兼容性</h3>
+  <div class="alert alert-info">
+    <span>ℹ️</span>
+    <div>
+      <strong>增量升级路径</strong>：新架构作为 TranscriptAuditor 的替换，对外接口不变：
+      <ul style="margin-top: 8px;">
+        <li><code>activate(voice)</code> / <code>deactivate()</code> 生命周期不变</li>
+        <li><code>AUDITOR_MANAGED_TOOLS</code> 不变 — 同样的 5 个工具在会议中移除</li>
+        <li>EventBus 事件保持兼容 (<code>auditor.intent</code>, <code>auditor.executing</code>, etc.)</li>
+        <li>新增事件: <code>auditor.requirement</code>, <code>auditor.decision</code>, <code>auditor.checkpoint</code></li>
+        <li>REST API 无变更 — 内部架构重构，对外透明</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>风险评估</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>风险 1: 本地规则的误分类</div>
+      <p>EntryClassifier 用正则规则分类，可能把命令误判为需求，或者需求漏判。</p>
+      <p><strong>缓解</strong>: 规则保守 (宁可误判为 chat → 被 fallback 捕获)；Haiku 做最终判断；定期根据实际数据调优规则。</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>风险 2: liveNotes 压缩丢信息</div>
+      <p>StateCheckpoint 压缩 liveNotes 时可能丢失重要信息。</p>
+      <p><strong>缓解</strong>: pinned 类型永不压缩；压缩前保存原始版本到 OpenClaw MEMORY.md；压缩规则可调。</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot dot-green"></span>风险 3: 多 Queue 竞争 Haiku API</div>
+      <p>多个微任务同时 debounce 到期，并发调用 Haiku。</p>
+      <p><strong>缓解</strong>: Bun 单线程 + await → 自然排队；不同 debounce 时间天然错开；可加全局 rate limiter。</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+// ── Mermaid init ──
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#e2e8f0',
+    primaryBorderColor: '#4f8cff',
+    lineColor: '#4f8cff',
+    secondaryColor: '#2d1f4e',
+    tertiaryColor: '#1a1d27',
+    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+    fontSize: '13px',
+  },
+  flowchart: { htmlLabels: true, curve: 'basis' },
+  sequence: { mirrorActors: false, messageAlign: 'left' },
+  gantt: { fontSize: 12 },
+});
+
+// ── Sticky nav highlighting ──
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav a');
+
+function updateActiveNav() {
+  let current = '';
+  sections.forEach(section => {
+    const top = section.offsetTop - 80;
+    if (window.scrollY >= top) current = section.id;
+  });
+  navLinks.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === `#${current}`);
+  });
+}
+
+window.addEventListener('scroll', updateActiveNav, { passive: true });
+updateActiveNav();
+
+// ── Smooth scroll ──
+navLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(link.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+</script>
+
+</body>
+</html>

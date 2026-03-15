@@ -1,0 +1,26 @@
+{
+  "name": "callingclaw",
+  "version": "2.2.1",
+  "description": "CallingClaw 2.0 — Voice + Vision + Computer Use AI Agent",
+  "module": "src/callingclaw.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/callingclaw.ts",
+    "dev": "bun --hot run src/callingclaw.ts",
+    "setup:python": "pip3 install -r requirements.txt",
+    "test": "bun test",
+    "check": "bun scripts/check-wiring.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@playwright/cli": "^0.1.1",
+    "openai": "^6.27.0"
+  }
+}

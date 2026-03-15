@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw — Live Meeting</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0c0c10;
+      --surface:   #141418;
+      --surface-2: #1a1a20;
+      --surface-3: #202028;
+      --text:      #e4e4f0;
+      --text-2:    #9090a8;
+      --text-3:    #52526a;
+      --accent:    #e85d4c;
+      --user:      #60a5fa;
+      --ai:        #4ade80;
+      --screen:    #c084fc;
+      --tool:      #fb923c;
+      --think:     #a78bfa;
+      --compute:   #38bdf8;
+      --border:    #22222e;
+      --font-d: "Space Grotesk", system-ui, sans-serif;
+      --font-b: "Inter", system-ui, sans-serif;
+      --font-m: "JetBrains Mono", monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-b);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═══ HEADER ═══ */
+    .hdr {
+      display: flex; align-items: center;
+      height: 58px; padding: 0 1.5rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      gap: 1rem; flex-shrink: 0;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-family: var(--font-d); font-weight: 700;
+      font-size: 1rem; letter-spacing: -0.02em; white-space: nowrap;
+    }
+    .logo-mark {
+      width: 30px; height: 30px;
+      border-radius: 7px; overflow: hidden;
+      flex-shrink: 0;
+    }
+    .logo-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .logo-sub { color: var(--text-3); font-weight: 400; font-size: 0.875rem; }
+    .hdr-center {
+      flex: 1; display: flex; align-items: center;
+      justify-content: center; gap: 1rem;
+    }
+    .live-badge {
+      display: flex; align-items: center; gap: 0.375rem;
+      padding: 0.25rem 0.875rem;
+      border-radius: 100px;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.25);
+      font-size: 0.75rem; font-weight: 700;
+      color: #ef4444; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .live-badge.idle {
+      background: rgba(80,80,100,0.15);
+      border-color: rgba(80,80,100,0.25);
+      color: var(--text-3);
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: currentColor; flex-shrink: 0;
+      animation: livepulse 1.4s infinite;
+    }
+    .live-badge.idle .live-dot { animation: none; opacity: 0.4; }
+    @keyframes livepulse { 0%,100%{opacity:1}50%{opacity:0.25} }
+    .timer {
+      font-family: var(--font-m);
+      font-size: 1.0625rem; font-weight: 500;
+      color: var(--text-2); letter-spacing: 0.06em;
+    }
+    .hdr-right { display: flex; align-items: center; gap: 0.5rem; }
+    .spill {
+      display: flex; align-items: center; gap: 0.25rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 100px;
+      background: var(--surface-2); border: 1px solid var(--border);
+      font-size: 0.6875rem; font-weight: 600;
+      color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .sdot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--text-3); transition: all 0.3s;
+    }
+    .sdot.on { background: var(--ai); box-shadow: 0 0 5px var(--ai); }
+    .panel-link {
+      font-size: 0.75rem; color: var(--text-3);
+      text-decoration: none; border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.25rem 0.625rem;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .panel-link:hover { color: var(--text-2); border-color: var(--text-3); }
+
+    /* ═══ MAIN GRID ═══ */
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      height: calc(100vh - 58px);
+      overflow: hidden;
+    }
+
+    /* ═══ TRANSCRIPT PANEL ═══ */
+    .tx-panel {
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border); overflow: hidden;
+    }
+    .panel-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.625rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    .panel-ttl {
+      font-family: var(--font-d); font-size: 0.6875rem;
+      font-weight: 700; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .panel-meta {
+      font-family: var(--font-m); font-size: 0.6875rem; color: var(--text-3);
+    }
+    .tx-feed {
+      flex: 1; overflow-y: auto;
+      padding: 1rem 1.25rem;
+      display: flex; flex-direction: column; gap: 0.875rem;
+      scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
+    }
+    .tx-empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; gap: 0.625rem; color: var(--text-3);
+    }
+    .tx-empty-icon { font-size: 2.5rem; opacity: 0.25; }
+    .tx-empty-text { font-size: 0.875rem; }
+    .tx-entry {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      animation: entryIn 0.3s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes entryIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .tx-meta { display: flex; align-items: center; gap: 0.5rem; }
+    .tx-role {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      font-size: 0.6875rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .tx-role.user   { color: var(--user); }
+    .tx-role.ai     { color: var(--ai); }
+    .tx-role.screen { color: var(--screen); }
+    .tx-role.system { color: var(--text-3); }
+    .tx-time {
+      font-family: var(--font-m); font-size: 0.625rem; color: var(--text-3);
+    }
+    .tx-text {
+      font-size: 1rem; line-height: 1.65; color: var(--text);
+      padding: 0.5rem 0.875rem; border-radius: 8px;
+      background: var(--surface-2); border-left: 3px solid transparent;
+    }
+    .tx-entry.user   .tx-text { border-left-color: var(--user);   background: rgba(96,165,250,0.06); }
+    .tx-entry.ai     .tx-text { border-left-color: var(--ai);     background: rgba(74,222,128,0.06); }
+    .tx-entry.screen .tx-text {
+      border-left-color: var(--screen); background: rgba(192,132,252,0.06);
+      font-size: 0.875rem; color: var(--text-2); font-family: var(--font-m);
+    }
+    .tx-entry.system .tx-text {
+      border-left-color: var(--text-3); background: rgba(82,82,106,0.1);
+      font-size: 0.875rem; color: var(--text-3);
+    }
+
+    /* ═══ AI PANEL ═══ */
+    .ai-panel {
+      display: flex; flex-direction: column;
+      background: var(--surface); overflow: hidden;
+    }
+
+    /* State Widget */
+    .state-wrap {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .state-ttl {
+      font-family: var(--font-d); font-size: 0.6875rem; font-weight: 700;
+      color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 0.625rem;
+    }
+    .state-widget {
+      display: flex; align-items: center; gap: 0.875rem;
+      padding: 0.875rem 1rem; border-radius: 12px;
+      background: var(--surface-2); border: 1px solid var(--border);
+      transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
+      min-height: 72px;
+    }
+    .state-widget.s-thinking  { border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.06); box-shadow: 0 0 24px rgba(167,139,250,0.08); }
+    .state-widget.s-speaking  { border-color: rgba(74,222,128,0.35);  background: rgba(74,222,128,0.06);  box-shadow: 0 0 24px rgba(74,222,128,0.08);  }
+    .state-widget.s-tool      { border-color: rgba(251,146,60,0.35);  background: rgba(251,146,60,0.06);  box-shadow: 0 0 24px rgba(251,146,60,0.08);  }
+    .state-widget.s-computing { border-color: rgba(56,189,248,0.35);  background: rgba(56,189,248,0.06);  box-shadow: 0 0 24px rgba(56,189,248,0.08);  }
+    .state-icon-box {
+      width: 46px; height: 46px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; flex-shrink: 0;
+      background: var(--surface-3); transition: background 0.35s;
+    }
+    .s-thinking  .state-icon-box { background: rgba(167,139,250,0.15); }
+    .s-speaking  .state-icon-box { background: rgba(74,222,128,0.15); }
+    .s-tool      .state-icon-box { background: rgba(251,146,60,0.15); }
+    .s-computing .state-icon-box { background: rgba(56,189,248,0.15); }
+    .state-body { flex: 1; min-width: 0; }
+    .state-lbl {
+      font-family: var(--font-d); font-size: 0.9375rem;
+      font-weight: 600; line-height: 1.2; transition: color 0.35s;
+    }
+    .s-thinking  .state-lbl { color: #a78bfa; }
+    .s-speaking  .state-lbl { color: #4ade80; }
+    .s-tool      .state-lbl { color: #fb923c; }
+    .s-computing .state-lbl { color: #38bdf8; }
+    .s-idle      .state-lbl { color: var(--text-3); }
+    .state-dtl {
+      font-size: 0.75rem; color: var(--text-3);
+      margin-top: 0.2rem; font-family: var(--font-m);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .state-anim { width: 22px; flex-shrink: 0; }
+    /* Dot bounce */
+    .dots { display: flex; gap: 3px; align-items: center; }
+    .dots span {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: currentColor; animation: dbounce 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dbounce { 0%,60%,100%{transform:translateY(0);opacity:0.4} 30%{transform:translateY(-5px);opacity:1} }
+    /* Audio bars */
+    .bars { display: flex; gap: 2px; align-items: flex-end; height: 18px; }
+    .bars span {
+      width: 3px; border-radius: 2px; background: currentColor;
+      animation: bwave 0.9s ease-in-out infinite;
+    }
+    .bars span:nth-child(1){animation-delay:0s}
+    .bars span:nth-child(2){animation-delay:0.15s}
+    .bars span:nth-child(3){animation-delay:0.3s}
+    .bars span:nth-child(4){animation-delay:0.15s}
+    @keyframes bwave { 0%,100%{height:3px;opacity:0.35} 50%{height:16px;opacity:1} }
+    /* Spinner */
+    .spin {
+      width: 15px; height: 15px;
+      border: 2px solid currentColor; border-top-color: transparent;
+      border-radius: 50%; animation: spinr 0.75s linear infinite; opacity: 0.7;
+    }
+    @keyframes spinr { to{transform:rotate(360deg)} }
+
+    /* Activity Feed */
+    .act-section {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden; border-bottom: 1px solid var(--border);
+    }
+    .act-feed {
+      flex: 1; overflow-y: auto;
+      padding: 0.5rem 0.875rem;
+      display: flex; flex-direction: column; gap: 0.25rem;
+      scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
+    }
+    .act-entry {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.375rem 0.5rem; border-radius: 6px;
+      animation: fadeIn 0.2s ease-out; transition: background 0.15s;
+    }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    .act-entry:hover { background: var(--surface-2); }
+    .act-ico { font-size: 0.875rem; flex-shrink:0; width:20px; text-align:center; }
+    .act-txt { font-size: 0.75rem; color: var(--text-2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .act-txt b { color: var(--text); font-weight: 600; }
+    .act-ts { font-family: var(--font-m); font-size: 0.625rem; color: var(--text-3); flex-shrink:0; }
+
+    /* Action Items */
+    .items-section {
+      padding: 0.75rem 1rem;
+      max-height: 200px; overflow-y: auto; flex-shrink: 0;
+    }
+    .item-list { display: flex; flex-direction: column; gap: 0.375rem; margin-top: 0.5rem; }
+    .item-row {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      padding: 0.375rem 0.5rem; border-radius: 6px;
+      background: rgba(251,146,60,0.06);
+      border-left: 2px solid rgba(251,146,60,0.35);
+    }
+    .item-bul { color: var(--tool); flex-shrink:0; font-size:0.75rem; line-height:1.6; }
+    .item-txt { font-size: 0.8125rem; color: var(--text-2); line-height: 1.45; }
+    .no-items { font-size: 0.75rem; color: var(--text-3); padding: 0.25rem 0.5rem; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="hdr">
+    <div class="logo">
+      <div class="logo-mark"><img src="./logo.png" alt="CallingClaw"></div>
+      CallingClaw <span class="logo-sub">&nbsp;2.0</span>
+    </div>
+
+    <div class="hdr-center">
+      <div class="live-badge idle" id="live-badge">
+        <div class="live-dot"></div>
+        <span id="live-text">Not in meeting</span>
+      </div>
+      <div class="timer" id="timer">00:00:00</div>
+    </div>
+
+    <div class="hdr-right">
+      <div class="spill"><div class="sdot" id="dot-voice"></div>Voice</div>
+      <div class="spill"><div class="sdot" id="dot-bridge"></div>Bridge</div>
+      <div class="spill"><div class="sdot" id="dot-rec"></div>REC</div>
+      <a class="panel-link" href="/" target="_blank">Full Panel ↗</a>
+    </div>
+  </header>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Transcript -->
+    <div class="tx-panel">
+      <div class="panel-hdr">
+        <span class="panel-ttl">Live Conversation</span>
+        <span class="panel-meta" id="tx-count">0 messages</span>
+      </div>
+      <div class="tx-feed" id="tx-feed">
+        <div class="tx-empty">
+          <div class="tx-empty-icon">🎤</div>
+          <div class="tx-empty-text">Waiting for meeting to start…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Panel -->
+    <div class="ai-panel">
+
+      <!-- State Widget -->
+      <div class="state-wrap">
+        <div class="state-ttl">AI Brain</div>
+        <div class="state-widget s-idle" id="state-widget">
+          <div class="state-icon-box"><span id="state-icon">💡</span></div>
+          <div class="state-body">
+            <div class="state-lbl" id="state-lbl">Idle</div>
+            <div class="state-dtl" id="state-dtl">Listening…</div>
+          </div>
+          <div class="state-anim" id="state-anim"></div>
+        </div>
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="act-section">
+        <div class="panel-hdr">
+          <span class="panel-ttl">Activity</span>
+          <span class="panel-meta" id="ws-status" style="color:var(--text-3)">⬤ Connecting</span>
+        </div>
+        <div class="act-feed" id="act-feed"></div>
+      </div>
+
+      <!-- Action Items -->
+      <div class="items-section">
+        <div class="panel-ttl">
+          Action Items
+          <span style="color:var(--tool);font-family:var(--font-m);font-size:0.875em;margin-left:0.25em" id="item-count"></span>
+        </div>
+        <div class="item-list" id="item-list">
+          <div class="no-items">No action items yet</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const API = `${location.protocol}//${location.host}`;
+
+    // ── State ──
+    let meetingStart = null;
+    let timerInt = null;
+    let txEntries = [];
+    let aiState = 'idle';
+    let stateResetTmr = null;
+    let ws = null;
+    let wsReconnTmr = null;
+
+    // ── Timer ──
+    function startTimer() {
+      if (timerInt) return;
+      meetingStart = Date.now();
+      timerInt = setInterval(() => {
+        const s = Math.floor((Date.now() - meetingStart) / 1000);
+        const h = String(Math.floor(s / 3600)).padStart(2,'0');
+        const m = String(Math.floor((s % 3600) / 60)).padStart(2,'0');
+        const sec = String(s % 60).padStart(2,'0');
+        document.getElementById('timer').textContent = `${h}:${m}:${sec}`;
+      }, 1000);
+    }
+    function stopTimer() {
+      if (timerInt) { clearInterval(timerInt); timerInt = null; }
+    }
+
+    // ── AI State Machine ──
+    const STATES = {
+      idle:      { cls:'s-idle',      icon:'💡', lbl:'Idle',         anim:'',     dtl:'Listening…' },
+      thinking:  { cls:'s-thinking',  icon:'💭', lbl:'Thinking',     anim:'dots', dtl:'Processing…' },
+      speaking:  { cls:'s-speaking',  icon:'🎤', lbl:'Speaking',     anim:'bars', dtl:'Generating response…' },
+      tool:      { cls:'s-tool',      icon:'🔧', lbl:'Using Tool',   anim:'spin', dtl:'' },
+      computing: { cls:'s-computing', icon:'💻', lbl:'Computing',    anim:'spin', dtl:'Running automation…' },
+    };
+    const ANIM_COLORS = { dots:'#a78bfa', bars:'#4ade80', spin:'#fb923c' };
+
+    function setAIState(state, dtlOverride) {
+      const cfg = STATES[state] || STATES.idle;
+      const w = document.getElementById('state-widget');
+      w.className = `state-widget ${cfg.cls}`;
+      document.getElementById('state-icon').textContent = cfg.icon;
+      document.getElementById('state-lbl').textContent  = cfg.lbl;
+      document.getElementById('state-dtl').textContent  = dtlOverride || cfg.dtl;
+      aiState = state;
+
+      const animEl = document.getElementById('state-anim');
+      const col = ANIM_COLORS[cfg.anim] || '#888';
+      if (cfg.anim === 'dots') {
+        animEl.innerHTML = `<div class="dots" style="color:${col}"><span></span><span></span><span></span></div>`;
+      } else if (cfg.anim === 'bars') {
+        animEl.innerHTML = `<div class="bars" style="color:${col}"><span></span><span></span><span></span><span></span></div>`;
+      } else if (cfg.anim === 'spin') {
+        animEl.innerHTML = `<div class="spin" style="color:${col}"></div>`;
+      } else {
+        animEl.innerHTML = '';
+      }
+      if (stateResetTmr) clearTimeout(stateResetTmr);
+    }
+    function autoReset(ms) {
+      if (stateResetTmr) clearTimeout(stateResetTmr);
+      stateResetTmr = setTimeout(() => setAIState('idle'), ms);
+    }
+
+    // ── Activity Feed ──
+    const TOOL_ICONS = {
+      recall_context:'💭', computer_action:'💻', schedule_meeting:'📅',
+      check_calendar:'📆', join_meeting:'🎥', leave_meeting:'🚪',
+      take_screenshot:'📸', save_meeting_notes:'📝', share_screen:'🖥️',
+      stop_sharing:'⏹️', open_file:'📂', zoom_control:'🎬', browser_action:'🌐',
+    };
+
+    function addActivity(icon, html, ts) {
+      const feed = document.getElementById('act-feed');
+      const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+      const time = ts || new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const div = document.createElement('div');
+      div.className = 'act-entry';
+      div.innerHTML = `<span class="act-ico">${icon}</span><span class="act-txt">${html}</span><span class="act-ts">${time}</span>`;
+      feed.appendChild(div);
+      while (feed.children.length > 150) feed.removeChild(feed.firstChild);
+      if (atBottom) feed.scrollTop = feed.scrollHeight;
+    }
+
+    // ── Transcript ──
+    function renderTranscript(entries) {
+      const feed = document.getElementById('tx-feed');
+      const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+
+      if (entries.length === 0) {
+        feed.innerHTML = '<div class="tx-empty"><div class="tx-empty-icon">🎤</div><div class="tx-empty-text">Waiting for conversation…</div></div>';
+        document.getElementById('tx-count').textContent = '0 messages';
+        return;
+      }
+
+      // Append only new entries
+      const startIdx = txEntries.length;
+      if (startIdx === 0) feed.innerHTML = '';
+
+      const newOnes = entries.slice(startIdx);
+      for (const e of newOnes) {
+        const text = e.text || e.content || '';
+        const isScreen = /^\[Screen\]|^Screen:/i.test(text);
+        let role = e.role === 'user' ? 'user' : e.role === 'assistant' ? 'ai' : 'system';
+        if (isScreen) role = 'screen';
+
+        const LABELS = { user:'👤 Speaker', ai:'CC CallingClaw', screen:'🖥️ Screen', system:'⚙️ System' };
+        const ts = e.ts ? new Date(e.ts).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'}) : '';
+
+        const div = document.createElement('div');
+        div.className = `tx-entry ${role}`;
+        div.innerHTML = `
+          <div class="tx-meta">
+            <span class="tx-role ${role}">${LABELS[role]}</span>
+            ${ts ? `<span class="tx-time">${ts}</span>` : ''}
+          </div>
+          <div class="tx-text">${escHtml(text)}</div>`;
+        feed.appendChild(div);
+
+        // Briefly show "speaking" when AI output arrives
+        if (role === 'ai' && aiState === 'idle') {
+          setAIState('speaking', text.slice(0, 55) + (text.length > 55 ? '…' : ''));
+          autoReset(2800);
+        }
+      }
+
+      txEntries = entries;
+      document.getElementById('tx-count').textContent = `${entries.length} message${entries.length !== 1 ? 's' : ''}`;
+      if (atBottom) feed.scrollTop = feed.scrollHeight;
+    }
+
+    function renderActionItems(items) {
+      const list = document.getElementById('item-list');
+      const count = document.getElementById('item-count');
+      if (!items || items.length === 0) {
+        list.innerHTML = '<div class="no-items">No action items yet</div>';
+        count.textContent = '';
+        return;
+      }
+      count.textContent = `(${items.length})`;
+      list.innerHTML = items.map(i => `
+        <div class="item-row">
+          <span class="item-bul">○</span>
+          <span class="item-txt">${escHtml(i.task || i.text || '')}</span>
+        </div>`).join('');
+    }
+
+    function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    // ── Status ──
+    async function fetchStatus() {
+      try {
+        const r = await fetch(`${API}/api/status`);
+        const d = await r.json();
+        document.getElementById('dot-voice').className  = `sdot ${d.realtime === 'connected' ? 'on' : ''}`;
+        document.getElementById('dot-bridge').className = `sdot ${d.bridge === 'connected' ? 'on' : ''}`;
+        document.getElementById('dot-rec').className    = `sdot ${d.meeting === 'recording' ? 'on' : ''}`;
+        if (d.meeting === 'recording') {
+          document.getElementById('live-badge').className = 'live-badge';
+          document.getElementById('live-text').textContent = 'Live Meeting';
+          if (!timerInt) startTimer();
+        }
+      } catch {}
+    }
+
+    // ── Transcript Polling ──
+    async function pollTranscript() {
+      try {
+        const [trRes, stRes] = await Promise.all([
+          fetch(`${API}/api/meeting/transcript?count=200`),
+          fetch(`${API}/api/meeting/status`),
+        ]);
+        const tr = await trRes.json();
+        const st = await stRes.json();
+        renderTranscript(tr.entries || []);
+        renderActionItems(st.actionItems || []);
+      } catch {}
+    }
+
+    // ── WebSocket ──
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws/events`);
+
+      ws.onopen = () => {
+        document.getElementById('ws-status').textContent = '⬤ Live';
+        document.getElementById('ws-status').style.color = 'var(--ai)';
+        addActivity('⚡', '<b>Connected</b> to event stream');
+      };
+      ws.onmessage = e => { try { handleEvent(JSON.parse(e.data)); } catch {} };
+      ws.onclose = () => {
+        document.getElementById('ws-status').textContent = '⬤ Offline';
+        document.getElementById('ws-status').style.color = 'var(--text-3)';
+        clearTimeout(wsReconnTmr);
+        wsReconnTmr = setTimeout(connectWS, 3000);
+      };
+      ws.onerror = () => ws.close();
+    }
+
+    function handleEvent(ev) {
+      const d = ev.data || {};
+      const t = ev.type;
+      const ts = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}) : null;
+
+      switch (t) {
+
+        // Meeting lifecycle
+        case 'meeting.joining':
+          document.getElementById('live-badge').className = 'live-badge';
+          document.getElementById('live-text').textContent = 'Joining…';
+          addActivity('🎥', `<b>Joining</b> ${escHtml(d.platform || 'meeting')}`, ts);
+          break;
+        case 'meeting.started':
+          document.getElementById('live-badge').className = 'live-badge';
+          document.getElementById('live-text').textContent = 'Live Meeting';
+          startTimer();
+          addActivity('🟢', '<b>Meeting started</b> — recording active', ts);
+          setAIState('idle', 'Meeting active, listening…');
+          fetchStatus();
+          break;
+        case 'meeting.ended':
+        case 'meeting.stopped':
+          document.getElementById('live-badge').className = 'live-badge idle';
+          document.getElementById('live-text').textContent = 'Meeting ended';
+          stopTimer();
+          addActivity('🔴', '<b>Meeting ended</b>', ts);
+          setAIState('idle', 'Meeting complete');
+          fetchStatus();
+          break;
+        case 'meeting.action_item':
+          addActivity('📋', `Action item: <b>${escHtml(d.text || '')}</b>`, ts);
+          break;
+
+        // Voice
+        case 'voice.started':
+          addActivity('🎤', 'Voice session <b>started</b>', ts);
+          setAIState('idle', 'Voice connected, listening…');
+          fetchStatus();
+          break;
+        case 'voice.stopped':
+          addActivity('🔇', 'Voice session <b>stopped</b>', ts);
+          fetchStatus();
+          break;
+
+        // Voice tool calls (emitted from callingclaw.ts)
+        case 'voice.tool_call': {
+          const tool = d.tool || 'unknown';
+          const icon = TOOL_ICONS[tool] || '🔧';
+          const label = tool.replace(/_/g, ' ');
+          const detail = d.instruction || d.query || d.summary || '';
+          addActivity(icon, `Tool: <b>${escHtml(label)}</b>${detail ? ' — ' + escHtml(detail.slice(0, 60)) : ''}`, ts);
+          if (tool === 'recall_context') {
+            setAIState('thinking', `Recalling: ${(d.query || '').slice(0, 55)}`);
+          } else if (tool === 'computer_action') {
+            setAIState('computing', (d.instruction || 'Running automation').slice(0, 55));
+          } else {
+            setAIState('tool', label);
+            autoReset(10000);
+          }
+          break;
+        }
+
+        // Computer Use
+        case 'computer.task_started':
+          addActivity('💻', `<b>Executing:</b> ${escHtml((d.instruction || '').slice(0, 75))}`, ts);
+          setAIState('computing', (d.instruction || 'Running…').slice(0, 55));
+          break;
+        case 'computer.task_done':
+          addActivity('✅', `Done: <b>${escHtml((d.summary || '').slice(0, 75))}</b>`, ts);
+          setAIState('idle');
+          break;
+
+        // OpenClaw
+        case 'openclaw.delta':
+          if (aiState !== 'thinking') setAIState('thinking', 'OpenClaw processing…');
+          break;
+        case 'openclaw.done':
+          addActivity('⚡', `OpenClaw: <b>${escHtml((d.preview || 'task complete').slice(0, 60))}</b>`, ts);
+          setAIState('idle');
+          break;
+        case 'openclaw.error':
+          addActivity('❌', `OpenClaw error: ${escHtml((d.error || '').slice(0, 60))}`, ts);
+          setAIState('idle');
+          break;
+
+        // Tasks & workspace
+        case 'task.created':
+          if (d.task) addActivity('📋', `Task: <b>${escHtml((d.task.task || '').slice(0, 60))}</b>`, ts);
+          break;
+        case 'workspace.updated':
+          addActivity('📁', `Context: <b>${escHtml((d.topic || 'workspace updated').slice(0, 60))}</b>`, ts);
+          break;
+      }
+    }
+
+    // ── Init ──
+    connectWS();
+    fetchStatus();
+    pollTranscript();
+    setInterval(pollTranscript, 2500);
+    setInterval(fetchStatus, 12000);
+  </script>
+</body>
+</html>

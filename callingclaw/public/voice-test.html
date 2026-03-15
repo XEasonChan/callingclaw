@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw — Voice Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+      --border: #2a2a2a; --text: #e5e5e5; --text2: #888; --text3: #555;
+      --accent: #6366f1; --accent-dim: #4f46e5;
+      --green: #22c55e; --red: #ef4444; --yellow: #eab308; --blue: #3b82f6;
+      --radius: 12px; --radius-sm: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background: var(--bg); color: var(--text); height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: var(--surface2); color: var(--text2);
+    }
+    .header .badge.connected { background: rgba(34,197,94,0.15); color: var(--green); }
+    .header .back { color: var(--text2); text-decoration: none; font-size: 13px; margin-right: 8px; }
+    .header .back:hover { color: var(--text); }
+
+    /* Main layout */
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .panel-left { width: 380px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .panel-right { flex: 1; display: flex; flex-direction: column; }
+
+    /* Controls */
+    .controls { padding: 20px; }
+    .control-group { margin-bottom: 16px; }
+    .control-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; }
+    select, input[type="text"] {
+      width: 100%; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 13px; outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    textarea {
+      width: 100%; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 12px; font-family: 'SF Mono', monospace;
+      outline: none; resize: vertical; line-height: 1.5;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    .btn {
+      padding: 10px 24px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-start { background: var(--green); color: #fff; width: 100%; justify-content: center; }
+    .btn-start:hover { background: #16a34a; }
+    .btn-stop { background: var(--red); color: #fff; width: 100%; justify-content: center; }
+    .btn-stop:hover { background: #dc2626; }
+    .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); padding: 6px 12px; font-size: 12px; }
+    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Mic level */
+    .mic-bar-container {
+      height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 8px; overflow: hidden;
+    }
+    .mic-bar {
+      height: 100%; width: 0%; background: var(--green); border-radius: 2px;
+      transition: width 50ms linear;
+    }
+    .mic-bar.active { background: var(--green); }
+
+    /* Transcript */
+    .transcript-area { flex: 1; overflow-y: auto; padding: 20px; }
+    .transcript-entry { margin-bottom: 12px; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .transcript-role {
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .transcript-role.user { color: var(--blue); }
+    .transcript-role.assistant { color: var(--green); }
+    .transcript-role.system { color: var(--yellow); }
+    .transcript-text { font-size: 14px; line-height: 1.6; color: var(--text); }
+    .transcript-time { font-size: 10px; color: var(--text3); margin-top: 2px; }
+    .transcript-empty {
+      display: flex; align-items: center; justify-content: center; height: 100%;
+      color: var(--text3); font-size: 14px;
+    }
+
+    /* Voice visualizer */
+    .voice-viz {
+      height: 60px; display: flex; align-items: center; justify-content: center;
+      gap: 3px; padding: 0 20px; border-top: 1px solid var(--border);
+    }
+    .voice-viz .bar {
+      width: 3px; background: var(--accent); border-radius: 2px; transition: height 80ms ease;
+      height: 4px;
+    }
+    .voice-viz.speaking .bar { animation: voicePulse 0.6s ease-in-out infinite alternate; }
+    @keyframes voicePulse {
+      0% { height: 4px; opacity: 0.3; }
+      100% { height: 32px; opacity: 1; }
+    }
+
+    /* Text input */
+    .text-input-bar {
+      padding: 12px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .text-input-bar input { flex: 1; }
+
+    /* Layer toggles */
+    .layer-section { padding: 0 20px 20px; border-top: 1px solid var(--border); }
+    .layer-section-title {
+      font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase;
+      letter-spacing: 0.5px; padding: 12px 0 8px; display: flex; justify-content: space-between;
+    }
+    .layer-row {
+      display: flex; align-items: center; gap: 10px; padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .layer-row:last-child { border-bottom: none; }
+    .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider {
+      position: absolute; inset: 0; background: #333; border-radius: 10px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .toggle .slider::before {
+      content: ''; position: absolute; width: 16px; height: 16px;
+      left: 2px; top: 2px; background: #888; border-radius: 50%;
+      transition: all 0.2s;
+    }
+    .toggle input:checked + .slider { background: var(--accent); }
+    .toggle input:checked + .slider::before { transform: translateX(16px); background: #fff; }
+    .toggle input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+    .layer-info { flex: 1; min-width: 0; }
+    .layer-name { font-size: 13px; font-weight: 500; }
+    .layer-meta { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+    /* Collapsible */
+    .collapsible-toggle {
+      cursor: pointer; user-select: none; color: var(--accent); font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a class="back" href="/">← Panel</a>
+    <h1>Voice Test</h1>
+    <span class="badge" id="status-badge">Disconnected</span>
+    <span class="badge" id="ws-badge">WS: --</span>
+  </div>
+
+  <div class="main">
+    <!-- Left: Controls -->
+    <div class="panel-left">
+      <div class="controls">
+        <!-- Voice select -->
+        <div class="control-group">
+          <div class="control-label">Voice</div>
+          <select id="voice-select">
+            <option value="alloy">Alloy</option>
+            <option value="ash">Ash</option>
+            <option value="ballad">Ballad</option>
+            <option value="coral">Coral</option>
+            <option value="echo">Echo</option>
+            <option value="fable">Fable</option>
+            <option value="marin" selected>Marin</option>
+            <option value="nova">Nova</option>
+            <option value="onyx">Onyx</option>
+            <option value="sage">Sage</option>
+            <option value="shimmer">Shimmer</option>
+            <option value="verse">Verse</option>
+          </select>
+        </div>
+
+        <!-- Instructions -->
+        <div class="control-group">
+          <div class="control-label">
+            System Instructions
+            <span class="collapsible-toggle" id="instr-toggle" onclick="toggleInstructions()">expand</span>
+          </div>
+          <textarea id="instructions" rows="3" placeholder="System instructions for the voice AI...">You are CallingClaw, an AI assistant. Speak naturally and concisely in the user's language. You can help with scheduling, screen control, and meeting tasks.</textarea>
+          <div id="instr-full" style="display:none; margin-top: 8px;">
+            <button class="btn btn-ghost" onclick="updateInstructions()">Update Instructions</button>
+            <span id="instr-status" style="font-size: 11px; color: var(--text3); margin-left: 8px;"></span>
+          </div>
+        </div>
+
+        <!-- Mic level -->
+        <div class="control-group">
+          <div class="control-label">Microphone</div>
+          <div class="mic-bar-container">
+            <div class="mic-bar" id="mic-bar"></div>
+          </div>
+        </div>
+
+        <!-- Start/Stop -->
+        <div class="control-group">
+          <button class="btn btn-start" id="btn-start" onclick="startSession()">Start Voice Session</button>
+          <button class="btn btn-stop" id="btn-stop" onclick="stopSession()" style="display:none">Stop</button>
+        </div>
+      </div>
+
+      <!-- Layer Toggles -->
+      <div class="layer-section">
+        <div class="layer-section-title">
+          Capability Layers
+          <span id="layer-count" style="font-size: 11px; font-weight: 400; color: var(--text3);">0/14 tools</span>
+        </div>
+        <div id="layers-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Transcript -->
+    <div class="panel-right">
+      <div class="transcript-area" id="transcript">
+        <div class="transcript-empty">Start a voice session to begin talking with CallingClaw AI</div>
+      </div>
+
+      <!-- Voice visualizer -->
+      <div class="voice-viz" id="voice-viz">
+        <script>for(let i=0;i<24;i++)document.write('<div class="bar" style="animation-delay:'+(i*0.05)+'s"></div>')</script>
+      </div>
+
+      <!-- Text input -->
+      <div class="text-input-bar">
+        <input type="text" id="text-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendText()">
+        <button class="btn btn-ghost" onclick="sendText()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════
+    // Voice Test — Browser Audio + WebSocket Relay
+    // ═══════════════════════════════════════════════════════
+
+    const API = location.origin;
+    const WS_URL = `ws://${location.host}/ws/voice-test`;
+
+    let ws = null;
+    let audioCtx = null;
+    let micStream = null;
+    let micSource = null;
+    let micProcessor = null;
+    let micAnalyser = null;
+    let playbackQueue = [];
+    let playbackNode = null;
+    let isPlaying = false;
+    let sessionActive = false;
+
+    // ── Load config ──
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/config`);
+        const d = await r.json();
+        if (d.openai_voice) document.getElementById('voice-select').value = d.openai_voice;
+      } catch {}
+      try {
+        const r = await fetch(`${API}/api/voice/instructions`);
+        const d = await r.json();
+        if (d.instructions) document.getElementById('instructions').value = d.instructions;
+      } catch {}
+    })();
+
+    // ── Toggle instructions ──
+    function toggleInstructions() {
+      const full = document.getElementById('instr-full');
+      const ta = document.getElementById('instructions');
+      const toggle = document.getElementById('instr-toggle');
+      if (full.style.display === 'none') {
+        full.style.display = 'block';
+        ta.rows = 10;
+        toggle.textContent = 'collapse';
+      } else {
+        full.style.display = 'none';
+        ta.rows = 3;
+        toggle.textContent = 'expand';
+      }
+    }
+
+    // ── Update instructions mid-session ──
+    async function updateInstructions() {
+      const text = document.getElementById('instructions').value.trim();
+      if (!text) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'update_instructions', instructions: text }));
+        document.getElementById('instr-status').textContent = 'sent';
+        setTimeout(() => document.getElementById('instr-status').textContent = '', 2000);
+      } else {
+        // Fallback to REST
+        try {
+          await fetch(`${API}/api/voice/instructions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instructions: text })
+          });
+          document.getElementById('instr-status').textContent = 'updated';
+        } catch {
+          document.getElementById('instr-status').textContent = 'failed';
+        }
+        setTimeout(() => document.getElementById('instr-status').textContent = '', 2000);
+      }
+    }
+
+    // ── Start session ──
+    async function startSession() {
+      const btnStart = document.getElementById('btn-start');
+      const btnStop = document.getElementById('btn-stop');
+      btnStart.disabled = true;
+      btnStart.textContent = 'Connecting...';
+
+      try {
+        // 1. Get mic permission
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+        });
+
+        // 2. Set up AudioContext at 24kHz (OpenAI Realtime native rate)
+        audioCtx = new AudioContext({ sampleRate: 24000 });
+        if (audioCtx.sampleRate !== 24000) {
+          console.warn(`[VoiceTest] AudioContext sampleRate is ${audioCtx.sampleRate}, expected 24000. Audio will be resampled.`);
+        }
+
+        // 3. Set up mic capture
+        micSource = audioCtx.createMediaStreamSource(micStream);
+        micAnalyser = audioCtx.createAnalyser();
+        micAnalyser.fftSize = 256;
+        micSource.connect(micAnalyser);
+
+        // ScriptProcessor for PCM16 capture
+        micProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
+        micSource.connect(micProcessor);
+        micProcessor.connect(audioCtx.destination); // Required for processing to work
+
+        micProcessor.onaudioprocess = (e) => {
+          if (!sessionActive || !ws || ws.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          // Float32 → Int16 (PCM16)
+          const pcm16 = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const s = Math.max(-1, Math.min(1, input[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          // Int16Array → base64
+          const bytes = new Uint8Array(pcm16.buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const b64 = btoa(binary);
+          ws.send(JSON.stringify({ type: 'audio', audio: b64 }));
+        };
+
+        // 4. Set up playback node (ScriptProcessor for output)
+        playbackNode = audioCtx.createScriptProcessor(4096, 1, 1);
+        playbackNode.onaudioprocess = (e) => {
+          const output = e.outputBuffer.getChannelData(0);
+          if (playbackQueue.length > 0) {
+            const chunk = playbackQueue.shift();
+            const len = Math.min(chunk.length, output.length);
+            for (let i = 0; i < len; i++) output[i] = chunk[i];
+            for (let i = len; i < output.length; i++) output[i] = 0;
+            if (!isPlaying) {
+              isPlaying = true;
+              document.getElementById('voice-viz').classList.add('speaking');
+            }
+          } else {
+            for (let i = 0; i < output.length; i++) output[i] = 0;
+            if (isPlaying) {
+              isPlaying = false;
+              document.getElementById('voice-viz').classList.remove('speaking');
+            }
+          }
+        };
+        playbackNode.connect(audioCtx.destination);
+
+        // 5. Connect WebSocket
+        ws = new WebSocket(WS_URL);
+        ws.onopen = () => {
+          updateBadge('ws-badge', 'WS: Connected', true);
+
+          // Change voice first
+          const voice = document.getElementById('voice-select').value;
+          fetch(`${API}/api/config`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ openai_voice: voice })
+          }).catch(() => {});
+
+          // Send start command with instructions
+          const instructions = document.getElementById('instructions').value.trim();
+          ws.send(JSON.stringify({ type: 'start', instructions: instructions || undefined }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'audio' && msg.audio) {
+              // Decode base64 PCM16 → Float32
+              const binary = atob(msg.audio);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              const pcm16 = new Int16Array(bytes.buffer);
+              const float32 = new Float32Array(pcm16.length);
+              for (let i = 0; i < pcm16.length; i++) {
+                float32[i] = pcm16[i] / (pcm16[i] < 0 ? 0x8000 : 0x7FFF);
+              }
+              playbackQueue.push(float32);
+              // Limit queue to prevent memory bloat (max ~2s of audio at 24kHz)
+              while (playbackQueue.length > 12) playbackQueue.shift();
+            } else if (msg.type === 'transcript') {
+              addTranscript(msg.role, msg.text, msg.ts);
+            } else if (msg.type === 'status') {
+              sessionActive = msg.voiceConnected;
+              updateBadge('status-badge', msg.voiceConnected ? 'Voice Connected' : 'Disconnected', msg.voiceConnected);
+              if (msg.voiceConnected) {
+                btnStart.style.display = 'none';
+                btnStop.style.display = '';
+                startMicLevel();
+                enableLayerToggles(true);
+                if (enabledLayers.size > 0) applyLayers();
+              }
+            } else if (msg.type === 'layers_info') {
+              renderLayers(msg.layers);
+              if (sessionActive) enableLayerToggles(true);
+            } else if (msg.type === 'layers_updated') {
+              updateLayerCount();
+              const names = (msg.activeLayers || []).join(', ') || 'none';
+              addTranscript('system', `Layers updated: [${names}] — ${msg.activeTools?.length || 0} tools active`);
+            } else if (msg.type === 'error') {
+              addTranscript('system', `Error: ${msg.message}`);
+              resetUI();
+            }
+          } catch {}
+        };
+
+        ws.onclose = () => {
+          updateBadge('ws-badge', 'WS: Closed', false);
+          if (sessionActive) stopSession();
+        };
+
+        ws.onerror = () => {
+          updateBadge('ws-badge', 'WS: Error', false);
+          resetUI();
+        };
+
+      } catch (e) {
+        alert(`Failed to start: ${e.message}`);
+        resetUI();
+      }
+    }
+
+    // ── Stop session ──
+    function stopSession() {
+      sessionActive = false;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stop' }));
+        ws.close();
+      }
+      ws = null;
+
+      // Clean up audio
+      if (micProcessor) { micProcessor.disconnect(); micProcessor = null; }
+      if (micSource) { micSource.disconnect(); micSource = null; }
+      if (micAnalyser) { micAnalyser.disconnect(); micAnalyser = null; }
+      if (playbackNode) { playbackNode.disconnect(); playbackNode = null; }
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      if (audioCtx) { audioCtx.close(); audioCtx = null; }
+      playbackQueue = [];
+      isPlaying = false;
+
+      resetUI();
+      document.getElementById('voice-viz').classList.remove('speaking');
+      updateBadge('status-badge', 'Disconnected', false);
+    }
+
+    // ── Send text ──
+    function sendText() {
+      const input = document.getElementById('text-input');
+      const text = input.value.trim();
+      if (!text) return;
+      fetch(`${API}/api/voice/text`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      addTranscript('user', text);
+      input.value = '';
+    }
+
+    // ── Transcript ──
+    function addTranscript(role, text, ts) {
+      const area = document.getElementById('transcript');
+      // Remove empty placeholder
+      const empty = area.querySelector('.transcript-empty');
+      if (empty) empty.remove();
+
+      const entry = document.createElement('div');
+      entry.className = 'transcript-entry';
+      const time = ts ? new Date(ts).toLocaleTimeString('zh-CN') : new Date().toLocaleTimeString('zh-CN');
+      const roleLabels = { user: 'You', assistant: 'CallingClaw AI', system: 'System' };
+      entry.innerHTML = `
+        <div class="transcript-role ${role}">${roleLabels[role] || role}</div>
+        <div class="transcript-text">${escapeHtml(text)}</div>
+        <div class="transcript-time">${time}</div>
+      `;
+      area.appendChild(entry);
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Mic level ──
+    let micLevelRAF = null;
+    function startMicLevel() {
+      if (!micAnalyser) return;
+      const data = new Uint8Array(micAnalyser.frequencyBinCount);
+      const bar = document.getElementById('mic-bar');
+      function tick() {
+        if (!micAnalyser) return;
+        micAnalyser.getByteFrequencyData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i];
+        const avg = sum / data.length;
+        const pct = Math.min(100, (avg / 128) * 100);
+        bar.style.width = pct + '%';
+        bar.classList.toggle('active', pct > 5);
+        micLevelRAF = requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
+    // ── UI Helpers ──
+    function resetUI() {
+      const btnStart = document.getElementById('btn-start');
+      const btnStop = document.getElementById('btn-stop');
+      btnStart.style.display = '';
+      btnStart.disabled = false;
+      btnStart.textContent = 'Start Voice Session';
+      btnStop.style.display = 'none';
+      if (micLevelRAF) { cancelAnimationFrame(micLevelRAF); micLevelRAF = null; }
+      document.getElementById('mic-bar').style.width = '0%';
+    }
+
+    function updateBadge(id, text, ok) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = ok ? 'badge connected' : 'badge';
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // Layer Toggle Management
+    // ═══════════════════════════════════════════════════════
+
+    const LAYER_ICONS = {
+      memory: '&#128218;', calendar: '&#128197;', meeting: '&#128222;',
+      automation: '&#9881;', zoom: '&#127909;',
+    };
+    const LAYER_DESCRIPTIONS = {
+      memory: 'recall_context',
+      calendar: 'schedule / check calendar',
+      meeting: 'join / create / leave meeting',
+      automation: 'screen / browser / files',
+      zoom: 'Zoom keyboard shortcuts',
+    };
+
+    let layerInfo = null;
+    let enabledLayers = new Set();
+
+    function renderLayers(info) {
+      layerInfo = info;
+      const container = document.getElementById('layers-container');
+      container.innerHTML = '';
+      for (const [key, data] of Object.entries(info)) {
+        const checked = enabledLayers.has(key);
+        const statusText = data.status ? ` · ${data.status}` : '';
+        const row = document.createElement('div');
+        row.className = 'layer-row';
+        row.innerHTML = `
+          <label class="toggle">
+            <input type="checkbox" data-layer="${key}" ${checked ? 'checked' : ''} ${!sessionActive ? 'disabled' : ''} onchange="toggleLayer('${key}', this.checked)">
+            <span class="slider"></span>
+          </label>
+          <div class="layer-info">
+            <div class="layer-name">${LAYER_ICONS[key] || ''} ${data.label}</div>
+            <div class="layer-meta">${data.toolCount} tools · ${LAYER_DESCRIPTIONS[key] || ''}${statusText}</div>
+          </div>
+        `;
+        container.appendChild(row);
+      }
+      updateLayerCount();
+    }
+
+    function toggleLayer(name, enabled) {
+      if (enabled) enabledLayers.add(name);
+      else enabledLayers.delete(name);
+      applyLayers();
+    }
+
+    function applyLayers() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: 'set_layers', layers: [...enabledLayers] }));
+    }
+
+    function updateLayerCount() {
+      let active = 0, total = 0;
+      if (layerInfo) {
+        for (const [key, data] of Object.entries(layerInfo)) {
+          total += data.toolCount;
+          if (enabledLayers.has(key)) active += data.toolCount;
+        }
+      }
+      document.getElementById('layer-count').textContent = `${active}/${total} tools`;
+    }
+
+    function enableLayerToggles(enabled) {
+      document.querySelectorAll('#layers-container input[type="checkbox"]').forEach(el => {
+        el.disabled = !enabled;
+      });
+    }
+
+    // Load placeholder layers on init
+    renderLayers({
+      memory:     { label: 'Memory',     toolCount: 1,  tools: ['recall_context'], status: '...' },
+      calendar:   { label: 'Calendar',   toolCount: 2,  tools: ['schedule_meeting', 'check_calendar'], status: '...' },
+      meeting:    { label: 'Meeting',    toolCount: 4,  tools: ['join_meeting', 'create_and_join_meeting', 'leave_meeting', 'save_meeting_notes'] },
+      automation: { label: 'Automation', toolCount: 6,  tools: ['computer_action', 'browser_action', 'open_file', 'share_screen', 'stop_sharing', 'take_screenshot'], status: '...' },
+      zoom:       { label: 'Zoom',       toolCount: 1,  tools: ['zoom_control'] },
+    });
+  </script>
+</body>
+</html>
