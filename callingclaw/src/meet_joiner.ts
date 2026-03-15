@@ -171,7 +171,7 @@ export class MeetJoiner {
    * Join any meeting by URL. Auto-detects platform (Google Meet or Zoom).
    */
   async joinMeeting(options: MeetJoinOptions): Promise<MeetSession> {
-    const { meetUrl, muteMic = true, muteCamera = true } = options;
+    const { meetUrl, muteMic = false, muteCamera = true } = options;
 
     const validated = validateMeetingUrl(meetUrl);
     const platform = validated?.platform || "unknown";

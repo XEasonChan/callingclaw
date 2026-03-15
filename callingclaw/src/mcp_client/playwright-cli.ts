@@ -478,6 +478,9 @@ export class PlaywrightCLIClient {
         if (result.startsWith("admitted:")) {
           consecutiveFailures = 0;
           this._recordAdmitted(result.slice(9));
+          // Handle "Admit all" confirmation dialog (async render)
+          await this.wait(500);
+          await this._dismissAdmitConfirmation();
           return;
         }
 
@@ -536,18 +539,28 @@ export class PlaywrightCLIClient {
     return this.evaluate(`() => {
       const all = [...document.querySelectorAll('button, [role="button"], div[tabindex]')];
 
-      // Step B: Sidebar "Admit all" (preferred) or individual "Admit"
-      const admitAll = all.find(b => {
-        const t = (b.textContent || '').trim();
-        return t === 'Admit all' || t === '全部准许';
-      });
-      if (admitAll) { admitAll.click(); return 'admitted:' + admitAll.textContent.trim().substring(0, 60); }
-
+      // Step B: Individual "Admit" first (avoids "Admit all" confirmation dialog)
       const admit = all.find(b => {
         const t = (b.textContent || '').trim();
         return t === 'Admit' || t === '准许';
       });
       if (admit) { admit.click(); return 'admitted:' + admit.textContent.trim().substring(0, 60); }
+
+      // Step B2: "Admit all" as fallback — then handle confirmation dialog
+      const admitAll = all.find(b => {
+        const t = (b.textContent || '').trim();
+        return t === 'Admit all' || t === '全部准许';
+      });
+      if (admitAll) {
+        admitAll.click();
+        // Handle confirmation dialog: look for confirm button after short delay
+        const confirm = all.find(b => {
+          const t = (b.textContent || '').trim();
+          return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认';
+        });
+        if (confirm && confirm !== admitAll) { confirm.click(); }
+        return 'admitted:' + admitAll.textContent.trim().substring(0, 60);
+      }
 
       // Step A: Green notification "Admit N guest(s)"
       const notif = all.find(b => {
@@ -578,6 +591,25 @@ export class PlaywrightCLIClient {
 
       return 'none';
     }`);
+  }
+
+  /**
+   * Dismiss "Admit all" confirmation dialog if it appeared.
+   * Google Meet shows a second "Admit all" or "Confirm" button after clicking the first one.
+   */
+  private async _dismissAdmitConfirmation(): Promise<void> {
+    try {
+      await this.evaluate(`() => {
+        const all = [...document.querySelectorAll('button, [role="button"], div[tabindex]')];
+        // Look for confirmation dialog buttons
+        const confirmBtn = all.find(b => {
+          const t = (b.textContent || '').trim();
+          return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认' || t === 'OK' || t === '确定';
+        });
+        if (confirmBtn) { confirmBtn.click(); return 'confirmed'; }
+        return 'no_dialog';
+      }`);
+    } catch {}
   }
 
   /** Record admitted attendees */
