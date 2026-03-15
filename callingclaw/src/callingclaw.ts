@@ -18,7 +18,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.2.1";
+let APP_VERSION = "2.4.0";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -135,7 +135,7 @@ let _meetingVisionBuffer: string[] = [];
 const vision = new VisionModule({
   bridge,
   context,
-  analysisIntervalMs: 8000, // Analyze every 8 seconds during meetings
+  analysisIntervalMs: 1000, // Analyze every 1 second during meetings
   onScreenDescription: (description, _screenshot) => {
     // Buffer descriptions for periodic OpenClaw push
     _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
@@ -155,7 +155,7 @@ const vision = new VisionModule({
 // Auto-start meeting vision + open transparency view + activate auditor when meeting starts
 eventBus.on("meeting.started", () => {
   if (!vision.isMeetingMode) {
-    vision.startMeetingVision(8000);
+    vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");
   }
   // Open meeting transparency panel in browser (foreground)
@@ -208,6 +208,81 @@ eventBus.on("meeting.ended", () => {
   }
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
+
+// ── Auto-leave when meeting ends externally (host ended, kicked, etc.) ──
+// This is called from PlaywrightCLI's meeting-end detector.
+let _autoLeaveInProgress = false;
+async function autoLeaveMeeting() {
+  if (_autoLeaveInProgress) return;
+  _autoLeaveInProgress = true;
+  console.log("[Meeting] Auto-leave triggered — meeting ended externally");
+
+  try {
+    // Stop admission monitor
+    if (playwrightCli.isAdmissionMonitoring) {
+      playwrightCli.stopAdmissionMonitor();
+    }
+    playwrightCli.clearMeetingEndCallback();
+
+    // Cancel waiting room poll if running
+    if (_waitingRoomAbort) {
+      _waitingRoomAbort.abort();
+      _waitingRoomAbort = null;
+    }
+
+    // Generate summary + export
+    const summary = await meeting.generateSummary();
+    const filepath = await meeting.exportToMarkdown(summary);
+    meeting.stopRecording();
+
+    // Create tasks from action items
+    let createdTasks: any[] = [];
+    if (summary.actionItems?.length > 0) {
+      createdTasks = taskStore.createFromMeetingItems(
+        summary.actionItems.map((a: any) => ({
+          task: a.task, assignee: a.assignee, deadline: a.deadline,
+        }))
+      );
+    }
+
+    const followUp = {
+      filepath, summary,
+      tasks: createdTasks.map((t: any) => ({ id: t.id, task: t.task, assignee: t.assignee, deadline: t.deadline })),
+      pendingConfirmation: true, generatedAt: Date.now(),
+      autoDetected: true,
+    };
+
+    eventBus.emit("meeting.ended", followUp);
+    eventBus.endCorrelation();
+
+    // Post-meeting delivery
+    const prepSummary = getPostMeetingSummary(meetingPrepSkill);
+    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary }).catch((e: any) => {
+      console.error("[AutoLeave] Delivery failed:", e.message);
+    });
+
+    // Revert voice to default persona
+    meetingPrepSkill.clear();
+    if (voice.connected) {
+      const defaultBrief = contextSync.getBrief().voice;
+      const defaultInstructions = buildVoiceInstructions() +
+        (defaultBrief ? `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${defaultBrief}` : "");
+      voice.updateInstructions(defaultInstructions);
+      voice.sendText("会议已经结束了，我已经保存了会议记录。");
+    }
+
+    console.log(`[AutoLeave] Complete — notes: ${filepath}, tasks: ${createdTasks.length}`);
+  } catch (e: any) {
+    console.error("[AutoLeave] Error:", e.message);
+    // Even if summary fails, still emit meeting.ended to clean up state
+    eventBus.emit("meeting.ended", { autoDetected: true, error: e.message });
+  } finally {
+    _autoLeaveInProgress = false;
+  }
+}
+
+// Abort controller for waiting room background poll
+let _waitingRoomAbort: AbortController | null = null;
 
 // ── 2. Computer Use Module ──────────────────────────────────────
 
@@ -555,6 +630,12 @@ const voice = new VoiceModule({
               },
             );
             console.log(`[Meeting] Admission monitor started (${attendeeNames.length} expected attendees)`);
+
+            // ── Step 5: Register meeting-end detector (piggybacks on admission monitor) ──
+            playwrightCli.onMeetingEnd(() => {
+              autoLeaveMeeting();
+            });
+            console.log("[Meeting] Meeting-end detector registered");
           }
         }
 
@@ -578,11 +659,17 @@ const voice = new VoiceModule({
         }
 
         // Background poll: if stuck in waiting_room, keep checking until admitted (5 min)
+        // Now cancellable via _waitingRoomAbort (cleared on meeting end)
         if (joinState === "waiting_room" && playwrightCli.connected) {
           console.log("[Meeting] In waiting room — background poll until admitted...");
+          _waitingRoomAbort = new AbortController();
+          const signal = _waitingRoomAbort.signal;
+          const meetUrl = args.meet_url;
           (async () => {
             for (let i = 0; i < 60; i++) {
+              if (signal.aborted) { console.log("[Meeting] Waiting room poll cancelled"); return; }
               await new Promise(r => setTimeout(r, 5000));
+              if (signal.aborted) return;
               try {
                 const check = await playwrightCli.evaluate(`() => {
                   const leave = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
@@ -590,16 +677,19 @@ const voice = new VoiceModule({
                   if (leave || controls) return 'in_meeting';
                   const text = document.body.innerText;
                   if (text.includes('removed') || text.includes('denied')) return 'rejected';
+                  if (text.includes('meeting has ended') || text.includes('会议已结束')) return 'ended';
                   return 'waiting';
                 }`);
                 if (check.includes("in_meeting")) {
                   console.log("[Meeting] Admitted from waiting room!");
+                  _waitingRoomAbort = null;
                   meeting.startRecording();
-                  eventBus.emit("meeting.started", { meet_url: args.meet_url, correlation_id: corrId });
+                  eventBus.emit("meeting.started", { meet_url: meetUrl, correlation_id: corrId });
                   break;
                 }
-                if (check.includes("rejected")) {
-                  console.log("[Meeting] Rejected from waiting room");
+                if (check.includes("rejected") || check.includes("ended")) {
+                  console.log(`[Meeting] ${check} from waiting room`);
+                  _waitingRoomAbort = null;
                   break;
                 }
               } catch {}
@@ -640,7 +730,9 @@ const voice = new VoiceModule({
           : `Failed: ${session.error}`;
       }
       case "leave_meeting": {
-        // Stop admission monitor if running
+        // Stop meeting-end watcher + admission monitor
+        playwrightCli.clearMeetingEndCallback();
+        if (_waitingRoomAbort) { _waitingRoomAbort.abort(); _waitingRoomAbort = null; }
         if (playwrightCli.isAdmissionMonitoring) {
           const admitted = playwrightCli.stopAdmissionMonitor();
           if (admitted.length > 0) {

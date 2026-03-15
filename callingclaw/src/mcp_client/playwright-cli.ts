@@ -610,6 +610,74 @@ export class PlaywrightCLIClient {
   }
 
   /**
+   * Register a callback to fire when the meeting ends (host ended, kicked, etc.).
+   * Detection piggybacks on the admission monitor's 3s interval.
+   * If no admission monitor is running, starts a standalone meeting-end watcher.
+   */
+  onMeetingEnd(callback: () => void): void {
+    this._meetingEndCallback = callback;
+
+    // If admission monitor isn't running, start a lightweight standalone watcher
+    if (!this._admissionInterval) {
+      console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
+      this._admissionInterval = setInterval(async () => {
+        try {
+          const ended = await this._checkMeetingEnded();
+          if (ended) {
+            console.log("[MeetEnd] Meeting ended detected — triggering cleanup");
+            const cb = this._meetingEndCallback;
+            this._meetingEndCallback = null;
+            this.stopAdmissionMonitor();
+            if (cb) cb();
+          }
+        } catch {}
+      }, 3000);
+    }
+  }
+
+  /**
+   * Check if Google Meet page shows "meeting ended" state.
+   * Uses pure DOM inspection — no screenshots, no AI model.
+   * Detects: host ended meeting, removed, expired, navigated away.
+   */
+  private async _checkMeetingEnded(): Promise<boolean> {
+    const result = await this.evaluate(`() => {
+      // 1. Not on Meet anymore (navigated away / crashed)
+      if (!location.hostname.includes('meet.google.com')) return 'ended';
+
+      // 2. DOM signal: Leave call button missing = no longer in meeting
+      const leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
+      const callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
+
+      // 3. Text-based signals (post-meeting screen)
+      const text = document.body.innerText || '';
+      const endedSignals = [
+        'This meeting has ended', '会议已结束', '會議已結束',
+        'You were removed from the meeting', '您已被移出会议',
+        'Your meeting code has expired', '会议代码已过期',
+        'Return to home screen', '返回主屏幕',
+        'The meeting has ended for everyone', '所有人的会议已结束',
+        'You left the meeting', '你已退出会议', '您已離開會議',
+        'Rejoin', '重新加入',  // Post-meeting "Rejoin" button = meeting is over for us
+      ];
+      const hasEndedText = endedSignals.some(s => text.includes(s));
+      if (hasEndedText) return 'ended';
+
+      // 4. No call controls AND no video grid = definitely not in meeting
+      const videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
+      if (!leaveBtn && !callControls && !videoGrid) return 'ended';
+
+      return 'active';
+    }`);
+    return result === "ended";
+  }
+
+  /** Clear the meeting-end callback without stopping the admission monitor */
+  clearMeetingEndCallback(): void {
+    this._meetingEndCallback = null;
+  }
+
+  /**
    * Select an audio device in Google Meet's pre-join device picker.
    * The device buttons are [aria-label="Microphone: ..."] / [aria-label="Speaker: ..."]
    * Clicking opens a dropdown menu. Each item is an <li> with the device name.
@@ -698,10 +766,11 @@ export class PlaywrightCLIClient {
   async resetBrowser(): Promise<{ success: boolean; detail: string }> {
     console.log("[PlaywrightCLI] Resetting browser...");
 
-    // Stop admission monitor if running
+    // Stop admission monitor + meeting-end watcher if running
     if (this._admissionInterval) {
       this.stopAdmissionMonitor();
     }
+    this._meetingEndCallback = null;
 
     // 1. Close playwright-cli session gracefully
     try {
