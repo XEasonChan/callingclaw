@@ -6,13 +6,24 @@ const { systemPreferences, shell } = require('electron');
 const { execSync } = require('child_process');
 
 class PermissionChecker {
-  // ── Check All Permissions ────────────────────────────────────
+  // ── Check Required Permissions (onboarding) ────────────────
+  // Microphone is NOT required for onboarding — BlackHole virtual
+  // audio doesn't need TCC mic authorization. Mic is only needed
+  // for "direct mode" (real microphone, no meeting).
 
   async checkAll() {
     return {
-      microphone: await this.checkMicrophone(),
       screenRecording: this.checkScreenRecording(),
       accessibility: this.checkAccessibility(),
+    };
+  }
+
+  // ── Check Optional Permissions (on-demand) ─────────────────
+  // Called when user switches to direct mode (real mic, no BlackHole).
+
+  async checkOptional() {
+    return {
+      microphone: await this.checkMicrophone(),
     };
   }
 

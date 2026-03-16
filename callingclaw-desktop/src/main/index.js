@@ -289,9 +289,14 @@ function setupIPC() {
     return true;
   });
 
-  // Permission checks
+  // Permission checks (required: screen recording + accessibility)
   ipcMain.handle('permissions:check', async () => {
     return await permissionChecker.checkAll();
+  });
+
+  // Optional permission checks (microphone — only for direct mode)
+  ipcMain.handle('permissions:checkOptional', async () => {
+    return await permissionChecker.checkOptional();
   });
 
   ipcMain.handle('permissions:request', async (_, permission) => {
