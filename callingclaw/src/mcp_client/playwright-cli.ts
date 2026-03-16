@@ -493,12 +493,16 @@ export class PlaywrightCLIClient {
           const step2 = await this._admitEval();
           if (step2.startsWith("admitted:")) {
             this._recordAdmitted(step2.slice(9));
+            await this.wait(500);
+            await this._dismissAdmitConfirmation();
           } else {
             // Sidebar opened but no Admit button yet — try once more
             await this.wait(600);
             const step3 = await this._admitEval();
             if (step3.startsWith("admitted:")) {
               this._recordAdmitted(step3.slice(9));
+              await this.wait(500);
+              await this._dismissAdmitConfirmation();
             } else {
               console.log(`[MeetAdmit] Panel open but Admit button not found after 2 retries`);
             }
@@ -546,19 +550,15 @@ export class PlaywrightCLIClient {
       });
       if (admit) { admit.click(); return 'admitted:' + admit.textContent.trim().substring(0, 60); }
 
-      // Step B2: "Admit all" as fallback — then handle confirmation dialog
+      // Step B2: "Admit all" as fallback — confirmation dialog handled by _dismissAdmitConfirmation()
       const admitAll = all.find(b => {
         const t = (b.textContent || '').trim();
         return t === 'Admit all' || t === '全部准许';
       });
       if (admitAll) {
         admitAll.click();
-        // Handle confirmation dialog: look for confirm button after short delay
-        const confirm = all.find(b => {
-          const t = (b.textContent || '').trim();
-          return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认';
-        });
-        if (confirm && confirm !== admitAll) { confirm.click(); }
+        // Note: "Admit all" triggers an async confirmation dialog.
+        // The caller (_dismissAdmitConfirmation) handles it with retries.
         return 'admitted:' + admitAll.textContent.trim().substring(0, 60);
       }
 
@@ -595,21 +595,31 @@ export class PlaywrightCLIClient {
 
   /**
    * Dismiss "Admit all" confirmation dialog if it appeared.
-   * Google Meet shows a second "Admit all" or "Confirm" button after clicking the first one.
+   * Google Meet renders a second "Admit all" or "Confirm" button ASYNCHRONOUSLY
+   * after clicking the first one. We retry up to 3 times with increasing waits
+   * to catch the async DOM render.
    */
   private async _dismissAdmitConfirmation(): Promise<void> {
-    try {
-      await this.evaluate(`() => {
-        const all = [...document.querySelectorAll('button, [role="button"], div[tabindex]')];
-        // Look for confirmation dialog buttons
-        const confirmBtn = all.find(b => {
-          const t = (b.textContent || '').trim();
-          return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认' || t === 'OK' || t === '确定';
-        });
-        if (confirmBtn) { confirmBtn.click(); return 'confirmed'; }
-        return 'no_dialog';
-      }`);
-    } catch {}
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await this.evaluate(`() => {
+          // Look for dialog/overlay containers (confirmation renders inside these)
+          const all = [...document.querySelectorAll('button, [role="button"], [role="dialog"] button, div[role="alertdialog"] button')];
+          const confirmBtn = all.find(b => {
+            const t = (b.textContent || '').trim();
+            return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认' || t === 'OK' || t === '确定';
+          });
+          if (confirmBtn) { confirmBtn.click(); return 'confirmed'; }
+          return 'no_dialog';
+        }`);
+        if (result.includes("confirmed")) {
+          console.log(`[MeetAdmit] Confirmation dialog dismissed (attempt ${attempt + 1})`);
+          return;
+        }
+      } catch {}
+      // Increasing wait: 500ms, 800ms, 1200ms — gives DOM time to render
+      await this.wait(500 + attempt * 300);
+    }
   }
 
   /** Record admitted attendees */
