@@ -128,10 +128,7 @@ function createMainWindow() {
     },
   });
 
-  // Clear localStorage once so onboarding shows for testing (remove this block after testing)
-  mainWindow.webContents.session.clearStorageData({ storages: ['localstorage'] }).then(() => {
-    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
-  });
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
