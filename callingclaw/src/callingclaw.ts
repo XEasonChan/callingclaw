@@ -4,7 +4,7 @@
 
 import { CONFIG } from "./config";
 import { PythonBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { PeekabooClient } from "./mcp_client/peekaboo";
@@ -174,6 +174,9 @@ eventBus.on("meeting.started", () => {
 
     // Activate the auditor
     transcriptAuditor.activate(voice);
+
+    // Activate context retriever (knowledge gap fill)
+    contextRetriever.activate(voice);
   }
 });
 
@@ -199,13 +202,16 @@ eventBus.on("meeting.ended", () => {
     playwrightCli.stopAdmissionMonitor();
   }
 
-  // ── Deactivate TranscriptAuditor + restore all tools to OpenAI ──
+  // ── Deactivate TranscriptAuditor + ContextRetriever + restore all tools ──
   if (transcriptAuditor.active) {
     transcriptAuditor.deactivate();
     if (voice.connected) {
       voice.restoreAllTools();
       console.log("[Init] Restored all tools to OpenAI session (auditor deactivated)");
     }
+  }
+  if (contextRetriever.active) {
+    contextRetriever.deactivate();
   }
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
@@ -337,6 +343,17 @@ const transcriptAuditor = new TranscriptAuditor({
   meetJoiner,
 });
 
+// ── 2e. ContextRetriever (Event-Driven Knowledge Gap Fill) ──────
+// During meetings, monitors transcript for topics not covered by prep brief.
+// Uses fast models (Haiku/Gemini) to detect gaps + semantic search on MEMORY.md.
+// No OpenClaw in meeting loop — too slow. All retrieval via OpenRouter.
+const contextRetriever = new ContextRetriever({
+  context,
+  eventBus,
+  contextSync,
+  meetingPrepSkill,
+});
+
 // ── 3. Voice Module (OpenAI Realtime) ───────────────────────────
 
 // ── 4. Meeting Module (before voice, since tools need it) ──────
@@ -355,6 +372,7 @@ const toolDeps = {
   openclawBridge,
   meetingPrepSkill,
   contextSync,
+  contextRetriever,
   context,
   automationRouter,
   computerUse,
@@ -479,6 +497,7 @@ if (await pythonFile.exists()) {
     }
 
     transcriptAuditor.deactivate();
+    contextRetriever.deactivate();
     proc.kill();
     bridge.stop();
     voice.stop();

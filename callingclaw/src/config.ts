@@ -26,6 +26,22 @@ export const CONFIG = {
     model: "anthropic/claude-sonnet-4.6",
   },
 
+  // Meeting intelligence — fast models for gap detection + semantic search
+  // All routed through OpenRouter for unified model switching
+  analysis: {
+    // Gap analysis: reads transcript, decides what context is missing
+    model: process.env.ANALYSIS_MODEL || "anthropic/claude-haiku-4-5",
+    // Semantic search: reads MEMORY.md, finds relevant sections for queries
+    // Set to a different model for A/B testing (defaults to same as analysis)
+    searchModel: process.env.SEARCH_MODEL || "",
+    // Both used by ContextRetriever + TranscriptAuditor via OpenRouter
+    //
+    // Quick switch examples (.env):
+    //   ANALYSIS_MODEL=anthropic/claude-haiku-4-5    # Haiku for gap detection
+    //   SEARCH_MODEL=google/gemini-3.1-flash-lite-preview  # Gemini for search
+    //   SEARCH_MODEL=anthropic/claude-haiku-4-5      # or same Haiku for both
+  },
+
   // Vision analysis (screen/meeting screenshots → Gemini Flash via OpenRouter)
   vision: {
     model: process.env.VISION_MODEL || "google/gemini-3-flash-preview",
