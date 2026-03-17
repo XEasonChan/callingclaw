@@ -1246,137 +1246,136 @@ STEP-BY-STEP FLOW:
           return Response.json({ error: "topic is required" }, { status: 400, headers });
         }
 
-        // ── Step 1: Quick title generation (<2s) ──
-        // User may type a long description; compress into short calendar title
-        let meetingTitle = body.topic;
-        if (services.openclawBridge?.connected && body.topic.length > 30) {
-          try {
-            const titleResult = await services.openclawBridge.sendTask(
-              `Generate a short meeting title (under 50 chars, in the user's language) for this topic. Return ONLY the title, nothing else:\n\n"${body.topic}"`
-            );
-            if (titleResult && !titleResult.includes("timed out") && titleResult.length < 80) {
-              meetingTitle = titleResult.trim().replace(/^["']|["']$/g, "");
-            }
-          } catch { /* use original topic */ }
-        }
+        // ── INSTANT RESPONSE — all AI work async via EventBus ──
+        // Desktop gets response in <1s. OpenClaw handles everything in background.
+        // Each step emits progress events → Desktop shows real-time log in side panel.
 
-        // ── Step 2: Create Google Calendar event (schedule, don't auto-join) ──
-        // Default: next half-hour slot. User joins manually or at scheduled time.
-        let meetUrl = body.url || null;
-        let calendarEvent: any = null;
-        let meetAttendees: import("./mcp_client/google_cal").CalendarAttendee[] = [];
-        if (services.calendar.connected) {
-          try {
-            let start: Date;
-            if (body.start_time) {
-              start = new Date(body.start_time);
-            } else {
-              // Try to extract time from natural language in the topic
-              // e.g., "今晚八点讨论callingclaw官网" → 20:00 today
-              let parsedTime: Date | null = null;
-              if (services.openclawBridge?.connected) {
-                try {
-                  const now = new Date();
-                  const timeResult = await services.openclawBridge.sendTask(
-                    `Extract the meeting time from this text. Current time: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}. ` +
-                    `Return ONLY an ISO 8601 datetime string (e.g., 2026-03-17T20:00:00+08:00). If no time is mentioned, return "none".\n\nText: "${body.topic}"`
-                  );
-                  if (timeResult && !timeResult.includes("none") && !timeResult.includes("timed out")) {
-                    const d = new Date(timeResult.trim());
-                    if (!isNaN(d.getTime())) parsedTime = d;
-                  }
-                } catch {}
-              }
-              if (parsedTime) {
-                start = parsedTime;
-              } else {
-                // Fallback: next half-hour mark, at least 10 min away
-                const now = new Date();
-                const mins = now.getMinutes();
-                start = new Date(now);
-                start.setMinutes(mins < 30 ? 30 : 60, 0, 0);
-                if (mins >= 30) start.setHours(start.getHours());
-                if (start.getTime() - now.getTime() < 10 * 60000) {
-                  start = new Date(start.getTime() + 30 * 60000);
-                }
-              }
-            }
-            const duration = (body.duration_minutes || 30) * 60000;
-            const end = new Date(start.getTime() + duration);
-            const prepAttendees: import("./mcp_client/google_cal").CalendarAttendee[] =
-              (body.attendees || []).map((e: string) => ({ email: e }));
-            if (CONFIG.userEmail && !prepAttendees.some(a => a.email === CONFIG.userEmail)) {
-              prepAttendees.push({ email: CONFIG.userEmail });
-            }
-            const calResult = await services.calendar.createEvent({
-              summary: meetingTitle,
-              start: start.toISOString(),
-              end: end.toISOString(),
-              attendees: prepAttendees,
-            });
-            // createEvent returns JSON string — parse it
-            try {
-              calendarEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult;
-            } catch { calendarEvent = { id: null, meetLink: null, start: start.toISOString(), end: end.toISOString() }; }
-            meetUrl = calendarEvent.meetLink || calendarEvent.hangoutLink || meetUrl;
-            meetAttendees = calendarEvent.attendees || prepAttendees;
-            // Store actual start/end from the created event
-            calendarEvent.start = { dateTime: calendarEvent.start || start.toISOString() };
-            calendarEvent.end = { dateTime: calendarEvent.end || end.toISOString() };
-            console.log(`[MeetingPrepare] Calendar: "${meetingTitle}" at ${start.toLocaleTimeString()}, Meet: ${meetUrl}`);
-          } catch (e: any) {
-            console.warn("[MeetingPrepare] Calendar create failed:", e.message);
-          }
-        }
+        const prepId = `prep_${Date.now()}`;
 
-        // ── Step 3: Return immediately — no auto-join, research in background ──
+        // Return immediately with just the topic
         const agenda = {
+          prepId,
           topic: body.topic,
-          title: meetingTitle,
-          meetUrl,
-          calendarEventId: calendarEvent?.id || null,
-          startTime: calendarEvent?.start?.dateTime || null,
-          endTime: calendarEvent?.end?.dateTime || null,
+          title: body.topic.length > 60 ? body.topic.slice(0, 57) + "..." : body.topic,
+          meetUrl: body.url || null,
+          calendarEventId: null as string | null,
+          startTime: body.start_time || null,
+          endTime: null as string | null,
           generatedAt: Date.now(),
-          prepStatus: "researching",
+          prepStatus: "processing",
           prepBrief: null,
         };
 
         services.eventBus.emit("meeting.agenda", agenda);
 
-        // ── Step 4: Background OpenClaw deep research (no time limit) ──
-        // MeetingScheduler handles auto-join at scheduled time (not here)
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        // ── Background pipeline: title → time → calendar → deep research ──
+        // Every step emits "meeting.prep_progress" so Desktop can show live log
+        if (services.openclawBridge?.connected) {
           (async () => {
+            const emit = (step: string, data?: any) => {
+              services.eventBus.emit("meeting.prep_progress", { prepId, step, ...data });
+              console.log(`[MeetingPrepare] ${step}`);
+            };
+
+            let title = agenda.title;
+            let meetUrl = body.url || null;
+            let startTime: string | null = body.start_time || null;
+            let endTime: string | null = null;
+            let calEventId: string | null = null;
+            let meetAttendees: any[] = [];
+
             try {
-              console.log(`[MeetingPrepare] Background research: "${meetingTitle}"`);
-              const prepResult = await prepareMeeting(
-                services.meetingPrepSkill, body.topic, body.context, meetAttendees
-              );
-              const prepBriefData = {
-                topic: prepResult.brief.topic,
-                goal: prepResult.brief.goal,
-                summary: prepResult.brief.summary,
-                keyPoints: prepResult.brief.keyPoints,
-                architectureDecisions: prepResult.brief.architectureDecisions,
-                expectedQuestions: prepResult.brief.expectedQuestions,
-                filePaths: prepResult.brief.filePaths,
-                browserUrls: prepResult.brief.browserUrls,
-                previousContext: prepResult.brief.previousContext,
-              };
-              console.log(`[MeetingPrepare] Research complete: ${prepBriefData.keyPoints?.length || 0} key points, ${prepBriefData.filePaths?.length || 0} files`);
-              services.eventBus.emit("meeting.prep_ready", {
-                topic: body.topic,
-                meetUrl,
-                calendarEventId: calendarEvent?.id || null,
-                prepBrief: prepBriefData,
-              });
+              // Step 1: AI title generation
+              emit("generating_title", { message: "正在生成会议标题..." });
+              if (body.topic.length > 15) {
+                const titleResult = await services.openclawBridge.sendTask(
+                  `Generate a short meeting title (under 50 chars, in the user's language) for this topic. Return ONLY the title, nothing else:\n\n"${body.topic}"`
+                );
+                if (titleResult && !titleResult.includes("timed out") && titleResult.length < 80) {
+                  title = titleResult.trim().replace(/^["']|["']$/g, "");
+                }
+              }
+              emit("title_ready", { title, message: `标题: ${title}` });
+
+              // Step 2: AI time parsing
+              if (!startTime) {
+                emit("parsing_time", { message: "正在解析会议时间..." });
+                const now = new Date();
+                const timeResult = await services.openclawBridge.sendTask(
+                  `Extract the meeting time from this text. Current time: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}. ` +
+                  `Return ONLY an ISO 8601 datetime string (e.g., 2026-03-17T20:00:00+08:00). If no time is mentioned, return "none".\n\nText: "${body.topic}"`
+                );
+                if (timeResult && !timeResult.includes("none") && !timeResult.includes("timed out")) {
+                  const d = new Date(timeResult.trim());
+                  if (!isNaN(d.getTime())) startTime = d.toISOString();
+                }
+                if (!startTime) {
+                  // Fallback: next half-hour mark
+                  const mins = now.getMinutes();
+                  const fallback = new Date(now);
+                  fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
+                  if (mins >= 30) fallback.setHours(fallback.getHours());
+                  if (fallback.getTime() - now.getTime() < 10 * 60000) {
+                    fallback.setTime(fallback.getTime() + 30 * 60000);
+                  }
+                  startTime = fallback.toISOString();
+                }
+                const duration = (body.duration_minutes || 30) * 60000;
+                endTime = new Date(new Date(startTime).getTime() + duration).toISOString();
+                emit("time_ready", { startTime, endTime, message: `时间: ${new Date(startTime).toLocaleTimeString('zh-CN')}` });
+              }
+
+              // Step 3: Create Google Calendar
+              if (services.calendar.connected) {
+                emit("creating_calendar", { message: "正在创建日历和会议链接..." });
+                const prepAttendees = (body.attendees || []).map((e: string) => ({ email: e }));
+                if (CONFIG.userEmail && !prepAttendees.some((a: any) => a.email === CONFIG.userEmail)) {
+                  prepAttendees.push({ email: CONFIG.userEmail });
+                }
+                const calResult = await services.calendar.createEvent({
+                  summary: title,
+                  start: startTime!,
+                  end: endTime || new Date(new Date(startTime!).getTime() + 30*60000).toISOString(),
+                  attendees: prepAttendees,
+                });
+                let calEvent: any;
+                try { calEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult; } catch { calEvent = {}; }
+                meetUrl = calEvent.meetLink || calEvent.hangoutLink || meetUrl;
+                calEventId = calEvent.id || null;
+                meetAttendees = calEvent.attendees || prepAttendees;
+                emit("calendar_ready", { title, meetUrl, calendarEventId: calEventId, startTime, endTime, message: `日历已创建 — Meet: ${meetUrl || '无链接'}` });
+              }
+
+              // Step 4: Deep research (meeting prep)
+              if (services.meetingPrepSkill) {
+                emit("researching", { message: "OpenClaw 正在深度调研..." });
+                const prepResult = await prepareMeeting(
+                  services.meetingPrepSkill, body.topic, body.context, meetAttendees
+                );
+                const prepBriefData = {
+                  topic: prepResult.brief.topic || title,
+                  goal: prepResult.brief.goal,
+                  summary: prepResult.brief.summary,
+                  keyPoints: prepResult.brief.keyPoints,
+                  architectureDecisions: prepResult.brief.architectureDecisions,
+                  expectedQuestions: prepResult.brief.expectedQuestions,
+                  filePaths: prepResult.brief.filePaths,
+                  browserUrls: prepResult.brief.browserUrls,
+                  previousContext: prepResult.brief.previousContext,
+                };
+                emit("research_complete", {
+                  message: `调研完成 — ${prepBriefData.keyPoints?.length || 0} 要点, ${prepBriefData.filePaths?.length || 0} 文件`,
+                });
+
+                services.eventBus.emit("meeting.prep_ready", {
+                  prepId, topic: body.topic, title, meetUrl, calendarEventId: calEventId,
+                  startTime, endTime, prepBrief: prepBriefData,
+                });
+              }
             } catch (e: any) {
-              console.error("[MeetingPrepare] Background research failed:", e.message);
+              emit("error", { message: `失败: ${e.message}` });
               services.eventBus.emit("meeting.prep_ready", {
-                topic: body.topic,
-                prepBrief: null,
-                error: e.message,
+                prepId, topic: body.topic, prepBrief: null, error: e.message,
               });
             }
           })();

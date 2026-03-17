@@ -1008,37 +1008,27 @@ async function submitTopic() {
   listEl.insertAdjacentHTML('afterbegin', cardHtml);
   // Store prep panel state for this card
   window['_prepCards'] = window['_prepCards'] || {};
-  window['_prepCards'][cardId] = { topic, agentFeed: ['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始准备会议...'], prepBrief: null };
+  window['_prepCards'][cardId] = { topic, agentFeed: ['[' + new Date().toLocaleTimeString('zh-CN') + '] 已提交话题，等待 OpenClaw 处理...'], prepBrief: null };
+  // Immediately open side panel with live log (Pneuma-style)
+  openPrepPanel(cardId);
+  // Add Talk Locally button immediately
+  const card0 = document.getElementById(cardId);
+  if (card0) {
+    const act = document.createElement('div');
+    act.className = 'meet-actions';
+    act.setAttribute('onclick', 'event.stopPropagation()');
+    act.innerHTML = '<span class="meet-link accent" onclick="startLocalTalk(\'' + esc(topic) + '\')">Talk Locally</span>';
+    card0.appendChild(act);
+  }
   try {
+    // API returns instantly (<1s). All AI work happens async via EventBus.
     const r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
     const data = await r.json();
     S.prepBrief = data;
-    const meetUrl = data.meetUrl || null;
-    const title = data.title || topic;
-    const startTime = data.startTime ? new Date(data.startTime) : null;
-    // Update card state
     const pc = window['_prepCards'][cardId];
-    if (pc) { pc.title = title; pc.meetUrl = meetUrl; pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 日历已创建: ' + title); }
-    if (data.calendarEventId) {
-      S.meetings.unshift({ id: data.calendarEventId, summary: title, start: { dateTime: data.startTime || new Date().toISOString() }, end: { dateTime: data.endTime || new Date().toISOString() }, hangoutLink: meetUrl });
-    }
-    // Update card: show title + time + buttons (calendar done, research still running)
-    const card = document.getElementById(cardId);
-    if (card) {
-      const titleEl = card.querySelector('.meet-title'); if (titleEl) titleEl.textContent = title;
-      const dateNum = card.querySelector('.meet-date-num'); if (dateNum) dateNum.textContent = startTime ? startTime.getDate() : '📅';
-      const dateSub = card.querySelector('.meet-date-sub'); if (dateSub) dateSub.textContent = startTime ? startTime.toLocaleDateString('en', { month: 'short', weekday: 'short' }) : '';
-      const timeStr = startTime ? startTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
-      card.querySelector('.meet-time').textContent = timeStr + (meetUrl ? '' : ' · 未生成会议链接');
-      card.querySelector('.meet-badge').className = 'meet-badge badge-ready'; card.querySelector('.meet-badge').textContent = '已安排';
-      // Add action buttons
-      let actionsHtml = '<div class="meet-actions" onclick="event.stopPropagation()">';
-      actionsHtml += '<span class="meet-link accent" onclick="startLocalTalk(\'' + esc(title) + '\')">Talk Locally</span>';
-      if (meetUrl) actionsHtml += '<span class="meet-link green" onclick="joinMeeting(\'' + esc(meetUrl) + '\')">Join Meeting</span>';
-      actionsHtml += '</div>';
-      card.insertAdjacentHTML('beforeend', actionsHtml);
-    }
-    // Research completion comes via WebSocket "meeting.prep_ready" event
+    if (pc) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 后端已接收，OpenClaw 开始处理...');
+    // Card updates now come via WebSocket "meeting.prep_progress" events
+    // (title, time, meetUrl, calendar all pushed incrementally)
   } catch(e) {
     console.error('[Prep]', e);
     const wrap = document.getElementById(cardId + '-wrap'); if (wrap) wrap.remove();
@@ -1218,7 +1208,43 @@ function connectWS() {
       try {
         const msg = JSON.parse(e.data);
         if (msg.event === 'meeting.started' || msg.event === 'meeting.ended' || msg.event === 'meeting.agenda') setTimeout(refreshAll, 500);
-        // Handle async prep research completion
+
+        // ── Real-time prep pipeline progress (Pneuma-style log) ──
+        if (msg.event === 'meeting.prep_progress' && msg.data) {
+          const cards = window['_prepCards'] || {};
+          for (const [cid, pc] of Object.entries(cards)) {
+            if (pc.prepBrief) continue; // Already done
+            const step = msg.data.step || '';
+            const message = msg.data.message || step;
+            pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + message);
+
+            // Update card info based on step
+            const card = document.getElementById(cid);
+            if (card) {
+              if (msg.data.title) { const t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pc.title = msg.data.title; }
+              if (msg.data.startTime) { const t = card.querySelector('.meet-time'); if (t) t.textContent = new Date(msg.data.startTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + message; }
+              if (msg.data.meetUrl) {
+                pc.meetUrl = msg.data.meetUrl;
+                const actions = card.querySelector('.meet-actions');
+                if (actions && !actions.querySelector('.green')) {
+                  actions.insertAdjacentHTML('beforeend', '<span class="meet-link green" onclick="event.stopPropagation();joinMeeting(\'' + esc(msg.data.meetUrl) + '\')">Join Meeting</span>');
+                }
+              }
+              if (msg.data.calendarEventId && !pc.calendarEventId) {
+                pc.calendarEventId = msg.data.calendarEventId;
+                // Add to S.meetings so it persists
+                S.meetings.unshift({ id: msg.data.calendarEventId, summary: pc.title || pc.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
+              }
+            }
+
+            // Update side panel if showing this card
+            const spTitle = document.getElementById('sp-title');
+            if (spTitle && spTitle.textContent.includes(pc.title || pc.topic)) {
+              openPrepPanel(cid);
+            }
+          }
+        }
+
         // Feed OpenClaw agent activity into prep cards
         if (msg.event === 'openclaw.delta' || msg.event === 'openclaw.done') {
           const cards = window['_prepCards'] || {};
