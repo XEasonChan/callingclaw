@@ -303,20 +303,6 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
   healthCheck: "http://localhost:4000/api/recovery/health",
 
   // ── Shared Document Convention ──
-  // All files live in ~/.callingclaw/shared/ with meetingId-based naming:
-  //
-  //   {meetingId}_prep.md      — 会前调研 (OpenClaw writes this)
-  //   {meetingId}_live.md      — 会中实时日志 (CallingClaw appends)
-  //   {meetingId}_summary.md   — 会后总结 (CallingClaw writes)
-  //   {meetingId}_transcript.md — 完整对话记录
-  //   sessions.json            — 会议索引
-  //
-  // meetingId = Google Calendar Event ID (preferred) or {date}_{safeTopic}
-  //
-  // After writing a file, call:
-  //   POST /api/meeting/prep-result { topic, meetingId, filePath? }
-  // to notify CallingClaw Desktop to render it.
-  //
   sharedDir: "~/.callingclaw/shared/",
   sessionsIndex: "~/.callingclaw/shared/sessions.json",
   fileSuffixes: {
@@ -325,4 +311,21 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     summary: "_summary.md",
     transcript: "_transcript.md",
   },
+
+  // ── OpenClaw ↔ CallingClaw Protocol Schemas ──
+  // Source of truth: src/openclaw-protocol.ts
+  protocolSchemas: [
+    { id: "OC-001", name: "Meeting Prep Brief Generation", responseFormat: "JSON", latency: "5-15s" },
+    { id: "OC-002", name: "Context Recall", responseFormat: "text <500w", latency: "2-10s" },
+    { id: "OC-003", name: "Calendar Cron Registration", responseFormat: "jobId (regex)", latency: "2-5s" },
+    { id: "OC-004", name: "Todo Delivery (Telegram)", responseFormat: '"sent"', latency: "3-8s" },
+    { id: "OC-005", name: "Summary Delivery", responseFormat: '"sent"', latency: "3-8s" },
+    { id: "OC-006", name: "Todo Execution Handoff", responseFormat: "JSON {status, summary}", latency: "10-60s" },
+    { id: "OC-007", name: "Meeting Vision Push", responseFormat: '"ok" (fire & forget)', latency: "2-5s" },
+    { id: "OC-008", name: "Computer Use Delegation", responseFormat: "text (capped 10K)", latency: "5-30s" },
+    { id: "OC-009", name: "Follow-up Fallback", responseFormat: '"ok" (fire & forget)', latency: "2-5s" },
+  ],
 };
+
+// Re-export protocol for OpenClaw integration
+export { OPENCLAW_PROTOCOL, type OpenClawProtocolId } from "../openclaw-protocol";
