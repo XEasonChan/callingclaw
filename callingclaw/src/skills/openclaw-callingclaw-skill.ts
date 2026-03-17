@@ -56,6 +56,18 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return { success: false, error: "Usage: /callingclaw voice start|stop [instructions]" };
       }
 
+      case "prep-result": {
+        // Submit completed prep brief to CallingClaw for rendering
+        // OpenClaw calls this after deep research is done
+        if (!rest) return { success: false, error: "Usage: /callingclaw prep-result <JSON>" };
+        try {
+          const briefJson = JSON.parse(rest);
+          return await apiPost("/api/meeting/prep-result", briefJson);
+        } catch {
+          return { success: false, error: "Invalid JSON. Send the full MeetingPrepBrief object." };
+        }
+      }
+
       case "prepare":
       case "create": {
         // Create a meeting: calendar event + Meet link + background deep research

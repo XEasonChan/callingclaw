@@ -1255,17 +1255,33 @@ STEP-BY-STEP FLOW:
               `用户想要准备一个会议，话题是: "${body.topic}"`,
               ``,
               `请完成以下步骤:`,
-              `1. 先用 /callingclaw email 获取用户的默认参会邮箱`,
-              `2. 理解话题，生成一个简短的会议标题和合适的会议时间`,
-              `3. 用 /callingclaw prepare 创建会议（会自动创建日历+Meet链接+深度调研）`,
-              `   或者直接用 Google Calendar tool 创建日历事件，然后 /callingclaw prepare 做调研`,
-              `4. 调研完成后，确认结果已写入 ~/.callingclaw/shared/prep/ 目录`,
-              `5. 最后通知用户会议已准备好`,
               ``,
-              `注意:`,
-              `- 会议时间从话题中推断（如"今晚八点"→20:00），如果没提到时间就安排在下一个半小时整点`,
-              `- 一定要邀请用户邮箱作为参会人`,
-              `- 调研结果要详细（keyPoints, architectureDecisions, expectedQuestions, filePaths）`,
+              `## Step 1: 获取用户邮箱`,
+              `执行 /callingclaw email 获取用户的默认参会邮箱`,
+              ``,
+              `## Step 2: 创建日历事件`,
+              `- 从话题推断会议时间（如"今晚八点"→20:00），没提到时间就用下一个半小时整点`,
+              `- 用 Google Calendar tool 创建事件（带 Meet 链接），邀请用户邮箱`,
+              ``,
+              `## Step 3: 深度调研`,
+              `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度会前调研`,
+              `生成完整的 MeetingPrepBrief JSON（topic, goal, summary, keyPoints, architectureDecisions, expectedQuestions, filePaths, browserUrls）`,
+              ``,
+              `## Step 4: 提交结果到 CallingClaw（关键！）`,
+              `调研完成后，必须调用以下 API 把结果提交给 CallingClaw Desktop 渲染:`,
+              ``,
+              `\`\`\`bash`,
+              `curl -X POST http://localhost:4000/api/meeting/prep-result \\`,
+              `  -H "Content-Type: application/json" \\`,
+              `  -d '{ 完整的 MeetingPrepBrief JSON }'`,
+              `\`\`\``,
+              ``,
+              `这个 API 会:`,
+              `- 把 brief 写入 ~/.callingclaw/shared/prep/ 目录`,
+              `- 通过 WebSocket 通知 Desktop 自动渲染`,
+              `- 返回 { ok: true, filePath, keyPoints, files }`,
+              ``,
+              `如果不调用这个 API，Desktop 就看不到调研结果！`,
             ].join("\n");
 
             await services.openclawBridge.sendTask(taskPrompt);
@@ -1277,6 +1293,56 @@ STEP-BY-STEP FLOW:
         })();
 
         return Response.json({ ok: true, prepId, topic: body.topic, delegatedTo: "openclaw" }, { headers });
+      }
+
+      // POST /api/meeting/prep-result — OpenClaw submits completed prep brief
+      // This is the "last mile" — OpenClaw did the research, now CallingClaw saves + renders it
+      if (url.pathname === "/api/meeting/prep-result" && req.method === "POST") {
+        const body = await req.json() as any;
+        if (!body.topic) {
+          return Response.json({ error: "topic is required" }, { status: 400, headers });
+        }
+
+        try {
+          // Import shared-documents helpers
+          const { savePrepBrief, updateManifest } = await import("./modules/shared-documents");
+
+          // Build MeetingPrepBrief from OpenClaw's JSON
+          const brief = {
+            topic: body.topic,
+            goal: body.goal || "",
+            summary: body.summary || "",
+            keyPoints: body.keyPoints || [],
+            architectureDecisions: body.architectureDecisions || [],
+            expectedQuestions: body.expectedQuestions || [],
+            previousContext: body.previousContext || "",
+            filePaths: body.filePaths || [],
+            browserUrls: body.browserUrls || [],
+            folderPaths: body.folderPaths || [],
+            generatedAt: Date.now(),
+            attendees: [],
+            liveNotes: [],
+          };
+
+          // Save to ~/.callingclaw/shared/prep/
+          const savedPath = await savePrepBrief(brief);
+          await updateManifest();
+
+          // Emit event so Desktop auto-renders
+          services.eventBus.emit("meeting.prep_ready", {
+            topic: body.topic,
+            title: body.topic,
+            meetUrl: body.meetUrl || null,
+            calendarEventId: body.calendarEventId || null,
+            prepBrief: brief,
+            filePath: savedPath,
+          });
+
+          console.log(`[PrepResult] Brief received from OpenClaw: "${body.topic}" → ${savedPath}`);
+          return Response.json({ ok: true, filePath: savedPath, keyPoints: brief.keyPoints.length, files: brief.filePaths.length }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
       }
 
       // POST /api/meeting/prepare — Direct meeting creation (fallback if OpenClaw unavailable)
