@@ -520,11 +520,12 @@ export class MeetJoiner {
       this.bridge.sendAction("key", { key: "command+shift+h" });
     }
 
-    // Stop virtual audio routing
+    // Stop virtual audio routing + reset screen capture to mouse-tracking
     this.bridge.send("config", {
       audio_mode: "default",
       capture_system_audio: false,
       virtual_mic_output: false,
+      capture_mode: "mouse",
     });
 
     // Restore original audio devices

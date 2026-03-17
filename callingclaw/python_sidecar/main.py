@@ -44,12 +44,93 @@ BRIDGE_URL = f"ws://localhost:{BRIDGE_PORT}"
 last_screenshot_hash = None
 capture_running = False
 audio_mode = "default"  # "default" | "direct" | "meet_bridge"
+capture_mode = "mouse"  # "mouse" | "meeting_app"
+meeting_app_name = ""   # e.g. "Google Chrome", "zoom.us" — set by config
+_locked_monitor_idx = None  # cached monitor index for meeting_app mode
+
+
+# ── Multi-Monitor Display Detection ─────────────────────────
+
+def _get_monitor_for_mouse(sct_monitors):
+    """Return mss monitor index (1-based) containing the mouse cursor."""
+    try:
+        mx, my = pyautogui.position()
+        for i, mon in enumerate(sct_monitors):
+            if i == 0:
+                continue  # skip combined virtual desktop
+            if (mon["left"] <= mx < mon["left"] + mon["width"] and
+                    mon["top"] <= my < mon["top"] + mon["height"]):
+                return i
+        return 1  # fallback: primary
+    except Exception:
+        return 1
+
+
+def _get_monitor_for_app(sct_monitors, app_name):
+    """Return mss monitor index (1-based) containing the frontmost window of app_name.
+
+    Uses macOS CGWindowListCopyWindowInfo to locate the app's window,
+    then maps its center point to the mss monitor list.
+    Falls back to primary monitor on error or non-macOS.
+    """
+    if sys.platform != "darwin" or not app_name:
+        return 1
+    try:
+        from Quartz import (  # type: ignore
+            CGWindowListCopyWindowInfo,
+            kCGWindowListOptionOnScreenOnly,
+            kCGNullWindowID,
+        )
+        windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+        for w in windows:
+            owner = w.get("kCGWindowOwnerName", "")
+            # Match by app name (case-insensitive contains)
+            if app_name.lower() not in owner.lower():
+                continue
+            # Skip tiny helper windows (menubar extras, etc.)
+            b = w.get("kCGWindowBounds", {})
+            ww, wh = b.get("Width", 0), b.get("Height", 0)
+            if ww < 200 or wh < 200:
+                continue
+            cx = b.get("X", 0) + ww / 2
+            cy = b.get("Y", 0) + wh / 2
+            for i, mon in enumerate(sct_monitors):
+                if i == 0:
+                    continue
+                if (mon["left"] <= cx < mon["left"] + mon["width"] and
+                        mon["top"] <= cy < mon["top"] + mon["height"]):
+                    return i
+            break  # found the window but didn't map — fall through
+    except ImportError:
+        # Quartz/PyObjC not available — fall back
+        pass
+    except Exception as e:
+        print(f"[Screen] App monitor detection error: {e}")
+    return 1
+
+
+def _resolve_capture_monitor(sct_monitors):
+    """Pick which monitor to capture based on current capture_mode."""
+    global _locked_monitor_idx
+
+    if capture_mode == "meeting_app":
+        # In meeting mode, lock to the meeting app's monitor once found.
+        # Re-detect only if not locked yet or if monitor count changed.
+        if _locked_monitor_idx is not None and _locked_monitor_idx < len(sct_monitors):
+            return _locked_monitor_idx
+        idx = _get_monitor_for_app(sct_monitors, meeting_app_name)
+        _locked_monitor_idx = idx
+        return idx
+    else:
+        # Talk Locally / default: follow mouse cursor
+        return _get_monitor_for_mouse(sct_monitors)
 
 
 def take_screenshot() -> str:
-    """Capture screen and return base64 PNG."""
+    """Capture the appropriate monitor and return base64 PNG."""
     with mss.mss() as sct:
-        monitor = sct.monitors[1]  # Primary monitor
+        idx = _resolve_capture_monitor(sct.monitors)
+        monitor = sct.monitors[idx]
         img = sct.grab(monitor)
         from mss.tools import to_png
         png_bytes = to_png(img.rgb, img.size)
@@ -432,7 +513,7 @@ async def screen_capture_loop(ws):
 # ── Main ──────────────────────────────────────────────────────
 
 async def main():
-    global audio_mode, capture_running
+    global audio_mode, capture_running, capture_mode, meeting_app_name, _locked_monitor_idx
 
     audio_bridge = AudioBridge()
 
@@ -492,6 +573,18 @@ async def main():
 
                     elif msg_type == "config":
                         print(f"[Sidecar] Config update received: {payload}")
+
+                        # ── Screen capture mode ──
+                        new_capture = payload.get("capture_mode")
+                        if new_capture in ("mouse", "meeting_app"):
+                            capture_mode = new_capture
+                            _locked_monitor_idx = None  # reset lock on mode change
+                            app = payload.get("meeting_app", "")
+                            if app:
+                                meeting_app_name = app
+                            print(f"[Sidecar] Capture mode: {capture_mode}"
+                                  f"{f' (app={meeting_app_name})' if capture_mode == 'meeting_app' else ''}")
+
                         new_mode = payload.get("audio_mode")
 
                         if new_mode in ("direct", "meet_bridge") and audio_mode != new_mode:
