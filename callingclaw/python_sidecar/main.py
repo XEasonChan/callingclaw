@@ -399,6 +399,10 @@ async def screen_capture_loop(ws):
 
     while capture_running:
         try:
+            # Check if websocket is still open before doing work
+            if ws.closed:
+                break
+
             screenshot_b64 = take_screenshot()
             raw = base64.b64decode(screenshot_b64)
             current_hash = simple_hash(raw)
@@ -410,7 +414,8 @@ async def screen_capture_loop(ws):
                     "payload": {"image": screenshot_b64, "changed": True},
                     "ts": int(time.time() * 1000),
                 }
-                await ws.send(json.dumps(msg))
+                if not ws.closed:
+                    await ws.send(json.dumps(msg))
 
             consecutive_errors = 0  # Reset on success
             await asyncio.sleep(1.0)
@@ -433,7 +438,14 @@ async def main():
 
     print(f"[Sidecar] Connecting to {BRIDGE_URL}...")
 
-    async for ws in websockets.connect(BRIDGE_URL):
+    while True:
+        try:
+            ws = await websockets.connect(BRIDGE_URL)
+        except Exception as e:
+            print(f"[Sidecar] Connection failed: {e}, retrying in 3s...")
+            await asyncio.sleep(3)
+            continue
+
         try:
             print("[Sidecar] Connected to Bun bridge!")
 
@@ -547,12 +559,26 @@ async def main():
                 except Exception as e:
                     print(f"[Sidecar] Message handling error: {e}")
 
-        except websockets.ConnectionClosed:
-            print("[Sidecar] Disconnected, reconnecting in 2s...")
+        except (websockets.ConnectionClosed, ConnectionError, OSError) as e:
+            print(f"[Sidecar] Disconnected: {e}, reconnecting in 3s...")
+        except Exception as e:
+            print(f"[Sidecar] Unexpected error: {e}, reconnecting in 3s...")
+        finally:
+            # Cancel all background tasks before reconnecting
             capture_running = False
+            if capture_task and not capture_task.done():
+                capture_task.cancel()
+                try: await capture_task
+                except: pass
+            if audio_capture_task and not audio_capture_task.done():
+                audio_capture_task.cancel()
+                try: await audio_capture_task
+                except: pass
             audio_bridge.stop()
             audio_mode = "default"
-            await asyncio.sleep(2)
+            try: await ws.close()
+            except: pass
+            await asyncio.sleep(3)
 
 
 if __name__ == "__main__":
