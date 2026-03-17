@@ -109,8 +109,9 @@ export class PythonBridge {
         this._ready = false;
         return;
       }
-      // If no pong in 15s, mark as disconnected
-      if (Date.now() - this._lastPong > 15000) {
+      // If no pong in 30s, mark as disconnected
+      // (PyAudio blocking I/O can delay pong; 15s was too aggressive)
+      if (Date.now() - this._lastPong > 30000) {
         console.warn("[Bridge] Sidecar ping timeout — marking disconnected");
         this._ready = false;
         try { this.client.close(); } catch {}

@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld('callingclaw', {
     hide: () => ipcRenderer.invoke('overlay:hide'),
   },
 
+  // ── Skill ──────────────────────────────────────────────────
+  skill: {
+    check: () => ipcRenderer.invoke('skill:check'),
+    install: () => ipcRenderer.invoke('skill:install'),
+  },
+
   // ── Shell ──────────────────────────────────────────────────
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),

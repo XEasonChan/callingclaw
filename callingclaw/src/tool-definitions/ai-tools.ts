@@ -3,17 +3,19 @@
 
 import type { ToolModule } from "./types";
 import type { ContextSync } from "../modules/context-sync";
+import type { ContextRetriever } from "../modules/context-retriever";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "../modules/event-bus";
 
 export interface AIToolDeps {
   contextSync: ContextSync;
+  contextRetriever?: ContextRetriever;
   openclawBridge: OpenClawBridge;
   eventBus: EventBus;
 }
 
 export function aiTools(deps: AIToolDeps): ToolModule {
-  const { contextSync, openclawBridge, eventBus } = deps;
+  const { contextSync, contextRetriever, openclawBridge, eventBus } = deps;
 
   return {
     definitions: [
@@ -35,7 +37,7 @@ export function aiTools(deps: AIToolDeps): ToolModule {
             urgency: {
               type: "string",
               enum: ["quick", "thorough"],
-              description: "quick = search local memory only (<1s). thorough = delegate to OpenClaw agent for deep search with file access (5-15s).",
+              description: "quick = search local memory + already-retrieved contexts (<1s). thorough = delegate to OpenClaw agent for deep search with file access (5-15s).",
             },
           },
           required: ["query"],
@@ -49,6 +51,20 @@ export function aiTools(deps: AIToolDeps): ToolModule {
           const query = args.query as string;
           const urgency = (args.urgency as string) || "quick";
           eventBus.emit("voice.tool_call", { tool: "recall_context", query: query.slice(0, 80), urgency });
+
+          // Path 0: Check ContextRetriever's already-retrieved contexts (instant, <1ms)
+          // These are contexts proactively fetched by Haiku gap analysis during the meeting
+          if (contextRetriever?.active) {
+            const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+            const cached = contextRetriever.retrievedContexts.find((r) => {
+              const lower = (r.query + " " + r.content).toLowerCase();
+              return keywords.some((kw) => lower.includes(kw));
+            });
+            if (cached) {
+              console.log(`[RecallContext] Hit from ContextRetriever cache: "${cached.query.slice(0, 60)}"`);
+              return `[Retrieved context]\n${cached.content}`;
+            }
+          }
 
           // Path A: Quick — local MEMORY.md keyword search (<100ms)
           const localResult = contextSync.searchMemory(query);

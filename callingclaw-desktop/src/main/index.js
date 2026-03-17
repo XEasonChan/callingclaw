@@ -22,6 +22,82 @@ try {
   // Fallback to package.json version
 }
 
+// ── Bundled Skill Markdown ──────────────────────────────────────
+const BUNDLED_SKILL_MARKDOWN = `# /callingclaw — AI Meeting Room
+
+CallingClaw is your AI meeting room running on localhost:4000. Use these commands to control meetings, voice AI, and automation.
+
+## Quick Start
+\\\`\\\`\\\`
+/callingclaw status              # Check if CallingClaw is running
+/callingclaw join <meeting-url>  # Join a Google Meet / Zoom meeting
+/callingclaw leave               # Leave meeting + generate summary & todos
+/callingclaw say <text>          # Speak in the meeting via AI voice
+\\\`\\\`\\\`
+
+## All Commands
+
+### Meeting Control
+- \\\`/callingclaw join <url> [instructions]\\\` — Join meeting with optional custom instructions
+- \\\`/callingclaw leave\\\` — Leave meeting, generate summary, create todos, send to Telegram
+- \\\`/callingclaw say <text>\\\` — Send text as AI voice in the meeting
+
+### Voice AI
+- \\\`/callingclaw voice start [instructions]\\\` — Start voice session
+- \\\`/callingclaw voice stop\\\` — Stop voice session
+
+### Screen & Automation
+- \\\`/callingclaw screen <instruction>\\\` — Execute a computer use task (4-layer automation)
+- \\\`/callingclaw screenshot\\\` — Take a screenshot of the current screen
+
+### Calendar
+- \\\`/callingclaw calendar\\\` — List upcoming events from Google Calendar
+
+### Tasks
+- \\\`/callingclaw tasks\\\` — List pending tasks from meetings
+- \\\`/callingclaw confirm <task-id>\\\` — Confirm a task for execution
+
+### Context
+- \\\`/callingclaw context <note>\\\` — Add a note to shared context
+- \\\`/callingclaw pin <filepath> [summary]\\\` — Pin a file to shared context
+- \\\`/callingclaw notes\\\` — List saved meeting notes
+- \\\`/callingclaw transcript [count]\\\` — Get live transcript
+
+### Health & Recovery
+- \\\`/callingclaw health\\\` — Health check all subsystems
+- \\\`/callingclaw recover browser|sidecar|voice|all\\\` — Reset subsystems
+
+## Architecture
+CallingClaw uses a dual-process AI architecture:
+- **System 1 (Fast):** OpenAI Realtime voice — 300ms response, handles live conversation
+- **System 2 (Deep):** You (Claude Code / OpenClaw) — deep reasoning, memory, file access
+
+When you join a meeting via \\\`/callingclaw join\\\`, CallingClaw:
+1. Opens the meeting URL in Chrome
+2. Bridges audio via BlackHole virtual devices
+3. Starts real-time voice conversation
+4. Captures screenshots for visual context
+5. Extracts action items during the meeting
+6. On leave: generates summary, creates todos, sends to Telegram for confirmation
+
+## API Reference
+All endpoints are on \\\`http://localhost:4000\\\`:
+- \\\`GET  /api/status\\\` — Engine health
+- \\\`POST /api/meeting/join\\\` — \\\`{url, instructions?}\\\`
+- \\\`POST /api/meeting/leave\\\`
+- \\\`POST /api/voice/start\\\` — \\\`{instructions?, audio_mode?}\\\`
+- \\\`POST /api/voice/stop\\\`
+- \\\`POST /api/voice/text\\\` — \\\`{text}\\\`
+- \\\`POST /api/computer/run\\\` — \\\`{instruction}\\\`
+- \\\`GET  /api/calendar/events\\\`
+- \\\`GET  /api/tasks\\\`
+- \\\`PATCH /api/tasks/:id\\\` — \\\`{status}\\\`
+- \\\`GET  /api/meeting/notes\\\`
+- \\\`GET  /api/meeting/transcript?count=N\\\`
+- \\\`GET  /api/recovery/health\\\`
+- \\\`WS   /ws/events\\\` — Real-time EventBus stream
+`;
+
 // ── App State ──────────────────────────────────────────────────
 
 let mainWindow = null;
@@ -43,7 +119,7 @@ function createMainWindow() {
     icon: appIcon,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#F5F5F7',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
@@ -250,6 +326,41 @@ function setupIPC() {
   // Shell helpers
   ipcMain.handle('shell:openExternal', (_, url) => {
     shell.openExternal(url);
+  });
+
+  // ── Skill Installation ──────────────────────────────────────
+  ipcMain.handle('skill:check', async () => {
+    const { execSync } = require('child_process');
+    const os = require('os');
+    // Check if claude CLI exists
+    let claudePath = null;
+    try {
+      claudePath = execSync('which claude', { timeout: 3000 }).toString().trim();
+    } catch {}
+    // Check if skill file exists
+    const skillPath = path.join(os.homedir(), '.claude', 'commands', 'callingclaw.md');
+    const skillInstalled = fs.existsSync(skillPath);
+    return { claudeInstalled: !!claudePath, claudePath, skillInstalled, skillPath };
+  });
+
+  ipcMain.handle('skill:install', async () => {
+    const os = require('os');
+    const skillDir = path.join(os.homedir(), '.claude', 'commands');
+    const skillPath = path.join(skillDir, 'callingclaw.md');
+    // Ensure directory exists
+    fs.mkdirSync(skillDir, { recursive: true });
+    // Fetch latest skill manifest from daemon if running, else use bundled
+    let content;
+    try {
+      const res = await fetch('http://localhost:4000/api/skill/manifest');
+      const data = await res.json();
+      content = data.markdown;
+    } catch {}
+    if (!content) {
+      content = BUNDLED_SKILL_MARKDOWN;
+    }
+    fs.writeFileSync(skillPath, content, 'utf-8');
+    return { ok: true, path: skillPath };
   });
 
   // App info

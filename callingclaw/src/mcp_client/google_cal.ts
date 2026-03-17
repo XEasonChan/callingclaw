@@ -12,6 +12,7 @@ export interface CalendarAttendee {
 }
 
 export interface CalendarEvent {
+  id?: string;
   summary: string;
   start: string;
   end: string;
@@ -224,6 +225,7 @@ export class GoogleCalendarClient {
       );
 
       return (data.items || []).map((item: any) => ({
+        id: item.id || "",
         summary: item.summary || "(no title)",
         start: item.start?.dateTime || item.start?.date || "",
         end: item.end?.dateTime || item.end?.date || "",

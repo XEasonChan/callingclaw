@@ -36,11 +36,25 @@ export interface WorkspaceContext {
   injectedAt: number;
 }
 
+export interface BrowserContext {
+  url: string;
+  title: string;
+  scrollY: number;
+  scrollHeight: number;
+  viewportHeight: number;
+  visibleText: string;
+  links: number;
+  buttons: number;
+  inputs: number;
+  capturedAt: number;
+}
+
 export class SharedContext {
   private _transcript: TranscriptEntry[] = [];
   private _screen: ScreenState = { latestScreenshot: null, capturedAt: 0 };
   private _meetingNotes: MeetingNote[] = [];
   private _workspace: WorkspaceContext | null = null;
+  private _browserContext: BrowserContext | null = null;
   private _listeners = new Map<string, Array<(data: any) => void>>();
 
   // ── Transcript ──
@@ -139,6 +153,21 @@ export class SharedContext {
     this._workspace = null;
   }
 
+  // ── Browser Context (Talk Locally: DOM snapshots of active browser tab) ──
+
+  get browserContext(): BrowserContext | null {
+    return this._browserContext;
+  }
+
+  updateBrowserContext(info: Omit<BrowserContext, "capturedAt">) {
+    this._browserContext = { ...info, capturedAt: Date.now() };
+    this.emit("browser_context", this._browserContext);
+  }
+
+  clearBrowserContext() {
+    this._browserContext = null;
+  }
+
   // ── Event System ──
 
   on(event: string, handler: (data: any) => void) {
@@ -163,6 +192,7 @@ export class SharedContext {
       meetingNotes: this._meetingNotes,
       todos: this.getTodos(),
       workspace: this._workspace,
+      browserContext: this._browserContext,
     };
   }
 
@@ -171,5 +201,6 @@ export class SharedContext {
     this._screen = { latestScreenshot: null, capturedAt: 0 };
     this._meetingNotes = [];
     this._workspace = null;
+    this._browserContext = null;
   }
 }

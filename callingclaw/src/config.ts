@@ -1,5 +1,17 @@
 // CallingClaw 2.0 — Central Configuration
 
+// ── Load persistent user config from ~/.callingclaw/user-config.json ──
+const USER_CONFIG_PATH = `${process.env.HOME}/.callingclaw/user-config.json`;
+let _userConfig: Record<string, string> = {};
+try {
+  const f = Bun.file(USER_CONFIG_PATH);
+  if (await f.exists()) {
+    _userConfig = await f.json();
+  }
+} catch {
+  // File doesn't exist yet or is invalid — use defaults
+}
+
 export const CONFIG = {
   // Server
   port: parseInt(process.env.PORT || "4000"),
@@ -24,6 +36,22 @@ export const CONFIG = {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     baseUrl: "https://openrouter.ai/api/v1",
     model: "anthropic/claude-sonnet-4.6",
+  },
+
+  // Meeting intelligence — fast models for gap detection + semantic search
+  // All routed through OpenRouter for unified model switching
+  analysis: {
+    // Gap analysis: reads transcript, decides what context is missing
+    model: process.env.ANALYSIS_MODEL || "anthropic/claude-haiku-4-5",
+    // Semantic search: reads MEMORY.md, finds relevant sections for queries
+    // Set to a different model for A/B testing (defaults to same as analysis)
+    searchModel: process.env.SEARCH_MODEL || "",
+    // Both used by ContextRetriever + TranscriptAuditor via OpenRouter
+    //
+    // Quick switch examples (.env):
+    //   ANALYSIS_MODEL=anthropic/claude-haiku-4-5    # Haiku for gap detection
+    //   SEARCH_MODEL=google/gemini-3.1-flash-lite-preview  # Gemini for search
+    //   SEARCH_MODEL=anthropic/claude-haiku-4-5      # or same Haiku for both
   },
 
   // Vision analysis (screen/meeting screenshots → Gemini Flash via OpenRouter)
@@ -65,6 +93,11 @@ export const CONFIG = {
     // Peekaboo CLI path (defaults to system PATH)
     cliPath: process.env.PEEKABOO_PATH || "peekaboo",
   },
+
+  // User identity — auto-added as attendee to every calendar event
+  userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };
 
 export type CallingClawConfig = typeof CONFIG;
+
+export { USER_CONFIG_PATH };

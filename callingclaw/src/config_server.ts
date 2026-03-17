@@ -2,17 +2,22 @@
 // Provides REST API for the web config page + service status + meeting notes
 // + EventBus WebSocket + TaskStore + Workspace Context
 
-import { CONFIG } from "./config";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { CONFIG, USER_CONFIG_PATH } from "./config";
+import { readFileSync, mkdirSync } from "fs";
+import { resolve, dirname } from "path";
 import type { PythonBridge } from "./bridge";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.0.0";
+let APP_VERSION = "2.2.4";
 try {
-  APP_VERSION = readFileSync(resolve(__dirname, "..", "..", "VERSION"), "utf-8").trim();
+  // Try callingclaw/VERSION first, then root CallingClaw 2.0/VERSION
+  try {
+    APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
+  } catch {
+    APP_VERSION = readFileSync(resolve(__dirname, "..", "..", "VERSION"), "utf-8").trim();
+  }
 } catch {
-  // Fallback
+  // Fallback to hardcoded
 }
 import type { VoiceModule } from "./modules/voice";
 import type { GoogleCalendarClient } from "./mcp_client/google_cal";
@@ -305,6 +310,32 @@ export function startConfigServer(services: Services) {
           }
         }
         return Response.json({ ok: true, voice: CONFIG.openai.voice }, { headers });
+      }
+
+      // GET /api/config/user-email — Get persistent user email
+      if (url.pathname === "/api/config/user-email" && req.method === "GET") {
+        return Response.json({ email: CONFIG.userEmail }, { headers });
+      }
+
+      // POST /api/config/user-email — Set persistent user email
+      if (url.pathname === "/api/config/user-email" && req.method === "POST") {
+        const body = await req.json();
+        const email = (body.email || "").trim();
+        CONFIG.userEmail = email;
+        // Persist to ~/.callingclaw/user-config.json
+        try {
+          let existing: Record<string, string> = {};
+          const f = Bun.file(USER_CONFIG_PATH);
+          if (await f.exists()) {
+            existing = await f.json();
+          }
+          existing.userEmail = email;
+          mkdirSync(dirname(USER_CONFIG_PATH), { recursive: true });
+          await Bun.write(USER_CONFIG_PATH, JSON.stringify(existing, null, 2));
+        } catch (e: any) {
+          console.warn("[Config] Failed to persist user email:", e.message);
+        }
+        return Response.json({ ok: true, email }, { headers });
       }
 
       // ══════════════════════════════════════════════════════════════
@@ -792,8 +823,17 @@ export function startConfigServer(services: Services) {
       // POST /api/calendar/create — Create calendar event
       if (url.pathname === "/api/calendar/create" && req.method === "POST") {
         const body = await req.json();
-        const result = await services.calendar.createEvent(body);
-        return Response.json({ result }, { headers });
+        // Auto-add user email as attendee if configured
+        if (CONFIG.userEmail) {
+          const existing = (body.attendees || []).map((a: any) => (typeof a === "string" ? a : a.email));
+          if (!existing.includes(CONFIG.userEmail)) {
+            body.attendees = [...(body.attendees || []), { email: CONFIG.userEmail }];
+          }
+        }
+        const raw = await services.calendar.createEvent(body);
+        let result: any;
+        try { result = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { result = raw; }
+        return Response.json(result, { headers });
       }
 
       // ══════════════════════════════════════════════════════════════
@@ -1196,46 +1236,149 @@ STEP-BY-STEP FLOW:
           topic: string;
           url?: string;
           context?: string;
+          attendees?: string[];       // email addresses
+          duration_minutes?: number;  // default 30
+          start_time?: string;        // ISO string — when to schedule
         };
         if (!body.topic) {
           return Response.json({ error: "topic is required" }, { status: 400, headers });
         }
 
-        // Generate workspace context summary
-        const workspace = services.context.workspace;
-        const syncBrief = services.contextSync?.getBrief();
-        const calendarEvents = await services.calendar.listUpcomingEvents(3).catch(() => []);
-
-        // Generate structured meeting prep brief via OpenClaw (if available)
-        let prepBriefData: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        // ── Step 1: Quick title generation (<2s) ──
+        // User may type a long description; compress into short calendar title
+        let meetingTitle = body.topic;
+        if (services.openclawBridge?.connected && body.topic.length > 30) {
           try {
-            const prepResult = await prepareMeeting(services.meetingPrepSkill, body.topic, body.context);
-            prepBriefData = {
-              topic: prepResult.brief.topic,
-              goal: prepResult.brief.goal,
-              keyPoints: prepResult.brief.keyPoints,
-              expectedQuestions: prepResult.brief.expectedQuestions.length,
-              filePaths: prepResult.brief.filePaths.length,
-            };
+            const titleResult = await services.openclawBridge.sendTask(
+              `Generate a short meeting title (under 50 chars, in the user's language) for this topic. Return ONLY the title, nothing else:\n\n"${body.topic}"`
+            );
+            if (titleResult && !titleResult.includes("timed out") && titleResult.length < 80) {
+              meetingTitle = titleResult.trim().replace(/^["']|["']$/g, "");
+            }
+          } catch { /* use original topic */ }
+        }
+
+        // ── Step 2: Create Google Calendar event (schedule, don't auto-join) ──
+        // Default: next half-hour slot. User joins manually or at scheduled time.
+        let meetUrl = body.url || null;
+        let calendarEvent: any = null;
+        let meetAttendees: import("./mcp_client/google_cal").CalendarAttendee[] = [];
+        if (services.calendar.connected) {
+          try {
+            let start: Date;
+            if (body.start_time) {
+              start = new Date(body.start_time);
+            } else {
+              // Try to extract time from natural language in the topic
+              // e.g., "今晚八点讨论callingclaw官网" → 20:00 today
+              let parsedTime: Date | null = null;
+              if (services.openclawBridge?.connected) {
+                try {
+                  const now = new Date();
+                  const timeResult = await services.openclawBridge.sendTask(
+                    `Extract the meeting time from this text. Current time: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}. ` +
+                    `Return ONLY an ISO 8601 datetime string (e.g., 2026-03-17T20:00:00+08:00). If no time is mentioned, return "none".\n\nText: "${body.topic}"`
+                  );
+                  if (timeResult && !timeResult.includes("none") && !timeResult.includes("timed out")) {
+                    const d = new Date(timeResult.trim());
+                    if (!isNaN(d.getTime())) parsedTime = d;
+                  }
+                } catch {}
+              }
+              if (parsedTime) {
+                start = parsedTime;
+              } else {
+                // Fallback: next half-hour mark, at least 10 min away
+                const now = new Date();
+                const mins = now.getMinutes();
+                start = new Date(now);
+                start.setMinutes(mins < 30 ? 30 : 60, 0, 0);
+                if (mins >= 30) start.setHours(start.getHours());
+                if (start.getTime() - now.getTime() < 10 * 60000) {
+                  start = new Date(start.getTime() + 30 * 60000);
+                }
+              }
+            }
+            const duration = (body.duration_minutes || 30) * 60000;
+            const end = new Date(start.getTime() + duration);
+            const prepAttendees: import("./mcp_client/google_cal").CalendarAttendee[] =
+              (body.attendees || []).map((e: string) => ({ email: e }));
+            if (CONFIG.userEmail && !prepAttendees.some(a => a.email === CONFIG.userEmail)) {
+              prepAttendees.push({ email: CONFIG.userEmail });
+            }
+            const calResult = await services.calendar.createEvent({
+              summary: meetingTitle,
+              start: start.toISOString(),
+              end: end.toISOString(),
+              attendees: prepAttendees,
+            });
+            // createEvent returns JSON string — parse it
+            try {
+              calendarEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult;
+            } catch { calendarEvent = { id: null, meetLink: null, start: start.toISOString(), end: end.toISOString() }; }
+            meetUrl = calendarEvent.meetLink || calendarEvent.hangoutLink || meetUrl;
+            meetAttendees = calendarEvent.attendees || prepAttendees;
+            // Store actual start/end from the created event
+            calendarEvent.start = { dateTime: calendarEvent.start || start.toISOString() };
+            calendarEvent.end = { dateTime: calendarEvent.end || end.toISOString() };
+            console.log(`[MeetingPrepare] Calendar: "${meetingTitle}" at ${start.toLocaleTimeString()}, Meet: ${meetUrl}`);
           } catch (e: any) {
-            console.warn("[MeetingPrepare] Brief generation failed:", e.message);
+            console.warn("[MeetingPrepare] Calendar create failed:", e.message);
           }
         }
 
+        // ── Step 3: Return immediately — no auto-join, research in background ──
         const agenda = {
           topic: body.topic,
-          meetUrl: body.url || null,
+          title: meetingTitle,
+          meetUrl,
+          calendarEventId: calendarEvent?.id || null,
+          startTime: calendarEvent?.start?.dateTime || null,
+          endTime: calendarEvent?.end?.dateTime || null,
           generatedAt: Date.now(),
-          workspace: workspace || null,
-          contextBrief: syncBrief?.voice || null,
-          prepBrief: prepBriefData,
-          upcomingEvents: calendarEvents,
-          pendingConfirmation: true,
-          instructions: `Review this agenda. Reply with /callingclaw join <url> to start the meeting, or modify the topic/context first.`,
+          prepStatus: "researching",
+          prepBrief: null,
         };
 
         services.eventBus.emit("meeting.agenda", agenda);
+
+        // ── Step 4: Background OpenClaw deep research (no time limit) ──
+        // MeetingScheduler handles auto-join at scheduled time (not here)
+        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+          (async () => {
+            try {
+              console.log(`[MeetingPrepare] Background research: "${meetingTitle}"`);
+              const prepResult = await prepareMeeting(
+                services.meetingPrepSkill, body.topic, body.context, meetAttendees
+              );
+              const prepBriefData = {
+                topic: prepResult.brief.topic,
+                goal: prepResult.brief.goal,
+                summary: prepResult.brief.summary,
+                keyPoints: prepResult.brief.keyPoints,
+                architectureDecisions: prepResult.brief.architectureDecisions,
+                expectedQuestions: prepResult.brief.expectedQuestions,
+                filePaths: prepResult.brief.filePaths,
+                browserUrls: prepResult.brief.browserUrls,
+                previousContext: prepResult.brief.previousContext,
+              };
+              console.log(`[MeetingPrepare] Research complete: ${prepBriefData.keyPoints?.length || 0} key points, ${prepBriefData.filePaths?.length || 0} files`);
+              services.eventBus.emit("meeting.prep_ready", {
+                topic: body.topic,
+                meetUrl,
+                calendarEventId: calendarEvent?.id || null,
+                prepBrief: prepBriefData,
+              });
+            } catch (e: any) {
+              console.error("[MeetingPrepare] Background research failed:", e.message);
+              services.eventBus.emit("meeting.prep_ready", {
+                topic: body.topic,
+                prepBrief: null,
+                error: e.message,
+              });
+            }
+          })();
+        }
 
         return Response.json(agenda, { headers });
       }
@@ -1321,6 +1464,210 @@ STEP-BY-STEP FLOW:
           }).catch((e: any) => console.error("[Meeting/Leave] PostMeetingDelivery failed:", e.message));
         }
 
+        return Response.json({ ok: true, ...followUp }, { headers });
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // ── Talk Locally API ──
+      // Same meeting intelligence as Join Meeting, but without Chrome/Meet
+      // Audio: direct mic/speaker. Adds browser DOM context capture.
+      // ══════════════════════════════════════════════════════════════
+
+      // POST /api/meeting/talk-locally — Start a local meeting session
+      // Full meeting stack: voice + transcript + auditor + vision + DOM context
+      if (url.pathname === "/api/meeting/talk-locally" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { topic?: string };
+        const topic = body.topic || "Local Conversation";
+
+        // Step 1: Start voice session with direct audio (local mic/speaker)
+        let voiceStarted = false;
+        if (!services.realtime.connected && CONFIG.openai.apiKey) {
+          try {
+            let instructions: string | undefined;
+            const workspacePrompt = services.context.getWorkspacePrompt();
+            if (workspacePrompt) {
+              instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
+            }
+            const syncBrief = services.contextSync?.getBrief().voice;
+            if (syncBrief) {
+              instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
+            }
+            await services.realtime.start(instructions);
+            voiceStarted = true;
+            console.log("[TalkLocally] Voice AI started (direct audio)");
+          } catch (e: any) {
+            console.warn("[TalkLocally] Voice start failed:", e.message);
+          }
+        } else if (services.realtime.connected) {
+          voiceStarted = true;
+        }
+
+        // Configure direct audio mode (local mic/speaker, not BlackHole)
+        const audioOk = await services.bridge.sendConfigAndVerify(
+          { audio_mode: "direct" },
+          { timeoutMs: 3000, retries: 3 }
+        );
+        if (audioOk) {
+          console.log("[TalkLocally] Audio confirmed: direct");
+        } else {
+          console.warn("[TalkLocally] Audio config not confirmed — continuing anyway");
+        }
+
+        // Step 2: Generate meeting prep brief (best-effort)
+        let prepBrief: any = null;
+        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+          try {
+            const prepResult = await prepareMeeting(services.meetingPrepSkill, topic);
+            prepBrief = prepResult.brief;
+            if (services.realtime.connected) {
+              services.realtime.updateInstructions(prepResult.instructions);
+              console.log("[TalkLocally] Voice switched to MEETING_PERSONA with prep brief");
+            }
+          } catch (e: any) {
+            console.warn("[TalkLocally] Prep brief failed (continuing without):", e.message);
+          }
+        }
+
+        // Step 3: Start meeting recording (transcript)
+        services.meeting.startRecording();
+        services.eventBus.startCorrelation("talk");
+
+        // Step 4: Emit meeting.started — auto-triggers TranscriptAuditor,
+        // ContextRetriever, and MeetingVision via eventBus handlers in callingclaw.ts
+        services.eventBus.emit("meeting.started", {
+          platform: "local",
+          topic,
+        });
+        services.eventBus.emit("voice.started", { audio_mode: "direct" });
+        console.log("[TalkLocally] meeting.started emitted — full meeting stack active");
+
+        // Step 5: Start browser DOM context capture (unique to Talk Locally)
+        // Captures active browser tab DOM every 10 seconds for richer context
+        const domContextInterval = setInterval(async () => {
+          if (!services.playwrightCli?.connected) return;
+          try {
+            const raw = await services.playwrightCli.evaluate(`() => ({
+              url: location.href,
+              title: document.title,
+              scrollY: window.scrollY,
+              scrollHeight: document.documentElement.scrollHeight,
+              viewportHeight: window.innerHeight,
+              visibleText: document.body.innerText.substring(0, 2000),
+              links: document.querySelectorAll('a').length,
+              buttons: document.querySelectorAll('button').length,
+              inputs: document.querySelectorAll('input,textarea').length,
+            })`);
+            const domInfo = typeof raw === "string" ? JSON.parse(raw) : raw;
+            services.context.updateBrowserContext(domInfo);
+            services.eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
+          } catch {
+            // Browser might not be active — silently skip
+          }
+        }, 10000);
+
+        // Store interval ID on the eventBus for cleanup on stop
+        // Using a well-known key so talk-locally/stop can clear it
+        (services.eventBus as any)._talkLocallyDomInterval = domContextInterval;
+        (services.eventBus as any)._talkLocallyTopic = topic;
+
+        return Response.json({
+          ok: true,
+          topic,
+          voice: voiceStarted ? "connected" : "failed",
+          audio_mode: "direct",
+          prepBrief: prepBrief ? {
+            topic: prepBrief.topic,
+            keyPoints: prepBrief.keyPoints?.length || 0,
+          } : null,
+          modules: {
+            transcript: true,
+            vision: true,
+            auditor: "auto-activated via meeting.started",
+            contextRetriever: "auto-activated via meeting.started",
+            domContext: services.playwrightCli?.connected ? "active (10s interval)" : "unavailable (no browser)",
+          },
+        }, { headers });
+      }
+
+      // POST /api/meeting/talk-locally/stop — Stop local talk session
+      // Generates summary, creates tasks, emits meeting.ended, reverts voice
+      if (url.pathname === "/api/meeting/talk-locally/stop" && req.method === "POST") {
+        // Clear browser DOM context interval
+        const domInterval = (services.eventBus as any)._talkLocallyDomInterval;
+        if (domInterval) {
+          clearInterval(domInterval);
+          (services.eventBus as any)._talkLocallyDomInterval = null;
+        }
+        services.context.clearBrowserContext();
+
+        // Generate summary + export markdown
+        const summary = await services.meeting.generateSummary();
+        const filepath = await services.meeting.exportToMarkdown(summary);
+        services.meeting.stopRecording();
+
+        // Create tasks from action items
+        let createdTasks: any[] = [];
+        if (summary.actionItems && summary.actionItems.length > 0) {
+          createdTasks = services.taskStore.createFromMeetingItems(
+            summary.actionItems.map((a: any) => ({
+              task: a.task,
+              assignee: a.assignee,
+              deadline: a.deadline,
+            })),
+            services.eventBus.correlationId || undefined
+          );
+        }
+
+        // Build follow-up report
+        const followUp = {
+          filepath,
+          summary,
+          tasks: createdTasks.map((t: any) => ({
+            id: t.id,
+            task: t.task,
+            assignee: t.assignee,
+            deadline: t.deadline,
+            status: t.status,
+          })),
+          pendingConfirmation: true,
+          generatedAt: Date.now(),
+        };
+
+        services.eventBus.emit("meeting.ended", followUp);
+        services.eventBus.endCorrelation();
+
+        // Trigger post-meeting delivery (non-blocking)
+        if (services.postMeetingDelivery) {
+          services.postMeetingDelivery.deliver({
+            summary,
+            notesFilePath: filepath,
+            prepSummary: services.meetingPrepSkill?.currentBrief ? {
+              topic: services.meetingPrepSkill.currentBrief.topic,
+              liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],
+              completedTasks: (services.meetingPrepSkill.currentBrief.liveNotes || []).filter((n: string) => n.startsWith("[DONE]")),
+              requirements: (services.meetingPrepSkill.currentBrief.liveNotes || []).filter((n: string) => n.startsWith("[REQ]")),
+            } : null,
+          }).catch((e: any) => console.error("[TalkLocally/Stop] PostMeetingDelivery failed:", e.message));
+        }
+
+        // Revert voice to default persona
+        if (services.meetingPrepSkill) {
+          services.meetingPrepSkill.clear();
+        }
+        if (services.realtime.connected) {
+          const defaultBrief = services.contextSync?.getBrief().voice;
+          const defaultInstructions = buildVoiceInstructions() +
+            (defaultBrief ? `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${defaultBrief}` : "");
+          services.realtime.updateInstructions(defaultInstructions);
+          console.log("[TalkLocally] Voice reverted to DEFAULT_PERSONA");
+        }
+
+        // Stop voice session
+        services.realtime.stop();
+        services.bridge.send("config", { audio_mode: "default" });
+        services.eventBus.emit("voice.stopped", {});
+
+        console.log(`[TalkLocally] Stopped — notes: ${filepath}, tasks: ${createdTasks.length}`);
         return Response.json({ ok: true, ...followUp }, { headers });
       }
 

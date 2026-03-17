@@ -263,19 +263,22 @@ Respond with JSON only:
       reasoning: "no_api_key",
     };
 
-    if (CONFIG.anthropic.apiKey) {
-      return this.callAnthropicDirect(prompt);
-    } else if (CONFIG.openrouter.apiKey) {
+    // Prefer OpenRouter (supports all models uniformly — Haiku, Gemini, etc.)
+    if (CONFIG.openrouter.apiKey) {
       return this.callOpenRouter(prompt);
+    } else if (CONFIG.anthropic.apiKey) {
+      return this.callAnthropicDirect(prompt);
     }
 
     console.warn(
-      "[TranscriptAuditor] No API key (need ANTHROPIC_API_KEY or OPENROUTER_API_KEY)"
+      "[TranscriptAuditor] No API key (need OPENROUTER_API_KEY or ANTHROPIC_API_KEY)"
     );
     return NULL_RESULT;
   }
 
   private async callAnthropicDirect(prompt: string): Promise<AuditResult> {
+    // Strip OpenRouter-style prefix (e.g. "anthropic/claude-haiku-4-5" → "claude-haiku-4-5")
+    const model = CONFIG.analysis.model.replace(/^anthropic\//, "");
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -284,7 +287,7 @@ Respond with JSON only:
         "anthropic-version": "2024-01-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model,
         max_tokens: 256,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -308,7 +311,7 @@ Respond with JSON only:
           Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
         },
         body: JSON.stringify({
-          model: "anthropic/claude-haiku-4-5",
+          model: CONFIG.analysis.model,
           max_tokens: 256,
           messages: [{ role: "user", content: prompt }],
         }),
@@ -456,7 +459,8 @@ Respond with JSON only:
           this.voice,
           this.meetingPrepSkill,
           instruction,
-          executionResult
+          executionResult,
+          this.eventBus
         );
       }
 
@@ -484,7 +488,7 @@ Respond with JSON only:
 
     // Push updated context to Voice AI so it can ask the user
     if (this.voice?.connected) {
-      pushContextUpdate(this.voice, this.meetingPrepSkill);
+      pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
     }
 
     this.eventBus.emit("auditor.suggest", {

@@ -4,7 +4,7 @@
 
 import { CONFIG } from "./config";
 import { PythonBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { PeekabooClient } from "./mcp_client/peekaboo";
@@ -19,7 +19,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.4.1";
+let APP_VERSION = "2.2.4";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -54,6 +54,11 @@ const contextSync = new ContextSync();
 const openclawBridge = new OpenClawBridge();
 
 const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
+
+// Forward live notes to EventBus for Desktop UI visibility
+meetingPrepSkill.onLiveNote((note, topic) => {
+  eventBus.emit("meeting.live_note", { note, topic, timestamp: Date.now() });
+});
 
 // Load OpenClaw's MEMORY.md at startup (non-blocking)
 contextSync.loadOpenClawMemory().then((ok) => {
@@ -141,6 +146,9 @@ const vision = new VisionModule({
     // Buffer descriptions for periodic OpenClaw push
     _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
 
+    // Emit vision event for Desktop UI visibility
+    eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
+
     // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
     if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
       const batch = _meetingVisionBuffer.splice(0);
@@ -148,6 +156,7 @@ const vision = new VisionModule({
         `Meeting screen update — the following visual content was shown during the meeting. ` +
         `Add relevant details to your meeting context for later summary:\n\n${batch.join("\n")}`
       ).catch(() => {});
+      eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
       console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to OpenClaw`);
     }
   },
@@ -159,9 +168,9 @@ eventBus.on("meeting.started", () => {
     vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");
   }
-  // Open meeting transparency panel in browser (foreground)
-  Bun.spawn(["open", `http://localhost:${CONFIG.port}/meeting-view.html`]);
-  console.log("[Init] Meeting transparency view opened in browser");
+  // Meeting view disabled — now shown in Electron sidebar only
+  // Bun.spawn(["open", `http://localhost:${CONFIG.port}/meeting-view.html`]);
+  // console.log("[Init] Meeting transparency view opened in browser");
 
   // ── Activate TranscriptAuditor: take over automation from OpenAI ──
   if (voice.connected) {
@@ -174,6 +183,9 @@ eventBus.on("meeting.started", () => {
 
     // Activate the auditor
     transcriptAuditor.activate(voice);
+
+    // Activate context retriever (knowledge gap fill)
+    contextRetriever.activate(voice);
   }
 });
 
@@ -187,6 +199,7 @@ function stopMeetingVisionAndFlush(reason: string) {
     openclawBridge.sendTask(
       `${reason} — final screen captures:\n\n${batch.join("\n")}`
     ).catch(() => {});
+    eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
   }
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }
@@ -199,13 +212,16 @@ eventBus.on("meeting.ended", () => {
     playwrightCli.stopAdmissionMonitor();
   }
 
-  // ── Deactivate TranscriptAuditor + restore all tools to OpenAI ──
+  // ── Deactivate TranscriptAuditor + ContextRetriever + restore all tools ──
   if (transcriptAuditor.active) {
     transcriptAuditor.deactivate();
     if (voice.connected) {
       voice.restoreAllTools();
       console.log("[Init] Restored all tools to OpenAI session (auditor deactivated)");
     }
+  }
+  if (contextRetriever.active) {
+    contextRetriever.deactivate();
   }
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
@@ -307,12 +323,9 @@ const peekaboo = new PeekabooClient();
 const zoomSkill = new ZoomSkill(bridge);
 const automationRouter = new AutomationRouter(bridge, eventBus, playwrightCli, peekaboo);
 
-// Start Layer 2 (Playwright CLI) in background — non-blocking
-playwrightCli.start().then(() => {
-  console.log("[Init] Layer 2 (Playwright CLI) ready");
-}).catch((e) => {
-  console.warn("[Init] Layer 2 (Playwright CLI) not available:", e.message);
-});
+// Layer 2 (Playwright CLI) — lazy start, only launches Chrome when first needed
+// (avoids opening an empty Chrome window on CallingClaw startup)
+console.log("[Init] Layer 2 (Playwright CLI) ready (lazy — Chrome launches on first use)");
 
 // Check Layer 3 (Peekaboo) availability — non-blocking
 peekaboo.checkAvailability().then((ok) => {
@@ -337,6 +350,17 @@ const transcriptAuditor = new TranscriptAuditor({
   meetJoiner,
 });
 
+// ── 2e. ContextRetriever (Event-Driven Knowledge Gap Fill) ──────
+// During meetings, monitors transcript for topics not covered by prep brief.
+// Uses fast models (Haiku/Gemini) to detect gaps + semantic search on MEMORY.md.
+// No OpenClaw in meeting loop — too slow. All retrieval via OpenRouter.
+const contextRetriever = new ContextRetriever({
+  context,
+  eventBus,
+  contextSync,
+  meetingPrepSkill,
+});
+
 // ── 3. Voice Module (OpenAI Realtime) ───────────────────────────
 
 // ── 4. Meeting Module (before voice, since tools need it) ──────
@@ -355,6 +379,7 @@ const toolDeps = {
   openclawBridge,
   meetingPrepSkill,
   contextSync,
+  contextRetriever,
   context,
   automationRouter,
   computerUse,
@@ -479,6 +504,7 @@ if (await pythonFile.exists()) {
     }
 
     transcriptAuditor.deactivate();
+    contextRetriever.deactivate();
     proc.kill();
     bridge.stop();
     voice.stop();
