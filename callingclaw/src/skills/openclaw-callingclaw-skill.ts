@@ -227,4 +227,23 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
   ],
   endpoint: "http://localhost:4000",
   healthCheck: "http://localhost:4000/api/recovery/health",
+
+  // ── OpenClaw → CallingClaw Protocol Schemas ──
+  // All message schemas for CallingClaw → OpenClaw calls (via sendTask).
+  // See docs/openclaw-protocol.md for full documentation.
+  // Source of truth: src/openclaw-protocol.ts
+  protocolSchemas: [
+    { id: "OC-001", name: "Meeting Prep Brief Generation", responseFormat: "JSON", latency: "5-15s" },
+    { id: "OC-002", name: "Context Recall", responseFormat: "text <500w", latency: "2-10s" },
+    { id: "OC-003", name: "Calendar Cron Registration", responseFormat: "jobId (regex)", latency: "2-5s" },
+    { id: "OC-004", name: "Todo Delivery (Telegram)", responseFormat: '"sent"', latency: "3-8s" },
+    { id: "OC-005", name: "Summary Delivery", responseFormat: '"sent"', latency: "3-8s" },
+    { id: "OC-006", name: "Todo Execution Handoff", responseFormat: "JSON {status, summary}", latency: "10-60s" },
+    { id: "OC-007", name: "Meeting Vision Push", responseFormat: '"ok" (fire & forget)', latency: "2-5s" },
+    { id: "OC-008", name: "Computer Use Delegation", responseFormat: "text (capped 10K)", latency: "5-30s" },
+    { id: "OC-009", name: "Follow-up Fallback", responseFormat: '"ok" (fire & forget)', latency: "2-5s" },
+  ],
 };
+
+// Re-export protocol for OpenClaw integration
+export { OPENCLAW_PROTOCOL, type OpenClawProtocolId } from "../openclaw-protocol";
