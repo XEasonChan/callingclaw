@@ -301,8 +301,28 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
   ],
   endpoint: "http://localhost:4000",
   healthCheck: "http://localhost:4000/api/recovery/health",
-  // OpenClaw can also read shared files directly from disk:
+
+  // ── Shared Document Convention ──
+  // All files live in ~/.callingclaw/shared/ with meetingId-based naming:
+  //
+  //   {meetingId}_prep.md      — 会前调研 (OpenClaw writes this)
+  //   {meetingId}_live.md      — 会中实时日志 (CallingClaw appends)
+  //   {meetingId}_summary.md   — 会后总结 (CallingClaw writes)
+  //   {meetingId}_transcript.md — 完整对话记录
+  //   sessions.json            — 会议索引
+  //
+  // meetingId = Google Calendar Event ID (preferred) or {date}_{safeTopic}
+  //
+  // After writing a file, call:
+  //   POST /api/meeting/prep-result { topic, meetingId, filePath? }
+  // to notify CallingClaw Desktop to render it.
+  //
   sharedDir: "~/.callingclaw/shared/",
-  sharedSubdirs: ["prep", "notes", "logs"],
-  manifestPath: "~/.callingclaw/shared/manifest.json",
+  sessionsIndex: "~/.callingclaw/shared/sessions.json",
+  fileSuffixes: {
+    prep: "_prep.md",
+    live: "_live.md",
+    summary: "_summary.md",
+    transcript: "_transcript.md",
+  },
 };
