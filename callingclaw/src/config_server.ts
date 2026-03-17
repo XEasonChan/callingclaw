@@ -1665,34 +1665,8 @@ STEP-BY-STEP FLOW:
         services.eventBus.emit("voice.started", { audio_mode: "direct" });
         console.log("[TalkLocally] meeting.started emitted — full meeting stack active");
 
-        // Step 5: Start browser DOM context capture (unique to Talk Locally)
-        // Captures active browser tab DOM every 10 seconds for richer context
-        const domContextInterval = setInterval(async () => {
-          if (!services.playwrightCli?.connected) return;
-          try {
-            const raw = await services.playwrightCli.evaluate(`() => ({
-              url: location.href,
-              title: document.title,
-              scrollY: window.scrollY,
-              scrollHeight: document.documentElement.scrollHeight,
-              viewportHeight: window.innerHeight,
-              visibleText: document.body.innerText.substring(0, 2000),
-              links: document.querySelectorAll('a').length,
-              buttons: document.querySelectorAll('button').length,
-              inputs: document.querySelectorAll('input,textarea').length,
-            })`);
-            const domInfo = typeof raw === "string" ? JSON.parse(raw) : raw;
-            services.context.updateBrowserContext(domInfo);
-            services.eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
-          } catch {
-            // Browser might not be active — silently skip
-          }
-        }, 10000);
-
-        // Store interval ID on the eventBus for cleanup on stop
-        // Using a well-known key so talk-locally/stop can clear it
-        (services.eventBus as any)._talkLocallyDomInterval = domContextInterval;
-        (services.eventBus as any)._talkLocallyTopic = topic;
+        // DOM context capture now unified in callingclaw.ts meeting.started handler
+        // (both Talk Locally and Meet Mode get it automatically)
 
         return Response.json({
           ok: true,

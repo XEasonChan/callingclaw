@@ -128,6 +128,9 @@ contextSync.onUpdate(() => {
   }
 });
 
+// Browser DOM context capture interval (started on meeting.started, cleared on meeting.ended)
+let _domContextInterval: ReturnType<typeof setInterval> | null = null;
+
 // Wire OpenClaw activity events to EventBus for real-time visibility
 openclawBridge.onActivity((kind, summary, detail) => {
   eventBus.emit(kind, { summary, detail });
@@ -192,6 +195,39 @@ eventBus.on("meeting.started", () => {
     // Activate context retriever (knowledge gap fill)
     contextRetriever.activate(voice);
   }
+
+  // ── Start Browser DOM context capture (both modes) ──
+  // Captures active browser tab DOM every 10s for richer context.
+  // In Meet mode: captures non-Meet tabs when Playwright is free.
+  // In Talk Locally: captures whatever the user is browsing.
+  if (playwrightCli.connected) {
+    _domContextInterval = setInterval(async () => {
+      if (!playwrightCli.connected) return;
+      try {
+        const raw = await playwrightCli.evaluate(`() => {
+          // Skip if on Google Meet page (Meet mode uses it for other things)
+          if (location.hostname === 'meet.google.com') return JSON.stringify({ skip: true });
+          return JSON.stringify({
+            url: location.href,
+            title: document.title,
+            scrollY: window.scrollY,
+            scrollHeight: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight,
+            visibleText: document.body.innerText.substring(0, 2000),
+            links: document.querySelectorAll('a').length,
+            buttons: document.querySelectorAll('button').length,
+            inputs: document.querySelectorAll('input,textarea').length,
+          });
+        }`);
+        const domInfo = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!domInfo.skip) {
+          context.updateBrowserContext?.(domInfo);
+          eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
+        }
+      } catch {} // Browser busy or not accessible
+    }, 10000);
+    console.log("[Init] Browser DOM context capture started (10s interval)");
+  }
 });
 
 // Auto-stop vision when meeting ends or recording stops
@@ -211,6 +247,13 @@ function stopMeetingVisionAndFlush(reason: string) {
 
 eventBus.on("meeting.ended", () => {
   stopMeetingVisionAndFlush("Meeting ended");
+
+  // Stop DOM context capture
+  if (_domContextInterval) {
+    clearInterval(_domContextInterval);
+    _domContextInterval = null;
+    context.clearBrowserContext?.();
+  }
 
   // ── Stop admission monitor ──
   if (playwrightCli.isAdmissionMonitoring) {
