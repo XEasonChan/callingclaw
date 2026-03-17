@@ -1162,3 +1162,46 @@ curl -X POST http://localhost:4000/api/computer/run \
   -H "Content-Type: application/json" \
   -d '{"instruction": "Open Chrome and go to github.com"}'
 ```
+
+---
+
+## 19. Git Conventions
+
+### Commit Rules
+- 使用 **Conventional Commits**: `feat:`, `fix:`, `docs:`, `refactor:`, `chore:`
+- 每完成一个独立功能点或修复，**立即 commit**，不要积攒
+- commit 前必须运行 `bunx tsc --noEmit` 检查编译
+- 大的重构前先创建 checkpoint commit: `"checkpoint: before xxx refactoring"`
+- 主线**不允许 force push**
+- 所有 commit 包含 `Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>`
+
+### Versioning (Semantic Versioning)
+- **MAJOR**: 不兼容的 API 变更或用户可见的 breaking change
+- **MINOR**: 新功能，向后兼容
+- **PATCH**: bug 修复，性能优化
+- 版本号统一维护在: `VERSION`, `callingclaw/package.json`, `callingclaw-desktop/package.json`, `callingclaw/src/callingclaw.ts`
+- 每次 release 必须同步更新 `CHANGELOG.md`
+
+### Branch Strategy
+```
+main (稳定版) ← dev/frontend, dev/backend, dev/ai (worktrees)
+```
+- Feature 在对应角色的 worktree 分支上开发
+- Backend agent 作为 integrator 合并到 main
+- 合并前检查文件所有权边界
+
+### Release Process (使用 `/release` 命令)
+1. 列出上个 tag 以来的所有 commit，按类型分类
+2. 判断 semver bump (MAJOR/MINOR/PATCH)
+3. 更新所有版本号文件
+4. 生成 CHANGELOG.md 条目
+5. 运行编译检查
+6. Commit + Tag + Push + GitHub Release
+
+### Worktree Paths
+| Role | Path | Branch |
+|------|------|--------|
+| Main | `CallingClaw 2.0/` (iCloud) | `main` |
+| Frontend | `/Users/admin/dev/callingclaw-worktrees/frontend` | `dev/frontend` |
+| Backend | `/Users/admin/dev/callingclaw-worktrees/backend` | `dev/backend` |
+| AI | `/Users/admin/dev/callingclaw-worktrees/ai` | `dev/ai` |
