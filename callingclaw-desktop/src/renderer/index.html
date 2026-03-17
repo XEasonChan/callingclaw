@@ -1046,6 +1046,11 @@ async function submitTopic() {
 function openPrepPanel(cardId) {
   const pc = window['_prepCards']?.[cardId];
   if (!pc) { openPrepBriefFull(); return; }
+  // If OpenClaw already wrote the markdown, render it directly
+  if (pc.mdContent) {
+    openPanel('📋 ' + (pc.title || pc.topic), pc.mdContent);
+    return;
+  }
   let md = '# ' + esc(pc.title || pc.topic) + '\n\n';
   if (pc.prepBrief) {
     md = buildPrepMarkdown(pc.prepBrief);
@@ -1266,26 +1271,33 @@ function connectWS() {
         }
         // Handle prep research completion
         if (msg.event === 'meeting.prep_ready' && msg.data) {
-          S.prepBrief = { prepBrief: msg.data.prepBrief };
-          // Find the matching prep card and update it
+          // OpenClaw wrote .md file and notified us — render directly
+          const mdContent = msg.data.mdContent || '';
+          const topic = msg.data.topic || '';
+          const filePath = msg.data.filePath || '';
+
+          // Update any active prep card
           const cards = window['_prepCards'] || {};
           for (const [cid, pc] of Object.entries(cards)) {
-            if (!pc.prepBrief) {
-              pc.prepBrief = msg.data.prepBrief;
+            if (!pc.prepDone) {
+              pc.prepDone = true;
+              pc.mdContent = mdContent;
+              pc.filePath = filePath;
               pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 调研完成');
-              // Cache to localStorage for persistence across restarts
-              cachePrepBrief(pc.title || pc.topic, msg.data.prepBrief);
-              // Update prep-sub to done state
+              // Cache markdown content by topic
+              cachePrepBrief(pc.title || pc.topic, { mdContent, filePath });
+              // Update prep attachment badge
               const prepEl = document.getElementById(cid + '-prep');
               if (prepEl) {
                 prepEl.classList.remove('shimmer');
                 prepEl.classList.add('done');
                 prepEl.textContent = '✅ Meeting Prep — 调研完成，点击查看';
               }
-              // Auto-open side panel with full brief
-              if (msg.data.prepBrief) openPrepPanel(cid);
-              // Remove prep-card wrapper so renderMeetings() can take over
-              // (data already in S.meetings + localStorage cache)
+              // Auto-open side panel with rendered markdown
+              if (mdContent) {
+                openPanel('📋 ' + (pc.title || topic), mdContent);
+              }
+              // Clean up so renderMeetings takes over
               setTimeout(() => {
                 const wrap = document.getElementById(cid + '-wrap');
                 if (wrap) wrap.remove();
@@ -1293,6 +1305,11 @@ function connectWS() {
               }, 500);
               break;
             }
+          }
+
+          // No active card — just open panel directly (e.g., from Telegram flow)
+          if (!Object.values(cards).some((pc: any) => pc.prepDone)) {
+            if (mdContent) openPanel('📋 ' + topic, mdContent);
           }
         }
         // Feed events into local talk panel
