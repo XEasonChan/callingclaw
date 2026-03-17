@@ -9,8 +9,9 @@
 
 ### 启动 CallingClaw Desktop
 ```bash
-cd "CallingClaw 2.0/callingclaw-desktop" && npm run start
+cd "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-desktop" && npm run start
 ```
+> ⚠️ 必须用主仓库的完整路径（不是 worktree 里的）。worktree 版本可能是旧的。
 > Desktop 会自动拉起 Bun daemon（后端引擎）。如果 daemon 已在运行，Desktop 会直接连接。
 
 **验收标准:**
