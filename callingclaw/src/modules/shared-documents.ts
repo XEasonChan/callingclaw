@@ -109,7 +109,7 @@ export async function savePrepBrief(brief: MeetingPrepBrief): Promise<string> {
   const jsonPath = resolve(SHARED_PREP_DIR, jsonFile);
 
   await Bun.write(mdPath, md);
-  await Bun.write(jsonPath, JSON.stringify(brief, null, 2));
+  // Only markdown — no JSON file (Desktop reads .md directly)
 
   // Update manifest
   await updateManifest((m) => {
