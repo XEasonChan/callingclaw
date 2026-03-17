@@ -8,11 +8,16 @@ import { resolve, dirname } from "path";
 import type { PythonBridge } from "./bridge";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.0.0";
+let APP_VERSION = "2.2.2";
 try {
-  APP_VERSION = readFileSync(resolve(__dirname, "..", "..", "VERSION"), "utf-8").trim();
+  // Try callingclaw/VERSION first, then root CallingClaw 2.0/VERSION
+  try {
+    APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
+  } catch {
+    APP_VERSION = readFileSync(resolve(__dirname, "..", "..", "VERSION"), "utf-8").trim();
+  }
 } catch {
-  // Fallback
+  // Fallback to hardcoded
 }
 import type { VoiceModule } from "./modules/voice";
 import type { GoogleCalendarClient } from "./mcp_client/google_cal";
