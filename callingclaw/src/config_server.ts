@@ -1997,8 +1997,8 @@ STEP-BY-STEP FLOW:
 
       // GET /api/shared/manifest — Return the shared directory manifest
       if (url.pathname === "/api/shared/manifest" && req.method === "GET") {
-        const manifest = await readManifest();
-        return Response.json(manifest, { headers });
+        const { readSessions } = await import("./modules/shared-documents");
+        return Response.json(readSessions(), { headers });
       }
 
       // GET /api/shared/file?path=prep/xxx.md — Read any file from shared directory
