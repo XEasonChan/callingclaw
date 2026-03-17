@@ -389,7 +389,7 @@ export function startConfigServer(services: Services) {
       // POST /api/voice/stop — Stop voice session + deactivate audio
       if (url.pathname === "/api/voice/stop" && req.method === "POST") {
         services.realtime.stop();
-        services.bridge.send("config", { audio_mode: "default" });
+        services.bridge.send("config", { audio_mode: "default", capture_mode: "mouse" });
         services.eventBus.emit("voice.stopped", {});
         return Response.json({ ok: true, status: "disconnected" }, { headers });
       }
@@ -994,13 +994,18 @@ export function startConfigServer(services: Services) {
           }
         }
 
-        // Step 2: Configure audio bridge mode BEFORE joining (with verification)
+        // Step 2: Configure audio + screen capture mode BEFORE joining
+        // Screen capture: lock to the meeting app's display (Chrome for Meet, Zoom for Zoom)
+        const meetingApp = validated.platform === "zoom" ? "zoom.us" : "Google Chrome";
         const audioConfigOk = await services.bridge.sendConfigAndVerify(
-          { audio_mode: "meet_bridge", capture_system_audio: true, virtual_mic_output: true },
+          {
+            audio_mode: "meet_bridge", capture_system_audio: true, virtual_mic_output: true,
+            capture_mode: "meeting_app", meeting_app: meetingApp,
+          },
           { timeoutMs: 3000, retries: 3 }
         );
         if (audioConfigOk) {
-          console.log("[Meeting] ✅ Audio bridge confirmed: meet_bridge");
+          console.log(`[Meeting] ✅ Audio bridge confirmed: meet_bridge, screen locked to ${meetingApp}`);
         } else {
           console.error("[Meeting] ⚠️ Audio bridge config NOT confirmed — voice may not work!");
           // Continue anyway (meeting join still useful for screen capture / notes)
@@ -1626,13 +1631,13 @@ STEP-BY-STEP FLOW:
           voiceStarted = true;
         }
 
-        // Configure direct audio mode (local mic/speaker, not BlackHole)
+        // Configure direct audio + mouse-tracking screen capture
         const audioOk = await services.bridge.sendConfigAndVerify(
-          { audio_mode: "direct" },
+          { audio_mode: "direct", capture_mode: "mouse" },
           { timeoutMs: 3000, retries: 3 }
         );
         if (audioOk) {
-          console.log("[TalkLocally] Audio confirmed: direct");
+          console.log("[TalkLocally] Audio confirmed: direct, screen follows mouse");
         } else {
           console.warn("[TalkLocally] Audio config not confirmed — continuing anyway");
         }
@@ -1762,7 +1767,7 @@ STEP-BY-STEP FLOW:
 
         // Stop voice session
         services.realtime.stop();
-        services.bridge.send("config", { audio_mode: "default" });
+        services.bridge.send("config", { audio_mode: "default", capture_mode: "mouse" });
         services.eventBus.emit("voice.stopped", {});
 
         console.log(`[TalkLocally] Stopped — notes: ${filepath}, tasks: ${createdTasks.length}`);
