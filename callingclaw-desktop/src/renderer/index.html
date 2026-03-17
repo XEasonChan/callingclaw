@@ -1021,14 +1021,21 @@ async function submitTopic() {
     card0.appendChild(act);
   }
   try {
-    // API returns instantly (<1s). All AI work happens async via EventBus.
-    const r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
-    const data = await r.json();
-    S.prepBrief = data;
+    // Delegate to OpenClaw — it handles title, time, calendar, research autonomously
+    // Falls back to direct prepare if OpenClaw unavailable
+    let r = await fetch(API + '/api/meeting/delegate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
+    let data = await r.json();
+    if (data.error) {
+      // OpenClaw unavailable — fallback to direct prepare
+      const pc0 = window['_prepCards'][cardId];
+      if (pc0) pc0.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] OpenClaw 不可用，使用直接创建...');
+      r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
+      data = await r.json();
+    }
     const pc = window['_prepCards'][cardId];
-    if (pc) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 后端已接收，OpenClaw 开始处理...');
-    // Card updates now come via WebSocket "meeting.prep_progress" events
-    // (title, time, meetUrl, calendar all pushed incrementally)
+    if (pc) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw 已接管，自主处理中...' : '后端直接处理中...'));
+    if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cardId);
+    // All subsequent updates come via WebSocket events
   } catch(e) {
     console.error('[Prep]', e);
     const wrap = document.getElementById(cardId + '-wrap'); if (wrap) wrap.remove();
@@ -1237,9 +1244,8 @@ function connectWS() {
               }
             }
 
-            // Update side panel if showing this card
-            const spTitle = document.getElementById('sp-title');
-            if (spTitle && spTitle.textContent.includes(pc.title || pc.topic)) {
+            // Always refresh side panel if any prep card is active
+            if (document.getElementById('side-panel')?.classList.contains('open')) {
               openPrepPanel(cid);
             }
           }
@@ -1252,9 +1258,7 @@ function connectWS() {
             if (!pc.prepBrief && pc.agentFeed) {
               const text = msg.data?.text || msg.data?.delta || '';
               if (text) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (text.length > 60 ? text.slice(0,60) + '...' : text));
-              // Live-update side panel if it's showing this card's prep
-              const spTitle = document.getElementById('sp-title');
-              if (spTitle && spTitle.textContent.includes(pc.title || pc.topic)) {
+              if (document.getElementById('side-panel')?.classList.contains('open')) {
                 openPrepPanel(cid);
               }
             }

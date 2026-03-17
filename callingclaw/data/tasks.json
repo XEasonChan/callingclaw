@@ -1,5 +1,27 @@
 [
   {
+    "id": "task_mmuf1k2z_ght2",
+    "task": "Confirm requirements with Isabelle for Relay scenario data sync prioritization.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Yi BAI",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "mtg_mmuexjix_m3pu",
+    "createdAt": 1773740073707,
+    "updatedAt": 1773740073707
+  },
+  {
+    "id": "task_mmuf1k2y_21ud",
+    "task": "Review the cumulative logic proposal for 'isMyContribution'.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Yi BAI",
+    "deadline": "2023-11-15",
+    "sourceMeetingId": "mtg_mmuexjix_m3pu",
+    "createdAt": 1773740073706,
+    "updatedAt": 1773740073706
+  },
+  {
     "id": "task_mmue0m9f_ke2r",
     "task": "Ensure the testing team adheres to the new QA protocol updates.",
     "status": "pending",

@@ -1231,7 +1231,55 @@ STEP-BY-STEP FLOW:
         return Response.json({ aborted: false, reason: "No browser loop running" }, { headers });
       }
 
-      // POST /api/meeting/prepare — Generate pre-meeting agenda for user confirmation
+      // POST /api/meeting/delegate — Delegate meeting creation to OpenClaw (agent-first pattern)
+      // Desktop sends topic → CallingClaw relays to OpenClaw → OpenClaw uses /callingclaw skill
+      // All progress comes back via EventBus → WebSocket → Desktop side panel
+      if (url.pathname === "/api/meeting/delegate" && req.method === "POST") {
+        const body = (await req.json()) as { topic: string };
+        if (!body.topic) {
+          return Response.json({ error: "topic is required" }, { status: 400, headers });
+        }
+        if (!services.openclawBridge?.connected) {
+          return Response.json({ error: "OpenClaw not connected" }, { status: 503, headers });
+        }
+
+        const prepId = `prep_${Date.now()}`;
+        services.eventBus.emit("meeting.prep_progress", {
+          prepId, step: "delegating", message: "正在委托 OpenClaw 处理...",
+        });
+
+        // Fire-and-forget: OpenClaw handles everything autonomously
+        (async () => {
+          try {
+            const taskPrompt = [
+              `用户想要准备一个会议，话题是: "${body.topic}"`,
+              ``,
+              `请完成以下步骤:`,
+              `1. 先用 /callingclaw email 获取用户的默认参会邮箱`,
+              `2. 理解话题，生成一个简短的会议标题和合适的会议时间`,
+              `3. 用 /callingclaw prepare 创建会议（会自动创建日历+Meet链接+深度调研）`,
+              `   或者直接用 Google Calendar tool 创建日历事件，然后 /callingclaw prepare 做调研`,
+              `4. 调研完成后，确认结果已写入 ~/.callingclaw/shared/prep/ 目录`,
+              `5. 最后通知用户会议已准备好`,
+              ``,
+              `注意:`,
+              `- 会议时间从话题中推断（如"今晚八点"→20:00），如果没提到时间就安排在下一个半小时整点`,
+              `- 一定要邀请用户邮箱作为参会人`,
+              `- 调研结果要详细（keyPoints, architectureDecisions, expectedQuestions, filePaths）`,
+            ].join("\n");
+
+            await services.openclawBridge.sendTask(taskPrompt);
+          } catch (e: any) {
+            services.eventBus.emit("meeting.prep_progress", {
+              prepId, step: "error", message: `OpenClaw 处理失败: ${e.message}`,
+            });
+          }
+        })();
+
+        return Response.json({ ok: true, prepId, topic: body.topic, delegatedTo: "openclaw" }, { headers });
+      }
+
+      // POST /api/meeting/prepare — Direct meeting creation (fallback if OpenClaw unavailable)
       // Returns: meeting prep brief + agenda items that user can review before joining
       if (url.pathname === "/api/meeting/prepare" && req.method === "POST") {
         const body = (await req.json()) as {
