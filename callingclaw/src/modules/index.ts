@@ -16,3 +16,4 @@ export { BrowserActionLoop } from "./browser-action-loop";
 export { MeetingScheduler } from "./meeting-scheduler";
 export { PostMeetingDelivery } from "./post-meeting-delivery";
 export { ContextRetriever } from "./context-retriever";
+export * from "./shared-documents";
