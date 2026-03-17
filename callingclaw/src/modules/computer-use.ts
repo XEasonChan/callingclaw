@@ -576,10 +576,11 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
           console.log(`[ComputerUse] ${stepDesc}`);
           this.emitActivity("ai.openclaw", `Task: ${task?.slice(0, 60)}`);
 
+          // OC-008: Computer Use Task Delegation
           const result = await this.openclaw.sendTask(task);
-          console.log(`[ComputerUse] OpenClaw result: ${result.slice(0, 200)}`);
+          console.log(`[ComputerUse] OpenClaw result (OC-008): ${result.slice(0, 200)}`);
 
-          // Cap output to prevent token explosion
+          // Cap output to prevent token explosion (per OC-008 spec: 10K limit)
           const capped = result.length > 10000
             ? result.slice(0, 10000) + "\n...(truncated)"
             : result;
