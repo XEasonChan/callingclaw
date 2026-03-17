@@ -34,7 +34,7 @@ export const FILE_SUFFIXES = {
 // ── Meeting Session ──
 
 export interface MeetingSession {
-  meetingId: string;         // Google Calendar Event ID or fallback
+  meetingId: string;         // CallingClaw-generated: cc_{ts}_{rand} (stable from first moment)
   topic: string;
   meetUrl?: string;
   startTime?: string;
@@ -65,10 +65,13 @@ export function safeFilename(topic: string): string {
 
 function isoNow(): string { return new Date().toISOString(); }
 
-/** Generate a meetingId from calendarEventId or fallback to date+topic */
-export function generateMeetingId(calendarEventId?: string, topic?: string): string {
-  if (calendarEventId) return calendarEventId;
-  return `${new Date().toISOString().slice(0, 10)}_${safeFilename(topic || "meeting")}`;
+/** Generate a stable meetingId at request time.
+ * Format: cc_{timestamp}_{random} — always available before calendar creation.
+ * CalendarEventId is linked later in sessions.json after calendar succeeds. */
+export function generateMeetingId(): string {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 6);
+  return `cc_${ts}_${rand}`;
 }
 
 /** Get the full file path for a meeting document */
