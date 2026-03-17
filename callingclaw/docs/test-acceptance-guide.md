@@ -7,25 +7,19 @@
 
 ## 启动检查
 
-### 1. 启动 CallingClaw
-```bash
-cd "CallingClaw 2.0/callingclaw" && bun run start
-```
-**验收标准:**
-- [ ] 终端显示 ASCII LOGO + v2.3.1
-- [ ] `Modules: Voice ✓ ComputerUse ✓ Calendar ✓` 全绿
-- [ ] 无 Chrome 窗口弹出（lazy start）
-- [ ] Python sidecar 连接成功（`Bridge: Python sidecar connected`）
-
-### 2. 启动 Desktop
+### 启动 CallingClaw Desktop
 ```bash
 cd "CallingClaw 2.0/callingclaw-desktop" && npm run start
 ```
+> Desktop 会自动拉起 Bun daemon（后端引擎）。如果 daemon 已在运行，Desktop 会直接连接。
+
 **验收标准:**
-- [ ] 窗口标题显示 `CallingClaw v2.3.1`
+- [ ] Desktop 窗口弹出，标题显示 `CallingClaw v2.3.1`
 - [ ] Dock 图标是圆角龙虾爪（824x824 squircle）
 - [ ] 状态栏显示：🟢运行中 🟢语音 🟢OpenClaw 🟢音频
 - [ ] 首页显示 "🦞 Hey Andrew, What's our next meeting topic?"
+- [ ] 无 Chrome 窗口弹出（Playwright lazy start）
+- [ ] Coming Up 列表显示 Google Calendar 中的会议
 
 ---
 
