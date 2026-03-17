@@ -6,6 +6,7 @@
 // Usage in OpenClaw:
 //   /callingclaw voice start       — Start voice session
 //   /callingclaw voice stop        — Stop voice session
+//   /callingclaw prepare <topic>   — Create meeting (calendar + Meet link + deep research)
 //   /callingclaw join <url>        — Join a meeting
 //   /callingclaw leave             — Leave meeting + generate follow-up
 //   /callingclaw status            — Check CallingClaw status
@@ -55,6 +56,26 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return { success: false, error: "Usage: /callingclaw voice start|stop [instructions]" };
       }
 
+      case "prepare":
+      case "create": {
+        // Create a meeting: calendar event + Meet link + background deep research
+        // Auto-adds CONFIG.userEmail as attendee
+        if (!rest) return { success: false, error: "Usage: /callingclaw prepare <topic> [--attendees email1,email2] [--time 2026-03-17T20:00]" };
+        const body: any = { topic: rest };
+        // Parse optional flags
+        const attendeeMatch = rest.match(/--attendees?\s+([\w@.,]+)/);
+        if (attendeeMatch) {
+          body.attendees = attendeeMatch[1].split(",").map((e: string) => e.trim());
+          body.topic = rest.replace(/--attendees?\s+[\w@.,]+/, "").trim();
+        }
+        const timeMatch = rest.match(/--time\s+([\d\-T:+]+)/);
+        if (timeMatch) {
+          body.start_time = timeMatch[1];
+          body.topic = body.topic.replace(/--time\s+[\d\-T:+]+/, "").trim();
+        }
+        return await apiPost("/api/meeting/prepare", body);
+      }
+
       case "join": {
         const url = parts[1];
         if (!url) return { success: false, error: "Usage: /callingclaw join <meeting-url>" };
@@ -78,6 +99,12 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
 
       case "calendar":
         return await apiGet("/api/calendar/events");
+
+      case "user-email":
+      case "email":
+        // Get or set the user's default email (used for calendar invites)
+        if (rest) return await apiPost("/api/config/user-email", { email: rest });
+        return await apiGet("/api/config/user-email");
 
       case "tasks":
         return await apiGet("/api/tasks?status=pending");
@@ -139,6 +166,7 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
             commands: [
               "/callingclaw status              — Check if CallingClaw is running",
               "/callingclaw voice start|stop     — Start/stop voice session",
+              "/callingclaw prepare <topic>      — Create meeting (calendar + Meet + research)",
               "/callingclaw join <url>           — Join a meeting",
               "/callingclaw leave                — Leave meeting + follow-up",
               "/callingclaw say <text>           — Send text to voice AI",
