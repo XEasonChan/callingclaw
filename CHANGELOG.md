@@ -3,6 +3,15 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.2.4] - 2026-03-17
+
+### Added
+- **`/callingclaw prepare` command** — OpenClaw can now create meetings through CallingClaw's API, which auto-adds `CONFIG.userEmail` as attendee. Supports `--attendees` and `--time` flags.
+- **`/callingclaw email` command** — get/set user default email from OpenClaw
+
+### Fixed
+- **Missing attendee on OpenClaw-created meetings** — OpenClaw previously created calendar events directly (bypassing CallingClaw), so user email was never included as attendee
+
 ## [2.2.3] - 2026-03-17
 
 ### Fixed
