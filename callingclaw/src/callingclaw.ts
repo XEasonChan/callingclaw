@@ -13,6 +13,7 @@ import { MeetJoiner } from "./meet_joiner";
 import { OpenClawBridge } from "./openclaw_bridge";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
+import { OC007_PROMPT, type OC007_Request } from "./openclaw-protocol";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { readFileSync } from "fs";
@@ -242,7 +243,7 @@ eventBus.on("meeting.started", () => {
 function stopMeetingVisionAndFlush(reason: string) {
   if (!vision.isMeetingMode) return;
   vision.stopMeetingVision();
-  // Flush remaining buffer to OpenClaw
+  // Flush remaining buffer to OpenClaw via OC-007 (final)
   if (_meetingVisionBuffer.length > 0 && openclawBridge.connected) {
     const batch = _meetingVisionBuffer.splice(0);
     openclawBridge.sendTask(

@@ -1,13 +1,10 @@
 // CallingClaw 2.0 — OpenClaw Protocol Schema
 // ═══════════════════════════════════════════════════════════════════
 // Defines ALL message schemas between CallingClaw → OpenClaw.
-// Each call has a unique ID, typed request, and typed response.
+// Each call has a unique ID, typed request, typed response, and
+// an English prompt builder + response parser.
 //
-// Design principles:
-// - Every call has a schema ID (OC-xxx) for cross-reference in docs
-// - Request and response are typed — no ambiguous free-text
-// - Response parsing includes validation
-// - Failure modes are explicit
+// All prompts are in English for consistency and model performance.
 // ═══════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════
@@ -42,7 +39,7 @@ export const OC001_PROMPT = (req: OC001_Request) => {
         .join("\n")}`
     : "";
 
-  return `You are preparing a Meeting Prep Brief for CallingClaw's voice AI assistant.
+  return `Generate a meeting prep brief. Follow these instructions exactly.
 
 ## Your Task
 Read the relevant files and your memory, then generate a structured JSON meeting prep brief.
@@ -52,6 +49,17 @@ ${req.topic}
 
 ## Additional Context from User
 ${req.userContext || "(no additional context)"}${attendeeSection}
+
+## What to Include
+
+1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in the user's preferred language.
+2. **keyPoints**: 5-8 bullet points covering the main topics to discuss.
+3. **architectureDecisions**: For each major technical decision, explain WHAT was decided and WHY.
+4. **expectedQuestions**: 3-5 questions that might come up, with suggested answers.
+5. **previousContext**: If there were previous meetings on this topic, summarize key outcomes and open items.
+6. **filePaths**: All relevant local files with absolute paths. Suggest action: "open" / "scroll" / "present".
+7. **browserUrls**: All relevant web URLs (GitHub, deployed apps, Figma, docs).
+8. **folderPaths**: Key project directories the user might want to show.
 
 ## Output Format
 Return ONLY valid JSON matching this exact structure:
@@ -70,7 +78,7 @@ Return ONLY valid JSON matching this exact structure:
 }
 \`\`\`
 
-Be thorough with file paths — use absolute paths. Write summary in the user's preferred language.`;
+Be thorough with file paths — use absolute paths.`;
 };
 
 export function parseOC001(raw: string, fallbackTopic: string): OC001_Response {
@@ -92,7 +100,6 @@ export function parseOC001(raw: string, fallbackTopic: string): OC001_Response {
       };
     } catch {}
   }
-  // Fallback: raw text as summary
   return {
     topic: fallbackTopic, goal: "Discuss " + fallbackTopic,
     summary: raw.slice(0, 2000), keyPoints: [], architectureDecisions: [],
@@ -108,22 +115,22 @@ export function parseOC001(raw: string, fallbackTopic: string): OC001_Response {
 export interface OC002_Request {
   id: "OC-002";
   query: string;
-  localContext?: string;  // Pre-fetched local keyword search result
-  language: string;       // "zh" | "en" | "ja"
+  localContext?: string;
+  language: string;
 }
 
 export interface OC002_Response {
-  answer: string;         // Concise factual answer (<500 words)
+  answer: string;
 }
 
 export const OC002_PROMPT = (req: OC002_Request) =>
   `The user asked a question that requires context recall. Search your memory (MEMORY.md), recent files, and conversation history to find relevant information.
 
-User's question context: "${req.query}"
+User's question: "${req.query}"
 
-${req.localContext ? `Pre-fetched local context:\n${req.localContext}\n\nPlease expand on this with more details.` : "No local context found. Please search broadly."}
+${req.localContext ? `Pre-fetched local context:\n${req.localContext}\n\nExpand on this with more details from your files.` : "No local context found. Search broadly across your memory and files."}
 
-Return a concise factual answer (under 500 words) that the voice assistant can relay to the user. Focus on concrete facts, dates, metrics, and actionable information. Answer in ${req.language === "zh" ? "Chinese" : req.language === "ja" ? "Japanese" : "English"}.`;
+Return a concise factual answer (under 500 words) for the voice assistant to relay. Focus on concrete facts, dates, metrics, and actionable information. Answer in the user's language (${req.language}).`;
 
 export function parseOC002(raw: string): OC002_Response {
   return { answer: raw.slice(0, 3000) };
@@ -136,30 +143,30 @@ export function parseOC002(raw: string): OC002_Response {
 
 export interface OC003_Request {
   id: "OC-003";
-  cronName: string;          // e.g. "auto-join: CallingClaw PRD review"
-  joinAtISO: string;         // ISO 8601 timestamp
-  eventSummary: string;      // Meeting title
-  eventDescription: string;  // Full event text for OpenClaw context
+  cronName: string;
+  joinAtISO: string;
+  eventSummary: string;
+  eventDescription: string;
 }
 
 export interface OC003_Response {
-  jobId: string;             // Cron job ID
+  jobId: string;
 }
 
 export const OC003_PROMPT = (req: OC003_Request) =>
-  `请用 cron 工具创建一个一次性定时任务:
+  `Use the cron tool to create a one-time scheduled task:
 - action: "add"
 - schedule: { kind: "at", at: "${req.joinAtISO}" }
 - sessionTarget: "main"
-- payload: { kind: "systemEvent", text: 以下内容 }
+- payload: { kind: "systemEvent", text: the event text below }
 - name: "${req.cronName}"
 
-systemEvent 内容:
+Event text:
 ---
 ${req.eventDescription}
 ---
 
-创建后只回复 job ID，格式: jobId: <id>`;
+After creating the cron job, reply with only the job ID in this format: jobId: <id>`;
 
 export function parseOC003(raw: string): OC003_Response {
   const match = raw.match(/job[_\s]?[Ii][Dd][\s:]*[`"']?([a-zA-Z0-9_-]+)[`"']?/);
@@ -177,8 +184,8 @@ export interface OC004_Request {
   meetingId: string;
   todos: Array<{
     id: string;
-    text: string;       // Compressed ≤20 chars
-    fullText: string;   // Original text
+    text: string;
+    fullText: string;
     assignee?: string;
     deadline?: string;
   }>;
@@ -197,23 +204,23 @@ export const OC004_PROMPT = (req: OC004_Request) => {
     { text: `✅ ${i + 1}`, callback_data: `cc_confirm:${req.meetingId}:${t.id}` },
     { text: `❌ ${i + 1}`, callback_data: `cc_skip:${req.meetingId}:${t.id}` },
   ]);
-  buttons.push([{ text: "✅ 全部确认执行", callback_data: `cc_confirm_all:${req.meetingId}` }]);
+  buttons.push([{ text: "✅ Confirm all", callback_data: `cc_confirm_all:${req.meetingId}` }]);
 
-  return `会议「${req.topic}」刚结束。请用 message 工具发送以下内容给用户，并附带 inline buttons:
+  return `Meeting "${req.topic}" just ended. Use the message tool to send the following to the user with inline buttons.
 
-消息内容:
+Message content:
 ---
-📋 会议 Todo — ${req.topic}
+Meeting Todos — ${req.topic}
 
 ${todoLines}
 ---
 
-inline buttons:
+Inline buttons (one row per todo, two buttons each):
 \`\`\`json
 ${JSON.stringify(buttons, null, 2)}
 \`\`\`
 
-发完消息后，只回复 "sent"。`;
+After sending the message, reply with only "sent".`;
 };
 
 export function parseOC004(raw: string): OC004_Response {
@@ -237,14 +244,16 @@ export interface OC005_Response {
 }
 
 export const OC005_PROMPT = (req: OC005_Request) => {
-  const parts = [`📝 会议总结 — ${req.topic}`, ""];
-  if (req.keyPoints.length) parts.push(`**关键结论:**\n${req.keyPoints.map((p) => `- ${p}`).join("\n")}`);
-  if (req.decisions.length) parts.push(`\n**决策:**\n${req.decisions.map((d) => `- ${d}`).join("\n")}`);
-  parts.push("", "(无待办事项)");
+  const parts = [`Meeting Summary — ${req.topic}`, ""];
+  if (req.keyPoints.length) parts.push(`**Key conclusions:**\n${req.keyPoints.map((p) => `- ${p}`).join("\n")}`);
+  if (req.decisions.length) parts.push(`\n**Decisions:**\n${req.decisions.map((d) => `- ${d}`).join("\n")}`);
+  parts.push("", "(No action items)");
 
-  return `会议「${req.topic}」刚结束，没有 action items。请用 message 工具发送以下总结给用户:\n\n${parts.filter(Boolean).join("\n")}
+  return `Meeting "${req.topic}" just ended with no action items. Use the message tool to send this summary to the user:
 
-发完消息后，只回复 "sent"。`;
+${parts.filter(Boolean).join("\n")}
+
+After sending, reply with only "sent".`;
 };
 
 export function parseOC005(raw: string): OC005_Response {
@@ -265,7 +274,7 @@ export interface OC006_Request {
   };
   meeting: {
     topic: string;
-    time: string;          // ISO 8601
+    time: string;
     notesFilePath: string;
     decisions: string[];
     requirements: string[];
@@ -280,33 +289,33 @@ export interface OC006_Response {
 
 export const OC006_PROMPT = (req: OC006_Request) => {
   const parts: string[] = [];
-  parts.push(`用户确认了会议 todo，请执行。`);
+  parts.push("User confirmed a meeting todo for execution.");
   parts.push("");
   parts.push("## Todo");
   parts.push(req.todo.fullText);
-  if (req.todo.assignee) parts.push(`负责人: ${req.todo.assignee}`);
-  if (req.todo.deadline) parts.push(`截止: ${req.todo.deadline}`);
+  if (req.todo.assignee) parts.push(`Assignee: ${req.todo.assignee}`);
+  if (req.todo.deadline) parts.push(`Deadline: ${req.todo.deadline}`);
   parts.push("");
-  parts.push("## 会议信息");
-  parts.push(`主题: ${req.meeting.topic}`);
-  parts.push(`时间: ${req.meeting.time}`);
-  parts.push(`完整记录: ${req.meeting.notesFilePath}`);
+  parts.push("## Meeting Context");
+  parts.push(`Topic: ${req.meeting.topic}`);
+  parts.push(`Time: ${req.meeting.time}`);
+  parts.push(`Full notes: ${req.meeting.notesFilePath}`);
   if (req.meeting.decisions.length) {
-    parts.push("", "## 相关决策");
+    parts.push("", "## Related Decisions");
     req.meeting.decisions.forEach((d) => parts.push(`- ${d}`));
   }
   if (req.meeting.requirements.length) {
-    parts.push("", "## 会议中的需求");
+    parts.push("", "## Requirements from Meeting");
     req.meeting.requirements.forEach((r) => parts.push(`- ${r}`));
   }
   if (req.meeting.liveNotes.length) {
-    parts.push("", "## 实时记录");
+    parts.push("", "## Live Notes");
     req.meeting.liveNotes.forEach((n) => parts.push(`- ${n}`));
   }
   parts.push("");
-  parts.push("请读取完整会议记录，结合你的记忆和文件结构，分析这个 todo 的背景、验收标准、修改方向和目标，然后用 sub-agent 执行。");
+  parts.push("Read the full meeting notes, combine with your memory and file structure, analyze the todo's background, acceptance criteria, and goals, then execute using a sub-agent.");
   parts.push("");
-  parts.push('完成后回复 JSON: {"status": "completed", "summary": "做了什么"}');
+  parts.push('When done, reply with JSON: {"status": "completed", "summary": "what was done"}');
 
   return parts.join("\n");
 };
@@ -319,7 +328,6 @@ export function parseOC006(raw: string): OC006_Response {
       if (p.status && p.summary) return { status: p.status, summary: p.summary };
     }
   } catch {}
-  // Fallback: treat any response as "started"
   return { status: "started", summary: raw.slice(0, 500) };
 }
 
@@ -334,15 +342,14 @@ export interface OC007_Request {
   screenDescriptions: string[];
 }
 
-// No meaningful response — fire and forget
 export interface OC007_Response {
   acknowledged: boolean;
 }
 
 export const OC007_PROMPT = (req: OC007_Request) =>
   req.reason === "final"
-    ? `Meeting ended — final screen captures for meeting context:\n\n${req.screenDescriptions.join("\n\n")}\n\nStore these in your meeting context for the summary. Reply "ok".`
-    : `Meeting screen update — visual content shown during meeting. Add to meeting context:\n\n${req.screenDescriptions.join("\n\n")}\n\nReply "ok".`;
+    ? `Meeting ended — final screen captures for meeting context:\n\n${req.screenDescriptions.join("\n\n")}\n\nStore these in your meeting context for the post-meeting summary. Reply "ok".`
+    : `Meeting screen update — visual content shown during the meeting. Add relevant details to your meeting context for later summary:\n\n${req.screenDescriptions.join("\n\n")}\n\nReply "ok".`;
 
 export function parseOC007(raw: string): OC007_Response {
   return { acknowledged: raw.toLowerCase().includes("ok") || raw.length > 0 };
@@ -355,11 +362,11 @@ export function parseOC007(raw: string): OC007_Response {
 
 export interface OC008_Request {
   id: "OC-008";
-  task: string;           // Natural language task from Claude CU
+  task: string;
 }
 
 export interface OC008_Response {
-  result: string;         // Task execution output (capped 10K chars)
+  result: string;
 }
 
 export const OC008_PROMPT = (req: OC008_Request) => req.task;
@@ -388,14 +395,14 @@ export interface OC009_Response {
 
 export const OC009_PROMPT = (req: OC009_Request) => {
   const parts = [
-    `## 会议结束 — Follow-up Report`,
-    `**主题**: ${req.topic}`,
-    `**时间**: ${req.time}`,
-    `**记录文件**: ${req.filepath}`,
+    `## Meeting Ended — Follow-up Report`,
+    `**Topic**: ${req.topic}`,
+    `**Time**: ${req.time}`,
+    `**Notes file**: ${req.filepath}`,
   ];
-  if (req.keyPoints.length) parts.push(`\n### 关键结论\n${req.keyPoints.map((p) => `- ${p}`).join("\n")}`);
-  if (req.tasks.length) parts.push(`\n### 待执行任务\n${req.tasks.map((t) => `- [ ] ${t.task}`).join("\n")}`);
-  return `Meeting follow-up (delivery failed, sending raw):\n\n${parts.join("\n")}\n\nReply "ok".`;
+  if (req.keyPoints.length) parts.push(`\n### Key Conclusions\n${req.keyPoints.map((p) => `- ${p}`).join("\n")}`);
+  if (req.tasks.length) parts.push(`\n### Pending Tasks\n${req.tasks.map((t) => `- [ ] ${t.task}`).join("\n")}`);
+  return `Meeting follow-up (Telegram delivery failed, sending raw report). Store this for reference:\n\n${parts.join("\n")}\n\nReply "ok".`;
 };
 
 export function parseOC009(raw: string): OC009_Response {
@@ -403,7 +410,7 @@ export function parseOC009(raw: string): OC009_Response {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Protocol Index — all schemas in one place
+// Protocol Index
 // ══════════════════════════════════════════════════════════════
 
 export const OPENCLAW_PROTOCOL = {
