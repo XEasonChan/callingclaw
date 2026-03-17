@@ -1,5 +1,35 @@
 [
   {
+    "id": "task_mmue0m9f_ke2r",
+    "task": "Ensure the testing team adheres to the new QA protocol updates.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Quality Assurance Lead",
+    "deadline": "2023-11-15",
+    "createdAt": 1773738350259,
+    "updatedAt": 1773738350259
+  },
+  {
+    "id": "task_mmue0m9f_ua9a",
+    "task": "Compile recent user feedback and prepare a summary report for the development team.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Product Owner",
+    "deadline": "2023-11-12",
+    "createdAt": 1773738350259,
+    "updatedAt": 1773738350259
+  },
+  {
+    "id": "task_mmue0m9d_sudr",
+    "task": "Review and update coding standards documentation.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Development Team Lead",
+    "deadline": "2023-11-10",
+    "createdAt": 1773738350257,
+    "updatedAt": 1773738350257
+  },
+  {
     "id": "task_mmucki7m_km6i",
     "task": "Compile a complete to-do checklist for CallingClaw launch.",
     "status": "pending",
