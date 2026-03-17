@@ -18,6 +18,7 @@
 import type { GoogleCalendarClient, CalendarEvent } from "../mcp_client/google_cal";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
+import { OC003_PROMPT, parseOC003, type OC003_Request } from "../openclaw-protocol";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LOOKAHEAD_MS = 2 * 60 * 60 * 1000; // 2 hours ahead
@@ -164,46 +165,33 @@ export class MeetingScheduler {
       const attendeeList = event.attendees
         ?.filter(a => !a.self)
         .map(a => a.displayName || a.email)
-        .join(", ") || "无参会人信息";
+        .join(", ") || "no attendee info";
 
       const eventText = [
-        `🗓️ 会议即将开始 — 自动加入`,
+        `Meeting starting soon — auto-join`,
         ``,
-        `**主题**: ${event.summary}`,
-        `**时间**: ${new Date(event.start).toLocaleString("zh-CN")} ~ ${new Date(event.end).toLocaleString("zh-CN")}`,
-        `**参会人**: ${attendeeList}`,
-        `**Meet链接**: ${event.meetLink}`,
+        `**Topic**: ${event.summary}`,
+        `**Time**: ${new Date(event.start).toLocaleString("en-US")} ~ ${new Date(event.end).toLocaleString("en-US")}`,
+        `**Attendees**: ${attendeeList}`,
+        `**Meet link**: ${event.meetLink}`,
         ``,
-        `请执行以下步骤:`,
-        `1. 调用 CallingClaw API 加入会议:`,
+        `Steps to execute:`,
+        `1. Call CallingClaw API to join the meeting:`,
         `   curl -s -X POST http://localhost:4000/api/meeting/join -H "Content-Type: application/json" -d '{"url": "${event.meetLink}"}'`,
-        `2. 确认加入成功后，通知用户会议已开始`,
-        `3. 如果加入失败，告知用户并提供 Meet 链接让他们手动加入`,
+        `2. After confirming join success, notify the user the meeting has started`,
+        `3. If join fails, inform the user and provide the Meet link for manual join`,
       ].join("\n");
 
-      // Use OpenClaw's sendTask to register the cron (since we can't directly call the cron API)
-      // Instead, we ask OpenClaw to create the cron job for us
-      const cronRequest = [
-        `请用 cron 工具创建一个一次性定时任务:`,
-        `- action: "add"`,
-        `- schedule: { kind: "at", at: "${joinAtISO}" }`,
-        `- sessionTarget: "main"`,
-        `- payload: { kind: "systemEvent", text: 以下内容 }`,
-        `- name: "auto-join: ${event.summary.replace(/"/g, "'")}"`,
-        ``,
-        `systemEvent 内容:`,
-        `---`,
-        eventText,
-        `---`,
-        ``,
-        `创建后回复 job ID。`,
-      ].join("\n");
-
-      const response = await this.openclawBridge.sendTask(cronRequest);
-
-      // Try to extract job ID from response
-      const idMatch = response.match(/job[_\s]?[Ii][Dd][\s:]*[`"']?([a-zA-Z0-9_-]+)[`"']?/);
-      const cronJobId = idMatch?.[1] || `auto_${Date.now()}`;
+      // Register cron via OC-003 protocol
+      const req: OC003_Request = {
+        id: "OC-003",
+        cronName: `auto-join: ${event.summary.replace(/"/g, "'")}`,
+        joinAtISO,
+        eventSummary: event.summary,
+        eventDescription: eventText,
+      };
+      const response = await this.openclawBridge.sendTask(OC003_PROMPT(req));
+      const { jobId: cronJobId } = parseOC003(response);
 
       console.log(`[MeetingScheduler] Cron registered for "${event.summary}" at ${joinAtISO} (id: ${cronJobId})`);
       return cronJobId;

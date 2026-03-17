@@ -20,6 +20,7 @@
 
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { CalendarAttendee } from "../mcp_client/google_cal";
+import { OC001_PROMPT, parseOC001, type OC001_Request } from "../openclaw-protocol";
 
 // ── Meeting Prep Brief Structure ──
 // This is the output that feeds into Voice AI + Computer Use
@@ -66,65 +67,8 @@ export interface MeetingPrepBrief {
   liveNotes: string[];             // notes added dynamically during the meeting
 }
 
-// ── OpenClaw Prompt Template ──
-// This prompt is sent to OpenClaw to generate the prep brief.
-// OpenClaw has full access to its MEMORY.md + file system + tools.
-
-export const MEETING_PREP_PROMPT = `You are preparing a Meeting Prep Brief for CallingClaw's voice AI assistant.
-
-## Your Task
-Read the relevant files and your memory, then generate a structured JSON meeting prep brief.
-
-## Meeting Topic
-{TOPIC}
-
-## Additional Context from User
-{USER_CONTEXT}
-
-## What to Include
-
-1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in the user's preferred language.
-
-2. **keyPoints**: List of 5-8 bullet points covering the main topics to discuss.
-
-3. **architectureDecisions**: For each major technical decision, explain WHAT was decided and WHY. This helps the voice AI explain rationale when asked.
-
-4. **expectedQuestions**: 3-5 questions that might come up, with suggested answers.
-
-5. **previousContext**: If there were previous meetings on this topic, summarize key outcomes and open items.
-
-6. **filePaths**: List all relevant local files with their absolute paths. Include:
-   - Source code files that will be discussed
-   - Documentation / PRD files
-   - Configuration files
-   - For each, suggest an action: "open" (view), "scroll" (present), "present" (step through)
-
-7. **browserUrls**: List all relevant web URLs:
-   - GitHub repos, PR links
-   - Deployed app URLs
-   - Design tools (Figma, etc.)
-   - Documentation sites
-
-8. **folderPaths**: Key project directories the user might want to show.
-
-## Output Format
-Return ONLY valid JSON matching this structure:
-\`\`\`json
-{
-  "topic": "...",
-  "goal": "...",
-  "summary": "...",
-  "keyPoints": ["...", "..."],
-  "architectureDecisions": [{"decision": "...", "rationale": "..."}],
-  "expectedQuestions": [{"question": "...", "suggestedAnswer": "..."}],
-  "previousContext": "...",
-  "filePaths": [{"path": "...", "description": "...", "action": "open"}],
-  "browserUrls": [{"url": "...", "description": "...", "action": "navigate"}],
-  "folderPaths": [{"path": "...", "description": "..."}]
-}
-\`\`\`
-
-Be thorough with file paths — the voice AI's computer use module relies on these to navigate the screen during the meeting. Use absolute paths.`;
+// Prompt template moved to openclaw-protocol.ts (OC-001)
+// Use OC001_PROMPT(req) to generate the prompt.
 
 // ── Meeting Prep Skill ──
 
@@ -148,30 +92,30 @@ export class MeetingPrepSkill {
    * @param userContext - Any additional instructions from the user
    */
   async generate(topic: string, userContext?: string, attendees?: CalendarAttendee[]): Promise<MeetingPrepBrief> {
-    // Build attendee context for the prompt
-    const attendeeContext = attendees?.length
-      ? `\n## Meeting Attendees\n${attendees
-          .filter((a) => !a.self)
-          .map((a) => `- ${a.displayName || a.email}${a.displayName ? ` (${a.email})` : ""}${a.responseStatus ? ` — ${a.responseStatus}` : ""}`)
-          .join("\n")}`
-      : "";
-
-    const prompt = MEETING_PREP_PROMPT
-      .replace("{TOPIC}", topic)
-      .replace("{USER_CONTEXT}", (userContext || "(no additional context)") + attendeeContext);
+    // Build typed request (OC-001)
+    const req: OC001_Request = {
+      id: "OC-001",
+      topic,
+      userContext,
+      attendees: attendees
+        ?.filter((a) => !a.self)
+        .map((a) => ({
+          name: a.displayName || "",
+          email: a.email,
+          status: a.responseStatus,
+        })),
+    };
 
     console.log(`[MeetingPrep] Generating brief for: "${topic}" (${attendees?.length || 0} attendees)`);
     const startTime = Date.now();
 
-    // Delegate to OpenClaw — it has full memory + file access
-    const rawResult = await this.bridge.sendTask(
-      `Generate a meeting prep brief. Follow these instructions exactly:\n\n${prompt}`
-    );
+    // Delegate to OpenClaw via OC-001 protocol
+    const rawResult = await this.bridge.sendTask(OC001_PROMPT(req));
 
     console.log(`[MeetingPrep] OpenClaw responded in ${Date.now() - startTime}ms`);
 
-    // Parse JSON from OpenClaw's response
-    const brief = this.parseResponse(rawResult, topic);
+    // Parse with typed parser
+    const brief = parseOC001(rawResult, topic) as any as MeetingPrepBrief;
     brief.generatedAt = Date.now();
     brief.liveNotes = [];
     brief.attendees = attendees || [];
@@ -302,46 +246,12 @@ export class MeetingPrepSkill {
     this._currentBrief = null;
   }
 
-  // ── Internal: Parse OpenClaw's response into structured brief ──
-
-  private parseResponse(raw: string, fallbackTopic: string): MeetingPrepBrief {
-    // Try to extract JSON from the response
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          topic: parsed.topic || fallbackTopic,
-          goal: parsed.goal || "",
-          generatedAt: Date.now(),
-          summary: parsed.summary || "",
-          keyPoints: parsed.keyPoints || [],
-          architectureDecisions: parsed.architectureDecisions || [],
-          expectedQuestions: parsed.expectedQuestions || [],
-          previousContext: parsed.previousContext || undefined,
-          filePaths: parsed.filePaths || [],
-          browserUrls: parsed.browserUrls || [],
-          folderPaths: parsed.folderPaths || [],
-          attendees: [],
-          liveNotes: [],
-        };
-      } catch (e) {
-        console.warn("[MeetingPrep] JSON parse failed, using raw text as summary");
-      }
-    }
-
-    // Fallback: use raw text as summary
+  // parseResponse removed — now uses parseOC001 from openclaw-protocol.ts
+  // Kept for backwards compat if needed externally
+  private _parseResponseLegacy(raw: string, fallbackTopic: string): MeetingPrepBrief {
     return {
-      topic: fallbackTopic,
-      goal: "Discuss " + fallbackTopic,
+      ...parseOC001(raw, fallbackTopic),
       generatedAt: Date.now(),
-      summary: raw.slice(0, 2000),
-      keyPoints: [],
-      architectureDecisions: [],
-      expectedQuestions: [],
-      filePaths: [],
-      browserUrls: [],
-      folderPaths: [],
       attendees: [],
       liveNotes: [],
     };

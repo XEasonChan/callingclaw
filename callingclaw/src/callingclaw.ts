@@ -13,6 +13,7 @@ import { MeetJoiner } from "./meet_joiner";
 import { OpenClawBridge } from "./openclaw_bridge";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
+import { OC007_PROMPT, type OC007_Request } from "./openclaw-protocol";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { readFileSync } from "fs";
@@ -141,13 +142,11 @@ const vision = new VisionModule({
     // Buffer descriptions for periodic OpenClaw push
     _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
 
-    // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
+    // Push visual context to OpenClaw every 5 descriptions (~40 seconds) via OC-007
     if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
       const batch = _meetingVisionBuffer.splice(0);
-      openclawBridge.sendTask(
-        `Meeting screen update — the following visual content was shown during the meeting. ` +
-        `Add relevant details to your meeting context for later summary:\n\n${batch.join("\n")}`
-      ).catch(() => {});
+      const req: OC007_Request = { id: "OC-007", reason: "batch", screenDescriptions: batch };
+      openclawBridge.sendTask(OC007_PROMPT(req)).catch(() => {});
       console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to OpenClaw`);
     }
   },
@@ -184,12 +183,11 @@ eventBus.on("meeting.started", () => {
 function stopMeetingVisionAndFlush(reason: string) {
   if (!vision.isMeetingMode) return;
   vision.stopMeetingVision();
-  // Flush remaining buffer to OpenClaw
+  // Flush remaining buffer to OpenClaw via OC-007 (final)
   if (_meetingVisionBuffer.length > 0 && openclawBridge.connected) {
     const batch = _meetingVisionBuffer.splice(0);
-    openclawBridge.sendTask(
-      `${reason} — final screen captures:\n\n${batch.join("\n")}`
-    ).catch(() => {});
+    const req: OC007_Request = { id: "OC-007", reason: "final", screenDescriptions: batch };
+    openclawBridge.sendTask(OC007_PROMPT(req)).catch(() => {});
   }
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }

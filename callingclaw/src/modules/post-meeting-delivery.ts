@@ -20,6 +20,11 @@ import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
 import type { MeetingSummary } from "./meeting";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
+import {
+  OC004_PROMPT, parseOC004, type OC004_Request,
+  OC005_PROMPT, type OC005_Request,
+  OC006_PROMPT, type OC006_Request,
+} from "../openclaw-protocol";
 
 interface TodoItem {
   id: string;
@@ -170,77 +175,50 @@ export class PostMeetingDelivery {
   }
 
   /**
-   * Send todo list to user via OpenClaw message tool with inline buttons.
+   * Send todo list to user via OpenClaw message tool with inline buttons (OC-004).
    */
   private async sendTodoMessage(delivery: MeetingDelivery): Promise<void> {
     const { meetingId, topic, todos } = delivery;
 
-    // Build the numbered todo list
-    const todoLines = todos.map((t, i) =>
-      `${i + 1}. ${t.shortText}${t.assignee ? ` → ${t.assignee}` : ""}${t.deadline ? ` (${t.deadline})` : ""}`
-    ).join("\n");
-
-    // Build instruction for OpenClaw to send this as a Telegram message with inline buttons
-    const instruction = [
-      `会议「${topic}」刚结束。请用 message 工具发送以下内容给用户，并附带 inline buttons:`,
-      ``,
-      `消息内容:`,
-      `---`,
-      `📋 会议 Todo — ${topic}`,
-      ``,
-      todoLines,
-      `---`,
-      ``,
-      `inline buttons (每个 todo 一行, 每行两个按钮):`,
-      `\`\`\`json`,
-      JSON.stringify(
-        todos.map((t, i) => [
-          { text: `✅ ${i + 1}`, callback_data: `cc_confirm:${meetingId}:${t.id}` },
-          { text: `❌ ${i + 1}`, callback_data: `cc_skip:${meetingId}:${t.id}` },
-        ]),
-        null,
-        2
-      ),
-      `\`\`\``,
-      ``,
-      `再加一行全部确认的按钮:`,
-      `\`\`\`json`,
-      JSON.stringify([
-        [{ text: "✅ 全部确认执行", callback_data: `cc_confirm_all:${meetingId}` }],
-      ]),
-      `\`\`\``,
-      ``,
-      `发完消息后，回复 "sent"。不要添加其他内容。`,
-    ].join("\n");
+    const req: OC004_Request = {
+      id: "OC-004",
+      topic,
+      meetingId,
+      todos: todos.map((t) => ({
+        id: t.id,
+        text: t.shortText,
+        fullText: t.fullText,
+        assignee: t.assignee,
+        deadline: t.deadline,
+      })),
+    };
 
     try {
-      await this.openclawBridge.sendTask(instruction);
-      console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
+      const raw = await this.openclawBridge.sendTask(OC004_PROMPT(req));
+      const { sent } = parseOC004(raw);
+      if (sent) {
+        console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
+      } else {
+        console.warn("[PostMeeting] OpenClaw did not confirm message was sent");
+      }
     } catch (e: any) {
       console.error("[PostMeeting] Failed to send todo message:", e.message);
     }
   }
 
   /**
-   * Send summary-only message when there are no action items.
+   * Send summary-only message when there are no action items (OC-005).
    */
   private async sendSummaryOnly(topic: string, summary: MeetingSummary): Promise<void> {
-    const keyPoints = (summary.keyPoints || []).slice(0, 5).map((p, i) => `${i + 1}. ${p}`).join("\n");
-    const decisions = (summary.decisions || []).map(d => `• ${d}`).join("\n");
-
-    const text = [
-      `📝 会议总结 — ${topic}`,
-      ``,
-      summary.keyPoints?.length ? `**关键结论:**\n${keyPoints}` : "",
-      summary.decisions?.length ? `\n**决策:**\n${decisions}` : "",
-      ``,
-      `(无待办事项)`,
-    ].filter(Boolean).join("\n");
+    const req: OC005_Request = {
+      id: "OC-005",
+      topic,
+      keyPoints: (summary.keyPoints || []).slice(0, 5),
+      decisions: summary.decisions || [],
+    };
 
     try {
-      await this.openclawBridge.sendTask(
-        `会议「${topic}」刚结束，没有 action items。请用 message 工具发送以下总结给用户:\n\n${text}`
-      );
+      await this.openclawBridge.sendTask(OC005_PROMPT(req));
     } catch (e: any) {
       console.error("[PostMeeting] Failed to send summary:", e.message);
     }
@@ -343,9 +321,24 @@ export class PostMeetingDelivery {
     });
 
     try {
-      // Hand off raw meeting data to OpenClaw — let OpenClaw do all the thinking
-      const handoff = this.buildHandoff(delivery, todo);
-      await this.openclawBridge.sendTask(handoff);
+      // Hand off via OC-006 protocol
+      const req: OC006_Request = {
+        id: "OC-006",
+        todo: {
+          fullText: todo.fullText,
+          assignee: todo.assignee,
+          deadline: todo.deadline,
+        },
+        meeting: {
+          topic: delivery.topic,
+          time: new Date(delivery.deliveredAt).toISOString(),
+          notesFilePath: delivery.notesFilePath,
+          decisions: delivery.fullSummary.decisions || [],
+          requirements: delivery.requirements,
+          liveNotes: delivery.liveNotes,
+        },
+      };
+      await this.openclawBridge.sendTask(OC006_PROMPT(req));
       console.log(`[PostMeeting] Handed off to OpenClaw: ${todo.shortText}`);
     } catch (e: any) {
       console.error(`[PostMeeting] Handoff failed for "${todo.shortText}":`, e.message);
@@ -357,49 +350,7 @@ export class PostMeetingDelivery {
     }
   }
 
-  /**
-   * Build a raw data handoff for OpenClaw.
-   * Only includes facts from the meeting — no AI instructions or research prompts.
-   * OpenClaw decides how to analyze and execute based on its own memory + capabilities.
-   */
-  private buildHandoff(delivery: MeetingDelivery, todo: TodoItem): string {
-    const parts: string[] = [];
-
-    parts.push(`用户确认了会议 todo，请执行。`);
-    parts.push(``);
-    parts.push(`## Todo`);
-    parts.push(`${todo.fullText}`);
-    if (todo.assignee) parts.push(`负责人: ${todo.assignee}`);
-    if (todo.deadline) parts.push(`截止: ${todo.deadline}`);
-    parts.push(``);
-    parts.push(`## 会议信息`);
-    parts.push(`主题: ${delivery.topic}`);
-    parts.push(`时间: ${new Date(delivery.deliveredAt).toLocaleString("zh-CN")}`);
-    parts.push(`完整记录: ${delivery.notesFilePath}`);
-
-    if (delivery.fullSummary.decisions?.length) {
-      parts.push(``);
-      parts.push(`## 相关决策`);
-      delivery.fullSummary.decisions.forEach(d => parts.push(`- ${d}`));
-    }
-
-    if (delivery.requirements.length > 0) {
-      parts.push(``);
-      parts.push(`## 会议中的需求`);
-      delivery.requirements.forEach(r => parts.push(`- ${r}`));
-    }
-
-    if (delivery.liveNotes.length > 0) {
-      parts.push(``);
-      parts.push(`## 实时记录`);
-      delivery.liveNotes.forEach(n => parts.push(`- ${n}`));
-    }
-
-    parts.push(``);
-    parts.push(`请读取完整会议记录，结合你的记忆和文件结构，分析这个 todo 的背景、验收标准、修改方向和目标，然后用 sub-agent 执行。`);
-
-    return parts.join("\n");
-  }
+  // buildHandoff removed — now uses OC006_PROMPT from openclaw-protocol.ts
 
   /**
    * Get delivery status for API
