@@ -1308,7 +1308,7 @@ function connectWS() {
           }
 
           // No active card — just open panel directly (e.g., from Telegram flow)
-          if (!Object.values(cards).some((pc: any) => pc.prepDone)) {
+          if (!Object.values(cards).some((pc) => pc.prepDone)) {
             if (mdContent) openPanel('📋 ' + topic, mdContent);
           }
         }
