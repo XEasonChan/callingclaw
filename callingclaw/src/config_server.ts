@@ -8,7 +8,7 @@ import { resolve, dirname } from "path";
 import type { PythonBridge } from "./bridge";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.2.4";
+let APP_VERSION = "2.3.0";
 try {
   // Try callingclaw/VERSION first, then root CallingClaw 2.0/VERSION
   try {
