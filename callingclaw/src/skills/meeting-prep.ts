@@ -20,6 +20,7 @@
 
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { CalendarAttendee } from "../mcp_client/google_cal";
+import { savePrepBrief, startLiveLog, appendToLiveLog, stopLiveLog } from "../modules/shared-documents";
 
 // ── Meeting Prep Brief Structure ──
 // This is the output that feeds into Voice AI + Computer Use
@@ -132,9 +133,15 @@ export class MeetingPrepSkill {
   private bridge: OpenClawBridge;
   private _currentBrief: MeetingPrepBrief | null = null;
   private _onLiveNote?: (note: string, topic: string) => void;
+  private _liveLogPath: string | null = null;
 
   constructor(bridge: OpenClawBridge) {
     this.bridge = bridge;
+  }
+
+  /** Get the current live log file path (for external writers) */
+  get liveLogPath(): string | null {
+    return this._liveLogPath;
   }
 
   /** Register a callback for when a live note is added (for EventBus forwarding) */
@@ -185,6 +192,19 @@ export class MeetingPrepSkill {
     this._currentBrief = brief;
     console.log(`[MeetingPrep] Brief ready: ${brief.keyPoints.length} key points, ${brief.filePaths.length} files, ${brief.browserUrls.length} URLs`);
 
+    // Persist prep brief to shared directory (non-blocking)
+    savePrepBrief(brief).catch((e: any) => {
+      console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
+    });
+
+    // Start a live log file for this meeting
+    startLiveLog(topic).then((logPath) => {
+      this._liveLogPath = logPath;
+      console.log(`[MeetingPrep] Live log started: ${logPath}`);
+    }).catch((e: any) => {
+      console.warn(`[MeetingPrep] Failed to start live log: ${e.message}`);
+    });
+
     return brief;
   }
 
@@ -196,6 +216,12 @@ export class MeetingPrepSkill {
     if (!this._currentBrief) return;
     this._currentBrief.liveNotes.push(note);
     console.log(`[MeetingPrep] Live note added: "${note.slice(0, 60)}"`);
+
+    // Append to live log file on disk
+    if (this._liveLogPath) {
+      appendToLiveLog(this._liveLogPath, `[NOTE] ${note}`);
+    }
+
     this._onLiveNote?.(note, this._currentBrief.topic);
   }
 
@@ -304,8 +330,13 @@ export class MeetingPrepSkill {
     return parts.join("\n");
   }
 
-  /** Clear the current brief */
+  /** Clear the current brief and stop the live log */
   clear() {
+    // Stop live log if active
+    if (this._liveLogPath) {
+      stopLiveLog(this._liveLogPath).catch(() => {});
+      this._liveLogPath = null;
+    }
     this._currentBrief = null;
   }
 

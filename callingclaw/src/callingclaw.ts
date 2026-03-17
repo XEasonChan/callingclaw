@@ -4,7 +4,7 @@
 
 import { CONFIG } from "./config";
 import { PythonBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { PeekabooClient } from "./mcp_client/peekaboo";
@@ -148,6 +148,11 @@ const vision = new VisionModule({
 
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
+
+    // Append to live log file on disk
+    if (meetingPrepSkill.liveLogPath) {
+      appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`);
+    }
 
     // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
     if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
@@ -411,6 +416,14 @@ context.on("note", (note) => {
       text: note.text,
       assignee: note.assignee,
     });
+  }
+});
+
+// Write transcript entries to live log file on disk
+context.on("transcript", (entry: any) => {
+  if (meetingPrepSkill.liveLogPath && meeting.getNotes().isRecording) {
+    const role = entry.role === "user" ? "USER" : entry.role === "assistant" ? "AI" : entry.role?.toUpperCase() || "???";
+    appendToLiveLog(meetingPrepSkill.liveLogPath, `[${role}] ${entry.text}`);
   }
 });
 

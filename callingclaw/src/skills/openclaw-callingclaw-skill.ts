@@ -132,7 +132,27 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return await apiPost("/api/bridge/action", { action: "screenshot" });
 
       case "notes":
+        // Reads from ~/.callingclaw/shared/notes/ (+ legacy meeting_notes/)
         return await apiGet("/api/meeting/notes");
+
+      case "prep-files":
+      case "preps": {
+        // List available prep briefs from ~/.callingclaw/shared/prep/
+        return await apiGet("/api/shared/prep");
+      }
+
+      case "manifest": {
+        // Get shared directory manifest for quick file discovery
+        return await apiGet("/api/shared/manifest");
+      }
+
+      case "shared": {
+        // Read a file from the shared directory
+        // Usage: /callingclaw shared prep/2026-03-17_topic.md
+        const sharedPath = rest;
+        if (!sharedPath) return { success: false, error: "Usage: /callingclaw shared <relative-path>" };
+        return await apiGet(`/api/shared/file?path=${encodeURIComponent(sharedPath)}`);
+      }
 
       case "transcript": {
         const count = parseInt(parts[1]) || 20;
@@ -177,7 +197,10 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw context <note>       — Add shared context note",
               "/callingclaw pin <path> [summary] — Pin file to shared context",
               "/callingclaw screenshot           — Take screenshot",
-              "/callingclaw notes                — List saved meeting notes",
+              "/callingclaw notes                — List saved meeting notes (from ~/.callingclaw/shared/notes/)",
+              "/callingclaw prep-files           — List available prep briefs (from ~/.callingclaw/shared/prep/)",
+              "/callingclaw manifest             — Get shared directory file index",
+              "/callingclaw shared <path>        — Read a file from ~/.callingclaw/shared/ by relative path",
               "/callingclaw transcript [count]   — Get live transcript",
               "/callingclaw health               — Health check all subsystems",
               "/callingclaw recover browser      — Kill + restart browser",
@@ -185,6 +208,13 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw recover voice        — Restart voice session",
               "/callingclaw recover all          — Reset all subsystems",
             ],
+            sharedDir: "~/.callingclaw/shared/",
+            sharedSubdirs: {
+              prep: "Meeting prep briefs (.md + .json)",
+              notes: "Meeting notes/summaries (.md)",
+              logs: "Live meeting logs (.md)",
+              "manifest.json": "File index for quick discovery",
+            },
           },
         };
 
@@ -229,8 +259,8 @@ async function apiPatch(path: string, body: any): Promise<CallingClawSkillResult
 
 export const CALLINGCLAW_SKILL_MANIFEST = {
   name: "callingclaw",
-  version: "2.2.1",
-  description: "Control CallingClaw — voice AI, computer use, meetings, screen capture, self-recovery",
+  version: "2.2.4",
+  description: "Control CallingClaw — voice AI, computer use, meetings, screen capture, self-recovery, shared documents",
   trigger: "/callingclaw",
   examples: [
     "/callingclaw status",
@@ -241,6 +271,9 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     "/callingclaw leave",
     "/callingclaw health",
     "/callingclaw recover browser",
+    "/callingclaw prep-files",
+    "/callingclaw manifest",
+    "/callingclaw shared prep/2026-03-17_topic.md",
   ],
   capabilities: [
     "voice_conversation",
@@ -252,7 +285,12 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     "task_management",
     "context_sharing",
     "self_recovery",
+    "shared_documents",
   ],
   endpoint: "http://localhost:4000",
   healthCheck: "http://localhost:4000/api/recovery/health",
+  // OpenClaw can also read shared files directly from disk:
+  sharedDir: "~/.callingclaw/shared/",
+  sharedSubdirs: ["prep", "notes", "logs"],
+  manifestPath: "~/.callingclaw/shared/manifest.json",
 };

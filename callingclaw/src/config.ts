@@ -1,5 +1,26 @@
 // CallingClaw 2.0 — Central Configuration
 
+import { resolve } from "path";
+import { homedir } from "os";
+import { mkdirSync } from "fs";
+
+// ── Shared local document directory ──
+// Used by CallingClaw, OpenClaw, and Desktop UI for meeting artifacts
+export const SHARED_DIR = resolve(homedir(), ".callingclaw", "shared");
+export const SHARED_PREP_DIR = resolve(SHARED_DIR, "prep");
+export const SHARED_NOTES_DIR = resolve(SHARED_DIR, "notes");
+export const SHARED_LOGS_DIR = resolve(SHARED_DIR, "logs");
+export const SHARED_MANIFEST_PATH = resolve(SHARED_DIR, "manifest.json");
+
+// Ensure shared directories exist on import (startup)
+try {
+  mkdirSync(SHARED_PREP_DIR, { recursive: true });
+  mkdirSync(SHARED_NOTES_DIR, { recursive: true });
+  mkdirSync(SHARED_LOGS_DIR, { recursive: true });
+} catch {
+  // Permissions issue — will fail gracefully on write
+}
+
 // ── Load persistent user config from ~/.callingclaw/user-config.json ──
 const USER_CONFIG_PATH = `${process.env.HOME}/.callingclaw/user-config.json`;
 let _userConfig: Record<string, string> = {};

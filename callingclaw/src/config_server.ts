@@ -37,6 +37,8 @@ import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { buildVoiceInstructions, prepareMeeting } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
+import { readManifest, readSharedFile, listPrepFiles } from "./modules/shared-documents";
+import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
 
@@ -1389,6 +1391,10 @@ STEP-BY-STEP FLOW:
         const workspace = services.context.workspace;
         const syncBrief = services.contextSync?.getBrief();
 
+        // Also list persisted prep briefs from shared directory
+        let persistedPreps: string[] = [];
+        try { persistedPreps = await listPrepFiles(); } catch {}
+
         return Response.json({
           workspace: workspace || null,
           voiceBrief: syncBrief?.voice || null,
@@ -1396,6 +1402,8 @@ STEP-BY-STEP FLOW:
           voiceBriefChars: syncBrief?.voice?.length || 0,
           computerBriefChars: syncBrief?.computer?.length || 0,
           pinnedFiles: services.contextSync?.getPinnedFiles() || [],
+          persistedPreps,
+          sharedPrepDir: SHARED_PREP_DIR,
         }, { headers });
       }
 
@@ -1886,6 +1894,36 @@ STEP-BY-STEP FLOW:
         }
         const loaded = await services.contextSync.loadOpenClawMemory();
         return Response.json({ ok: loaded, status: services.contextSync.getStatus() }, { headers });
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // ── Shared Documents API (~/.callingclaw/shared/) ──
+      // ══════════════════════════════════════════════════════════════
+
+      // GET /api/shared/manifest — Return the shared directory manifest
+      if (url.pathname === "/api/shared/manifest" && req.method === "GET") {
+        const manifest = await readManifest();
+        return Response.json(manifest, { headers });
+      }
+
+      // GET /api/shared/file?path=prep/xxx.md — Read any file from shared directory
+      if (url.pathname === "/api/shared/file" && req.method === "GET") {
+        const filePath = url.searchParams.get("path");
+        if (!filePath) {
+          return Response.json({ error: "path query parameter is required" }, { status: 400, headers });
+        }
+        try {
+          const content = await readSharedFile(filePath);
+          return Response.json({ path: filePath, content }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 404, headers });
+        }
+      }
+
+      // GET /api/shared/prep — List available prep brief files
+      if (url.pathname === "/api/shared/prep" && req.method === "GET") {
+        const files = await listPrepFiles();
+        return Response.json({ files, dir: SHARED_PREP_DIR }, { headers });
       }
 
       // ══════════════════════════════════════════════════════════════
