@@ -1,5 +1,45 @@
 [
   {
+    "id": "task_mmug3e96_zxdj",
+    "task": "Ensure all team members are aligned with the project's next steps.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Dana",
+    "deadline": "2023-11-17",
+    "createdAt": 1773741839082,
+    "updatedAt": 1773741839082
+  },
+  {
+    "id": "task_mmug3e95_28pt",
+    "task": "Prepare detailed progress report for the client.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Alice",
+    "deadline": "2023-11-15",
+    "createdAt": 1773741839081,
+    "updatedAt": 1773741839081
+  },
+  {
+    "id": "task_mmug3e95_1xzq",
+    "task": "Develop a plan to address identified roadblocks.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Bob",
+    "deadline": "2023-11-20",
+    "createdAt": 1773741839081,
+    "updatedAt": 1773741839081
+  },
+  {
+    "id": "task_mmug3e95_qt1c",
+    "task": "Schedule a client review meeting to discuss upcoming deliverables.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Charlie",
+    "deadline": "2023-11-18",
+    "createdAt": 1773741839081,
+    "updatedAt": 1773741839081
+  },
+  {
     "id": "task_mmug2sn5_2tim",
     "task": "Prepare a detailed timeline for the next phase of the project",
     "status": "pending",

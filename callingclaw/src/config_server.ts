@@ -1266,33 +1266,28 @@ STEP-BY-STEP FLOW:
               `## Step 3: 深度调研`,
               `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度会前调研。`,
               ``,
-              `## Step 4: 写入 Markdown 文件（必须执行！）`,
-              `把调研结果写成结构清晰的 Markdown 文件，直接存到共享目录:`,
+              `## Step 4: 写入 Markdown 到共享目录（必须！）`,
+              `文件命名规范: {meetingId}_prep.md`,
+              `- meetingId = Google Calendar Event ID（如果 Step 2 创建了日历）`,
+              `- 或者 {date}_{safe_topic}（如: 2026-03-17_CallingClaw官网讨论）`,
+              `- 文件路径: ~/.callingclaw/shared/{meetingId}_prep.md`,
               ``,
-              `文件路径: ~/.callingclaw/shared/prep/{meeting_id}.md`,
-              `其中 meeting_id 用日期+话题拼接，如: 2026-03-17_CallingClaw官网讨论.md`,
+              `Markdown 自由格式，但建议包含:`,
+              `# 标题, 目标, 概要, 要点, 架构决策, 预期问题, 历史背景, 相关文件和链接`,
               ``,
-              `Markdown 格式要求:`,
-              `- # 标题`,
-              `- > 一句话目标（引用块）`,
-              `- 概要段落（2-3段，用户语言）`,
-              `- ## 📌 要点（编号列表，5-8条）`,
-              `- ## 🏗️ 架构决策（每个决策一个 ### 小标题 + 说明）`,
-              `- ## ❓ 预期问题（Q: 问题 + > 引用块回答）`,
-              `- ## 📜 历史背景`,
-              `- ## 📎 相关资源（文件路径 + 链接）`,
-              ``,
-              `## Step 5: 通知 CallingClaw 文件已就绪`,
-              `写完文件后，调用 API 通知 Desktop 渲染:`,
-              ``,
+              `## Step 5: 通知 CallingClaw 渲染`,
               `\`\`\`bash`,
               `curl -X POST http://localhost:4000/api/meeting/prep-result \\`,
               `  -H "Content-Type: application/json" \\`,
-              `  -d '{"topic": "会议主题", "filePath": "~/.callingclaw/shared/prep/xxx.md"}'`,
+              `  -d '{"topic":"主题","meetingId":"{meetingId}","calendarEventId":"{eventId}"}'`,
               `\`\`\``,
+              `CallingClaw 会根据 meetingId 找到 {meetingId}_prep.md 并渲染到 Desktop。`,
               ``,
-              `CallingClaw Desktop 只读取这个 .md 文件并渲染，不做任何格式转换。`,
-              `**如果不写文件+不调 API，Desktop 就看不到调研结果！**`,
+              `同一个 meetingId 的其他文件 (CallingClaw 自动生成):`,
+              `- {meetingId}_live.md — 会中实时日志`,
+              `- {meetingId}_summary.md — 会后总结`,
+              `- {meetingId}_transcript.md — 完整对话`,
+              `**不写文件 + 不调 API = Desktop 看不到！**`,
             ].join("\n");
 
             await services.openclawBridge.sendTask(taskPrompt);
@@ -1307,44 +1302,45 @@ STEP-BY-STEP FLOW:
       }
 
       // POST /api/meeting/prep-result — OpenClaw notifies "prep file is ready"
-      // OpenClaw writes the .md file directly to ~/.callingclaw/shared/prep/
-      // This endpoint just tells Desktop which file to render
+      // OpenClaw wrote {meetingId}_prep.md to ~/.callingclaw/shared/
+      // This endpoint tells Desktop which meetingId to render
       if (url.pathname === "/api/meeting/prep-result" && req.method === "POST") {
-        const body = await req.json() as { topic: string; filePath?: string; meetUrl?: string; calendarEventId?: string };
+        const body = await req.json() as { topic: string; meetingId?: string; filePath?: string; meetUrl?: string; calendarEventId?: string };
         if (!body.topic) {
           return Response.json({ error: "topic is required" }, { status: 400, headers });
         }
 
-        // Resolve file path — OpenClaw provides it, or we find it in shared/prep/
-        let filePath = body.filePath || "";
+        const { getMeetingFilePath, upsertSession, generateMeetingId } = await import("./modules/shared-documents");
+
+        // Determine meetingId
+        const meetingId = body.meetingId || body.calendarEventId || generateMeetingId(body.calendarEventId, body.topic);
+
+        // Resolve file path — by convention: {meetingId}_prep.md
+        let filePath = body.filePath || getMeetingFilePath(meetingId, "prep");
         if (filePath.startsWith("~")) filePath = filePath.replace("~", process.env.HOME || "");
 
-        // If no filePath given, try to find the latest file matching the topic
-        if (!filePath) {
-          const { SHARED_PREP_DIR } = await import("./config");
-          const { readdirSync } = await import("fs");
-          try {
-            const files = readdirSync(SHARED_PREP_DIR).filter((f: string) => f.endsWith(".md")).sort().reverse();
-            filePath = files[0] ? `${SHARED_PREP_DIR}/${files[0]}` : "";
-          } catch {}
-        }
-
-        // Read the markdown content for the event payload
+        // Read the markdown content
         let mdContent = "";
-        if (filePath) {
-          try { mdContent = await Bun.file(filePath).text(); } catch {}
+        try { mdContent = await Bun.file(filePath).text(); } catch {
+          // Try the path OpenClaw might have used
+          try { mdContent = await Bun.file(resolve(SHARED_DIR, meetingId + "_prep.md")).text(); } catch {}
         }
 
-        // Update manifest
-        try {
-          const { updateManifest } = await import("./modules/shared-documents");
-          await updateManifest();
-        } catch {}
+        // Update sessions index
+        upsertSession({
+          meetingId,
+          topic: body.topic,
+          meetUrl: body.meetUrl,
+          calendarEventId: body.calendarEventId,
+          status: "ready",
+          files: { prep: meetingId + "_prep.md" },
+        });
 
-        // Emit event — Desktop reads the file and renders markdown
+        // Emit event — Desktop renders markdown directly
         services.eventBus.emit("meeting.prep_ready", {
           topic: body.topic,
           title: body.topic,
+          meetingId,
           meetUrl: body.meetUrl || null,
           calendarEventId: body.calendarEventId || null,
           filePath,

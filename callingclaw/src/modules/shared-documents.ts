@@ -1,129 +1,159 @@
 // CallingClaw 2.0 — Shared Document Directory
 // ═══════════════════════════════════════════════════════════════════
-// Manages the shared local document directory at ~/.callingclaw/shared/
-// Provides persistence for meeting prep briefs, meeting notes, and live logs.
-// Accessible by CallingClaw, OpenClaw, and the Desktop UI.
+// All meeting files follow a unified naming convention:
 //
-// Directory structure:
-//   ~/.callingclaw/shared/
-//     ├── prep/           ← meeting prep briefs (.md + .json)
-//     ├── notes/          ← meeting notes/summaries (.md)
-//     ├── logs/           ← meeting live logs (.md)
-//     └── manifest.json   ← file index for quick discovery
+//   ~/.callingclaw/shared/{meetingId}_prep.md      ← 会前调研 (OpenClaw writes)
+//   ~/.callingclaw/shared/{meetingId}_live.md      ← 会中实时日志
+//   ~/.callingclaw/shared/{meetingId}_summary.md   ← 会后总结
+//   ~/.callingclaw/shared/{meetingId}_transcript.md← 完整记录
+//   ~/.callingclaw/shared/sessions.json            ← 会议索引
+//
+// meetingId = Google Calendar Event ID (e.g., "tnkfge7gfvnhit4cmc09no4hjc")
+//   or fallback: "{date}_{safeTopic}" if no calendar event
+//
+// OpenClaw writes _prep.md directly. CallingClaw writes _summary.md and _live.md.
+// Desktop renders by looking up meetingId → reading the corresponding .md files.
 // ═══════════════════════════════════════════════════════════════════
 
-import {
-  SHARED_DIR,
-  SHARED_PREP_DIR,
-  SHARED_NOTES_DIR,
-  SHARED_LOGS_DIR,
-  SHARED_MANIFEST_PATH,
-} from "../config";
-import { appendFileSync } from "fs";
+import { SHARED_DIR } from "../config";
+import { appendFileSync, readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 import type { MeetingPrepBrief } from "../skills/meeting-prep";
 
-// ── Manifest Types ──
+const SESSIONS_PATH = resolve(SHARED_DIR, "sessions.json");
 
-export interface ManifestEntry {
-  file: string;
+// ── File Suffixes (convention shared with OpenClaw skill) ──
+
+export const FILE_SUFFIXES = {
+  prep: "_prep.md",        // 会前调研 — OpenClaw writes
+  live: "_live.md",        // 会中实时日志 — CallingClaw appends
+  summary: "_summary.md",  // 会后总结 — CallingClaw writes
+  transcript: "_transcript.md", // 完整对话记录
+} as const;
+
+// ── Meeting Session ──
+
+export interface MeetingSession {
+  meetingId: string;         // Google Calendar Event ID or fallback
   topic: string;
+  meetUrl?: string;
+  startTime?: string;
+  endTime?: string;
+  calendarEventId?: string;
+  status: "preparing" | "ready" | "active" | "ended";
+  files: {
+    prep?: string;           // filename (not full path)
+    live?: string;
+    summary?: string;
+    transcript?: string;
+  };
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface ManifestLogEntry extends ManifestEntry {
-  active: boolean;
-}
-
-export interface SharedManifest {
+export interface SessionsIndex {
   lastUpdated: string;
   sharedDir: string;
-  prep: ManifestEntry[];
-  notes: ManifestEntry[];
-  logs: ManifestLogEntry[];
+  sessions: MeetingSession[];
 }
 
-// ── Utility: safe filename from topic ──
+// ── Utility ──
 
 export function safeFilename(topic: string): string {
-  return topic
-    .replace(/[/\\:*?"<>|]/g, "")
-    .replace(/\s+/g, "_")
-    .slice(0, 80);
+  return topic.replace(/[/\\:*?"<>|]/g, "").replace(/\s+/g, "_").slice(0, 60);
 }
 
-function datePrefix(): string {
-  return new Date().toISOString().slice(0, 10);
+function isoNow(): string { return new Date().toISOString(); }
+
+/** Generate a meetingId from calendarEventId or fallback to date+topic */
+export function generateMeetingId(calendarEventId?: string, topic?: string): string {
+  if (calendarEventId) return calendarEventId;
+  return `${new Date().toISOString().slice(0, 10)}_${safeFilename(topic || "meeting")}`;
 }
 
-function isoNow(): string {
-  return new Date().toISOString();
+/** Get the full file path for a meeting document */
+export function getMeetingFilePath(meetingId: string, suffix: keyof typeof FILE_SUFFIXES): string {
+  return resolve(SHARED_DIR, meetingId + FILE_SUFFIXES[suffix]);
 }
 
-// ── Manifest Management ──
+// ── Sessions Index ──
 
-export async function readManifest(): Promise<SharedManifest> {
+export function readSessions(): SessionsIndex {
   try {
-    const f = Bun.file(SHARED_MANIFEST_PATH);
-    if (await f.exists()) {
-      return await f.json();
-    }
-  } catch {}
-  return {
-    lastUpdated: isoNow(),
-    sharedDir: SHARED_DIR,
-    prep: [],
-    notes: [],
-    logs: [],
-  };
+    return JSON.parse(readFileSync(SESSIONS_PATH, "utf-8"));
+  } catch {
+    return { lastUpdated: isoNow(), sharedDir: SHARED_DIR, sessions: [] };
+  }
 }
 
-export async function updateManifest(
-  mutate: (manifest: SharedManifest) => void
-): Promise<SharedManifest> {
-  const manifest = await readManifest();
-  mutate(manifest);
-  manifest.lastUpdated = isoNow();
-  manifest.sharedDir = SHARED_DIR;
-  await Bun.write(SHARED_MANIFEST_PATH, JSON.stringify(manifest, null, 2));
-  return manifest;
+export function saveSessions(index: SessionsIndex): void {
+  index.lastUpdated = isoNow();
+  index.sharedDir = SHARED_DIR;
+  Bun.write(SESSIONS_PATH, JSON.stringify(index, null, 2)).catch(() => {});
+}
+
+/** Register or update a meeting session */
+export function upsertSession(session: Partial<MeetingSession> & { meetingId: string }): MeetingSession {
+  const index = readSessions();
+  let existing = index.sessions.find(s => s.meetingId === session.meetingId);
+  if (existing) {
+    Object.assign(existing, session, { updatedAt: isoNow() });
+  } else {
+    existing = {
+      meetingId: session.meetingId,
+      topic: session.topic || "Meeting",
+      status: session.status || "preparing",
+      files: session.files || {},
+      createdAt: isoNow(),
+      updatedAt: isoNow(),
+      ...session,
+    } as MeetingSession;
+    index.sessions.unshift(existing);
+  }
+  // Keep last 50 sessions
+  if (index.sessions.length > 50) index.sessions = index.sessions.slice(0, 50);
+  saveSessions(index);
+  return existing;
+}
+
+/** Find session by meetingId */
+export function findSession(meetingId: string): MeetingSession | undefined {
+  return readSessions().sessions.find(s => s.meetingId === meetingId);
+}
+
+/** List all sessions */
+export function listSessions(): MeetingSession[] {
+  return readSessions().sessions;
+}
+
+// ── Also keep old updateManifest for backward compat ──
+export async function updateManifest(_mutate?: any): Promise<any> {
+  // Now a no-op — sessions.json replaces manifest.json
+  return readSessions();
 }
 
 // ── Prep Brief Persistence ──
 
 /**
- * Save a MeetingPrepBrief to SHARED_PREP_DIR as both .md and .json.
- * Updates manifest.json.
- * Returns the markdown filepath.
+ * Save a MeetingPrepBrief using meetingId-based filename.
+ * Path: ~/.callingclaw/shared/{meetingId}_prep.md
  */
-export async function savePrepBrief(brief: MeetingPrepBrief): Promise<string> {
-  const prefix = datePrefix();
-  const safeTopic = safeFilename(brief.topic);
-  const baseName = `${prefix}_${safeTopic}`;
-  const mdFile = `${baseName}.md`;
-  const jsonFile = `${baseName}.json`;
-
-  // Build readable markdown
+export async function savePrepBrief(brief: MeetingPrepBrief, meetingId?: string): Promise<string> {
+  const id = meetingId || generateMeetingId(undefined, brief.topic);
+  const filePath = getMeetingFilePath(id, "prep");
   const md = renderPrepBriefMarkdown(brief);
-  const mdPath = resolve(SHARED_PREP_DIR, mdFile);
-  const jsonPath = resolve(SHARED_PREP_DIR, jsonFile);
+  await Bun.write(filePath, md);
 
-  await Bun.write(mdPath, md);
-  // Only markdown — no JSON file (Desktop reads .md directly)
-
-  // Update manifest
-  await updateManifest((m) => {
-    // Remove duplicate for same base name
-    m.prep = m.prep.filter((e) => !e.file.startsWith(baseName));
-    m.prep.unshift({
-      file: mdFile,
-      topic: brief.topic,
-      createdAt: isoNow(),
-    });
+  // Update sessions index
+  upsertSession({
+    meetingId: id,
+    topic: brief.topic,
+    status: "ready",
+    files: { prep: id + FILE_SUFFIXES.prep },
   });
 
-  console.log(`[SharedDocs] Prep brief saved: ${mdPath}`);
-  return mdPath;
+  console.log(`[SharedDocs] Prep saved: ${filePath}`);
+  return filePath;
 }
 
 function renderPrepBriefMarkdown(brief: MeetingPrepBrief): string {
@@ -226,25 +256,18 @@ function renderPrepBriefMarkdown(brief: MeetingPrepBrief): string {
 /**
  * Start a live log file for a meeting. Returns the log filepath.
  */
-export async function startLiveLog(topic: string): Promise<string> {
-  const prefix = datePrefix();
-  const safeTopic = safeFilename(topic);
-  const filename = `${prefix}_${safeTopic}_live.md`;
-  const filepath = resolve(SHARED_LOGS_DIR, filename);
+export async function startLiveLog(topic: string, meetingId?: string): Promise<string> {
+  const id = meetingId || generateMeetingId(undefined, topic);
+  const filepath = getMeetingFilePath(id, "live");
 
   const header = `# Live Meeting Log: ${topic}\n\n**Started:** ${new Date().toLocaleString()}\n\n---\n\n`;
   await Bun.write(filepath, header);
 
-  // Update manifest
-  await updateManifest((m) => {
-    // Mark all other logs as inactive
-    m.logs.forEach((l) => { l.active = false; });
-    m.logs.unshift({
-      file: filename,
-      topic,
-      createdAt: isoNow(),
-      active: true,
-    });
+  upsertSession({
+    meetingId: id,
+    topic,
+    status: "active",
+    files: { live: id + FILE_SUFFIXES.live },
   });
 
   console.log(`[SharedDocs] Live log started: ${filepath}`);
@@ -267,18 +290,14 @@ export function appendToLiveLog(filepath: string, entry: string): void {
 /**
  * Stop the live log: mark as inactive in manifest and add footer.
  */
-export async function stopLiveLog(filepath: string): Promise<void> {
+export async function stopLiveLog(filepath: string, meetingId?: string): Promise<void> {
   try {
     appendFileSync(filepath, `\n---\n\n**Ended:** ${new Date().toLocaleString()}\n`);
   } catch {}
 
-  // Extract filename from path
-  const filename = filepath.split("/").pop() || "";
-
-  await updateManifest((m) => {
-    const entry = m.logs.find((l) => l.file === filename);
-    if (entry) entry.active = false;
-  });
+  if (meetingId) {
+    upsertSession({ meetingId, status: "ended" });
+  }
 
   console.log(`[SharedDocs] Live log stopped: ${filepath}`);
 }
