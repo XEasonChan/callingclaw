@@ -110,20 +110,26 @@ def _get_monitor_for_app(sct_monitors, app_name):
 
 
 def _resolve_capture_monitor(sct_monitors):
-    """Pick which monitor to capture based on current capture_mode."""
+    """Pick which monitor to capture based on current capture_mode.
+
+    Both modes lock on first detection — no per-frame re-detection.
+    meeting_app: locks to the display containing the meeting window.
+    mouse: locks to the display containing the mouse cursor at session start.
+    Reset _locked_monitor_idx (via config message) to re-detect.
+    """
     global _locked_monitor_idx
 
+    if _locked_monitor_idx is not None and _locked_monitor_idx < len(sct_monitors):
+        return _locked_monitor_idx
+
     if capture_mode == "meeting_app":
-        # In meeting mode, lock to the meeting app's monitor once found.
-        # Re-detect only if not locked yet or if monitor count changed.
-        if _locked_monitor_idx is not None and _locked_monitor_idx < len(sct_monitors):
-            return _locked_monitor_idx
         idx = _get_monitor_for_app(sct_monitors, meeting_app_name)
-        _locked_monitor_idx = idx
-        return idx
     else:
-        # Talk Locally / default: follow mouse cursor
-        return _get_monitor_for_mouse(sct_monitors)
+        idx = _get_monitor_for_mouse(sct_monitors)
+
+    _locked_monitor_idx = idx
+    print(f"[Screen] Locked to monitor {idx} ({capture_mode})")
+    return idx
 
 
 def take_screenshot() -> str:
