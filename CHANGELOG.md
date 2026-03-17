@@ -3,6 +3,16 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.3.1] - 2026-03-17
+
+### Added
+- **OpenClaw Protocol Schemas (OC-001 to OC-009)** — typed request/response definitions for all CallingClaw ↔ OpenClaw calls in `openclaw-protocol.ts`
+- **Multi-monitor screenshot** — sidecar captures mouse-following or app-locked monitor
+- **Protocol documentation** — `docs/openclaw-protocol.md`
+
+### Fixed
+- **P0: Vision + recording leak after meeting ends** — three safety nets: voice.stopped auto-stop, 3h timeout, meeting.ended cleanup
+
 ## [2.3.0] - 2026-03-17
 
 ### Added
