@@ -1,5 +1,45 @@
 [
   {
+    "id": "task_mmug2sn5_2tim",
+    "task": "Prepare a detailed timeline for the next phase of the project",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Alice Johnson",
+    "deadline": "2023-11-10",
+    "createdAt": 1773741811073,
+    "updatedAt": 1773741811073
+  },
+  {
+    "id": "task_mmug2sn5_sm9s",
+    "task": "Establish weekly update meetings",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Bob Smith",
+    "deadline": "2023-11-05",
+    "createdAt": 1773741811073,
+    "updatedAt": 1773741811073
+  },
+  {
+    "id": "task_mmug2sn5_h5x4",
+    "task": "Review the quality standards document",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Carol Martinez",
+    "deadline": "2023-11-12",
+    "createdAt": 1773741811073,
+    "updatedAt": 1773741811073
+  },
+  {
+    "id": "task_mmug2sn5_hrfo",
+    "task": "Conduct a resource allocation assessment",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Dave Lee",
+    "deadline": "2023-11-14",
+    "createdAt": 1773741811073,
+    "updatedAt": 1773741811073
+  },
+  {
     "id": "task_mmuf1k2z_ght2",
     "task": "Confirm requirements with Isabelle for Relay scenario data sync prioritization.",
     "status": "pending",
