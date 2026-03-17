@@ -196,6 +196,14 @@ eventBus.on("meeting.started", () => {
     contextRetriever.activate(voice);
   }
 
+  // ── Safety: auto-stop after 3 hours to prevent cost leakage ──
+  setTimeout(() => {
+    if (vision.isMeetingMode) {
+      console.warn("[Init] Meeting exceeded 3 hour limit — auto-stopping vision to prevent cost leakage");
+      stopMeetingVisionAndFlush("3 hour safety limit reached");
+    }
+  }, 3 * 60 * 60 * 1000);
+
   // ── Start Browser DOM context capture (both modes) ──
   // Captures active browser tab DOM every 10s for richer context.
   // In Meet mode: captures non-Meet tabs when Playwright is free.
@@ -244,6 +252,19 @@ function stopMeetingVisionAndFlush(reason: string) {
   }
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }
+
+// ── Safety net: auto-stop meeting when voice disconnects ──
+// Prevents vision/recording from leaking if user closes session without proper stop
+eventBus.on("voice.stopped", () => {
+  if (vision.isMeetingMode || meeting.getNotes().isRecording) {
+    console.log("[Init] Voice stopped while meeting active — auto-stopping vision + recording");
+    stopMeetingVisionAndFlush("Voice disconnected");
+    if (_domContextInterval) { clearInterval(_domContextInterval); _domContextInterval = null; }
+    meeting.stopRecording();
+    if (transcriptAuditor.active) transcriptAuditor.deactivate();
+    if (contextRetriever.active) contextRetriever.deactivate();
+  }
+});
 
 eventBus.on("meeting.ended", () => {
   stopMeetingVisionAndFlush("Meeting ended");
