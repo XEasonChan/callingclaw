@@ -1,5 +1,17 @@
 // CallingClaw 2.0 — Central Configuration
 
+// ── Load persistent user config from ~/.callingclaw/user-config.json ──
+const USER_CONFIG_PATH = `${process.env.HOME}/.callingclaw/user-config.json`;
+let _userConfig: Record<string, string> = {};
+try {
+  const f = Bun.file(USER_CONFIG_PATH);
+  if (await f.exists()) {
+    _userConfig = await f.json();
+  }
+} catch {
+  // File doesn't exist yet or is invalid — use defaults
+}
+
 export const CONFIG = {
   // Server
   port: parseInt(process.env.PORT || "4000"),
@@ -81,6 +93,11 @@ export const CONFIG = {
     // Peekaboo CLI path (defaults to system PATH)
     cliPath: process.env.PEEKABOO_PATH || "peekaboo",
   },
+
+  // User identity — auto-added as attendee to every calendar event
+  userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };
 
 export type CallingClawConfig = typeof CONFIG;
+
+export { USER_CONFIG_PATH };

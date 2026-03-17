@@ -131,9 +131,15 @@ Be thorough with file paths — the voice AI's computer use module relies on the
 export class MeetingPrepSkill {
   private bridge: OpenClawBridge;
   private _currentBrief: MeetingPrepBrief | null = null;
+  private _onLiveNote?: (note: string, topic: string) => void;
 
   constructor(bridge: OpenClawBridge) {
     this.bridge = bridge;
+  }
+
+  /** Register a callback for when a live note is added (for EventBus forwarding) */
+  onLiveNote(callback: (note: string, topic: string) => void) {
+    this._onLiveNote = callback;
   }
 
   get currentBrief(): MeetingPrepBrief | null {
@@ -190,6 +196,7 @@ export class MeetingPrepSkill {
     if (!this._currentBrief) return;
     this._currentBrief.liveNotes.push(note);
     console.log(`[MeetingPrep] Live note added: "${note.slice(0, 60)}"`);
+    this._onLiveNote?.(note, this._currentBrief.topic);
   }
 
   /**

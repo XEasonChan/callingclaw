@@ -5,70 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CallingClaw</title>
 <style>
-/* ── Design Tokens ───────────────────────────────────── */
 :root {
-  --bg: #F5F5F7;
-  --white: #FFFFFF;
-  --text: #1C1C1E;
-  --text2: #8E8E93;
-  --text3: #C7C7CC;
-  --accent: #E63946;
-  --accent-soft: rgba(230,57,70,0.08);
-  --accent-mid: rgba(230,57,70,0.15);
-  --green: #34C759;
-  --green-soft: rgba(52,199,89,0.1);
-  --yellow: #FF9F0A;
-  --yellow-soft: rgba(255,159,10,0.1);
-  --blue: #007AFF;
-  --blue-soft: rgba(0,122,255,0.1);
-  --border: #E5E5EA;
-  --surface: #F2F2F7;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-xs: 6px;
-  --pill: 999px;
+  --bg: #F5F5F7; --white: #FFFFFF; --text: #1C1C1E; --text2: #8E8E93; --text3: #C7C7CC;
+  --accent: #E63946; --accent-soft: rgba(230,57,70,0.08); --accent-mid: rgba(230,57,70,0.15);
+  --green: #34C759; --green-soft: rgba(52,199,89,0.1);
+  --yellow: #FF9F0A; --yellow-soft: rgba(255,159,10,0.1);
+  --blue: #007AFF; --blue-soft: rgba(0,122,255,0.1);
+  --border: #E5E5EA; --surface: #F2F2F7;
+  --radius: 16px; --radius-sm: 10px; --radius-xs: 6px; --pill: 999px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
   --mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow: 0 2px 8px rgba(0,0,0,0.06);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
-  --ease: 150ms ease;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04); --shadow: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08); --ease: 150ms ease;
 }
-
-/* ── Reset ───────────────────────────────────────────── */
 * { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: var(--font); background: var(--bg); color: var(--text);
-  -webkit-font-smoothing: antialiased; -webkit-app-region: drag;
-  height: 100vh; overflow: hidden; display: flex; flex-direction: column;
-}
+body { font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -webkit-app-region: drag; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 button, input, select, textarea, a, label { -webkit-app-region: no-drag; }
-a { color: var(--accent); text-decoration: none; }
-::selection { background: var(--accent-soft); }
-
-/* ── Titlebar ────────────────────────────────────────── */
-.titlebar {
-  height: 52px; min-height: 52px;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px 0 80px;
-  border-bottom: 1px solid var(--border); background: var(--white);
-}
+a { color: var(--accent); text-decoration: none; } ::selection { background: var(--accent-soft); }
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+.titlebar { height: 52px; min-height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px 0 80px; border-bottom: 1px solid var(--border); background: var(--white); }
 .titlebar-left { display: flex; align-items: center; gap: 8px; }
-.titlebar-logo {
-  width: 22px; height: 22px; background: var(--accent); border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-}
-.titlebar-name { font-size: 13px; font-weight: 600; }
-.titlebar-ver { font-size: 11px; color: var(--text3); }
-.titlebar-right { display: flex; align-items: center; gap: 4px; }
-.tb-btn {
-  width: 32px; height: 32px; border-radius: 8px; border: none;
-  background: transparent; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; color: var(--text2); transition: background var(--ease);
-}
-.tb-btn:hover { background: var(--surface); }
-.tb-btn.active { background: var(--accent-soft); color: var(--accent); }
+.titlebar-logo { width: 22px; height: 22px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.titlebar-name { font-size: 13px; font-weight: 600; } .titlebar-ver { font-size: 11px; color: var(--text3); } .titlebar-right { display: flex; align-items: center; gap: 4px; }
+.tb-btn { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text2); transition: background var(--ease); }
+.tb-btn:hover { background: var(--surface); } .tb-btn.active { background: var(--accent-soft); color: var(--accent); }
+.body { flex: 1; display: flex; overflow: hidden; position: relative; } .view { display: none; flex: 1; } .view.active { display: flex; }
+.main-scroll { flex: 1; overflow-y: auto; -webkit-app-region: no-drag; } .main-center { max-width: 680px; margin: 0 auto; padding: 40px 24px 80px; }
+.greeting { text-align: center; padding: 48px 0 24px; } .greeting-emoji { font-size: 48px; display: block; margin-bottom: 12px; } .greeting h1 { font-family: 'Georgia', 'Times New Roman', serif; font-size: 32px; font-weight: 400; color: var(--text); line-height: 1.3; letter-spacing: -0.3px; }
+.hero-input-wrap { display: flex; gap: 10px; margin-bottom: 32px; }
+.hero-input { flex: 1; height: 48px; padding: 0 20px; border-radius: var(--radius); border: 1px solid var(--border); font-size: 15px; font-family: var(--font); background: var(--white); transition: border-color var(--ease); box-shadow: var(--shadow-sm); }
+.hero-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } .hero-input::placeholder { color: var(--text3); }
+.btn { padding: 10px 20px; border-radius: var(--pill); font-size: 14px; font-weight: 500; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all var(--ease); font-family: var(--font); white-space: nowrap; }
+.btn:hover { opacity: 0.9; transform: translateY(-0.5px); } .btn:active { transform: translateY(0); }
+.btn-primary { background: var(--accent); color: #fff; } .btn-secondary { background: var(--surface); color: var(--text); }
+.btn-ghost { background: transparent; color: var(--text2); padding: 10px 16px; } .btn-ghost:hover { background: var(--surface); color: var(--text); }
+.btn-sm { padding: 6px 14px; font-size: 13px; } .btn-danger { background: #FEE2E2; color: #DC2626; }
+.btn-hero { height: 48px; border-radius: var(--radius); padding: 0 24px; font-size: 15px; font-weight: 600; }
+.engine-banner { background: var(--white); border: 1px dashed var(--border); border-radius: var(--radius); padding: 40px 32px; text-align: center; margin-bottom: 32px; } .engine-banner h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; } .engine-banner p { font-size: 14px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
 
+<<<<<<< HEAD
 /* ── Body ────────────────────────────────────────────── */
 .body { flex: 1; display: flex; overflow: hidden; }
 .view { display: none; flex: 1; opacity: 0; }
@@ -122,10 +97,46 @@ a { color: var(--accent); text-decoration: none; }
 .badge-live { background: var(--accent); color: #fff; animation: pulse 2s ease-in-out infinite; }
 .badge-soon { background: var(--accent-soft); color: var(--accent); }
 .badge-count { background: var(--surface); color: var(--text2); }
+=======
+/* Meeting list — Evernote style */
+.meet-section-title { font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 400; color: var(--text); margin: 8px 0 16px; }
+.meet-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 36px; }
+.meet-row { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: var(--radius-sm); transition: background var(--ease); } .meet-row:hover { background: var(--white); } .meet-row.clickable { cursor: pointer; } .meet-row.clickable:hover { box-shadow: var(--shadow-sm); }
+.meet-date { flex-shrink: 0; width: 52px; text-align: center; } .meet-date-num { font-size: 28px; font-weight: 300; color: var(--text); line-height: 1; } .meet-date-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.meet-info { flex: 1; min-width: 0; } .meet-title { font-size: 15px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .meet-time { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.meet-actions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; } .meet-action { font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity var(--ease); } .meet-action:hover { opacity: 0.7; }
+.meet-action.local, .meet-link.accent { color: var(--accent); } .meet-action.join, .meet-link.green { color: var(--green); }
+.meet-link { font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text2); transition: opacity var(--ease); } .meet-link:hover { opacity: 0.7; }
+.badge-ready { background: var(--green-soft); color: #059669; }
+.prep-attach { display: inline-block; margin-top: 6px; padding: 4px 10px; font-size: 12px; color: var(--text2); border: 1px solid var(--border); border-radius: var(--radius-xs); cursor: pointer; transition: all var(--ease); }
+.prep-attach:hover { background: var(--surface); border-color: var(--text3); color: var(--text); }
+.prep-attach.shimmer { border-color: transparent; background: linear-gradient(90deg, var(--surface) 25%, var(--white) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmerAnim 1.5s ease-in-out infinite; }
+.prep-attach.done { border-color: var(--green); background: var(--green-soft); color: #059669; }
+.meet-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: var(--pill); flex-shrink: 0; } .badge-live { background: var(--accent); color: #fff; animation: pulse 2s ease-in-out infinite; } .badge-preparing { background: var(--yellow-soft); color: #D97706; }
+.note-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-sm); cursor: pointer; transition: background var(--ease); } .note-row:hover { background: var(--white); }
+.note-icon { flex-shrink: 0; color: var(--text3); } .note-info { flex: 1; min-width: 0; } .note-title { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .note-date { font-size: 12px; color: var(--text3); flex-shrink: 0; }
+.empty { text-align: center; padding: 40px 24px; } .empty p { font-size: 14px; color: var(--text2); line-height: 1.5; }
 
-/* ── Workspace ───────────────────────────────────────── */
-.workspace { flex: 1; overflow-y: auto; padding: 32px 40px; -webkit-app-region: no-drag; }
+/* Shimmer loading */
+.meet-row.shimmer .meet-title, .meet-row.shimmer .meet-time { background: linear-gradient(90deg, var(--surface) 25%, #E8E8ED 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; color: transparent; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* Side Panel (right slide-out) */
+.side-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 460px; background: var(--white); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,0.06); } .side-panel.open { transform: translateX(0); }
+.sp-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; } .sp-header h3 { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-close { width: 28px; height: 28px; border-radius: 6px; border: none; background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text2); flex-shrink: 0; } .sp-close:hover { background: var(--border); } .sp-body { flex: 1; overflow-y: auto; padding: 20px; -webkit-app-region: no-drag; }
+.sp-screenshot { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px; background: var(--surface); min-height: 180px; display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 13px; overflow: hidden; } .sp-screenshot img { width: 100%; display: block; }
+.sp-events { font-size: 13px; line-height: 1.6; } .sp-event-line { padding: 4px 0; border-bottom: 1px solid var(--surface); font-family: var(--mono); font-size: 12px; }
+.md h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px; } .md h2 { font-size: 17px; font-weight: 600; margin: 20px 0 8px; } .md h3 { font-size: 15px; font-weight: 600; margin: 16px 0 6px; } .md p { font-size: 14px; line-height: 1.7; margin-bottom: 10px; } .md strong { font-weight: 600; }
+.md ul, .md ol { padding-left: 20px; margin-bottom: 10px; } .md li { font-size: 14px; line-height: 1.6; margin-bottom: 4px; } .md pre { background: #1C1C1E; color: #E5E5EA; padding: 14px 16px; border-radius: var(--radius-sm); font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; margin-bottom: 12px; } .md code { background: var(--surface); padding: 1px 5px; border-radius: 4px; font-size: 13px; font-family: var(--mono); } .md pre code { background: none; padding: 0; }
+>>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
+
+/* Status Bar */
+.statusbar { height: 32px; min-height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-top: 1px solid var(--border); background: var(--white); font-size: 11px; color: var(--text2); -webkit-app-region: no-drag; }
+.st-items { display: flex; align-items: center; gap: 14px; } .st-item { display: flex; align-items: center; gap: 5px; cursor: default; } .st-right { display: flex; align-items: center; gap: 12px; }
+.st-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); transition: background 0.3s ease; } .st-dot.green { background: var(--green); } .st-dot.red { background: var(--accent); } .st-dot.yellow { background: var(--yellow); }
+
+<<<<<<< HEAD
 /* ── Hero Card ───────────────────────────────────────── */
 .hero {
   background: var(--white); border-radius: var(--radius); padding: 28px 32px;
@@ -277,43 +288,16 @@ a { color: var(--accent); text-decoration: none; }
 #st-eng-btn { animation: pulse 2s ease-in-out infinite; font-weight: 600; letter-spacing: 0.3px; box-shadow: 0 0 0 2px var(--accent-soft); }
 
 /* ── Settings View ───────────────────────────────────── */
+=======
+/* Settings View */
+>>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 #view-settings { flex-direction: column; background: var(--bg); overflow: hidden; height: 100%; }
-.set-head {
-  padding: 16px 32px; display: flex; align-items: center; gap: 12px;
-  border-bottom: 1px solid var(--border); background: var(--white);
-  flex-shrink: 0;
-}
-.set-back {
-  width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--surface);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; color: var(--text); transition: background var(--ease);
-}
-.set-back:hover { background: var(--border); }
-.set-head h3 { font-size: 16px; font-weight: 600; }
-.set-tabs {
-  display: flex; gap: 4px; padding: 12px 32px 0; background: var(--white);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.set-body {
-  flex: 1; overflow-y: auto; padding: 24px 32px; min-height: 0;
-  -webkit-app-region: no-drag;
-}
-.set-tab {
-  padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--text2);
-  border: none; background: none; cursor: pointer;
-  border-bottom: 2px solid transparent; transition: all var(--ease); margin-bottom: -1px;
-  font-family: var(--font);
-}
-.set-tab:hover { color: var(--text); }
-.set-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.set-panel { display: none; }
-.set-panel.active { display: block; }
-
-/* ── Setup Checklist ─────────────────────────────────── */
-.setup-group { margin-bottom: 24px; }
-.setup-group h4 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.set-head { padding: 16px 32px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--white); flex-shrink: 0; } .set-back { width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); transition: background var(--ease); } .set-back:hover { background: var(--border); } .set-head h3 { font-size: 16px; font-weight: 600; }
+.set-tabs { display: flex; gap: 4px; padding: 12px 32px 0; background: var(--white); border-bottom: 1px solid var(--border); flex-shrink: 0; } .set-body { flex: 1; overflow-y: auto; padding: 24px 32px; min-height: 0; -webkit-app-region: no-drag; }
+.set-tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--text2); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all var(--ease); margin-bottom: -1px; font-family: var(--font); } .set-tab:hover { color: var(--text); } .set-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.set-panel { display: none; } .set-panel.active { display: block; } .setup-group { margin-bottom: 24px; } .setup-group h4 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
 .chk-list { display: flex; flex-direction: column; gap: 4px; }
+<<<<<<< HEAD
 .chk {
   display: flex; align-items: center; gap: 10px; padding: 10px 14px;
   border-radius: var(--radius-sm); background: var(--white);
@@ -387,13 +371,41 @@ a { color: var(--accent); text-decoration: none; }
   border: 1px solid var(--border); font-size: 14px; font-family: var(--font);
   background: var(--white); transition: border-color var(--ease);
 }
+=======
+.chk { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--white); }
+.chk-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; } .chk-label { font-size: 14px; flex: 1; } .chk-val { font-size: 12px; color: var(--text2); }
+.input-group { margin-bottom: 16px; } .input-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.input-field { width: 100%; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 14px; font-family: var(--font); background: var(--white); transition: border-color var(--ease); }
+>>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 .input-field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-/* ── Animations ──────────────────────────────────────── */
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-.fade-in { animation: fadeIn 0.3s ease; }
+/* Voice Test */
+.vt-grid { display: grid; grid-template-columns: 300px 1fr; gap: 24px; }
+.vt-card { background: var(--white); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-sm); } .vt-card label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.vt-sel, .vt-ta { width: 100%; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 14px; font-family: var(--font); background: var(--white); }
+.vt-ta { resize: vertical; min-height: 80px; max-height: 200px; line-height: 1.5; font-size: 13px; } .vt-sel:focus, .vt-ta:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mic-track { height: 4px; background: var(--surface); border-radius: 2px; overflow: hidden; margin: 8px 0; } .mic-fill { height: 100%; background: var(--green); border-radius: 2px; width: 0; transition: width 50ms; }
+.vt-transcript { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; min-height: 420px; }
+.vt-t-head { padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.vt-t-body { flex: 1; overflow-y: auto; padding: 16px 20px; max-height: 360px; } .vt-t-foot { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.vt-input { flex: 1; padding: 8px 14px; border-radius: var(--pill); border: 1px solid var(--border); font-size: 14px; font-family: var(--font); } .vt-input:focus { outline: none; border-color: var(--accent); }
+.layer-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; } .toggle input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; inset: 0; background: var(--border); border-radius: 10px; cursor: pointer; transition: background 0.2s; }
+.slider::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: white; left: 2px; top: 2px; transition: transform 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+.toggle input:checked + .slider { background: var(--accent); } .toggle input:checked + .slider::before { transform: translateX(16px); } .toggle input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
+.layer-info { flex: 1; } .layer-name { font-size: 13px; font-weight: 500; } .layer-meta { font-size: 11px; color: var(--text2); }
+.log-console { background: #1C1C1E; color: #E5E5EA; border-radius: var(--radius-sm); padding: 16px; font-family: var(--mono); font-size: 12px; line-height: 1.6; height: 420px; overflow-y: auto; }
+.log-line { white-space: pre-wrap; word-break: break-all; } .log-line.error { color: #FF6B6B; }
+/* Onboarding */
+#view-onboarding { flex-direction: column; background: var(--white); -webkit-app-region: no-drag; }
+.ob-body { flex: 1; display: flex; min-height: 0; } .ob-left { width: 45%; display: flex; flex-direction: column; justify-content: center; padding: 32px 32px 32px 48px; overflow-y: auto; min-height: 0; } .ob-right { width: 55%; display: flex; align-items: center; justify-content: center; background: var(--bg); position: relative; overflow: hidden; }
+.ob-step { display: none; flex: 1; min-height: 0; } .ob-step.active { display: flex; }
+.ob-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent); font-weight: 600; margin-bottom: 12px; } .ob-title { font-size: 22px; font-weight: 700; line-height: 1.25; margin-bottom: 10px; letter-spacing: -0.3px; } .ob-desc { font-size: 14px; color: var(--text2); line-height: 1.6; margin-bottom: 20px; } .ob-actions { display: flex; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+.ob-status { margin-top: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; } .ob-status .st-dot { width: 8px; height: 8px; }
+.ob-progress { display: flex; justify-content: center; gap: 8px; padding: 16px 0 20px; border-top: 1px solid var(--border); } .ob-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.3s ease; } .ob-dot.done { background: var(--green); } .ob-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
 
+<<<<<<< HEAD
 /* ══════════════════════════════════════════════════════ */
 /* ── ONBOARDING ──────────────────────────────────────── */
 /* ══════════════════════════════════════════════════════ */
@@ -456,217 +468,54 @@ a { color: var(--accent); text-decoration: none; }
   transform-origin: left center;
   animation: doorOpen 1.2s ease-out 0.3s forwards;
 }
+=======
+/* Onboarding animations */
+.anim-canvas { width: 100%; height: 100%; position: relative; } .anim-welcome,.anim-screen,.anim-actions,.anim-ready { display: flex; align-items: center; justify-content: center; }
+.room-frame { width: 280px; height: 200px; border: 2px solid var(--border); border-radius: 16px; position: relative; overflow: hidden; background: var(--white); } .room-door { position: absolute; left: 0; top: 0; width: 40px; height: 100%; background: var(--surface); border-right: 2px solid var(--border); transform-origin: left center; animation: doorOpen 1.2s ease-out 0.3s forwards; }
+>>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 @keyframes doorOpen { to { transform: perspective(200px) rotateY(-75deg); opacity: 0.3; } }
-.room-lobster {
-  position: absolute; left: -60px; top: 50%; transform: translateY(-50%);
-  animation: lobsterEnter 1.5s ease-out 0.8s forwards;
-}
-@keyframes lobsterEnter { to { left: 50%; transform: translate(-50%, -50%); } }
-.room-icons {
-  position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
-  display: flex; flex-direction: column; gap: 16px;
-}
-.room-icons > div {
-  width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft);
-  display: flex; align-items: center; justify-content: center; color: var(--accent);
-  opacity: 0; animation: iconAppear 0.4s ease-out forwards;
-}
-.room-icons > div:nth-child(1) { animation-delay: 1.8s; }
-.room-icons > div:nth-child(2) { animation-delay: 2.1s; }
-.room-icons > div:nth-child(3) { animation-delay: 2.4s; }
-@keyframes iconAppear { to { opacity: 1; } }
-.room-label {
-  position: absolute; top: -28px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase;
-  letter-spacing: 0.5px; white-space: nowrap; opacity: 0;
-  animation: iconAppear 0.4s ease-out 2.6s forwards;
-}
-
-/* Step 2: Screen scan */
-.anim-screen { display: flex; align-items: center; justify-content: center; }
-.screen-frame {
-  width: 260px; height: 180px; border: 2px solid var(--border); border-radius: 12px;
-  position: relative; overflow: hidden; background: var(--white); padding: 16px;
-}
-.screen-el {
-  border-radius: 6px; background: var(--surface); position: absolute;
-}
-.screen-el.el-1 { width: 100px; height: 50px; top: 16px; left: 16px; }
-.screen-el.el-2 { width: 70px; height: 70px; top: 16px; right: 16px; }
-.screen-el.el-3 { width: 200px; height: 40px; bottom: 16px; left: 16px; }
-.scan-line {
-  position: absolute; left: 0; right: 0; height: 2px; background: var(--accent);
-  box-shadow: 0 0 12px var(--accent); top: -2px;
-  animation: scanDown 2.5s ease-in-out infinite;
-}
-@keyframes scanDown { 0% { top: -2px; } 50% { top: 100%; } 100% { top: -2px; } }
-.screen-highlight {
-  position: absolute; border: 2px solid var(--accent); border-radius: 8px;
-  opacity: 0; pointer-events: none;
-  animation: highlightPulse 2.5s ease-in-out infinite;
-}
-.hl-1 { top: 14px; left: 14px; width: 104px; height: 54px; animation-delay: 0.3s; }
-.hl-2 { top: 14px; right: 14px; width: 74px; height: 74px; animation-delay: 0.8s; }
-.hl-3 { bottom: 14px; left: 14px; width: 204px; height: 44px; animation-delay: 1.3s; }
-@keyframes highlightPulse {
-  0%,30% { opacity: 0; } 35%,55% { opacity: 1; } 60%,100% { opacity: 0; }
-}
-.screen-tag {
-  position: absolute; font-size: 10px; font-weight: 600; color: var(--accent);
-  background: var(--white); padding: 1px 6px; border-radius: 4px;
-  box-shadow: var(--shadow-sm); opacity: 0;
-  animation: highlightPulse 2.5s ease-in-out infinite;
-}
-.tag-1 { top: 72px; left: 40px; animation-delay: 0.5s; }
-.tag-2 { top: 92px; right: 30px; animation-delay: 1.0s; }
-.tag-3 { bottom: 64px; left: 80px; animation-delay: 1.5s; }
-
-/* Step 3: Auto actions */
-.anim-actions { display: flex; align-items: center; justify-content: center; }
-.actions-stage {
-  width: 280px; height: 200px; position: relative; background: var(--white);
-  border-radius: 12px; border: 2px solid var(--border); overflow: hidden;
-}
-.action-target {
-  position: absolute; border-radius: 8px; background: var(--surface);
-  display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text2);
-}
-.at-btn { width: 80px; height: 32px; top: 24px; left: 24px; }
-.at-input { width: 160px; height: 32px; top: 80px; left: 24px; border: 1px solid var(--border); background: var(--white); }
-.at-window { width: 100px; height: 70px; top: 100px; right: -100px; border: 1px solid var(--border); background: var(--white);
-  animation: windowSlide 6s ease-in-out infinite;
-}
-@keyframes windowSlide {
-  0%,55% { right: -100px; opacity: 0; } 60%,85% { right: 20px; opacity: 1; } 90%,100% { right: -100px; opacity: 0; }
-}
-.action-cursor {
-  position: absolute; width: 16px; height: 16px; z-index: 10;
-  animation: cursorMove 6s ease-in-out infinite;
-}
-@keyframes cursorMove {
-  0%,5% { left: 10px; top: 150px; } 15%,25% { left: 50px; top: 30px; }
-  35%,50% { left: 80px; top: 86px; } 65%,85% { left: 200px; top: 120px; }
-  95%,100% { left: 10px; top: 150px; }
-}
+.room-lobster { position: absolute; left: -60px; top: 50%; transform: translateY(-50%); animation: lobsterEnter 1.5s ease-out 0.8s forwards; }
+@keyframes lobsterEnter { to { left: 50%; transform: translate(-50%, -50%); } } @keyframes iconAppear { to { opacity: 1; } }
+.room-icons { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 16px; }
+.room-icons > div { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; color: var(--accent); opacity: 0; animation: iconAppear 0.4s ease-out forwards; }
+.room-icons > div:nth-child(1) { animation-delay: 1.8s; } .room-icons > div:nth-child(2) { animation-delay: 2.1s; } .room-icons > div:nth-child(3) { animation-delay: 2.4s; }
+.room-label { position: absolute; top: -28px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; opacity: 0; animation: iconAppear 0.4s ease-out 2.6s forwards; }
+.screen-frame { width: 260px; height: 180px; border: 2px solid var(--border); border-radius: 12px; position: relative; overflow: hidden; background: var(--white); padding: 16px; } .screen-el { border-radius: 6px; background: var(--surface); position: absolute; }
+.screen-el.el-1 { width: 100px; height: 50px; top: 16px; left: 16px; } .screen-el.el-2 { width: 70px; height: 70px; top: 16px; right: 16px; } .screen-el.el-3 { width: 200px; height: 40px; bottom: 16px; left: 16px; }
+.scan-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); box-shadow: 0 0 12px var(--accent); top: -2px; animation: scanDown 2.5s ease-in-out infinite; } @keyframes scanDown { 0% { top: -2px; } 50% { top: 100%; } 100% { top: -2px; } }
+.screen-highlight { position: absolute; border: 2px solid var(--accent); border-radius: 8px; opacity: 0; pointer-events: none; animation: highlightPulse 2.5s ease-in-out infinite; }
+.hl-1 { top: 14px; left: 14px; width: 104px; height: 54px; animation-delay: 0.3s; } .hl-2 { top: 14px; right: 14px; width: 74px; height: 74px; animation-delay: 0.8s; } .hl-3 { bottom: 14px; left: 14px; width: 204px; height: 44px; animation-delay: 1.3s; }
+@keyframes highlightPulse { 0%,30% { opacity: 0; } 35%,55% { opacity: 1; } 60%,100% { opacity: 0; } }
+.screen-tag { position: absolute; font-size: 10px; font-weight: 600; color: var(--accent); background: var(--white); padding: 1px 6px; border-radius: 4px; box-shadow: var(--shadow-sm); opacity: 0; animation: highlightPulse 2.5s ease-in-out infinite; }
+.tag-1 { top: 72px; left: 40px; animation-delay: 0.5s; } .tag-2 { top: 92px; right: 30px; animation-delay: 1.0s; } .tag-3 { bottom: 64px; left: 80px; animation-delay: 1.5s; }
+.actions-stage { width: 280px; height: 200px; position: relative; background: var(--white); border-radius: 12px; border: 2px solid var(--border); overflow: hidden; } .action-target { position: absolute; border-radius: 8px; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text2); }
+.at-btn { width: 80px; height: 32px; top: 24px; left: 24px; } .at-input { width: 160px; height: 32px; top: 80px; left: 24px; border: 1px solid var(--border); background: var(--white); }
+.at-window { width: 100px; height: 70px; top: 100px; right: -100px; border: 1px solid var(--border); background: var(--white); animation: windowSlide 6s ease-in-out infinite; }
+@keyframes windowSlide { 0%,55% { right: -100px; opacity: 0; } 60%,85% { right: 20px; opacity: 1; } 90%,100% { right: -100px; opacity: 0; } }
+.action-cursor { position: absolute; width: 16px; height: 16px; z-index: 10; animation: cursorMove 6s ease-in-out infinite; }
+@keyframes cursorMove { 0%,5% { left: 10px; top: 150px; } 15%,25% { left: 50px; top: 30px; } 35%,50% { left: 80px; top: 86px; } 65%,85% { left: 200px; top: 120px; } 95%,100% { left: 10px; top: 150px; } }
 .at-btn-press { animation: btnPress 6s ease-in-out infinite; }
-@keyframes btnPress {
-  0%,14% { background: var(--surface); } 15%,22% { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
-  23%,100% { background: var(--surface); }
-}
-.at-typing::after {
-  content: ''; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
-  width: 0; height: 14px; border-right: 2px solid var(--accent);
-  animation: typing 6s steps(12) infinite;
-}
+@keyframes btnPress { 0%,14% { background: var(--surface); } 15%,22% { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); } 23%,100% { background: var(--surface); } }
+.at-typing::after { content: ''; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 0; height: 14px; border-right: 2px solid var(--accent); animation: typing 6s steps(12) infinite; }
 @keyframes typing { 0%,34% { width: 0; } 35%,55% { width: 80px; } 56%,100% { width: 0; } }
-.layers-bar {
-  position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 6px;
-}
-.layer-badge {
-  font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: var(--pill);
-  background: var(--surface); color: var(--text3); transition: all 0.3s;
-}
-.layer-badge.lit { background: var(--accent); color: white; }
-.lb-1 { animation: layerLight 6s ease infinite; }
-.lb-2 { animation: layerLight 6s ease 1.5s infinite; }
-.lb-3 { animation: layerLight 6s ease 3s infinite; }
-.lb-4 { animation: layerLight 6s ease 4.5s infinite; }
-@keyframes layerLight {
-  0%,10% { background: var(--surface); color: var(--text3); }
-  12%,28% { background: var(--accent); color: white; }
-  30%,100% { background: var(--surface); color: var(--text3); }
-}
-
-/* Step 4: Dual brain */
-.anim-brain { display: flex; align-items: center; justify-content: center; gap: 40px; }
-.brain-node { position: relative; width: 100px; height: 100px; }
-.brain-core {
-  width: 60px; height: 60px; border-radius: 50%;
-  position: absolute; top: 20px; left: 20px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 600; color: var(--white); z-index: 2;
-}
-.brain-core.fast { background: #FF9F0A; }
-.brain-core.deep { background: var(--accent); }
-.brain-ring {
-  position: absolute; border-radius: 50%; border: 1.5px solid;
-  top: 50%; left: 50%; transform: translate(-50%, -50%);
-  opacity: 0;
-}
-.brain-node.fast .brain-ring { border-color: #FF9F0A; animation: ringPulse 1.5s ease-out infinite; }
-.brain-node.deep .brain-ring { border-color: var(--accent); animation: ringPulse 3s ease-out infinite; }
-.ring-1 { width: 80px; height: 80px; animation-delay: 0s !important; }
-.ring-2 { width: 100px; height: 100px; animation-delay: 0.4s !important; }
-.ring-3 { width: 120px; height: 120px; animation-delay: 0.8s !important; }
+.layers-bar { position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; } .layer-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: var(--pill); background: var(--surface); color: var(--text3); transition: all 0.3s; }
+.lb-1 { animation: layerLight 6s ease infinite; } .lb-2 { animation: layerLight 6s ease 1.5s infinite; } .lb-3 { animation: layerLight 6s ease 3s infinite; } .lb-4 { animation: layerLight 6s ease 4.5s infinite; }
+@keyframes layerLight { 0%,10% { background: var(--surface); color: var(--text3); } 12%,28% { background: var(--accent); color: white; } 30%,100% { background: var(--surface); color: var(--text3); } }
+.anim-brain { display: flex; align-items: center; justify-content: center; gap: 40px; } .brain-node { position: relative; width: 100px; height: 100px; }
+.brain-core { width: 60px; height: 60px; border-radius: 50%; position: absolute; top: 20px; left: 20px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--white); z-index: 2; } .brain-core.fast { background: #FF9F0A; } .brain-core.deep { background: var(--accent); }
+.brain-ring { position: absolute; border-radius: 50%; border: 1.5px solid; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; } .brain-node.fast .brain-ring { border-color: #FF9F0A; animation: ringPulse 1.5s ease-out infinite; } .brain-node.deep .brain-ring { border-color: var(--accent); animation: ringPulse 3s ease-out infinite; }
+.ring-1 { width: 80px; height: 80px; animation-delay: 0s !important; } .ring-2 { width: 100px; height: 100px; animation-delay: 0.4s !important; } .ring-3 { width: 120px; height: 120px; animation-delay: 0.8s !important; }
 @keyframes ringPulse { 0% { opacity: 0.6; transform: translate(-50%,-50%) scale(0.7); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.2); } }
-.brain-label {
-  position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; font-weight: 500; color: var(--text2); white-space: nowrap;
-}
-.brain-bridge {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 60px; display: flex; align-items: center; justify-content: center;
-}
-.bridge-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
-  position: absolute; animation: bridgeFlow 2s linear infinite;
-}
-.bridge-dot:nth-child(2) { animation-delay: 0.5s; }
-.bridge-dot:nth-child(3) { animation-delay: 1s; }
-.bridge-dot:nth-child(4) { animation-delay: 1.5s; animation-direction: reverse; }
+.brain-label { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: var(--text2); white-space: nowrap; } .bridge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); position: absolute; animation: bridgeFlow 2s linear infinite; } .bridge-dot:nth-child(2) { animation-delay: 0.5s; } .bridge-dot:nth-child(3) { animation-delay: 1s; } .bridge-dot:nth-child(4) { animation-delay: 1.5s; animation-direction: reverse; }
 @keyframes bridgeFlow { 0% { left: 0; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
-
-/* Step 5: Connection */
-.anim-connect { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px; }
-.connect-logos { display: flex; align-items: center; gap: 60px; position: relative; }
-.connect-logo {
-  width: 64px; height: 64px; border-radius: 16px; display: flex;
-  align-items: center; justify-content: center; z-index: 2;
-}
-.cl-openclaw { background: var(--surface); }
-.cl-callingclaw { background: var(--accent); }
-.connect-line {
-  position: absolute; top: 50%; left: 64px; right: 64px; height: 2px;
-  transform: translateY(-50%);
-}
-.connect-line-bg { background: var(--border); width: 100%; height: 100%; border-radius: 1px; }
-.connect-line-fill {
-  position: absolute; top: 0; left: 0; height: 100%; background: var(--accent);
-  border-radius: 1px; width: 0; animation: lineFill 2s ease-out 0.5s forwards;
-}
-@keyframes lineFill { to { width: 100%; } }
-.connect-terminal {
-  background: #1C1C1E; border-radius: 8px; padding: 14px 18px;
-  font-family: var(--mono); font-size: 12px; color: #E5E5EA;
-  min-width: 280px; overflow: hidden;
-}
-.term-line { opacity: 0; animation: termType 0.5s ease forwards; }
-.term-line:nth-child(1) { animation-delay: 2s; }
-.term-line:nth-child(2) { animation-delay: 3s; }
-.term-line:nth-child(3) { animation-delay: 4s; }
-@keyframes termType { to { opacity: 1; } }
-.term-prompt { color: var(--green); }
-.term-cmd { color: #E5E5EA; }
-.term-result { color: var(--text3); }
-
-/* Step 6: Ready — convergence */
-.anim-ready { display: flex; align-items: center; justify-content: center; }
-.converge-ring {
-  width: 200px; height: 200px; position: relative;
-}
-.converge-icon {
-  position: absolute; width: 40px; height: 40px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--white); box-shadow: var(--shadow);
-  animation: converge 2.5s ease-in-out 0.5s forwards;
-}
-.ci-0 { top: 0; left: 80px; } /* screen */
-.ci-1 { top: 60px; right: 0; } /* cursor */
-.ci-2 { bottom: 0; right: 20px; } /* brain */
-.ci-3 { bottom: 0; left: 20px; } /* openclaw */
-.ci-4 { top: 60px; left: 0; } /* audio */
+.anim-connect { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px; } .connect-logos { display: flex; align-items: center; gap: 60px; position: relative; } .connect-logo { width: 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; z-index: 2; } .cl-openclaw { background: var(--surface); } .cl-callingclaw { background: var(--accent); }
+.connect-line { position: absolute; top: 50%; left: 64px; right: 64px; height: 2px; transform: translateY(-50%); } .connect-line-bg { background: var(--border); width: 100%; height: 100%; border-radius: 1px; } .connect-line-fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--accent); border-radius: 1px; width: 0; animation: lineFill 2s ease-out 0.5s forwards; }
+@keyframes lineFill { to { width: 100%; } } .connect-terminal { background: #1C1C1E; border-radius: 8px; padding: 14px 18px; font-family: var(--mono); font-size: 12px; color: #E5E5EA; min-width: 280px; overflow: hidden; }
+.term-line { opacity: 0; animation: termType 0.5s ease forwards; } .term-line:nth-child(1) { animation-delay: 2s; } .term-line:nth-child(2) { animation-delay: 3s; } .term-line:nth-child(3) { animation-delay: 4s; } @keyframes termType { to { opacity: 1; } }
+.term-prompt { color: var(--green); } .term-cmd { color: #E5E5EA; } .term-result { color: var(--text3); } .converge-ring { width: 200px; height: 200px; position: relative; }
+.converge-icon { position: absolute; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--white); box-shadow: var(--shadow); animation: converge 2.5s ease-in-out 0.5s forwards; } .ci-0 { top: 0; left: 80px; } .ci-1 { top: 60px; right: 0; } .ci-2 { bottom: 0; right: 20px; } .ci-3 { bottom: 0; left: 20px; } .ci-4 { top: 60px; left: 0; }
 @keyframes converge { to { top: 80px; left: 80px; right: auto; bottom: auto; opacity: 0; transform: scale(0.5); } }
+<<<<<<< HEAD
 .converge-center {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
   width: 64px; height: 64px; border-radius: 16px; background: var(--accent);
@@ -699,11 +548,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+=======
+.converge-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); width: 64px; height: 64px; border-radius: 16px; background: var(--accent); display: flex; align-items: center; justify-content: center; animation: centerAppear 0.6s ease-out 2.5s forwards; box-shadow: 0 0 0 0 rgba(230,57,70,0); } @keyframes centerAppear { to { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 20px rgba(230,57,70,0.08); } }
+.converge-text { position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%); font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; opacity: 0; animation: iconAppear 0.4s ease 3s forwards; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } } .fade-in { animation: fadeIn 0.3s ease; }
+>>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 </style>
 </head>
 <body>
-
-<!-- ── Titlebar ──────────────────────────────────────── -->
 <header class="titlebar">
   <div class="titlebar-left">
     <div class="titlebar-logo">
@@ -721,34 +574,40 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     </button>
   </div>
 </header>
-
-<!-- ── Body ──────────────────────────────────────────── -->
 <div class="body">
-
-  <!-- ═══ HOME VIEW ═══════════════════════════════════ -->
+  <!-- HOME VIEW -->
   <div id="view-home" class="view active">
-    <aside class="sidebar">
-      <div class="sb-header">
-        <div class="sb-greet" id="greet"></div>
-        <div class="sb-metric" id="sb-count">--</div>
-        <div class="sb-sub">今天的会议</div>
+    <div class="main-scroll">
+      <div class="main-center">
+        <div id="engine-banner-slot"></div>
+        <div id="home-static">
+          <div class="greeting">
+            <span class="greeting-emoji">&#129438;</span>
+            <h1>Hey Andrew,<br>What's our next meeting topic?</h1>
+          </div>
+          <div class="hero-input-wrap">
+            <input class="hero-input" id="topic-input" placeholder="告诉 CallingClaw 你想讨论什么话题..." onkeydown="if(event.key==='Enter'&&!event.isComposing)submitTopic()">
+            <button class="btn btn-primary btn-hero" onclick="submitTopic()">准备会议</button>
+          </div>
+        </div>
+        <div id="meeting-list"></div>
       </div>
-      <div class="sb-label">接下来</div>
-      <div class="sb-list" id="sb-upcoming"></div>
-      <div class="sb-divider"></div>
-      <div class="sb-label">最近的会议</div>
-      <div class="sb-list" id="sb-recent"></div>
-    </aside>
-
-    <main class="workspace" id="ws"></main>
+    </div>
+    <div class="side-panel" id="side-panel">
+      <div class="sp-header">
+        <h3 id="sp-title">--</h3>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="btn btn-sm btn-danger" id="sp-stop-btn" style="display:none" onclick="stopLocalTalk()">停止</button>
+          <button class="sp-close" onclick="closePanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+      </div>
+      <div class="sp-body md" id="sp-body"></div>
+    </div>
   </div>
-
-  <!-- ═══ SETTINGS VIEW ══════════════════════════════ -->
+  <!-- SETTINGS VIEW -->
   <div id="view-settings" class="view">
     <div class="set-head">
-      <button class="set-back" id="btn-back">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
+      <button class="set-back" id="btn-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
       <h3>设置</h3>
     </div>
     <div class="set-tabs" id="set-tabs">
@@ -757,350 +616,58 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <button class="set-tab" data-p="logs">引擎日志</button>
     </div>
     <div class="set-body">
-
-      <!-- ── Setup Panel ───────────────────────────── -->
       <div class="set-panel active" id="panel-setup">
-        <div class="setup-group">
-          <h4>运行环境</h4>
-          <div class="chk-list" id="chk-env"></div>
-        </div>
-        <div class="setup-group">
-          <h4>系统权限</h4>
-          <div class="chk-list" id="chk-perm"></div>
-        </div>
-        <div class="setup-group">
-          <h4>API 密钥</h4>
+        <div class="setup-group"><h4>运行环境</h4><div class="chk-list" id="chk-env"></div></div>
+        <div class="setup-group"><h4>系统权限</h4><div class="chk-list" id="chk-perm"></div></div>
+        <div class="setup-group"><h4>API 密钥</h4>
           <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
-            <div class="input-group">
-              <div class="input-label">OpenAI API Key</div>
-              <input class="input-field" type="password" id="key-openai" placeholder="sk-...">
-            </div>
-            <div class="input-group">
-              <div class="input-label">OpenRouter API Key (可选)</div>
-              <input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-...">
-            </div>
+            <div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="key-openai" placeholder="sk-..."></div>
+            <div class="input-group"><div class="input-label">OpenRouter API Key (可选)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
             <button class="btn btn-sm btn-primary" onclick="saveKeys()">保存密钥</button>
           </div>
         </div>
-        <div class="setup-group">
-          <h4>连接状态</h4>
-          <div class="chk-list" id="chk-conn"></div>
+        <div class="setup-group"><h4>用户邮箱</h4>
+          <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
+            <div class="input-group"><div class="input-label">Your Email (自动加入会议邀请)</div><input class="input-field" type="email" id="user-email" placeholder="you@example.com"></div>
+            <button class="btn btn-sm btn-primary" onclick="saveUserEmail()">保存邮箱</button>
+            <span id="user-email-status" style="font-size:11px;color:var(--green);margin-left:8px;"></span>
+          </div>
         </div>
-        <div class="setup-group">
-          <h4>音频设备</h4>
-          <div class="chk-list" id="chk-audio"></div>
-        </div>
+        <div class="setup-group"><h4>连接状态</h4><div class="chk-list" id="chk-conn"></div></div>
+        <div class="setup-group"><h4>音频设备</h4><div class="chk-list" id="chk-audio"></div></div>
         <div style="margin-top:12px;display:flex;gap:10px;">
           <button class="btn btn-sm btn-secondary" onclick="runAllChecks()">重新检测</button>
           <button class="btn btn-sm btn-ghost" onclick="obRestart()">重新运行 Onboarding</button>
         </div>
       </div>
-
-      <!-- ── Voice Test Panel ──────────────────────── -->
       <div class="set-panel" id="panel-voice">
         <div class="vt-grid">
           <div style="display:flex;flex-direction:column;gap:16px;">
-            <div class="vt-card">
-              <label>语音</label>
-              <select class="vt-sel" id="vt-voice">
-                <option>alloy</option><option>ash</option><option>ballad</option>
-                <option>coral</option><option>echo</option><option>fable</option>
-                <option>marin</option><option>nova</option><option>onyx</option>
-                <option selected>sage</option><option>shimmer</option><option>verse</option>
-              </select>
-            </div>
-            <div class="vt-card">
-              <label>System Instructions</label>
-              <textarea class="vt-ta" id="vt-instr" rows="4">你是 CallingClaw 的语音助手。简洁、友好地回答问题。</textarea>
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-                <button class="btn btn-sm btn-ghost" onclick="vtUpdateInstructions()">更新</button>
-                <span id="vt-instr-status" style="font-size:11px;color:var(--green);"></span>
-              </div>
-            </div>
-            <div class="vt-card">
-              <label>麦克风电平</label>
-              <div class="mic-track"><div class="mic-fill" id="vt-mic-bar"></div></div>
-              <div style="display:flex;gap:8px;margin-top:12px;">
-                <button class="btn btn-sm btn-primary" id="vt-btn-start" onclick="vtStart()">开始语音</button>
-                <button class="btn btn-sm btn-danger" id="vt-btn-stop" style="display:none" onclick="vtStop()">停止</button>
-              </div>
-              <div style="font-size:11px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px;">
-                <div class="st-dot" id="vt-status-dot"></div>
-                <span id="vt-ws-status">--</span>
-              </div>
-            </div>
-            <div class="vt-card">
-              <label>能力层 <span id="vt-layer-count" style="font-size:11px;color:var(--text2);font-weight:400;">0/0 tools</span></label>
-              <div id="vt-layers"></div>
-            </div>
+            <div class="vt-card"><label>语音</label><select class="vt-sel" id="vt-voice"><option>alloy</option><option>ash</option><option>ballad</option><option>coral</option><option>echo</option><option>fable</option><option>marin</option><option>nova</option><option>onyx</option><option selected>sage</option><option>shimmer</option><option>verse</option></select></div>
+            <div class="vt-card"><label>System Instructions</label><textarea class="vt-ta" id="vt-instr" rows="4">你是 CallingClaw 的语音助手。简洁、友好地回答问题。</textarea><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><button class="btn btn-sm btn-ghost" onclick="vtUpdateInstructions()">更新</button><span id="vt-instr-status" style="font-size:11px;color:var(--green);"></span></div></div>
+            <div class="vt-card"><label>麦克风电平</label><div class="mic-track"><div class="mic-fill" id="vt-mic-bar"></div></div><div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-sm btn-primary" id="vt-btn-start" onclick="vtStart()">开始语音</button><button class="btn btn-sm btn-danger" id="vt-btn-stop" style="display:none" onclick="vtStop()">停止</button></div><div style="font-size:11px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px;"><div class="st-dot" id="vt-status-dot"></div><span id="vt-ws-status">--</span></div></div>
+            <div class="vt-card"><label>能力层 <span id="vt-layer-count" style="font-size:11px;color:var(--text2);font-weight:400;">0/0 tools</span></label><div id="vt-layers"></div></div>
           </div>
-          <div class="vt-transcript">
-            <div class="vt-t-head">
-              <div class="st-dot" id="vt-t-dot"></div> 对话记录
-            </div>
-            <div class="vt-t-body" id="vt-transcript">
-              <div style="text-align:center;color:var(--text3);padding:40px 0;">点击「开始语音」开始对话</div>
-            </div>
-            <div class="vt-t-foot">
-              <input class="vt-input" id="vt-text-input" placeholder="输入文字发送..." onkeydown="if(event.key==='Enter')vtSendText()">
-              <button class="btn btn-sm btn-primary" onclick="vtSendText()">发送</button>
-            </div>
-          </div>
+          <div class="vt-transcript"><div class="vt-t-head"><div class="st-dot" id="vt-t-dot"></div> 对话记录</div><div class="vt-t-body" id="vt-transcript"><div style="text-align:center;color:var(--text3);padding:40px 0;">点击「开始语音」开始对话</div></div><div class="vt-t-foot"><input class="vt-input" id="vt-text-input" placeholder="输入文字发送..." onkeydown="if(event.key==='Enter')vtSendText()"><button class="btn btn-sm btn-primary" onclick="vtSendText()">发送</button></div></div>
         </div>
       </div>
-
-      <!-- ── Logs Panel ────────────────────────────── -->
       <div class="set-panel" id="panel-logs">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <span style="font-size:14px;font-weight:600;">引擎日志</span>
-          <button class="btn btn-sm btn-ghost" onclick="clearLogs()">清空</button>
-        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:600;">引擎日志</span><button class="btn btn-sm btn-ghost" onclick="clearLogs()">清空</button></div>
         <div class="log-console" id="log-console"></div>
       </div>
-
     </div>
   </div>
-
-  <!-- ═══ ONBOARDING VIEW ════════════════════════════ -->
+  <!-- ONBOARDING VIEW -->
   <div id="view-onboarding" class="view">
-
-    <!-- Step 0: Welcome -->
-    <div class="ob-step active" data-ob="0">
-      <div class="ob-body">
-        <div class="ob-left">
-          <div class="ob-tag">Welcome</div>
-          <div class="ob-title">Give a meeting room<br>to your OpenClaw</div>
-          <div class="ob-desc">OpenClaw 可以自己去开会、确认需求、带上统一的记忆，再自己执行 — 像一个远程员工一样。<br><br>CallingClaw 就是 OpenClaw 的会议室。</div>
-          <div class="ob-actions">
-            <button class="btn btn-primary" onclick="obNext()">开始设置</button>
-            <button class="btn btn-ghost" onclick="obNext()">下一步</button>
-          </div>
-        </div>
-        <div class="ob-right">
-          <div class="anim-canvas anim-welcome">
-            <div style="position:relative;">
-              <div class="room-label">Meeting Room</div>
-              <div class="room-frame">
-                <div class="room-door"></div>
-                <div class="room-lobster">
-                  <svg width="48" height="48" viewBox="0 0 60 60" fill="none">
-                    <ellipse cx="30" cy="34" rx="13" ry="16" fill="#E63946"/>
-                    <path d="M17 28C10 20 14 10 22 16C18 12 24 9 27 14" fill="#E63946"/>
-                    <path d="M43 28C50 20 46 10 38 16C42 12 36 9 33 14" fill="#E63946"/>
-                    <circle cx="25" cy="28" r="2.5" fill="white"/><circle cx="35" cy="28" r="2.5" fill="white"/>
-                    <circle cx="25" cy="28" r="1.2" fill="#1C1C1E"/><circle cx="35" cy="28" r="1.2" fill="#1C1C1E"/>
-                    <path d="M25 24C22 14 16 10 13 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                    <path d="M35 24C38 14 44 10 47 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                  </svg>
-                </div>
-                <div class="room-icons">
-                  <div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></div>
-                  <div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-                  <div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 1: Screen Recording -->
-    <div class="ob-step" data-ob="1">
-      <div class="ob-body">
-        <div class="ob-left">
-          <div class="ob-tag">Step 1 / 5</div>
-          <div class="ob-title">屏幕理解</div>
-          <div class="ob-desc">CallingClaw 需要看到屏幕来理解会议中讨论的内容 — 分享的文档、演示的 slides、画的架构图。授权后 AI 可以实时分析屏幕并提取关键信息。</div>
-          <div class="ob-actions">
-            <button class="btn btn-primary" id="ob-screen-btn" onclick="obGrantScreen()">授权屏幕录制</button>
-            <button class="btn btn-ghost" onclick="obNext()">下一步</button>
-          </div>
-          <div class="ob-status" id="ob-screen-status"></div>
-        </div>
-        <div class="ob-right">
-          <div class="anim-canvas anim-screen">
-            <div class="screen-frame">
-              <div class="screen-el el-1"></div>
-              <div class="screen-el el-2"></div>
-              <div class="screen-el el-3"></div>
-              <div class="scan-line"></div>
-              <div class="screen-highlight hl-1"></div>
-              <div class="screen-highlight hl-2"></div>
-              <div class="screen-highlight hl-3"></div>
-              <div class="screen-tag tag-1">Slide</div>
-              <div class="screen-tag tag-2">Code</div>
-              <div class="screen-tag tag-3">Diagram</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 2: Accessibility -->
-    <div class="ob-step" data-ob="2">
-      <div class="ob-body">
-        <div class="ob-left">
-          <div class="ob-tag">Step 2 / 5</div>
-          <div class="ob-title">智能操作</div>
-          <div class="ob-desc">CallingClaw 可以帮你打开文件、切换应用、在浏览器中导航。4 层自动化策略 — 从 100ms 的快捷键到 AI 视觉操控，总能找到最快的方式。</div>
-          <div class="ob-actions">
-            <button class="btn btn-primary" id="ob-access-btn" onclick="obGrantAccess()">授权辅助功能</button>
-            <button class="btn btn-ghost" onclick="obNext()">下一步</button>
-          </div>
-          <div class="ob-status" id="ob-access-status"></div>
-        </div>
-        <div class="ob-right">
-          <div class="anim-canvas anim-actions">
-            <div style="position:relative;">
-              <div class="actions-stage">
-                <div class="action-target at-btn at-btn-press">Button</div>
-                <div class="action-target at-input at-typing"></div>
-                <div class="action-target at-window">Window</div>
-                <div class="action-cursor">
-                  <svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="#1C1C1E" stroke="white" stroke-width="1"/></svg>
-                </div>
-              </div>
-              <div class="layers-bar">
-                <span class="layer-badge lb-1">L1</span>
-                <span class="layer-badge lb-2">L2</span>
-                <span class="layer-badge lb-3">L3</span>
-                <span class="layer-badge lb-4">L4</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 3: AI Engine -->
-    <div class="ob-step" data-ob="3">
-      <div class="ob-body">
-        <div class="ob-left">
-          <div class="ob-tag">Step 3 / 5</div>
-          <div class="ob-title">连接 AI 引擎</div>
-          <div class="ob-desc">OpenAI API Key 驱动会议中的实时语音对话。OpenClaw 提供深度推理和代码执行能力。两者协同工作，像快慢双脑。</div>
-          <div class="input-group">
-            <div class="input-label">OpenAI API Key</div>
-            <input class="input-field" type="password" id="ob-key-openai" placeholder="sk-...">
-          </div>
-          <div class="input-group">
-            <div class="input-label">OpenRouter API Key (可选)</div>
-            <input class="input-field" type="password" id="ob-key-openrouter" placeholder="sk-or-v1-...">
-          </div>
-          <div class="ob-actions">
-            <button class="btn btn-primary" onclick="obSaveKeys()">保存并继续</button>
-            <button class="btn btn-ghost" onclick="obNext()">下一步</button>
-          </div>
-        </div>
-        <div class="ob-right">
-          <div class="anim-canvas anim-brain">
-            <div class="brain-node fast">
-              <div class="brain-core fast">语音</div>
-              <div class="brain-ring ring-1"></div>
-              <div class="brain-ring ring-2"></div>
-              <div class="brain-ring ring-3"></div>
-              <div class="brain-label">300ms 响应</div>
-            </div>
-            <div style="position:relative;width:60px;height:20px;">
-              <div class="bridge-dot"></div>
-              <div class="bridge-dot"></div>
-              <div class="bridge-dot"></div>
-              <div class="bridge-dot"></div>
-            </div>
-            <div class="brain-node deep">
-              <div class="brain-core deep">推理</div>
-              <div class="brain-ring ring-1"></div>
-              <div class="brain-ring ring-2"></div>
-              <div class="brain-ring ring-3"></div>
-              <div class="brain-label">深度分析</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 4: Install Skill -->
-    <div class="ob-step" data-ob="4">
-      <div class="ob-body">
-        <div class="ob-left">
-          <div class="ob-tag">Step 4 / 5</div>
-          <div class="ob-title">连接 OpenClaw</div>
-          <div class="ob-desc">一键安装 <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:13px;">/callingclaw</code> 命令到你的 Claude Code。安装后 OpenClaw 可以直接操控会议室 — 加入会议、发言、离开并生成 todo。</div>
-          <div class="ob-actions">
-            <button class="btn btn-primary" id="ob-skill-btn" onclick="obInstallSkill()">一键安装技能</button>
-            <button class="btn btn-ghost" onclick="obNext()">下一步</button>
-          </div>
-          <div class="ob-status" id="ob-skill-status"></div>
-        </div>
-        <div class="ob-right">
-          <div class="anim-canvas anim-connect">
-            <div class="connect-logos">
-              <div class="connect-logo cl-openclaw">
-                <svg width="32" height="32" viewBox="0 0 60 60" fill="none">
-                  <ellipse cx="30" cy="34" rx="13" ry="16" fill="#8E8E93"/>
-                  <path d="M17 28C10 20 14 10 22 16" fill="#8E8E93"/>
-                  <path d="M43 28C50 20 46 10 38 16" fill="#8E8E93"/>
-                  <circle cx="25" cy="28" r="2" fill="white"/><circle cx="35" cy="28" r="2" fill="white"/>
-                </svg>
-              </div>
-              <div class="connect-line"><div class="connect-line-bg"></div><div class="connect-line-fill"></div></div>
-              <div class="connect-logo cl-callingclaw">
-                <svg viewBox="0 0 20 20" fill="none" width="24" height="24"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
-              </div>
-            </div>
-            <div class="connect-terminal">
-              <div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw status</span></div>
-              <div class="term-line"><span class="term-result">CallingClaw running on :4000 ✓</span></div>
-              <div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw join meet.google.com/abc</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 5: Ready -->
-    <div class="ob-step" data-ob="5">
-      <div class="ob-body">
-        <div class="ob-left">
-          <div class="ob-tag">Ready</div>
-          <div class="ob-title">一切就绪</div>
-          <div class="ob-desc" id="ob-summary">检查配置中...</div>
-          <div class="ob-actions">
-            <button class="btn btn-primary" onclick="obFinish(true)">启动 CallingClaw</button>
-            <button class="btn btn-ghost" onclick="obFinish(false)">稍后启动</button>
-          </div>
-          <div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);line-height:1.6;">
-            在 Claude Code 中输入：<br>
-            <code style="color:var(--accent);font-weight:600;">/callingclaw join &lt;meeting-url&gt;</code><br>
-            开始你的第一个 AI 会议
-          </div>
-        </div>
-        <div class="ob-right">
-          <div class="anim-canvas anim-ready">
-            <div class="converge-ring">
-              <div class="converge-icon ci-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-              <div class="converge-icon ci-1"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="var(--text2)"/></svg></div>
-              <div class="converge-icon ci-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-              <div class="converge-icon ci-3"><svg width="18" height="18" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="11" ry="13" fill="var(--text2)"/></svg></div>
-              <div class="converge-icon ci-4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div>
-              <div class="converge-center">
-                <svg viewBox="0 0 20 20" fill="none" width="28" height="28"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
-              </div>
-              <div class="converge-text">Ready to take meetings</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Progress dots -->
+    <div class="ob-step active" data-ob="0"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Welcome</div><div class="ob-title">Give a meeting room<br>to your OpenClaw</div><div class="ob-desc">OpenClaw 可以自己去开会、确认需求、带上统一的记忆，再自己执行 -- 像一个远程员工一样。<br><br>CallingClaw 就是 OpenClaw 的会议室。</div><div class="ob-actions"><button class="btn btn-primary" onclick="obNext()">开始设置</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div></div><div class="ob-right"><div class="anim-canvas anim-welcome"><div style="position:relative;"><div class="room-label">Meeting Room</div><div class="room-frame"><div class="room-door"></div><div class="room-lobster"><svg width="48" height="48" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#E63946"/><path d="M17 28C10 20 14 10 22 16C18 12 24 9 27 14" fill="#E63946"/><path d="M43 28C50 20 46 10 38 16C42 12 36 9 33 14" fill="#E63946"/><circle cx="25" cy="28" r="2.5" fill="white"/><circle cx="35" cy="28" r="2.5" fill="white"/><circle cx="25" cy="28" r="1.2" fill="#1C1C1E"/><circle cx="35" cy="28" r="1.2" fill="#1C1C1E"/><path d="M25 24C22 14 16 10 13 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M35 24C38 14 44 10 47 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg></div><div class="room-icons"><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div></div></div></div></div></div></div></div>
+    <div class="ob-step" data-ob="1"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 1 / 5</div><div class="ob-title">屏幕理解</div><div class="ob-desc">CallingClaw 需要看到屏幕来理解会议中讨论的内容。授权后 AI 可以实时分析屏幕并提取关键信息。</div><div class="ob-actions"><button class="btn btn-primary" id="ob-screen-btn" onclick="obGrantScreen()">授权屏幕录制</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-screen-status"></div></div><div class="ob-right"><div class="anim-canvas anim-screen"><div class="screen-frame"><div class="screen-el el-1"></div><div class="screen-el el-2"></div><div class="screen-el el-3"></div><div class="scan-line"></div><div class="screen-highlight hl-1"></div><div class="screen-highlight hl-2"></div><div class="screen-highlight hl-3"></div><div class="screen-tag tag-1">Slide</div><div class="screen-tag tag-2">Code</div><div class="screen-tag tag-3">Diagram</div></div></div></div></div></div>
+    <div class="ob-step" data-ob="2"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 2 / 5</div><div class="ob-title">智能操作</div><div class="ob-desc">CallingClaw 可以帮你打开文件、切换应用、在浏览器中导航。4 层自动化策略，总能找到最快的方式。</div><div class="ob-actions"><button class="btn btn-primary" id="ob-access-btn" onclick="obGrantAccess()">授权辅助功能</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-access-status"></div></div><div class="ob-right"><div class="anim-canvas anim-actions"><div style="position:relative;"><div class="actions-stage"><div class="action-target at-btn at-btn-press">Button</div><div class="action-target at-input at-typing"></div><div class="action-target at-window">Window</div><div class="action-cursor"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="#1C1C1E" stroke="white" stroke-width="1"/></svg></div></div><div class="layers-bar"><span class="layer-badge lb-1">L1</span><span class="layer-badge lb-2">L2</span><span class="layer-badge lb-3">L3</span><span class="layer-badge lb-4">L4</span></div></div></div></div></div></div>
+    <div class="ob-step" data-ob="3"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 3 / 5</div><div class="ob-title">连接 AI 引擎</div><div class="ob-desc">OpenAI API Key 驱动会议中的实时语音对话。OpenClaw 提供深度推理和代码执行能力。</div><div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="ob-key-openai" placeholder="sk-..."></div><div class="input-group"><div class="input-label">OpenRouter API Key (可选)</div><input class="input-field" type="password" id="ob-key-openrouter" placeholder="sk-or-v1-..."></div><div class="ob-actions"><button class="btn btn-primary" onclick="obSaveKeys()">保存并继续</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div></div><div class="ob-right"><div class="anim-canvas anim-brain"><div class="brain-node fast"><div class="brain-core fast">语音</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">300ms 响应</div></div><div style="position:relative;width:60px;height:20px;"><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div></div><div class="brain-node deep"><div class="brain-core deep">推理</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">深度分析</div></div></div></div></div></div>
+    <div class="ob-step" data-ob="4"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 4 / 5</div><div class="ob-title">连接 OpenClaw</div><div class="ob-desc">一键安装 <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:13px;">/callingclaw</code> 命令到你的 Claude Code。</div><div class="ob-actions"><button class="btn btn-primary" id="ob-skill-btn" onclick="obInstallSkill()">一键安装技能</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-skill-status"></div></div><div class="ob-right"><div class="anim-canvas anim-connect"><div class="connect-logos"><div class="connect-logo cl-openclaw"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#8E8E93"/><path d="M17 28C10 20 14 10 22 16" fill="#8E8E93"/><path d="M43 28C50 20 46 10 38 16" fill="#8E8E93"/><circle cx="25" cy="28" r="2" fill="white"/><circle cx="35" cy="28" r="2" fill="white"/></svg></div><div class="connect-line"><div class="connect-line-bg"></div><div class="connect-line-fill"></div></div><div class="connect-logo cl-callingclaw"><svg viewBox="0 0 20 20" fill="none" width="24" height="24"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div></div><div class="connect-terminal"><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw status</span></div><div class="term-line"><span class="term-result">CallingClaw running on :4000</span></div><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw join meet.google.com/abc</span></div></div></div></div></div></div>
+    <div class="ob-step" data-ob="5"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Ready</div><div class="ob-title">一切就绪</div><div class="ob-desc" id="ob-summary">检查配置中...</div><div class="ob-actions"><button class="btn btn-primary" onclick="obFinish(true)">启动 CallingClaw</button><button class="btn btn-ghost" onclick="obFinish(false)">稍后启动</button></div><div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);line-height:1.6;">在 Claude Code 中输入：<br><code style="color:var(--accent);font-weight:600;">/callingclaw join &lt;meeting-url&gt;</code><br>开始你的第一个 AI 会议</div></div><div class="ob-right"><div class="anim-canvas anim-ready"><div class="converge-ring"><div class="converge-icon ci-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div class="converge-icon ci-1"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="var(--text2)"/></svg></div><div class="converge-icon ci-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="converge-icon ci-3"><svg width="18" height="18" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="11" ry="13" fill="var(--text2)"/></svg></div><div class="converge-icon ci-4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div><div class="converge-center"><svg viewBox="0 0 20 20" fill="none" width="28" height="28"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div><div class="converge-text">Ready to take meetings</div></div></div></div></div></div>
     <div class="ob-progress" id="ob-progress"></div>
   </div>
-
 </div>
-
-<!-- ── Status Bar ────────────────────────────────────── -->
 <footer class="statusbar">
   <div class="st-items">
     <div class="st-item" title="Bun 引擎状态"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">引擎</span></div>
@@ -1115,39 +682,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 </footer>
 
 <script>
-// ═══════════════════════════════════════════════════════════════
-// CallingClaw Desktop — Renderer
-// ═══════════════════════════════════════════════════════════════
-
 const API = 'http://localhost:4000';
+const S = { daemon: false, meetings: [], notes: [], tasks: [], status: null, prepBrief: null, wsEvents: null };
+let localTalkTimer = null, localTalkTopic = '';
 
-// ── State ──────────────────────────────────────────────────────
-const S = {
-  daemon: false,
-  meetings: [],      // upcoming calendar events
-  notes: [],         // recent meeting note filenames
-  tasks: [],         // active tasks
-  status: null,      // /api/status response
-  selected: null,    // selected meeting index or null
-};
-
-// ── SVG icons (reusable) ───────────────────────────────────────
 const IC = {
-  cal: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-  doc: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
-  check: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>',
-  clock: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-  empty: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  doc: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
 };
 
-// ── Helpers ─────────────────────────────────────────────────────
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
 function fmtTime(d) { return new Date(d).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); }
-
 function relTime(dateStr) {
-  const diff = new Date(dateStr) - Date.now();
-  const m = Math.round(diff / 60000);
+  const m = Math.round((new Date(dateStr) - Date.now()) / 60000);
   if (m < -1440) return Math.round(-m / 1440) + ' 天前';
   if (m < -60) return Math.round(-m / 60) + ' 小时前';
   if (m < -1) return -m + ' 分钟前';
@@ -1156,487 +702,618 @@ function relTime(dateStr) {
   if (m < 1440) return Math.round(m / 60) + ' 小时后';
   return Math.round(m / 1440) + ' 天后';
 }
-
-function greet() {
-  const h = new Date().getHours();
-  return h < 12 ? '早上好' : h < 18 ? '下午好' : '晚上好';
-}
-
 function parseNoteFilename(f) {
-  // 2026-03-16_1430_Sprint Planning.md
   const m = f.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_(.+)\.md$/);
   if (!m) return { date: '', title: f.replace('.md', '') };
   return { date: m[1], time: m[2] + ':' + m[3], title: m[4] };
 }
-
-function isToday(dateStr) {
+function fmtDateParts(dateStr) {
   const d = new Date(dateStr);
-  const n = new Date();
-  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  const day = d.getDate();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return { day, month: months[d.getMonth()], weekday: weekdays[d.getDay()] };
 }
 
-function initials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+// Markdown renderer
+function renderMd(src) {
+  let html = '', inCode = false, codeBuf = '';
+  for (const line of src.split('\n')) {
+    if (line.startsWith('```')) {
+      if (inCode) { html += '<pre><code>' + esc(codeBuf.trim()) + '</code></pre>'; codeBuf = ''; }
+      inCode = !inCode; continue;
+    }
+    if (inCode) { codeBuf += line + '\n'; continue; }
+    let l = line;
+    if (/^### /.test(l)) { html += '<h3>' + esc(l.slice(4)) + '</h3>'; continue; }
+    if (/^## /.test(l)) { html += '<h2>' + esc(l.slice(3)) + '</h2>'; continue; }
+    if (/^# /.test(l)) { html += '<h1>' + esc(l.slice(2)) + '</h1>'; continue; }
+    if (/^[-*] /.test(l)) { html += '<li>' + inlineMd(l.slice(2)) + '</li>'; continue; }
+    if (l.trim() === '') { html += '<br>'; continue; }
+    html += '<p>' + inlineMd(l) + '</p>';
+  }
+  if (inCode) html += '<pre><code>' + esc(codeBuf.trim()) + '</code></pre>';
+  return html;
+}
+function inlineMd(s) {
+  return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
 }
 
-// ── View Switching ─────────────────────────────────────────────
+// Side panel
+function openPanel(title, content) {
+  document.getElementById('sp-title').textContent = title;
+  document.getElementById('sp-body').innerHTML = typeof content === 'string' && content.startsWith('<') ? content : renderMd(content || '');
+  document.getElementById('sp-stop-btn').style.display = 'none';
+  document.getElementById('side-panel').classList.add('open');
+}
+function closePanel() {
+  document.getElementById('side-panel').classList.remove('open');
+  stopLocalTalk();
+}
+
+// View switching
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   document.getElementById('btn-settings').classList.toggle('active', name === 'settings');
-  // Hide statusbar during onboarding
   document.querySelector('.statusbar').style.display = name === 'onboarding' ? 'none' : '';
   document.querySelector('.titlebar').style.display = name === 'onboarding' ? 'none' : '';
   if (name === 'settings') runAllChecks();
   if (name === 'home') refreshAll();
 }
-
 document.getElementById('btn-settings').onclick = () => showView('settings');
 document.getElementById('btn-back').onclick = () => showView('home');
 document.getElementById('btn-overlay').onclick = () => window.callingclaw.overlay.show();
-
-// Settings tabs
 document.getElementById('set-tabs').addEventListener('click', e => {
-  const tab = e.target.closest('.set-tab');
-  if (!tab) return;
+  const tab = e.target.closest('.set-tab'); if (!tab) return;
   document.querySelectorAll('.set-tab').forEach(t => t.classList.toggle('active', t === tab));
   document.querySelectorAll('.set-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab.dataset.p));
 });
 
-// ── Data Fetching ──────────────────────────────────────────────
-async function fetchJSON(url) {
-  try { const r = await fetch(url, { signal: AbortSignal.timeout(4000) }); return await r.json(); }
-  catch { return null; }
-}
+// Data fetching
+async function fetchJSON(url) { try { const r = await fetch(url, { signal: AbortSignal.timeout(4000) }); return await r.json(); } catch { return null; } }
 
 async function refreshAll() {
-  // 1. Daemon status via IPC
-  const ds = await window.callingclaw.daemon.status();
-  S.daemon = ds.running;
+  let daemonRunning = false;
+  try { const ds = await window.callingclaw.daemon.status(); daemonRunning = ds.running; } catch {}
+  if (!daemonRunning) {
+    const httpCheck = await fetchJSON(API + '/api/status');
+    if (httpCheck && httpCheck.callingclaw === 'running') daemonRunning = true;
+  }
+  S.daemon = daemonRunning;
   updateStatusBar();
-
-  if (!S.daemon) { renderHome(); return; }
-
-  // 2. Parallel API fetches
+  renderEngineBanner();
+  if (!S.daemon) { document.getElementById('meeting-list').innerHTML = ''; return; }
   const [status, evts, notes, tasks] = await Promise.all([
-    fetchJSON(API + '/api/status'),
-    fetchJSON(API + '/api/calendar/events'),
-    fetchJSON(API + '/api/meeting/notes'),
-    fetchJSON(API + '/api/tasks'),
+    fetchJSON(API + '/api/status'), fetchJSON(API + '/api/calendar/events'),
+    fetchJSON(API + '/api/meeting/notes'), fetchJSON(API + '/api/tasks'),
   ]);
-
   S.status = status;
   S.meetings = Array.isArray(evts) ? evts : (evts?.events || []);
   S.notes = Array.isArray(notes) ? notes : (notes?.files || []);
   S.tasks = Array.isArray(tasks) ? tasks : (tasks?.tasks || []);
-
+  // Restore cached prep briefs for meetings
+  try {
+    const cached = JSON.parse(localStorage.getItem('cc_prep_cache') || '{}');
+    for (const m of S.meetings) {
+      if (cached[m.summary || ''] && !m._prepBrief) m._prepBrief = cached[m.summary];
+    }
+  } catch {}
   updateStatusBar();
-  renderSidebar();
-  renderHome();
+  renderMeetings();
 }
 
-// ── Status Bar ─────────────────────────────────────────────────
-function updateStatusBar() {
-  const eng = document.getElementById('st-eng');
-  const engT = document.getElementById('st-eng-t');
-  const engBtn = document.getElementById('st-eng-btn');
+// Save prep brief to localStorage cache (keyed by meeting title)
+function cachePrepBrief(title, brief) {
+  try {
+    const cached = JSON.parse(localStorage.getItem('cc_prep_cache') || '{}');
+    cached[title] = brief;
+    // Keep only last 20 entries
+    const keys = Object.keys(cached);
+    if (keys.length > 20) delete cached[keys[0]];
+    localStorage.setItem('cc_prep_cache', JSON.stringify(cached));
+  } catch {}
+}
 
+function renderEngineBanner() {
+  const slot = document.getElementById('engine-banner-slot');
+  const staticArea = document.getElementById('home-static');
+  if (!S.daemon) {
+    slot.innerHTML = '<div class="engine-banner fade-in"><h3>CallingClaw 引擎未启动</h3><p>启动引擎以连接日历、准备会议和管理待办事项。</p><div style="display:flex;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="toggleEngine()">启动引擎</button><button class="btn btn-secondary" onclick="showView(\'settings\')">系统检查</button></div></div>';
+    staticArea.style.display = 'none';
+  } else {
+    slot.innerHTML = '';
+    staticArea.style.display = '';
+  }
+}
+
+function updateStatusBar() {
+  const eng = document.getElementById('st-eng'), engT = document.getElementById('st-eng-t'), engBtn = document.getElementById('st-eng-btn');
   eng.className = 'st-dot ' + (S.daemon ? 'green' : 'red');
   engT.textContent = S.daemon ? '运行中' : '已停止';
   engBtn.style.display = S.daemon ? 'none' : '';
   engBtn.textContent = S.daemon ? '' : '启动引擎';
-
   if (S.status) {
     const v = S.status.voice?.connected || S.status.realtime?.connected;
-    const oc = S.status.openclaw?.connected;
-    const au = S.status.sidecar?.connected || S.status.audio?.bridgeActive;
     document.getElementById('st-voice').className = 'st-dot ' + (v ? 'green' : '');
-    document.getElementById('st-oc').className = 'st-dot ' + (oc ? 'green' : '');
-    document.getElementById('st-audio').className = 'st-dot ' + (au ? 'green' : '');
+    document.getElementById('st-oc').className = 'st-dot ' + (S.status.openclaw?.connected ? 'green' : '');
+    document.getElementById('st-audio').className = 'st-dot ' + ((S.status.sidecar?.connected || S.status.audio?.bridgeActive) ? 'green' : '');
   } else if (!S.daemon) {
-    ['st-voice', 'st-oc', 'st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
+    ['st-voice','st-oc','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
   }
 }
 
 async function toggleEngine() {
   const btn = document.getElementById('st-eng-btn');
-  if (S.daemon) {
-    btn.textContent = '停止中...'; btn.disabled = true;
-    await window.callingclaw.daemon.stop();
-  } else {
-    btn.textContent = '启动中...'; btn.disabled = true;
-    await window.callingclaw.daemon.start();
-  }
+  btn.textContent = S.daemon ? '停止中...' : '启动中...'; btn.disabled = true;
+  if (S.daemon) await window.callingclaw.daemon.stop(); else await window.callingclaw.daemon.start();
   btn.disabled = false;
   setTimeout(refreshAll, 1500);
 }
 
-// ── Sidebar Rendering ──────────────────────────────────────────
-function renderSidebar() {
-  // Greeting
-  document.getElementById('greet').textContent = greet();
+// Meeting status helpers
+function meetingStatus(event) {
+  const now = Date.now(), start = new Date(event.start?.dateTime || event.start?.date).getTime();
+  const end = new Date(event.end?.dateTime || event.end?.date).getTime();
+  const active = S.status?.meeting?.active && S.status?.meeting?.url === event.hangoutLink;
+  if (active) return { label: '进行中', cls: 'badge-live' };
+  if (now > end) return { label: '已结束', cls: 'ended' };
+  if (S.prepBrief && S.prepBrief.topic === event.summary) return { label: '已就绪', cls: 'badge-preparing' };
+  if (start - now < 1800000 && start > now) return { label: '即将开始', cls: 'badge-preparing' };
+  return null;
+}
 
-  // Count today's meetings
-  const todayCount = S.meetings.filter(e => {
-    const start = e.start?.dateTime || e.start?.date;
-    return start && isToday(start);
-  }).length;
-  document.getElementById('sb-count').textContent = S.daemon ? todayCount + ' 个' : '--';
-
-  // Upcoming meetings
-  const upEl = document.getElementById('sb-upcoming');
+// Render dynamic meeting list only (does NOT touch greeting or input)
+function renderMeetings() {
+  // Don't overwrite while any prep card is showing (has dynamic state)
+  if (document.querySelector('[id^="prep-card-"]')) return;
+  const el = document.getElementById('meeting-list');
   const now = Date.now();
-  const upcoming = S.meetings
-    .filter(e => new Date(e.start?.dateTime || e.start?.date) > now - 3600000)
-    .slice(0, 8);
-
-  if (!S.daemon) {
-    upEl.innerHTML = '<div class="sb-empty">启动引擎以加载日程</div>';
-  } else if (upcoming.length === 0) {
-    upEl.innerHTML = '<div class="sb-empty">没有即将到来的会议</div>';
-  } else {
-    upEl.innerHTML = upcoming.map((e, i) => {
-      const start = e.start?.dateTime || e.start?.date;
-      const inMeeting = S.status?.meeting?.active && S.status?.meeting?.url === e.hangoutLink;
-      const soon = new Date(start) - now < 1800000 && new Date(start) - now > 0;
-      const sel = S.selected === i;
-      let badge = '';
-      if (inMeeting) badge = '<span class="mi-badge badge-live">Live</span>';
-      else if (soon) badge = '<span class="mi-badge badge-soon">' + relTime(start) + '</span>';
-
-      return `<div class="mi ${sel ? 'sel' : ''} ${inMeeting ? 'live' : ''}" onclick="selectMeeting(${i})">
-        <div class="mi-icon">${IC.cal}</div>
-        <div class="mi-body">
-          <div class="mi-title">${esc(e.summary || '无标题')}</div>
-          <div class="mi-time">${fmtTime(start)}</div>
-        </div>
-        ${badge}
-      </div>`;
-    }).join('');
-  }
-
-  // Recent meeting notes
-  const recEl = document.getElementById('sb-recent');
-  if (S.notes.length === 0) {
-    recEl.innerHTML = '<div class="sb-empty">暂无会议记录</div>';
-  } else {
-    recEl.innerHTML = S.notes.slice(0, 5).map((f, i) => {
-      const p = parseNoteFilename(typeof f === 'string' ? f : f.name || f.filename || '');
-      return `<div class="mi" onclick="selectNote(${i})">
-        <div class="mi-icon">${IC.doc}</div>
-        <div class="mi-body">
-          <div class="mi-title">${esc(p.title)}</div>
-          <div class="mi-time">${p.date}</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-}
-
-function selectMeeting(i) {
-  S.selected = i;
-  renderSidebar();
-  renderHome();
-}
-
-function selectNote(i) {
-  // TODO: Phase 4 — show meeting summary detail
-}
-
-// ── Workspace Rendering ────────────────────────────────────────
-function renderHome() {
-  const ws = document.getElementById('ws');
-
-  // State: daemon not running
-  if (!S.daemon) {
-    ws.innerHTML = `
-      <div class="engine-banner fade-in">
-        <h3>CallingClaw 引擎未启动</h3>
-        <p>启动引擎以连接日历、准备会议和管理待办事项。</p>
-        <div style="display:flex;gap:10px;justify-content:center;">
-          <button class="btn btn-primary" onclick="toggleEngine()">启动引擎</button>
-          <button class="btn btn-secondary" onclick="showView('settings')">系统检查</button>
-        </div>
-      </div>`;
-    return;
-  }
-
+  const activeMeeting = S.status?.meeting?.active;
   let html = '';
 
-  // Hero: next meeting or active meeting
-  const now = Date.now();
-  const upcoming = S.meetings.filter(e => new Date(e.start?.dateTime || e.start?.date) > now - 3600000);
-  const activeMeeting = S.status?.meeting?.active;
-  const sel = S.selected !== null ? upcoming[S.selected] : upcoming[0];
-
+  // Active meeting banner
   if (activeMeeting) {
-    // Live meeting hero
-    html += `
-      <div class="hero live fade-in">
-        <svg class="deco" viewBox="0 0 120 120"><path d="M80 120C80 95 100 75 120 75V120H80Z" fill="#E63946" opacity="0.12"/><circle cx="105" cy="55" r="10" fill="#E63946" opacity="0.08"/><path d="M45 120C45 85 75 60 100 60C100 95 70 120 45 120Z" fill="#E63946" opacity="0.06"/></svg>
-        <div class="hero-over"><div class="live-dot"></div> 会议进行中</div>
-        <h2>${esc(S.status.meeting.topic || sel?.summary || '当前会议')}</h2>
-        <div class="hero-meta">正在录制 &middot; ${S.status.meeting.participants || ''}</div>
-        <div class="hero-actions">
-          <button class="btn btn-primary" onclick="window.callingclaw.overlay.show()">打开浮窗</button>
-          <button class="btn btn-secondary" onclick="window.callingclaw.shell.openExternal('http://localhost:4000/meeting-view.html')">完整面板</button>
-        </div>
-      </div>`;
-  } else if (sel) {
-    // Next meeting hero
-    const start = sel.start?.dateTime || sel.start?.date;
-    const end = sel.end?.dateTime || sel.end?.date;
-    const attendees = sel.attendees || [];
-    const minutesAway = Math.round((new Date(start) - now) / 60000);
-    const joinable = minutesAway <= 30 && sel.hangoutLink;
-
-    html += `
-      <div class="hero fade-in">
-        <svg class="deco" viewBox="0 0 120 120"><path d="M80 120C80 95 100 75 120 75V120H80Z" fill="#E63946" opacity="0.10"/><circle cx="105" cy="55" r="10" fill="#E63946" opacity="0.06"/><path d="M45 120C45 85 75 60 100 60C100 95 70 120 45 120Z" fill="#E63946" opacity="0.04"/></svg>
-        <div class="hero-over">${IC.clock} ${minutesAway > 0 ? relTime(start) : '已开始'}</div>
-        <h2>${esc(sel.summary || '无标题会议')}</h2>
-        <div class="hero-meta">${fmtTime(start)}${end ? ' – ' + fmtTime(end) : ''}${attendees.length ? ' &middot; ' + attendees.length + ' 位参会人' : ''}</div>
-        ${attendees.length ? '<div class="hero-people">' + attendees.slice(0, 5).map(a =>
-          '<div class="avatar">' + initials(a.displayName || a.email) + '</div>'
-        ).join('') + (attendees.length > 5 ? '<span class="avatar-more">+' + (attendees.length - 5) + '</span>' : '') + '</div>' : ''}
-        <div class="hero-actions">
-          ${joinable ? '<button class="btn btn-primary" onclick="joinMeeting(\'' + esc(sel.hangoutLink) + '\')">加入会议</button>' : ''}
-          <button class="btn btn-secondary" onclick="prepareMeeting(\'' + esc(sel.summary || '') + '\')">准备会议</button>
-        </div>
-      </div>`;
-  } else {
-    // No meetings
-    html += `
-      <div class="empty fade-in">
-        <div class="empty-icon">${IC.empty}</div>
-        <h3>今天没有更多会议</h3>
-        <p>日历中没有即将到来的会议安排</p>
-      </div>`;
+    html += '<div class="meet-section-title">Now</div><div class="meet-list">';
+    html += '<div class="meet-row" style="background:var(--white);border-left:3px solid var(--accent);">';
+    html += '<div class="meet-date"><div class="meet-date-num" style="color:var(--accent);">&#9679;</div></div>';
+    html += '<div class="meet-info"><div class="meet-title">' + esc(S.status.meeting.topic || '当前会议') + '</div><div class="meet-time">正在录制</div></div>';
+    html += '<span class="meet-badge badge-live">进行中</span>';
+    html += '<div class="meet-actions"><span class="meet-action local" onclick="window.callingclaw.overlay.show()">打开浮窗</span>';
+    html += '<span class="meet-action" style="color:#DC2626;" onclick="leaveMeeting()">离开</span></div>';
+    html += '</div></div>';
   }
 
-  // Active todos
-  const activeTodos = S.tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled');
-  const doneTodos = S.tasks.filter(t => t.status === 'done').slice(0, 3);
-
-  if (activeTodos.length > 0 || doneTodos.length > 0) {
-    html += `<div class="sec-title">执行中的任务 <span class="sec-count">${activeTodos.length} 项</span></div>`;
-    html += '<div class="todo-list">';
-    for (const t of activeTodos) {
-      const cls = t.status === 'in_progress' ? 'wip' : '';
-      const tagCls = t.status === 'in_progress' ? 'tag-wip' : 'tag-pending';
-      const tagText = t.status === 'in_progress' ? '执行中' : '待处理';
-      html += `<div class="todo">
-        <div class="todo-dot ${cls}"></div>
-        <div class="todo-body">
-          <div class="todo-text">${esc(t.task)}</div>
-          <div class="todo-sub">
-            <span class="tag ${tagCls}">${tagText}</span>
-            ${t.assignee ? '<span>' + esc(t.assignee) + '</span>' : ''}
-            ${t.deadline ? '<span>' + esc(t.deadline) + '</span>' : ''}
-          </div>
-        </div>
-      </div>`;
-    }
-    for (const t of doneTodos) {
-      html += `<div class="todo" style="opacity:0.6">
-        <div class="todo-dot done"></div>
-        <div class="todo-body">
-          <div class="todo-text done">${esc(t.task)}</div>
-          <div class="todo-sub"><span class="tag tag-done">已完成</span></div>
-        </div>
-      </div>`;
+  // Upcoming meetings
+  const upcoming = S.meetings.filter(e => new Date(e.start?.dateTime || e.start?.date) > now - 3600000);
+  if (upcoming.length > 0) {
+    html += '<div class="meet-section-title">Coming up</div><div class="meet-list">';
+    for (let i = 0; i < Math.min(upcoming.length, 8); i++) { const e = upcoming[i];
+      const start = e.start?.dateTime || e.start?.date;
+      const end = e.end?.dateTime || e.end?.date;
+      const dp = fmtDateParts(start);
+      const st = meetingStatus(e);
+      const hasLink = !!e.hangoutLink;
+      const eid = 'cal_' + (e.id || i);
+      html += '<div class="meet-row clickable" onclick="openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\')" data-eid="' + eid + '">';
+      html += '<div class="meet-date"><div class="meet-date-num">' + dp.day + '</div><div class="meet-date-sub">' + dp.month + ' ' + dp.weekday + '</div></div>';
+      const hasPrepBrief = !!(e._prepBrief);
+      html += '<div class="meet-info"><div class="meet-title">' + esc(e.summary || '无标题') + '</div>';
+      html += '<div class="meet-time">' + fmtTime(start) + (end ? ' - ' + fmtTime(end) : '') + '</div>';
+      // Show prep brief as attachment if available
+      if (hasPrepBrief) {
+        html += '<div class="prep-attach done" onclick="event.stopPropagation();openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\')">✅ Meeting Prep — 点击查看</div>';
+      }
+      html += '</div>';
+      if (st && st.cls !== 'ended') html += '<span class="meet-badge ' + st.cls + '">' + st.label + '</span>';
+      html += '<div class="meet-actions" onclick="event.stopPropagation()">';
+      html += '<span class="meet-action local" onclick="startLocalTalk(\'' + esc(e.summary||'') + '\')">Talk Locally</span>';
+      if (hasLink) html += '<span class="meet-action join" onclick="joinMeeting(\'' + esc(e.hangoutLink) + '\')">Join Meeting</span>';
+      html += '</div></div>';
     }
     html += '</div>';
+  } else if (!activeMeeting) {
+    html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
   }
 
-  // Recent meetings (cards)
-  if (S.notes.length > 0 && !activeMeeting) {
-    html += '<div class="sec-title" style="margin-top:32px;">最近的会议记录</div>';
-    html += '<div class="recent-cards">';
-    for (const f of S.notes.slice(0, 3)) {
+  // Past meetings (from notes)
+  if (S.notes.length > 0) {
+    html += '<div class="meet-section-title">Past meetings</div><div class="meet-list">';
+    for (const f of S.notes.slice(0, 8)) {
       const name = typeof f === 'string' ? f : f.name || f.filename || '';
       const p = parseNoteFilename(name);
-      html += `<div class="rc" onclick="window.callingclaw.shell.openExternal('http://localhost:4000/meeting-view.html')">
-        <div class="rc-top">
-          <span class="rc-title">${esc(p.title)}</span>
-          <span class="rc-date">${p.date}${p.time ? ' ' + p.time : ''}</span>
-        </div>
-        <div class="rc-stats">
-          <span>${IC.doc} 会议记录</span>
-        </div>
-      </div>`;
+      html += '<div class="note-row" onclick="openNote(\'' + esc(name) + '\')">';
+      html += '<div class="note-icon">' + IC.doc + '</div>';
+      html += '<div class="note-info"><div class="note-title">' + esc(p.title) + '</div></div>';
+      html += '<div class="note-date">' + (p.date || '') + '</div>';
+      html += '</div>';
     }
     html += '</div>';
   }
 
-  ws.innerHTML = html;
+  el.innerHTML = html;
 }
 
-// ── Meeting Actions ────────────────────────────────────────────
+// Actions
+async function submitTopic() {
+  const inp = document.getElementById('topic-input'), topic = inp.value.trim();
+  if (!topic) return;
+  inp.value = '';
+  const listEl = document.getElementById('meeting-list');
+  // Show card immediately with topic (no shimmer on the card itself)
+  const cardId = 'prep-card-' + Date.now();
+  const cardHtml = '<div class="meet-list" id="' + cardId + '-wrap">'
+    + '<div class="meet-row clickable" id="' + cardId + '" onclick="openPrepPanel(\'' + cardId + '\')">'
+    + '<div class="meet-date"><div class="meet-date-num" style="color:var(--text3)">--</div><div class="meet-date-sub"></div></div>'
+    + '<div class="meet-info"><div class="meet-title">' + esc(topic) + '</div>'
+    + '<div class="meet-time" style="color:var(--text3)">正在创建日历和会议链接...</div>'
+    + '<div class="prep-attach shimmer" id="' + cardId + '-prep" onclick="event.stopPropagation();openPrepPanel(\'' + cardId + '\')">'
+    + '📋 Meeting Prep — OpenClaw is researching...</div>'
+    + '</div></div></div>';
+  listEl.insertAdjacentHTML('afterbegin', cardHtml);
+  // Store prep panel state for this card
+  window['_prepCards'] = window['_prepCards'] || {};
+  window['_prepCards'][cardId] = { topic, agentFeed: ['[' + new Date().toLocaleTimeString('zh-CN') + '] 开始准备会议...'], prepBrief: null };
+  try {
+    const r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
+    const data = await r.json();
+    S.prepBrief = data;
+    const meetUrl = data.meetUrl || null;
+    const title = data.title || topic;
+    const startTime = data.startTime ? new Date(data.startTime) : null;
+    // Update card state
+    const pc = window['_prepCards'][cardId];
+    if (pc) { pc.title = title; pc.meetUrl = meetUrl; pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 日历已创建: ' + title); }
+    if (data.calendarEventId) {
+      S.meetings.unshift({ id: data.calendarEventId, summary: title, start: { dateTime: data.startTime || new Date().toISOString() }, end: { dateTime: data.endTime || new Date().toISOString() }, hangoutLink: meetUrl });
+    }
+    // Update card: show title + time + buttons (calendar done, research still running)
+    const card = document.getElementById(cardId);
+    if (card) {
+      const titleEl = card.querySelector('.meet-title'); if (titleEl) titleEl.textContent = title;
+      const dateNum = card.querySelector('.meet-date-num'); if (dateNum) dateNum.textContent = startTime ? startTime.getDate() : '📅';
+      const dateSub = card.querySelector('.meet-date-sub'); if (dateSub) dateSub.textContent = startTime ? startTime.toLocaleDateString('en', { month: 'short', weekday: 'short' }) : '';
+      const timeStr = startTime ? startTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
+      card.querySelector('.meet-time').textContent = timeStr + (meetUrl ? '' : ' · 未生成会议链接');
+      card.querySelector('.meet-badge').className = 'meet-badge badge-ready'; card.querySelector('.meet-badge').textContent = '已安排';
+      // Add action buttons
+      let actionsHtml = '<div class="meet-actions" onclick="event.stopPropagation()">';
+      actionsHtml += '<span class="meet-link accent" onclick="startLocalTalk(\'' + esc(title) + '\')">Talk Locally</span>';
+      if (meetUrl) actionsHtml += '<span class="meet-link green" onclick="joinMeeting(\'' + esc(meetUrl) + '\')">Join Meeting</span>';
+      actionsHtml += '</div>';
+      card.insertAdjacentHTML('beforeend', actionsHtml);
+    }
+    // Research completion comes via WebSocket "meeting.prep_ready" event
+  } catch(e) {
+    console.error('[Prep]', e);
+    const wrap = document.getElementById(cardId + '-wrap'); if (wrap) wrap.remove();
+  }
+}
+
+// Open prep panel showing agent feed + brief (or loading state)
+function openPrepPanel(cardId) {
+  const pc = window['_prepCards']?.[cardId];
+  if (!pc) { openPrepBriefFull(); return; }
+  let md = '# ' + esc(pc.title || pc.topic) + '\n\n';
+  if (pc.prepBrief) {
+    md = buildPrepMarkdown(pc.prepBrief);
+  } else {
+    md += '> OpenClaw 正在深度调研中...\n\n';
+    md += '## Agent Activity\n\n';
+    md += pc.agentFeed.map(f => '- ' + f).join('\n');
+    md += '\n\n*调研完成后将自动更新*';
+  }
+  openPanel('📋 ' + (pc.title || pc.topic), md);
+}
+
+function submitTopicFor(topic) { document.getElementById('topic-input').value = topic; submitTopic(); }
+
+function openPrepBriefFull() {
+  if (!S.prepBrief?.prepBrief) { openPanel('会前调研', '暂无准备资料。'); return; }
+  const b = S.prepBrief.prepBrief;
+  let md = '# ' + (b.topic || '会前调研') + '\n\n';
+  if (b.goal) md += '**目标:** ' + b.goal + '\n\n';
+  if (b.summary) md += b.summary + '\n\n';
+  if (b.keyPoints?.length) md += '## 要点\n' + b.keyPoints.map(p => '- ' + p).join('\n') + '\n\n';
+  if (b.architectureDecisions?.length) md += '## 架构决策\n' + b.architectureDecisions.map(d => '- **' + d.decision + '**: ' + d.rationale).join('\n') + '\n\n';
+  if (b.expectedQuestions?.length) md += '## 预期问题\n' + b.expectedQuestions.map(q => '- **Q:** ' + q.question + '\n  **A:** ' + q.suggestedAnswer).join('\n') + '\n\n';
+  if (b.filePaths?.length) md += '## 相关文件\n' + b.filePaths.map(f => '- `' + f.path + '` — ' + f.description).join('\n') + '\n\n';
+  if (b.browserUrls?.length) md += '## 相关链接\n' + b.browserUrls.map(u => '- [' + u.description + '](' + u.url + ')').join('\n') + '\n\n';
+  if (b.previousContext) md += '## 历史背景\n' + b.previousContext + '\n';
+  openPanel('📋 会前调研: ' + (b.topic || ''), md);
+}
+
+async function openCalendarMeetingPanel(topic, meetUrl) {
+  // Show loading state
+  openPanel(topic || '会议详情', '正在加载会议信息...');
+  let md = '# ' + (topic || '会议') + '\n\n';
+  // Try multiple sources: in-memory → localStorage cache → API
+  let brief = null;
+  if (S.prepBrief?.prepBrief?.topic === topic) {
+    brief = S.prepBrief.prepBrief;
+  }
+  if (!brief) {
+    try { const cached = JSON.parse(localStorage.getItem('cc_prep_cache') || '{}'); brief = cached[topic]; } catch {}
+  }
+  if (!brief) {
+    const apiData = await fetchJSON(API + '/api/meeting/prep-brief');
+    if (apiData?.prepBrief) brief = apiData.prepBrief;
+  }
+  if (brief) {
+    md = buildPrepMarkdown(brief);
+  } else {
+    md += '> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
+  }
+  if (meetUrl) md += '\n---\n🔗 **会议链接:** ' + meetUrl + '\n';
+  md += '\n---\n';
+  md += '**操作:** ';
+  if (meetUrl) md += '[加入会议](' + meetUrl + ') | ';
+  md += '[开始本地对话](#local:' + encodeURIComponent(topic) + ')\n';
+  openPanel(topic || '会议详情', md);
+}
+
+function buildPrepMarkdown(b) {
+  let md = '# ' + (b.topic || '会前调研') + '\n\n';
+  if (b.goal) md += '**目标:** ' + b.goal + '\n\n';
+  if (b.summary) md += b.summary + '\n\n';
+  if (b.keyPoints?.length) md += '## 要点\n' + b.keyPoints.map(p => '- ' + p).join('\n') + '\n\n';
+  if (b.architectureDecisions?.length) md += '## 架构决策\n' + b.architectureDecisions.map(d => '- **' + d.decision + '**: ' + d.rationale).join('\n') + '\n\n';
+  if (b.expectedQuestions?.length) md += '## 预期问题\n' + b.expectedQuestions.map(q => '- **Q:** ' + q.question + '\n  **A:** ' + q.suggestedAnswer).join('\n') + '\n\n';
+  if (b.filePaths?.length) md += '## 相关文件\n' + b.filePaths.map(f => '- `' + f.path + '` — ' + f.description).join('\n') + '\n\n';
+  if (b.browserUrls?.length) md += '## 相关链接\n' + b.browserUrls.map(u => '- [' + u.description + '](' + u.url + ')').join('\n') + '\n\n';
+  if (b.previousContext) md += '## 历史背景\n' + b.previousContext + '\n';
+  return md;
+}
+
 async function joinMeeting(url) {
   if (!url) return;
+  try { await fetch(API + '/api/meeting/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) }); } catch {}
+  setTimeout(refreshAll, 3000);
+}
+
+async function leaveMeeting() {
+  try { await fetch(API + '/api/meeting/leave', { method: 'POST' }); } catch {}
+  setTimeout(refreshAll, 2000);
+}
+
+// Talk Locally — full meeting intelligence stack (voice + transcript + auditor + vision + DOM context)
+async function startLocalTalk(topic) {
+  localTalkTopic = topic || 'Local Conversation';
+  document.getElementById('sp-title').textContent = '本地对话: ' + localTalkTopic;
+  document.getElementById('sp-stop-btn').style.display = '';
+  document.getElementById('sp-body').innerHTML = '<div class="sp-screenshot" id="sp-screenshot">Connecting...</div><div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">Activity</div><div class="sp-events" id="sp-events"></div>';
+  document.getElementById('side-panel').classList.add('open');
   try {
-    await fetch(API + '/api/meeting/join', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+    const r = await fetch(API + '/api/meeting/talk-locally', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: localTalkTopic }),
     });
-    setTimeout(refreshAll, 3000);
+    const data = await r.json();
+    if (data?.prepBrief) {
+      const evtEl = document.getElementById('sp-events');
+      if (evtEl) {
+        const line = document.createElement('div');
+        line.className = 'sp-event-line';
+        line.textContent = new Date().toLocaleTimeString('zh-CN') + ' meeting.prep: ' + data.prepBrief.keyPoints + ' key points loaded';
+        evtEl.appendChild(line);
+      }
+    }
+  } catch {}
+  // Poll screenshot for side panel display
+  localTalkTimer = setInterval(async () => {
+    try {
+      const r = await fetch(API + '/api/bridge/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'screenshot' }) });
+      const data = await r.json();
+      const el = document.getElementById('sp-screenshot');
+      if (el && data?.image) { el.innerHTML = '<img src="data:image/png;base64,' + data.image + '">'; }
+    } catch {}
+  }, 2000);
+}
+
+async function stopLocalTalk() {
+  if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
+  try {
+    const r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
+    const data = await r.json();
+    if (data?.filepath) {
+      const evtEl = document.getElementById('sp-events');
+      if (evtEl) {
+        const line = document.createElement('div');
+        line.className = 'sp-event-line';
+        line.textContent = new Date().toLocaleTimeString('zh-CN') + ' meeting.ended: Notes saved to ' + data.filepath;
+        evtEl.appendChild(line);
+      }
+    }
+  } catch {}
+  document.getElementById('sp-stop-btn').style.display = 'none';
+}
+
+async function openPrepBrief(topic) {
+  openPanel('会前调研: ' + topic, '加载中...');
+  const data = await fetchJSON(API + '/api/meeting/prep-brief');
+  if (data) {
+    let md = '# ' + (data.topic || topic) + '\n\n';
+    if (data.goal) md += '**目标:** ' + data.goal + '\n\n';
+    if (data.summary) md += data.summary + '\n\n';
+    if (data.keyPoints?.length) { md += '## 要点\n\n'; data.keyPoints.forEach(p => md += '- ' + p + '\n'); md += '\n'; }
+    if (data.architectureDecisions?.length) { md += '## 技术决策\n\n'; data.architectureDecisions.forEach(d => md += '- **' + d.decision + '**: ' + d.rationale + '\n'); md += '\n'; }
+    if (data.expectedQuestions?.length) { md += '## 预期问题\n\n'; data.expectedQuestions.forEach(q => md += '- **Q:** ' + q.question + '\n  **A:** ' + q.suggestedAnswer + '\n'); }
+    openPanel('会前调研: ' + topic, md);
+  } else { openPanel('会前调研: ' + topic, '暂无准备资料。请先使用「准备会议」功能。'); }
+}
+
+async function openNoteFor(topic) {
+  const match = S.notes.find(f => { const name = typeof f === 'string' ? f : f.name || ''; return name.includes(topic.replace(/\s+/g, '_').slice(0, 20)); });
+  if (match) { openNote(typeof match === 'string' ? match : match.name || match.filename || ''); return; }
+  openPanel('会后总结: ' + topic, '暂无会后总结。会议结束后会自动生成。');
+}
+
+async function openNote(filename) {
+  openPanel(parseNoteFilename(filename).title, '加载中...');
+  const data = await fetchJSON(API + '/api/meeting/notes/' + encodeURIComponent(filename));
+  openPanel(parseNoteFilename(filename).title, data?.content || data?.text || '无法加载笔记内容');
+}
+
+// WebSocket event stream
+function connectWS() {
+  try {
+    S.wsEvents = new WebSocket('ws://localhost:4000/ws/events');
+    S.wsEvents.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.event === 'meeting.started' || msg.event === 'meeting.ended' || msg.event === 'meeting.agenda') setTimeout(refreshAll, 500);
+        // Handle async prep research completion
+        // Feed OpenClaw agent activity into prep cards
+        if (msg.event === 'openclaw.delta' || msg.event === 'openclaw.done') {
+          const cards = window['_prepCards'] || {};
+          for (const [cid, pc] of Object.entries(cards)) {
+            if (!pc.prepBrief && pc.agentFeed) {
+              const text = msg.data?.text || msg.data?.delta || '';
+              if (text) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (text.length > 60 ? text.slice(0,60) + '...' : text));
+              // Live-update side panel if it's showing this card's prep
+              const spTitle = document.getElementById('sp-title');
+              if (spTitle && spTitle.textContent.includes(pc.title || pc.topic)) {
+                openPrepPanel(cid);
+              }
+            }
+          }
+        }
+        // Handle prep research completion
+        if (msg.event === 'meeting.prep_ready' && msg.data) {
+          S.prepBrief = { prepBrief: msg.data.prepBrief };
+          // Find the matching prep card and update it
+          const cards = window['_prepCards'] || {};
+          for (const [cid, pc] of Object.entries(cards)) {
+            if (!pc.prepBrief) {
+              pc.prepBrief = msg.data.prepBrief;
+              pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 调研完成');
+              // Cache to localStorage for persistence across restarts
+              cachePrepBrief(pc.title || pc.topic, msg.data.prepBrief);
+              // Update prep-sub to done state
+              const prepEl = document.getElementById(cid + '-prep');
+              if (prepEl) {
+                prepEl.classList.remove('shimmer');
+                prepEl.classList.add('done');
+                prepEl.textContent = '✅ Meeting Prep — 调研完成，点击查看';
+              }
+              // Auto-open side panel with full brief
+              if (msg.data.prepBrief) openPrepPanel(cid);
+              // Remove prep-card wrapper so renderMeetings() can take over
+              // (data already in S.meetings + localStorage cache)
+              setTimeout(() => {
+                const wrap = document.getElementById(cid + '-wrap');
+                if (wrap) wrap.remove();
+                renderMeetings();
+              }, 500);
+              break;
+            }
+          }
+        }
+        // Feed events into local talk panel
+        const evtEl = document.getElementById('sp-events');
+        if (evtEl && msg.event) {
+          const line = document.createElement('div');
+          line.className = 'sp-event-line';
+          line.textContent = new Date().toLocaleTimeString('zh-CN') + ' ' + msg.event + (msg.data ? ': ' + JSON.stringify(msg.data).slice(0, 80) : '');
+          evtEl.appendChild(line);
+          if (evtEl.children.length > 50) evtEl.removeChild(evtEl.firstChild);
+          evtEl.scrollTop = evtEl.scrollHeight;
+        }
+      } catch {}
+    };
+    S.wsEvents.onclose = () => setTimeout(connectWS, 5000);
   } catch {}
 }
 
-async function prepareMeeting(topic) {
-  // Trigger meeting prep — open overlay to show brief
-  try {
-    await fetch(API + '/api/voice/text', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: '请为接下来的会议做准备：' + topic }),
-    });
-  } catch {}
-  window.callingclaw.overlay.show();
-}
-
-// ── Setup Checks ───────────────────────────────────────────────
+// Setup checks
 async function runAllChecks() {
+  loadUserEmail();
   const envChecks = await window.callingclaw.env.check();
   const permChecks = await window.callingclaw.permissions.check();
-
-  // Environment
-  const envEl = document.getElementById('chk-env');
-  const envItems = [
+  document.getElementById('chk-env').innerHTML = [
     { ok: envChecks.bun?.ok, label: 'Bun Runtime', val: envChecks.bun?.version || envChecks.bun?.error || '--' },
     { ok: envChecks.python?.ok, label: 'Python 3', val: envChecks.python?.version || envChecks.python?.error || '--' },
     { ok: envChecks.daemonDir?.ok, label: 'CallingClaw Daemon', val: envChecks.daemonDir?.ok ? '已找到' : '未找到' },
     { ok: envChecks.envFile?.ok, label: '.env 配置文件', val: envChecks.envFile?.ok ? '已存在' : '未找到' },
-  ];
-  envEl.innerHTML = envItems.map(i =>
-    `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`
-  ).join('');
-
-  // Permissions
-  const permEl = document.getElementById('chk-perm');
-  const permItems = [
+  ].map(i => `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`).join('');
+  document.getElementById('chk-perm').innerHTML = [
     { key: 'microphone', label: '麦克风', p: permChecks.microphone },
     { key: 'screenRecording', label: '屏幕录制', p: permChecks.screenRecording },
     { key: 'accessibility', label: '辅助功能', p: permChecks.accessibility },
-  ];
-  permEl.innerHTML = permItems.map(i => {
+  ].map(i => {
     let action = '';
-    if (!i.p.granted && i.p.canRequest)
-      action = `<button class="btn btn-sm btn-primary" onclick="reqPerm('${i.key}')">授权</button>`;
-    else if (!i.p.granted)
-      action = `<button class="btn btn-sm btn-ghost" onclick="openPerm('${i.key}')">去设置</button>`;
+    if (!i.p.granted && i.p.canRequest) action = `<button class="btn btn-sm btn-primary" onclick="reqPerm('${i.key}')">授权</button>`;
+    else if (!i.p.granted) action = `<button class="btn btn-sm btn-ghost" onclick="openPerm('${i.key}')">去设置</button>`;
     return `<div class="chk"><span class="chk-icon">${i.p.granted ? '&#10003;' : '&#9888;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.p.status || ''}</span>${action}</div>`;
   }).join('');
-
-  // Connection status
-  const connEl = document.getElementById('chk-conn');
   let ocOk = false;
   try { await fetch('http://localhost:18789', { signal: AbortSignal.timeout(2000) }); ocOk = true; } catch {}
-  const calendarOk = envChecks.googleCredentials?.ok || false;
-  connEl.innerHTML = [
+  document.getElementById('chk-conn').innerHTML = [
     { ok: ocOk, label: 'OpenClaw Gateway', val: ocOk ? '已连接' : '未连接' },
-    { ok: calendarOk, label: 'Google Calendar', val: calendarOk ? '已配置' : '未配置' },
-  ].map(i =>
-    `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`
-  ).join('');
-
-  // Audio
-  const audioEl = document.getElementById('chk-audio');
-  audioEl.innerHTML = [
+    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? '已配置' : '未配置' },
+  ].map(i => `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`).join('');
+  document.getElementById('chk-audio').innerHTML = [
     { ok: envChecks.blackhole2ch?.ok, label: 'BlackHole 2ch', val: envChecks.blackhole2ch?.ok ? '已安装' : '未安装' },
     { ok: envChecks.blackhole16ch?.ok, label: 'BlackHole 16ch', val: envChecks.blackhole16ch?.ok ? '已安装' : '未安装' },
     { ok: envChecks.switchAudioSource?.ok, label: 'SwitchAudioSource', val: envChecks.switchAudioSource?.ok ? '已安装' : '未安装' },
-  ].map(i =>
-    `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`
-  ).join('');
+  ].map(i => `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`).join('');
 }
-
-async function reqPerm(name) {
-  await window.callingclaw.permissions.request(name);
-  setTimeout(runAllChecks, 1000);
-}
-
+async function reqPerm(name) { await window.callingclaw.permissions.request(name); setTimeout(runAllChecks, 1000); }
 function openPerm(name) { window.callingclaw.permissions.openSettings(name); }
-
 async function saveKeys() {
-  const o = document.getElementById('key-openai').value.trim();
-  const r = document.getElementById('key-openrouter').value.trim();
+  const o = document.getElementById('key-openai').value.trim(), r = document.getElementById('key-openrouter').value.trim();
   if (!o && !r) return;
-  const body = {};
-  if (o) body.OPENAI_API_KEY = o;
-  if (r) body.OPENROUTER_API_KEY = r;
+  const body = {}; if (o) body.OPENAI_API_KEY = o; if (r) body.OPENROUTER_API_KEY = r;
   try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch {}
 }
 
-// ── Logs ───────────────────────────────────────────────────────
-const logConsole = document.getElementById('log-console');
-const MAX_LOG = 500;
+// User email
+async function loadUserEmail() {
+  try {
+    const data = await fetchJSON(API + '/api/config/user-email');
+    if (data && data.email) document.getElementById('user-email').value = data.email;
+  } catch {}
+}
+async function saveUserEmail() {
+  const email = document.getElementById('user-email').value.trim();
+  const status = document.getElementById('user-email-status');
+  try {
+    await fetch(API + '/api/config/user-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    status.textContent = '已保存'; setTimeout(() => { status.textContent = ''; }, 2000);
+  } catch { status.textContent = '保存失败'; status.style.color = 'var(--accent)'; }
+}
 
+// Logs
+const logConsole = document.getElementById('log-console');
 window.callingclaw.daemon.onLog(line => {
   const d = document.createElement('div');
   d.className = 'log-line' + (line.includes('ERROR') || line.includes('[stderr]') ? ' error' : '');
-  d.textContent = line;
-  logConsole.appendChild(d);
-  if (logConsole.children.length > MAX_LOG) logConsole.removeChild(logConsole.firstChild);
+  d.textContent = line; logConsole.appendChild(d);
+  if (logConsole.children.length > 500) logConsole.removeChild(logConsole.firstChild);
   logConsole.scrollTop = logConsole.scrollHeight;
 });
-
 function clearLogs() { logConsole.innerHTML = ''; }
-
-// ── Daemon Events ──────────────────────────────────────────────
 window.callingclaw.daemon.onStatus(() => setTimeout(refreshAll, 500));
-window.callingclaw.daemon.onError(err => {
-  const d = document.createElement('div');
-  d.className = 'log-line error';
-  d.textContent = '[ERROR] ' + err;
-  logConsole.appendChild(d);
-});
+window.callingclaw.daemon.onError(err => { const d = document.createElement('div'); d.className = 'log-line error'; d.textContent = '[ERROR] ' + err; logConsole.appendChild(d); });
 
-// ── Version ────────────────────────────────────────────────────
-(async () => {
-  try {
-    const info = await window.callingclaw.app.info();
-    document.getElementById('app-ver').textContent = 'v' + info.version;
-    document.getElementById('st-ver').textContent = 'v' + info.version;
-  } catch {}
-})();
+// Version
+(async () => { try { const info = await window.callingclaw.app.info(); document.getElementById('app-ver').textContent = 'v' + info.version; document.getElementById('st-ver').textContent = 'v' + info.version; } catch {} })();
 
-// (init moved to end of script, after all function definitions)
-
-// ═══════════════════════════════════════════════════════════════
-// Voice Test (preserved from original, restyled)
-// ═══════════════════════════════════════════════════════════════
-
-let vtWs = null, vtAudioCtx = null, vtMicStream = null, vtMicSource = null;
-let vtMicProcessor = null, vtMicAnalyser = null, vtPlaybackNode = null;
-let vtPlaybackQueue = [], vtIsPlaying = false, vtSessionActive = false, vtMicRAF = null;
-let vtLayerInfo = null, vtEnabledLayers = new Set();
-
-// Load saved voice config
+// Voice Test
+let vtWs = null, vtAudioCtx = null, vtMicStream = null, vtMicSource = null, vtMicProcessor = null, vtMicAnalyser = null, vtPlaybackNode = null;
+let vtPlaybackQueue = [], vtIsPlaying = false, vtSessionActive = false, vtMicRAF = null, vtLayerInfo = null, vtEnabledLayers = new Set();
 (async () => {
   try { const r = await fetchJSON(API + '/api/config'); if (r?.openai_voice) document.getElementById('vt-voice').value = r.openai_voice; } catch {}
   try { const r = await fetchJSON(API + '/api/voice/instructions'); if (r?.instructions) document.getElementById('vt-instr').value = r.instructions; } catch {}
 })();
-
 function vtUpdateInstructions() {
-  const text = document.getElementById('vt-instr').value.trim();
-  if (!text) return;
-  if (vtWs && vtWs.readyState === WebSocket.OPEN) {
-    vtWs.send(JSON.stringify({ type: 'update_instructions', instructions: text }));
-    document.getElementById('vt-instr-status').textContent = 'sent';
-  } else {
-    fetch(API + '/api/voice/instructions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instructions: text })
-    }).then(() => { document.getElementById('vt-instr-status').textContent = 'updated'; }).catch(() => {});
-  }
+  const text = document.getElementById('vt-instr').value.trim(); if (!text) return;
+  if (vtWs && vtWs.readyState === WebSocket.OPEN) { vtWs.send(JSON.stringify({ type: 'update_instructions', instructions: text })); document.getElementById('vt-instr-status').textContent = 'sent'; }
+  else { fetch(API + '/api/voice/instructions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instructions: text }) }).then(() => { document.getElementById('vt-instr-status').textContent = 'updated'; }).catch(() => {}); }
   setTimeout(() => document.getElementById('vt-instr-status').textContent = '', 2000);
 }
-
 async function vtStart() {
-  const btnS = document.getElementById('vt-btn-start');
-  const btnE = document.getElementById('vt-btn-stop');
+  const btnS = document.getElementById('vt-btn-start'), btnE = document.getElementById('vt-btn-stop');
   btnS.disabled = true; btnS.textContent = '连接中...';
   try {
     vtMicStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
@@ -1645,71 +1322,52 @@ async function vtStart() {
     vtMicAnalyser = vtAudioCtx.createAnalyser(); vtMicAnalyser.fftSize = 256;
     vtMicSource.connect(vtMicAnalyser);
     vtMicProcessor = vtAudioCtx.createScriptProcessor(4096, 1, 1);
-    vtMicSource.connect(vtMicProcessor);
-    vtMicProcessor.connect(vtAudioCtx.destination);
+    vtMicSource.connect(vtMicProcessor); vtMicProcessor.connect(vtAudioCtx.destination);
     vtMicProcessor.onaudioprocess = e => {
       if (!vtSessionActive || !vtWs || vtWs.readyState !== WebSocket.OPEN) return;
-      const inp = e.inputBuffer.getChannelData(0);
-      const pcm = new Int16Array(inp.length);
+      const inp = e.inputBuffer.getChannelData(0), pcm = new Int16Array(inp.length);
       for (let i = 0; i < inp.length; i++) { const s = Math.max(-1, Math.min(1, inp[i])); pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF; }
-      const bytes = new Uint8Array(pcm.buffer);
-      let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const bytes = new Uint8Array(pcm.buffer); let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       vtWs.send(JSON.stringify({ type: 'audio', audio: btoa(bin) }));
     };
     vtPlaybackNode = vtAudioCtx.createScriptProcessor(4096, 1, 1);
     vtPlaybackNode.onaudioprocess = e => {
       const out = e.outputBuffer.getChannelData(0);
-      if (vtPlaybackQueue.length > 0) {
-        const chunk = vtPlaybackQueue.shift();
-        const len = Math.min(chunk.length, out.length);
-        for (let i = 0; i < len; i++) out[i] = chunk[i];
-        for (let i = len; i < out.length; i++) out[i] = 0;
-      } else { for (let i = 0; i < out.length; i++) out[i] = 0; }
+      if (vtPlaybackQueue.length > 0) { const chunk = vtPlaybackQueue.shift(); const len = Math.min(chunk.length, out.length); for (let i = 0; i < len; i++) out[i] = chunk[i]; for (let i = len; i < out.length; i++) out[i] = 0; }
+      else { for (let i = 0; i < out.length; i++) out[i] = 0; }
     };
     vtPlaybackNode.connect(vtAudioCtx.destination);
-
     vtWs = new WebSocket('ws://localhost:4000/ws/voice-test');
     vtWs.onopen = () => {
       document.getElementById('vt-ws-status').textContent = '已连接';
       vtWs.send(JSON.stringify({ type: 'get_layers' }));
-      const voice = document.getElementById('vt-voice').value;
-      fetch(API + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_voice: voice }) }).catch(() => {});
-      const instr = document.getElementById('vt-instr').value.trim();
-      vtWs.send(JSON.stringify({ type: 'start', instructions: instr || undefined }));
+      fetch(API + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_voice: document.getElementById('vt-voice').value }) }).catch(() => {});
+      vtWs.send(JSON.stringify({ type: 'start', instructions: document.getElementById('vt-instr').value.trim() || undefined }));
     };
     vtWs.onmessage = event => {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'audio' && msg.audio) {
-          const bin = atob(msg.audio);
-          const bytes = new Uint8Array(bin.length);
+          const bin = atob(msg.audio), bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const pcm = new Int16Array(bytes.buffer);
-          const f32 = new Float32Array(pcm.length);
+          const pcm = new Int16Array(bytes.buffer), f32 = new Float32Array(pcm.length);
           for (let i = 0; i < pcm.length; i++) f32[i] = pcm[i] / (pcm[i] < 0 ? 0x8000 : 0x7FFF);
-          vtPlaybackQueue.push(f32);
-          while (vtPlaybackQueue.length > 12) vtPlaybackQueue.shift();
-        } else if (msg.type === 'transcript') {
-          vtAddTranscript(msg.role, msg.text, msg.ts);
-        } else if (msg.type === 'status') {
+          vtPlaybackQueue.push(f32); while (vtPlaybackQueue.length > 12) vtPlaybackQueue.shift();
+        } else if (msg.type === 'transcript') { vtAddTranscript(msg.role, msg.text, msg.ts); }
+        else if (msg.type === 'status') {
           vtSessionActive = msg.voiceConnected;
           document.getElementById('vt-status-dot').className = 'st-dot' + (msg.voiceConnected ? ' green' : '');
           document.getElementById('vt-t-dot').className = 'st-dot' + (msg.voiceConnected ? ' green' : '');
           if (msg.voiceConnected) { btnS.style.display = 'none'; btnE.style.display = ''; vtStartMicLevel(); vtEnableToggles(true); if (vtEnabledLayers.size > 0) vtApplyLayers(); }
-        } else if (msg.type === 'layers_info') {
-          vtRenderLayers(msg.layers); if (vtSessionActive) vtEnableToggles(true);
-        } else if (msg.type === 'layers_updated') {
-          vtUpdateCount();
-          vtAddTranscript('system', 'Layers: [' + (msg.activeLayers || []).join(', ') + '] — ' + (msg.activeTools?.length || 0) + ' tools');
-        } else if (msg.type === 'error') {
-          vtAddTranscript('system', 'Error: ' + msg.message); vtResetUI();
-        }
+        } else if (msg.type === 'layers_info') { vtRenderLayers(msg.layers); if (vtSessionActive) vtEnableToggles(true); }
+        else if (msg.type === 'layers_updated') { vtUpdateCount(); vtAddTranscript('system', 'Layers: [' + (msg.activeLayers||[]).join(', ') + '] - ' + (msg.activeTools?.length||0) + ' tools'); }
+        else if (msg.type === 'error') { vtAddTranscript('system', 'Error: ' + msg.message); vtResetUI(); }
       } catch {}
     };
     vtWs.onclose = () => { document.getElementById('vt-ws-status').textContent = '--'; if (vtSessionActive) vtStop(); };
   } catch (e) { alert('Failed: ' + e.message); vtResetUI(); }
 }
-
 function vtStop() {
   vtSessionActive = false;
   if (vtWs && vtWs.readyState === WebSocket.OPEN) { vtWs.send(JSON.stringify({ type: 'stop' })); vtWs.close(); }
@@ -1718,82 +1376,54 @@ function vtStop() {
   vtMicProcessor = vtMicSource = vtMicAnalyser = vtPlaybackNode = null;
   if (vtMicStream) { vtMicStream.getTracks().forEach(t => t.stop()); vtMicStream = null; }
   if (vtAudioCtx) { vtAudioCtx.close(); vtAudioCtx = null; }
-  vtPlaybackQueue = []; vtIsPlaying = false; vtResetUI();
+  vtPlaybackQueue = []; vtResetUI();
   document.getElementById('vt-status-dot').className = 'st-dot';
   document.getElementById('vt-t-dot').className = 'st-dot';
 }
-
 function vtSendText() {
-  const inp = document.getElementById('vt-text-input'), text = inp.value.trim();
-  if (!text) return;
+  const inp = document.getElementById('vt-text-input'), text = inp.value.trim(); if (!text) return;
   fetch(API + '/api/voice/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
   vtAddTranscript('user', text); inp.value = '';
 }
-
 function vtAddTranscript(role, text, ts) {
-  const area = document.getElementById('vt-transcript');
-  const ph = area.querySelector('div[style*="text-align"]');
+  const area = document.getElementById('vt-transcript'), ph = area.querySelector('div[style*="text-align"]');
   if (ph) ph.remove();
-  const entry = document.createElement('div');
-  entry.style.cssText = 'margin-bottom:10px;';
+  const entry = document.createElement('div'); entry.style.cssText = 'margin-bottom:10px;';
   const time = ts ? new Date(ts).toLocaleTimeString('zh-CN') : new Date().toLocaleTimeString('zh-CN');
   const colors = { user: 'var(--blue)', assistant: 'var(--green)', system: 'var(--yellow)' };
   const names = { user: 'You', assistant: 'AI', system: 'System' };
   entry.innerHTML = `<div style="font-size:11px;font-weight:600;color:${colors[role]||'var(--text2)'};margin-bottom:2px;">${names[role]||role}</div><div style="font-size:13px;line-height:1.5;">${esc(text)}</div><div style="font-size:10px;color:var(--text3);margin-top:1px;">${time}</div>`;
   area.appendChild(entry); area.scrollTop = area.scrollHeight;
 }
-
 function vtStartMicLevel() {
   if (!vtMicAnalyser) return;
-  const data = new Uint8Array(vtMicAnalyser.frequencyBinCount);
-  const bar = document.getElementById('vt-mic-bar');
-  function tick() {
-    if (!vtMicAnalyser) return;
-    vtMicAnalyser.getByteFrequencyData(data);
-    let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i];
-    bar.style.width = Math.min(100, (sum / data.length / 128) * 100) + '%';
-    vtMicRAF = requestAnimationFrame(tick);
-  }
-  tick();
+  const data = new Uint8Array(vtMicAnalyser.frequencyBinCount), bar = document.getElementById('vt-mic-bar');
+  (function tick() { if (!vtMicAnalyser) return; vtMicAnalyser.getByteFrequencyData(data); let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i]; bar.style.width = Math.min(100, (sum / data.length / 128) * 100) + '%'; vtMicRAF = requestAnimationFrame(tick); })();
 }
-
 function vtResetUI() {
-  const btnS = document.getElementById('vt-btn-start');
-  const btnE = document.getElementById('vt-btn-stop');
-  btnS.style.display = ''; btnS.disabled = false; btnS.textContent = '开始语音';
-  btnE.style.display = 'none';
+  const btnS = document.getElementById('vt-btn-start'), btnE = document.getElementById('vt-btn-stop');
+  btnS.style.display = ''; btnS.disabled = false; btnS.textContent = '开始语音'; btnE.style.display = 'none';
   if (vtMicRAF) { cancelAnimationFrame(vtMicRAF); vtMicRAF = null; }
   document.getElementById('vt-mic-bar').style.width = '0%';
 }
-
-// ── Layer Toggles ──────────────────────────────────────────────
 const LI = { memory: '&#128218;', calendar: '&#128197;', meeting: '&#128222;', automation: '&#9881;', zoom: '&#127909;' };
 const LD = { memory: '记忆检索', calendar: '日程安排', meeting: '加入/离开会议', automation: '屏幕/浏览器/文件', zoom: 'Zoom 控制' };
-
 function vtRenderLayers(info) {
-  vtLayerInfo = info;
-  const c = document.getElementById('vt-layers');
-  c.innerHTML = '';
+  vtLayerInfo = info; const c = document.getElementById('vt-layers'); c.innerHTML = '';
   for (const [k, v] of Object.entries(info)) {
-    const checked = vtEnabledLayers.has(k);
     const row = document.createElement('div'); row.className = 'layer-row';
-    row.innerHTML = `<label class="toggle"><input type="checkbox" data-layer="${k}" ${checked ? 'checked' : ''} ${!vtSessionActive ? 'disabled' : ''} onchange="vtToggle('${k}',this.checked)"><span class="slider"></span></label><div class="layer-info"><div class="layer-name">${LI[k]||''} ${v.label}</div><div class="layer-meta">${v.toolCount} tools &middot; ${LD[k]||''}</div></div>`;
+    row.innerHTML = `<label class="toggle"><input type="checkbox" data-layer="${k}" ${vtEnabledLayers.has(k)?'checked':''} ${!vtSessionActive?'disabled':''} onchange="vtToggle('${k}',this.checked)"><span class="slider"></span></label><div class="layer-info"><div class="layer-name">${LI[k]||''} ${v.label}</div><div class="layer-meta">${v.toolCount} tools &middot; ${LD[k]||''}</div></div>`;
     c.appendChild(row);
   }
   vtUpdateCount();
 }
-
 function vtToggle(name, on) { if (on) vtEnabledLayers.add(name); else vtEnabledLayers.delete(name); vtApplyLayers(); }
 function vtApplyLayers() { if (vtWs && vtWs.readyState === WebSocket.OPEN) vtWs.send(JSON.stringify({ type: 'set_layers', layers: [...vtEnabledLayers] })); }
-function vtUpdateCount() {
-  let a = 0, t = 0;
-  if (vtLayerInfo) for (const [k, v] of Object.entries(vtLayerInfo)) { t += v.toolCount; if (vtEnabledLayers.has(k)) a += v.toolCount; }
-  document.getElementById('vt-layer-count').textContent = a + '/' + t + ' tools';
-}
+function vtUpdateCount() { let a = 0, t = 0; if (vtLayerInfo) for (const [k, v] of Object.entries(vtLayerInfo)) { t += v.toolCount; if (vtEnabledLayers.has(k)) a += v.toolCount; } document.getElementById('vt-layer-count').textContent = a + '/' + t + ' tools'; }
 function vtEnableToggles(en) { document.querySelectorAll('#vt-layers input[type="checkbox"]').forEach(el => el.disabled = !en); }
 
-// ═══════════════════════════════════════════════════════════════
 // Onboarding
+<<<<<<< HEAD
 // ═══════════════════════════════════════════════════════════════
 
 const OB_STEPS = 6;
@@ -1859,185 +1489,33 @@ function obRestart() {
   obInit();
 }
 
+=======
+const OB_STEPS = 6; let obStep = 0, obPollTimer = null;
+function obInit() { obRenderProgress(); obShowStep(0); obCheckStep(); }
+function obRenderProgress() { const el = document.getElementById('ob-progress'); el.innerHTML = ''; for (let i = 0; i < OB_STEPS; i++) { const dot = document.createElement('div'); dot.className = 'ob-dot' + (i < obStep ? ' done' : '') + (i === obStep ? ' active' : ''); el.appendChild(dot); } }
+function obShowStep(n) { obStep = n; document.querySelectorAll('.ob-step').forEach(s => s.classList.toggle('active', parseInt(s.dataset.ob) === n)); obRenderProgress(); obCheckStep().catch(() => {}); }
+function obNext() { if (obStep < OB_STEPS - 1) obShowStep(obStep + 1); }
+function obRestart() { localStorage.removeItem('onboarding_completed'); obStep = 0; document.querySelectorAll('.ob-step').forEach(s => s.classList.remove('active')); document.querySelector('.ob-step[data-ob="0"]').classList.add('active'); showView('onboarding'); obInit(); }
+function obStopPolling() { if (obPollTimer) { clearInterval(obPollTimer); obPollTimer = null; } }
+function obStartPolling() { obStopPolling(); obPollTimer = setInterval(async () => { const perms = await window.callingclaw.permissions.check(); if (obStep === 1 && perms.screenRecording.granted) { obStopPolling(); obAutoAdvance('ob-screen-status', 'ob-screen-btn', '屏幕录制已授权'); } if (obStep === 2 && perms.accessibility.granted) { obStopPolling(); obAutoAdvance('ob-access-status', 'ob-access-btn', '辅助功能已授权'); } }, 1500); }
+function obAutoAdvance(statusId, btnId, msg) { const el = document.getElementById(statusId), btn = document.getElementById(btnId); el.innerHTML = '<div class="st-dot green"></div> ' + msg; btn.textContent = '已授权'; btn.disabled = true; btn.classList.remove('btn-primary'); btn.classList.add('btn-secondary'); setTimeout(() => obNext(), 800); }
+function obGrantScreen() { window.callingclaw.permissions.openSettings('screenRecording'); document.getElementById('ob-screen-status').innerHTML = '<div class="st-dot" style="background:var(--yellow)"></div> 已打开系统设置'; obStartPolling(); }
+function obGrantAccess() { window.callingclaw.permissions.openSettings('accessibility'); document.getElementById('ob-access-status').innerHTML = '<div class="st-dot" style="background:var(--yellow)"></div> 已打开系统设置'; obStartPolling(); }
+async function obSaveKeys() { const o = document.getElementById('ob-key-openai').value.trim(), r = document.getElementById('ob-key-openrouter').value.trim(); if (!o && !r) { obNext(); return; } const body = {}; if (o) body.OPENAI_API_KEY = o; if (r) body.OPENROUTER_API_KEY = r; try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch {} obNext(); }
+async function obInstallSkill() { const btn = document.getElementById('ob-skill-btn'); btn.textContent = '安装中...'; btn.disabled = true; try { const result = await window.callingclaw.skill.install(); if (result.ok) { btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; document.getElementById('ob-skill-status').innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green"></div> 已安装到 ' + esc(result.path) + '</div>'; setTimeout(() => obNext(), 800); } } catch (e) { btn.textContent = '安装失败'; btn.disabled = false; btn.className = 'btn btn-primary'; document.getElementById('ob-skill-status').innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent)"></div> ' + esc(String(e.message||e)) + '</div>'; } }
+async function obFinish(startEngine) { localStorage.setItem('onboarding_completed', '1'); if (startEngine) await window.callingclaw.daemon.start(); showView('home'); setTimeout(refreshAll, startEngine ? 2000 : 100); }
+>>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 async function obCheckStep() {
-  // Stop any previous polling when changing steps
   obStopPolling();
-
   try {
-    if (obStep === 1) {
-      const perms = await window.callingclaw.permissions.check();
-      const el = document.getElementById('ob-screen-status');
-      const btn = document.getElementById('ob-screen-btn');
-      if (perms.screenRecording.granted) {
-        el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权';
-        btn.textContent = '✓ 已授权';
-        btn.className = 'btn btn-secondary';
-        btn.disabled = true;
-      } else {
-        el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权';
-        btn.textContent = '授权屏幕录制';
-        btn.disabled = false;
-        btn.className = 'btn btn-primary';
-        btn.onclick = obGrantScreen;
-      }
-    }
-
-    if (obStep === 2) {
-      const perms = await window.callingclaw.permissions.check();
-      const el = document.getElementById('ob-access-status');
-      const btn = document.getElementById('ob-access-btn');
-      if (perms.accessibility.granted) {
-        el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权';
-        btn.textContent = '✓ 已授权';
-        btn.className = 'btn btn-secondary';
-        btn.disabled = true;
-      } else {
-        el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权';
-        btn.textContent = '授权辅助功能';
-        btn.disabled = false;
-        btn.className = 'btn btn-primary';
-        btn.onclick = obGrantAccess;
-      }
-    }
-
-    if (obStep === 4) {
-      const info = await window.callingclaw.skill.check();
-      const el = document.getElementById('ob-skill-status');
-      const btn = document.getElementById('ob-skill-btn');
-      let html = '';
-      if (info.claudeInstalled) {
-        html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> Claude Code: ' + esc(info.claudePath) + '</div>';
-      } else {
-        html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> Claude Code 未检测到</div>';
-      }
-      if (info.skillInstalled) {
-        html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装</div>';
-        btn.textContent = '✓ 已安装';
-        btn.className = 'btn btn-secondary';
-        btn.disabled = true;
-      }
-      el.innerHTML = html;
-    }
-
-    if (obStep === 5) {
-      const [perms, skill, env] = await Promise.all([
-        window.callingclaw.permissions.check(),
-        window.callingclaw.skill.check(),
-        window.callingclaw.env.check(),
-      ]);
-      const items = [
-        { ok: perms.screenRecording.granted, label: '屏幕录制' },
-        { ok: perms.accessibility.granted, label: '辅助功能' },
-        { ok: env.envFile?.ok, label: 'AI 引擎' },
-        { ok: skill.skillInstalled, label: 'OpenClaw 技能' },
-        { ok: env.blackhole2ch?.ok, label: '音频桥接 (BlackHole)', optional: true },
-      ];
-      document.getElementById('ob-summary').innerHTML = items.map(i => {
-        const icon = i.ok ? '✓' : (i.optional ? '–' : '✗');
-        const color = i.ok ? 'var(--green)' : (i.optional ? 'var(--text3)' : 'var(--accent)');
-        return `<div style="margin-bottom:8px;font-size:15px;display:flex;align-items:center;gap:8px;">
-          <span style="color:${color};font-weight:600;width:16px;text-align:center;">${icon}</span> ${i.label}
-        </div>`;
-      }).join('');
-    }
-  } catch (e) {
-    console.warn('[onboarding] check error:', e);
-  }
+    if (obStep === 1) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-screen-status'), btn = document.getElementById('ob-screen-btn'); if (perms.screenRecording.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权屏幕录制'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantScreen; } }
+    if (obStep === 2) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-access-status'), btn = document.getElementById('ob-access-btn'); if (perms.accessibility.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权辅助功能'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantAccess; } }
+    if (obStep === 4) { const info = await window.callingclaw.skill.check(); const el = document.getElementById('ob-skill-status'), btn = document.getElementById('ob-skill-btn'); let html = ''; if (info.claudeInstalled) html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> Claude Code: ' + esc(info.claudePath) + '</div>'; else html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> Claude Code 未检测到</div>'; if (info.skillInstalled) { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装</div>'; btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; btn.disabled = true; } el.innerHTML = html; }
+    if (obStep === 5) { const [perms, skill, env] = await Promise.all([window.callingclaw.permissions.check(), window.callingclaw.skill.check(), window.callingclaw.env.check()]); document.getElementById('ob-summary').innerHTML = [{ ok: perms.screenRecording.granted, label: '屏幕录制' }, { ok: perms.accessibility.granted, label: '辅助功能' }, { ok: env.envFile?.ok, label: 'AI 引擎' }, { ok: skill.skillInstalled, label: 'OpenClaw 技能' }, { ok: env.blackhole2ch?.ok, label: '音频桥接 (BlackHole)', optional: true }].map(i => `<div style="margin-bottom:8px;font-size:15px;display:flex;align-items:center;gap:8px;"><span style="color:${i.ok ? 'var(--green)' : (i.optional ? 'var(--text3)' : 'var(--accent)')};font-weight:600;width:16px;text-align:center;">${i.ok ? '&#10003;' : (i.optional ? '-' : '&#10007;')}</span> ${i.label}</div>`).join(''); }
+  } catch {}
 }
 
-let obPollTimer = null;
-
-function obStartPolling() {
-  obStopPolling();
-  obPollTimer = setInterval(async () => {
-    const perms = await window.callingclaw.permissions.check();
-    if (obStep === 1 && perms.screenRecording.granted) {
-      obStopPolling();
-      obAutoAdvance('ob-screen-status', 'ob-screen-btn', '屏幕录制已授权');
-    }
-    if (obStep === 2 && perms.accessibility.granted) {
-      obStopPolling();
-      obAutoAdvance('ob-access-status', 'ob-access-btn', '辅助功能已授权');
-    }
-  }, 1500);
-}
-
-function obStopPolling() {
-  if (obPollTimer) { clearInterval(obPollTimer); obPollTimer = null; }
-}
-
-function obAutoAdvance(statusId, btnId, msg) {
-  const el = document.getElementById(statusId);
-  const btn = document.getElementById(btnId);
-  el.innerHTML = '<div class="st-dot green"></div> ' + msg;
-  btn.textContent = '✓ 已授权';
-  btn.disabled = true;
-  btn.classList.remove('btn-primary');
-  btn.classList.add('btn-secondary');
-  // Auto-advance after a short delay
-  setTimeout(() => obNext(), 800);
-}
-
-function obGrantScreen() {
-  window.callingclaw.permissions.openSettings('screenRecording');
-  document.getElementById('ob-screen-status').innerHTML =
-    '<div class="st-dot" style="background:var(--yellow)"></div> 已打开系统设置 — 授权后自动继续';
-  obStartPolling();
-}
-
-function obGrantAccess() {
-  window.callingclaw.permissions.openSettings('accessibility');
-  document.getElementById('ob-access-status').innerHTML =
-    '<div class="st-dot" style="background:var(--yellow)"></div> 已打开系统设置 — 授权后自动继续';
-  obStartPolling();
-}
-
-async function obSaveKeys() {
-  const o = document.getElementById('ob-key-openai').value.trim();
-  const r = document.getElementById('ob-key-openrouter').value.trim();
-  if (!o && !r) { obNext(); return; }
-  const body = {};
-  if (o) body.OPENAI_API_KEY = o;
-  if (r) body.OPENROUTER_API_KEY = r;
-  try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch {}
-  obNext();
-}
-
-async function obInstallSkill() {
-  const btn = document.getElementById('ob-skill-btn');
-  btn.textContent = '安装中...'; btn.disabled = true;
-  try {
-    const result = await window.callingclaw.skill.install();
-    if (result.ok) {
-      btn.textContent = '✓ 已安装';
-      btn.className = 'btn btn-secondary';
-      document.getElementById('ob-skill-status').innerHTML =
-        '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green"></div> 已安装到 ' + esc(result.path) + '</div>';
-      // Auto-advance
-      setTimeout(() => obNext(), 800);
-    }
-  } catch (e) {
-    btn.textContent = '安装失败'; btn.disabled = false;
-    btn.className = 'btn btn-primary';
-    document.getElementById('ob-skill-status').innerHTML =
-      '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent)"></div> ' + esc(String(e.message || e)) + '</div>';
-  }
-}
-
-async function obFinish(startEngine) {
-  localStorage.setItem('onboarding_completed', '1');
-  if (startEngine) {
-    await window.callingclaw.daemon.start();
-  }
-  showView('home');
-  setTimeout(refreshAll, startEngine ? 2000 : 100);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Init — check onboarding state
-// ═══════════════════════════════════════════════════════════════
-
-// Load default layers
+// Init
 vtRenderLayers({
   memory: { label: 'Memory', toolCount: 1, tools: ['recall_context'] },
   calendar: { label: 'Calendar', toolCount: 2, tools: ['schedule_meeting', 'check_calendar'] },
@@ -2046,17 +1524,9 @@ vtRenderLayers({
   zoom: { label: 'Zoom', toolCount: 1, tools: ['zoom_control'] },
 });
 
-// ═══════════════════════════════════════════════════════════════
-// INIT — must be at the very end, after all function definitions
-// ═══════════════════════════════════════════════════════════════
-document.getElementById('greet').textContent = greet();
-
-if (!localStorage.getItem('onboarding_completed')) {
-  showView('onboarding');
-  obInit();
-} else {
-  refreshAll();
-}
+if (!localStorage.getItem('onboarding_completed')) { showView('onboarding'); obInit(); }
+else { refreshAll(); }
+connectWS();
 setInterval(() => { if (document.querySelector('#view-home.active')) refreshAll(); }, 10000);
 </script>
 </body>

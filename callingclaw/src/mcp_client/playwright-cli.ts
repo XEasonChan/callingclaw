@@ -852,8 +852,9 @@ export class PlaywrightCLIClient {
 
   /** Run a playwright-cli command and return stdout */
   private async run(subcommand: string): Promise<string> {
+    // Auto-start on first use (lazy initialization — avoids opening Chrome at startup)
     if (!this._connected && !subcommand.startsWith("open")) {
-      throw new Error("Playwright CLI not started");
+      await this.start();
     }
 
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;

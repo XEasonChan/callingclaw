@@ -336,9 +336,13 @@ class AudioBridge:
         if not self.capture_stream:
             return
 
+        loop = asyncio.get_event_loop()
         while self.running:
             try:
-                data = self.capture_stream.read(self._chunk, exception_on_overflow=False)
+                # Run PyAudio read in thread pool to avoid blocking event loop
+                data = await loop.run_in_executor(
+                    None, self.capture_stream.read, self._chunk, False
+                )
                 b64 = base64.b64encode(data).decode("utf-8")
                 await ws.send(json.dumps({
                     "type": "audio_chunk",
@@ -467,9 +471,12 @@ async def main():
 
                     elif msg_type == "audio_playback":
                         # AI audio → speaker (direct) or BlackHole (meet)
+                        # Run in thread pool to avoid blocking asyncio event loop
+                        # (PyAudio write is synchronous and can block ping handling)
                         audio_data = payload.get("audio", "")
                         if audio_data and audio_mode in ("direct", "meet_bridge"):
-                            audio_bridge.play_audio(audio_data)
+                            loop = asyncio.get_event_loop()
+                            loop.run_in_executor(None, audio_bridge.play_audio, audio_data)
 
                     elif msg_type == "config":
                         print(f"[Sidecar] Config update received: {payload}")

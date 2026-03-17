@@ -1,5 +1,27 @@
 [
   {
+    "id": "task_mmta0g1w_7k0j",
+    "task": "Finalize presentation content and structure.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "Before the hackathon on Saturday",
+    "sourceMeetingId": "mtg_mmt9pi7m_2svt",
+    "createdAt": 1773671157572,
+    "updatedAt": 1773671157572
+  },
+  {
+    "id": "task_mmta0g1w_jvgt",
+    "task": "Prepare visual materials and presentation aids for the hackathon.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Xe",
+    "deadline": "Before the hackathon on Saturday",
+    "sourceMeetingId": "mtg_mmt9pi7m_2svt",
+    "createdAt": 1773671157572,
+    "updatedAt": 1773671157572
+  },
+  {
     "id": "task_mmrwyl7d_xp8n",
     "task": "Discuss Context Sync 增量架构方案",
     "status": "pending",

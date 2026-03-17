@@ -216,6 +216,12 @@ export class PostMeetingDelivery {
     try {
       await this.openclawBridge.sendTask(instruction);
       console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
+
+      this.eventBus.emit("postmeeting.todos_sent", {
+        meetingId,
+        topic,
+        todos: todos.map(t => ({ id: t.id, text: t.shortText, assignee: t.assignee })),
+      });
     } catch (e: any) {
       console.error("[PostMeeting] Failed to send todo message:", e.message);
     }
@@ -286,6 +292,14 @@ export class PostMeetingDelivery {
     if (!todo) return `Todo ${todoId} not found`;
 
     todo.confirmed = true;
+
+    this.eventBus.emit("postmeeting.todo_confirmed", {
+      meetingId,
+      todoId: todo.id,
+      task: todo.fullText,
+      assignee: todo.assignee,
+    });
+
     await this.executeTodo(delivery, todo);
     return `✅ 确认: ${todo.shortText}`;
   }
@@ -315,6 +329,12 @@ export class PostMeetingDelivery {
     const unconfirmed = delivery.todos.filter(t => !t.confirmed && !t.executionStarted);
     for (const todo of unconfirmed) {
       todo.confirmed = true;
+      this.eventBus.emit("postmeeting.todo_confirmed", {
+        meetingId,
+        todoId: todo.id,
+        task: todo.fullText,
+        assignee: todo.assignee,
+      });
     }
 
     // Execute all confirmed todos

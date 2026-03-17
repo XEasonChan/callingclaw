@@ -659,7 +659,7 @@ RULES:
       this.meetingPrepSkill.addLiveNote(note);
     }
 
-    pushContextUpdate(this.voice, this.meetingPrepSkill);
+    pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
     console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI`);
   }
 
