@@ -43,7 +43,6 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 .btn-hero { height: 48px; border-radius: var(--radius); padding: 0 24px; font-size: 15px; font-weight: 600; }
 .engine-banner { background: var(--white); border: 1px dashed var(--border); border-radius: var(--radius); padding: 40px 32px; text-align: center; margin-bottom: 32px; } .engine-banner h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; } .engine-banner p { font-size: 14px; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
 
-<<<<<<< HEAD
 /* ── Body ────────────────────────────────────────────── */
 .body { flex: 1; display: flex; overflow: hidden; }
 .view { display: none; flex: 1; opacity: 0; }
@@ -97,46 +96,12 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 .badge-live { background: var(--accent); color: #fff; animation: pulse 2s ease-in-out infinite; }
 .badge-soon { background: var(--accent-soft); color: var(--accent); }
 .badge-count { background: var(--surface); color: var(--text2); }
-=======
-/* Meeting list — Evernote style */
-.meet-section-title { font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 400; color: var(--text); margin: 8px 0 16px; }
-.meet-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 36px; }
-.meet-row { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: var(--radius-sm); transition: background var(--ease); } .meet-row:hover { background: var(--white); } .meet-row.clickable { cursor: pointer; } .meet-row.clickable:hover { box-shadow: var(--shadow-sm); }
-.meet-date { flex-shrink: 0; width: 52px; text-align: center; } .meet-date-num { font-size: 28px; font-weight: 300; color: var(--text); line-height: 1; } .meet-date-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
-.meet-info { flex: 1; min-width: 0; } .meet-title { font-size: 15px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .meet-time { font-size: 13px; color: var(--text2); margin-top: 2px; }
-.meet-actions { display: flex; align-items: center; gap: 16px; flex-shrink: 0; } .meet-action { font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity var(--ease); } .meet-action:hover { opacity: 0.7; }
-.meet-action.local, .meet-link.accent { color: var(--accent); } .meet-action.join, .meet-link.green { color: var(--green); }
-.meet-link { font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text2); transition: opacity var(--ease); } .meet-link:hover { opacity: 0.7; }
-.badge-ready { background: var(--green-soft); color: #059669; }
-.prep-attach { display: inline-block; margin-top: 6px; padding: 4px 10px; font-size: 12px; color: var(--text2); border: 1px solid var(--border); border-radius: var(--radius-xs); cursor: pointer; transition: all var(--ease); }
-.prep-attach:hover { background: var(--surface); border-color: var(--text3); color: var(--text); }
-.prep-attach.shimmer { border-color: transparent; background: linear-gradient(90deg, var(--surface) 25%, var(--white) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmerAnim 1.5s ease-in-out infinite; }
-.prep-attach.done { border-color: var(--green); background: var(--green-soft); color: #059669; }
-.meet-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: var(--pill); flex-shrink: 0; } .badge-live { background: var(--accent); color: #fff; animation: pulse 2s ease-in-out infinite; } .badge-preparing { background: var(--yellow-soft); color: #D97706; }
-.note-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-sm); cursor: pointer; transition: background var(--ease); } .note-row:hover { background: var(--white); }
-.note-icon { flex-shrink: 0; color: var(--text3); } .note-info { flex: 1; min-width: 0; } .note-title { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .note-date { font-size: 12px; color: var(--text3); flex-shrink: 0; }
-.empty { text-align: center; padding: 40px 24px; } .empty p { font-size: 14px; color: var(--text2); line-height: 1.5; }
-
-/* Shimmer loading */
-.meet-row.shimmer .meet-title, .meet-row.shimmer .meet-time { background: linear-gradient(90deg, var(--surface) 25%, #E8E8ED 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; color: transparent; }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-/* Side Panel (right slide-out) */
-.side-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 460px; background: var(--white); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,0.06); } .side-panel.open { transform: translateX(0); }
-.sp-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; } .sp-header h3 { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-close { width: 28px; height: 28px; border-radius: 6px; border: none; background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text2); flex-shrink: 0; } .sp-close:hover { background: var(--border); } .sp-body { flex: 1; overflow-y: auto; padding: 20px; -webkit-app-region: no-drag; }
-.sp-screenshot { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px; background: var(--surface); min-height: 180px; display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 13px; overflow: hidden; } .sp-screenshot img { width: 100%; display: block; }
-.sp-events { font-size: 13px; line-height: 1.6; } .sp-event-line { padding: 4px 0; border-bottom: 1px solid var(--surface); font-family: var(--mono); font-size: 12px; }
-.md h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px; } .md h2 { font-size: 17px; font-weight: 600; margin: 20px 0 8px; } .md h3 { font-size: 15px; font-weight: 600; margin: 16px 0 6px; } .md p { font-size: 14px; line-height: 1.7; margin-bottom: 10px; } .md strong { font-weight: 600; }
-.md ul, .md ol { padding-left: 20px; margin-bottom: 10px; } .md li { font-size: 14px; line-height: 1.6; margin-bottom: 4px; } .md pre { background: #1C1C1E; color: #E5E5EA; padding: 14px 16px; border-radius: var(--radius-sm); font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; margin-bottom: 12px; } .md code { background: var(--surface); padding: 1px 5px; border-radius: 4px; font-size: 13px; font-family: var(--mono); } .md pre code { background: none; padding: 0; }
->>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 
 /* Status Bar */
 .statusbar { height: 32px; min-height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-top: 1px solid var(--border); background: var(--white); font-size: 11px; color: var(--text2); -webkit-app-region: no-drag; }
 .st-items { display: flex; align-items: center; gap: 14px; } .st-item { display: flex; align-items: center; gap: 5px; cursor: default; } .st-right { display: flex; align-items: center; gap: 12px; }
 .st-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); transition: background 0.3s ease; } .st-dot.green { background: var(--green); } .st-dot.red { background: var(--accent); } .st-dot.yellow { background: var(--yellow); }
 
-<<<<<<< HEAD
 /* ── Hero Card ───────────────────────────────────────── */
 .hero {
   background: var(--white); border-radius: var(--radius); padding: 28px 32px;
@@ -288,16 +253,12 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 #st-eng-btn { animation: pulse 2s ease-in-out infinite; font-weight: 600; letter-spacing: 0.3px; box-shadow: 0 0 0 2px var(--accent-soft); }
 
 /* ── Settings View ───────────────────────────────────── */
-=======
-/* Settings View */
->>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 #view-settings { flex-direction: column; background: var(--bg); overflow: hidden; height: 100%; }
 .set-head { padding: 16px 32px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--white); flex-shrink: 0; } .set-back { width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); transition: background var(--ease); } .set-back:hover { background: var(--border); } .set-head h3 { font-size: 16px; font-weight: 600; }
 .set-tabs { display: flex; gap: 4px; padding: 12px 32px 0; background: var(--white); border-bottom: 1px solid var(--border); flex-shrink: 0; } .set-body { flex: 1; overflow-y: auto; padding: 24px 32px; min-height: 0; -webkit-app-region: no-drag; }
 .set-tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--text2); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all var(--ease); margin-bottom: -1px; font-family: var(--font); } .set-tab:hover { color: var(--text); } .set-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .set-panel { display: none; } .set-panel.active { display: block; } .setup-group { margin-bottom: 24px; } .setup-group h4 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
 .chk-list { display: flex; flex-direction: column; gap: 4px; }
-<<<<<<< HEAD
 .chk {
   display: flex; align-items: center; gap: 10px; padding: 10px 14px;
   border-radius: var(--radius-sm); background: var(--white);
@@ -371,12 +332,6 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
   border: 1px solid var(--border); font-size: 14px; font-family: var(--font);
   background: var(--white); transition: border-color var(--ease);
 }
-=======
-.chk { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--white); }
-.chk-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; } .chk-label { font-size: 14px; flex: 1; } .chk-val { font-size: 12px; color: var(--text2); }
-.input-group { margin-bottom: 16px; } .input-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
-.input-field { width: 100%; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 14px; font-family: var(--font); background: var(--white); transition: border-color var(--ease); }
->>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 .input-field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* Voice Test */
@@ -405,7 +360,6 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 .ob-status { margin-top: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; } .ob-status .st-dot { width: 8px; height: 8px; }
 .ob-progress { display: flex; justify-content: center; gap: 8px; padding: 16px 0 20px; border-top: 1px solid var(--border); } .ob-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.3s ease; } .ob-dot.done { background: var(--green); } .ob-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
 
-<<<<<<< HEAD
 /* ══════════════════════════════════════════════════════ */
 /* ── ONBOARDING ──────────────────────────────────────── */
 /* ══════════════════════════════════════════════════════ */
@@ -468,11 +422,6 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
   transform-origin: left center;
   animation: doorOpen 1.2s ease-out 0.3s forwards;
 }
-=======
-/* Onboarding animations */
-.anim-canvas { width: 100%; height: 100%; position: relative; } .anim-welcome,.anim-screen,.anim-actions,.anim-ready { display: flex; align-items: center; justify-content: center; }
-.room-frame { width: 280px; height: 200px; border: 2px solid var(--border); border-radius: 16px; position: relative; overflow: hidden; background: var(--white); } .room-door { position: absolute; left: 0; top: 0; width: 40px; height: 100%; background: var(--surface); border-right: 2px solid var(--border); transform-origin: left center; animation: doorOpen 1.2s ease-out 0.3s forwards; }
->>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 @keyframes doorOpen { to { transform: perspective(200px) rotateY(-75deg); opacity: 0.3; } }
 .room-lobster { position: absolute; left: -60px; top: 50%; transform: translateY(-50%); animation: lobsterEnter 1.5s ease-out 0.8s forwards; }
 @keyframes lobsterEnter { to { left: 50%; transform: translate(-50%, -50%); } } @keyframes iconAppear { to { opacity: 1; } }
@@ -515,7 +464,6 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 .term-prompt { color: var(--green); } .term-cmd { color: #E5E5EA; } .term-result { color: var(--text3); } .converge-ring { width: 200px; height: 200px; position: relative; }
 .converge-icon { position: absolute; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--white); box-shadow: var(--shadow); animation: converge 2.5s ease-in-out 0.5s forwards; } .ci-0 { top: 0; left: 80px; } .ci-1 { top: 60px; right: 0; } .ci-2 { bottom: 0; right: 20px; } .ci-3 { bottom: 0; left: 20px; } .ci-4 { top: 60px; left: 0; }
 @keyframes converge { to { top: 80px; left: 80px; right: auto; bottom: auto; opacity: 0; transform: scale(0.5); } }
-<<<<<<< HEAD
 .converge-center {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
   width: 64px; height: 64px; border-radius: 16px; background: var(--accent);
@@ -548,12 +496,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
-=======
-.converge-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); width: 64px; height: 64px; border-radius: 16px; background: var(--accent); display: flex; align-items: center; justify-content: center; animation: centerAppear 0.6s ease-out 2.5s forwards; box-shadow: 0 0 0 0 rgba(230,57,70,0); } @keyframes centerAppear { to { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 20px rgba(230,57,70,0.08); } }
-.converge-text { position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%); font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; opacity: 0; animation: iconAppear 0.4s ease 3s forwards; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } } .fade-in { animation: fadeIn 0.3s ease; }
->>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 </style>
 </head>
 <body>
@@ -788,7 +730,15 @@ async function refreshAll() {
     fetchJSON(API + '/api/meeting/notes'), fetchJSON(API + '/api/tasks'),
   ]);
   S.status = status;
-  S.meetings = Array.isArray(evts) ? evts : (evts?.events || []);
+  // Normalize calendar events — API returns flat start/end strings + meetLink,
+  // but rendering code expects { start: { dateTime }, hangoutLink }
+  const rawMeetings = Array.isArray(evts) ? evts : (evts?.events || []);
+  S.meetings = rawMeetings.map(e => ({
+    ...e,
+    start: typeof e.start === 'string' ? { dateTime: e.start } : e.start,
+    end: typeof e.end === 'string' ? { dateTime: e.end } : e.end,
+    hangoutLink: e.hangoutLink || e.meetLink || null,
+  }));
   S.notes = Array.isArray(notes) ? notes : (notes?.files || []);
   S.tasks = Array.isArray(tasks) ? tasks : (tasks?.tasks || []);
   // Restore cached prep briefs for meetings
@@ -1423,7 +1373,6 @@ function vtUpdateCount() { let a = 0, t = 0; if (vtLayerInfo) for (const [k, v] 
 function vtEnableToggles(en) { document.querySelectorAll('#vt-layers input[type="checkbox"]').forEach(el => el.disabled = !en); }
 
 // Onboarding
-<<<<<<< HEAD
 // ═══════════════════════════════════════════════════════════════
 
 const OB_STEPS = 6;
@@ -1489,22 +1438,6 @@ function obRestart() {
   obInit();
 }
 
-=======
-const OB_STEPS = 6; let obStep = 0, obPollTimer = null;
-function obInit() { obRenderProgress(); obShowStep(0); obCheckStep(); }
-function obRenderProgress() { const el = document.getElementById('ob-progress'); el.innerHTML = ''; for (let i = 0; i < OB_STEPS; i++) { const dot = document.createElement('div'); dot.className = 'ob-dot' + (i < obStep ? ' done' : '') + (i === obStep ? ' active' : ''); el.appendChild(dot); } }
-function obShowStep(n) { obStep = n; document.querySelectorAll('.ob-step').forEach(s => s.classList.toggle('active', parseInt(s.dataset.ob) === n)); obRenderProgress(); obCheckStep().catch(() => {}); }
-function obNext() { if (obStep < OB_STEPS - 1) obShowStep(obStep + 1); }
-function obRestart() { localStorage.removeItem('onboarding_completed'); obStep = 0; document.querySelectorAll('.ob-step').forEach(s => s.classList.remove('active')); document.querySelector('.ob-step[data-ob="0"]').classList.add('active'); showView('onboarding'); obInit(); }
-function obStopPolling() { if (obPollTimer) { clearInterval(obPollTimer); obPollTimer = null; } }
-function obStartPolling() { obStopPolling(); obPollTimer = setInterval(async () => { const perms = await window.callingclaw.permissions.check(); if (obStep === 1 && perms.screenRecording.granted) { obStopPolling(); obAutoAdvance('ob-screen-status', 'ob-screen-btn', '屏幕录制已授权'); } if (obStep === 2 && perms.accessibility.granted) { obStopPolling(); obAutoAdvance('ob-access-status', 'ob-access-btn', '辅助功能已授权'); } }, 1500); }
-function obAutoAdvance(statusId, btnId, msg) { const el = document.getElementById(statusId), btn = document.getElementById(btnId); el.innerHTML = '<div class="st-dot green"></div> ' + msg; btn.textContent = '已授权'; btn.disabled = true; btn.classList.remove('btn-primary'); btn.classList.add('btn-secondary'); setTimeout(() => obNext(), 800); }
-function obGrantScreen() { window.callingclaw.permissions.openSettings('screenRecording'); document.getElementById('ob-screen-status').innerHTML = '<div class="st-dot" style="background:var(--yellow)"></div> 已打开系统设置'; obStartPolling(); }
-function obGrantAccess() { window.callingclaw.permissions.openSettings('accessibility'); document.getElementById('ob-access-status').innerHTML = '<div class="st-dot" style="background:var(--yellow)"></div> 已打开系统设置'; obStartPolling(); }
-async function obSaveKeys() { const o = document.getElementById('ob-key-openai').value.trim(), r = document.getElementById('ob-key-openrouter').value.trim(); if (!o && !r) { obNext(); return; } const body = {}; if (o) body.OPENAI_API_KEY = o; if (r) body.OPENROUTER_API_KEY = r; try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch {} obNext(); }
-async function obInstallSkill() { const btn = document.getElementById('ob-skill-btn'); btn.textContent = '安装中...'; btn.disabled = true; try { const result = await window.callingclaw.skill.install(); if (result.ok) { btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; document.getElementById('ob-skill-status').innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green"></div> 已安装到 ' + esc(result.path) + '</div>'; setTimeout(() => obNext(), 800); } } catch (e) { btn.textContent = '安装失败'; btn.disabled = false; btn.className = 'btn btn-primary'; document.getElementById('ob-skill-status').innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent)"></div> ' + esc(String(e.message||e)) + '</div>'; } }
-async function obFinish(startEngine) { localStorage.setItem('onboarding_completed', '1'); if (startEngine) await window.callingclaw.daemon.start(); showView('home'); setTimeout(refreshAll, startEngine ? 2000 : 100); }
->>>>>>> 222b4a7 (release: CallingClaw v2.2.2 — Desktop Meeting Hub + Talk Locally + Bug Fixes)
 async function obCheckStep() {
   obStopPolling();
   try {
