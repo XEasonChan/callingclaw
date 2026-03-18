@@ -189,6 +189,10 @@ export interface OC004_Request {
     assignee?: string;
     deadline?: string;
   }>;
+  /** Meeting summary markdown (optional — included for user delivery) */
+  summaryMarkdown?: string;
+  /** Path to HTML file for Vercel deployment (optional) */
+  htmlPath?: string;
 }
 
 export interface OC004_Response {
@@ -206,7 +210,11 @@ export const OC004_PROMPT = (req: OC004_Request) => {
   ]);
   buttons.push([{ text: "✅ Confirm all", callback_data: `cc_confirm_all:${req.meetingId}` }]);
 
-  return `Meeting "${req.topic}" just ended. Use the message tool to send the following to the user with inline buttons.
+  const htmlNote = req.htmlPath
+    ? `\n\nIMPORTANT: An HTML summary is available at: ${req.htmlPath}\nDeploy it to Vercel (vercel deploy --prod ${req.htmlPath}) and include the URL in the message to the user.`
+    : "";
+
+  return `Meeting "${req.topic}" just ended. Use the message tool to send the following to the user with inline buttons.${htmlNote}
 
 Message content:
 ---
@@ -237,6 +245,10 @@ export interface OC005_Request {
   topic: string;
   keyPoints: string[];
   decisions: string[];
+  /** Full summary markdown (optional — for user delivery) */
+  summaryMarkdown?: string;
+  /** Path to HTML file for Vercel deployment (optional) */
+  htmlPath?: string;
 }
 
 export interface OC005_Response {
@@ -249,7 +261,11 @@ export const OC005_PROMPT = (req: OC005_Request) => {
   if (req.decisions.length) parts.push(`\n**Decisions:**\n${req.decisions.map((d) => `- ${d}`).join("\n")}`);
   parts.push("", "(No action items)");
 
-  return `Meeting "${req.topic}" just ended with no action items. Use the message tool to send this summary to the user:
+  const htmlNote = req.htmlPath
+    ? `\n\nIMPORTANT: An HTML summary is available at: ${req.htmlPath}\nDeploy it to Vercel (vercel deploy --prod ${req.htmlPath}) and include the URL in the message.`
+    : "";
+
+  return `Meeting "${req.topic}" just ended with no action items. Use the message tool to send this summary to the user:${htmlNote}
 
 ${parts.filter(Boolean).join("\n")}
 

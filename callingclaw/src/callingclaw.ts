@@ -392,6 +392,17 @@ async function autoLeaveMeeting() {
       console.error("[AutoLeave] Delivery failed:", e.message);
     });
 
+    // Patch calendar event with meeting notes link (non-blocking)
+    const activeMeetUrl = (meetJoiner as any).currentSession?.meetUrl;
+    if (calendar.connected && activeMeetUrl) {
+      calendar.findEventByMeetUrl(activeMeetUrl).then(async (ev) => {
+        if (ev?.id) {
+          const notesLine = `\n\n📝 Meeting Notes: ${filepath}`;
+          await calendar.patchEvent(ev.id, { description: (ev as any).description ? (ev as any).description + notesLine : notesLine });
+        }
+      }).catch(() => {});
+    }
+
     // Revert voice to default persona
     meetingPrepSkill.clear();
     if (voice.connected) {

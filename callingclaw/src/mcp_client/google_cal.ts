@@ -303,6 +303,26 @@ export class GoogleCalendarClient {
     }
   }
 
+  /**
+   * Patch an existing calendar event (partial update).
+   * Used to add meeting notes URL to event description after meeting ends.
+   */
+  async patchEvent(eventId: string, updates: { description?: string }): Promise<boolean> {
+    if (!this._connected || !eventId) return false;
+
+    try {
+      await this.calendarFetch(
+        `/calendars/primary/events/${encodeURIComponent(eventId)}`,
+        { method: "PATCH", body: JSON.stringify(updates) }
+      );
+      console.log(`[Calendar] Event ${eventId} patched`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Calendar] patchEvent failed: ${e.message}`);
+      return false;
+    }
+  }
+
   async findFreeSlots(duration: number = 30, withinHours: number = 24): Promise<string[]> {
     if (!this._connected) return [];
 
