@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""CallingClaw 2.0 — Python Sidecar (Physical Device Gateway)
+"""CallingClaw 2.0 — Python Sidecar (Audio Gateway + Input Actions)
 
 Connects to the Bun main process via Local WebSocket.
-Handles: screen capture, audio I/O, mouse/keyboard actions, Meet audio bridging.
+Handles: audio I/O (PyAudio/BlackHole), mouse/keyboard actions (pyautogui).
+
+Screen capture is handled on the Bun side (CDP + screencapture CLI).
+This process does NOT touch CoreGraphics/mss — audio-only.
 """
 
 import asyncio
@@ -27,11 +30,6 @@ try:
 except ImportError:
     missing.append("pyautogui")
 
-try:
-    import mss
-except ImportError:
-    missing.append("mss")
-
 if missing:
     print(f"[Sidecar] Missing packages: {', '.join(missing)}")
     print(f"[Sidecar] Install with: pip3 install {' '.join(missing)}")
@@ -41,114 +39,7 @@ BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "4001"))
 BRIDGE_URL = f"ws://localhost:{BRIDGE_PORT}"
 
 # State
-last_screenshot_hash = None
-capture_running = False
 audio_mode = "default"  # "default" | "direct" | "meet_bridge"
-capture_mode = "mouse"  # "mouse" | "meeting_app"
-meeting_app_name = ""   # e.g. "Google Chrome", "zoom.us" — set by config
-_locked_monitor_idx = None  # cached monitor index for meeting_app mode
-
-
-# ── Multi-Monitor Display Detection ─────────────────────────
-
-def _get_monitor_for_mouse(sct_monitors):
-    """Return mss monitor index (1-based) containing the mouse cursor."""
-    try:
-        mx, my = pyautogui.position()
-        for i, mon in enumerate(sct_monitors):
-            if i == 0:
-                continue  # skip combined virtual desktop
-            if (mon["left"] <= mx < mon["left"] + mon["width"] and
-                    mon["top"] <= my < mon["top"] + mon["height"]):
-                return i
-        return 1  # fallback: primary
-    except Exception:
-        return 1
-
-
-def _get_monitor_for_app(sct_monitors, app_name):
-    """Return mss monitor index (1-based) containing the frontmost window of app_name.
-
-    Uses macOS CGWindowListCopyWindowInfo to locate the app's window,
-    then maps its center point to the mss monitor list.
-    Falls back to primary monitor on error or non-macOS.
-    """
-    if sys.platform != "darwin" or not app_name:
-        return 1
-    try:
-        from Quartz import (  # type: ignore
-            CGWindowListCopyWindowInfo,
-            kCGWindowListOptionOnScreenOnly,
-            kCGNullWindowID,
-        )
-        windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
-        for w in windows:
-            owner = w.get("kCGWindowOwnerName", "")
-            # Match by app name (case-insensitive contains)
-            if app_name.lower() not in owner.lower():
-                continue
-            # Skip tiny helper windows (menubar extras, etc.)
-            b = w.get("kCGWindowBounds", {})
-            ww, wh = b.get("Width", 0), b.get("Height", 0)
-            if ww < 200 or wh < 200:
-                continue
-            cx = b.get("X", 0) + ww / 2
-            cy = b.get("Y", 0) + wh / 2
-            for i, mon in enumerate(sct_monitors):
-                if i == 0:
-                    continue
-                if (mon["left"] <= cx < mon["left"] + mon["width"] and
-                        mon["top"] <= cy < mon["top"] + mon["height"]):
-                    return i
-            break  # found the window but didn't map — fall through
-    except ImportError:
-        # Quartz/PyObjC not available — fall back
-        pass
-    except Exception as e:
-        print(f"[Screen] App monitor detection error: {e}")
-    return 1
-
-
-def _resolve_capture_monitor(sct_monitors):
-    """Pick which monitor to capture based on current capture_mode.
-
-    Both modes lock on first detection — no per-frame re-detection.
-    meeting_app: locks to the display containing the meeting window.
-    mouse: locks to the display containing the mouse cursor at session start.
-    Reset _locked_monitor_idx (via config message) to re-detect.
-    """
-    global _locked_monitor_idx
-
-    if _locked_monitor_idx is not None and _locked_monitor_idx < len(sct_monitors):
-        return _locked_monitor_idx
-
-    if capture_mode == "meeting_app":
-        idx = _get_monitor_for_app(sct_monitors, meeting_app_name)
-    else:
-        idx = _get_monitor_for_mouse(sct_monitors)
-
-    _locked_monitor_idx = idx
-    print(f"[Screen] Locked to monitor {idx} ({capture_mode})")
-    return idx
-
-
-def take_screenshot() -> str:
-    """Capture the appropriate monitor and return base64 PNG."""
-    with mss.mss() as sct:
-        idx = _resolve_capture_monitor(sct.monitors)
-        monitor = sct.monitors[idx]
-        img = sct.grab(monitor)
-        from mss.tools import to_png
-        png_bytes = to_png(img.rgb, img.size)
-        return base64.b64encode(png_bytes).decode("utf-8")
-
-
-def simple_hash(data: bytes) -> int:
-    """Fast perceptual hash for change detection."""
-    h = 0
-    for i in range(0, len(data), 1000):
-        h = (h * 31 + data[i]) & 0xFFFFFFFF
-    return h
 
 
 def find_and_click_text(target: str, fallback: str = None) -> dict:
@@ -253,9 +144,10 @@ async def execute_action(action_data: dict) -> dict:
             pyautogui.drag(ex - sx, ey - sy, duration=0.5)
 
         elif action == "screenshot":
-            screenshot_b64 = take_screenshot()
-            result["has_screenshot"] = True
-            result["screenshot"] = screenshot_b64
+            # Screenshot is now handled on the Bun side (CDP + screencapture CLI).
+            # Return an error to signal callers to use the new capture providers.
+            result["ok"] = False
+            result["error"] = "Screenshot moved to Bun side. Use BrowserCaptureProvider or DesktopCaptureProvider."
 
         elif action == "run_command":
             # Execute a shell command (used for opening URLs, etc.)
@@ -354,14 +246,10 @@ class AudioBridge:
                 print(f"[Audio]   [{i}] {info['name']} (in={in_ch}, out={out_ch}, rate={int(info['defaultSampleRate'])})")
 
         if mode == "meet_bridge":
-            # Dedicated machine: use two BlackHole devices to avoid feedback
-            # Capture: BlackHole 2ch (Meet speaker output → AI input)
-            # Playback: BlackHole 16ch (AI output → Meet mic input)
             bh2_idx, bh2_info = self._find_device("BlackHole 2ch", need_input=True)
             bh16_idx, bh16_info = self._find_device("BlackHole 16ch", need_output=True)
 
             if bh2_idx is None or bh16_idx is None:
-                # Fallback: try any BlackHole for capture, default for playback
                 bh_idx, _ = self._find_device("BlackHole", need_input=True)
                 if bh_idx is None:
                     print("[Audio] BlackHole not found. Install: brew install blackhole-2ch blackhole-16ch")
@@ -370,7 +258,6 @@ class AudioBridge:
                     self.mode = "direct"
                 else:
                     print(f"[Audio] Only one BlackHole found. Using [{bh_idx}] for capture, default for playback.")
-                    print("[Audio] For proper Meet bridging, install both blackhole-2ch and blackhole-16ch.")
                     self.capture_stream = self.pa.open(
                         format=FORMAT, channels=1, rate=self._rate,
                         input=True, input_device_index=bh_idx,
@@ -426,7 +313,6 @@ class AudioBridge:
         loop = asyncio.get_event_loop()
         while self.running:
             try:
-                # Run PyAudio read in thread pool to avoid blocking event loop
                 data = await loop.run_in_executor(
                     None, self.capture_stream.read, self._chunk, False
                 )
@@ -450,7 +336,7 @@ class AudioBridge:
             pcm_data = base64.b64decode(base64_pcm)
             self.playback_stream.write(pcm_data)
         except Exception as e:
-            print(f"[Audio] Playback error: {e}")
+            print(f"[Audio] Playback error: {e}", flush=True)
 
     def stop(self):
         """Stop audio capture and playback."""
@@ -470,60 +356,15 @@ class AudioBridge:
         print("[Audio] Audio bridge stopped")
 
 
-# ── Screen Capture ────────────────────────────────────────────
-
-async def screen_capture_loop(ws):
-    """Continuously capture screen at ~1 FPS and send changes.
-    
-    Runs in a separate asyncio task. Errors here must NOT block the main
-    message loop (which handles audio config, actions, etc.).
-    Consecutive errors trigger exponential backoff up to 30s.
-    """
-    global last_screenshot_hash, capture_running
-    capture_running = True
-    consecutive_errors = 0
-    MAX_BACKOFF = 30.0
-
-    while capture_running:
-        try:
-            # Check if websocket is still open before doing work
-            if ws.closed:
-                break
-
-            screenshot_b64 = take_screenshot()
-            raw = base64.b64decode(screenshot_b64)
-            current_hash = simple_hash(raw)
-
-            if current_hash != last_screenshot_hash:
-                last_screenshot_hash = current_hash
-                msg = {
-                    "type": "screenshot",
-                    "payload": {"image": screenshot_b64, "changed": True},
-                    "ts": int(time.time() * 1000),
-                }
-                if not ws.closed:
-                    await ws.send(json.dumps(msg))
-
-            consecutive_errors = 0  # Reset on success
-            await asyncio.sleep(1.0)
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            consecutive_errors += 1
-            backoff = min(2.0 * consecutive_errors, MAX_BACKOFF)
-            if consecutive_errors <= 3 or consecutive_errors % 20 == 0:
-                print(f"[Sidecar] Screen capture error (#{consecutive_errors}, backoff {backoff:.0f}s): {e}")
-            await asyncio.sleep(backoff)
-
-
 # ── Main ──────────────────────────────────────────────────────
 
 async def main():
-    global audio_mode, capture_running, capture_mode, meeting_app_name, _locked_monitor_idx
+    global audio_mode
 
     audio_bridge = AudioBridge()
 
     print(f"[Sidecar] Connecting to {BRIDGE_URL}...")
+    print("[Sidecar] Audio-only mode (screen capture handled by Bun)")
 
     while True:
         try:
@@ -542,8 +383,6 @@ async def main():
                 "ts": int(time.time() * 1000),
             }))
 
-            # Start screen capture in its own task — errors there won't block message handling
-            capture_task = asyncio.create_task(screen_capture_loop(ws))
             audio_capture_task = None
 
             async for raw_msg in ws:
@@ -554,24 +393,13 @@ async def main():
 
                     if msg_type == "action":
                         result = await execute_action(payload)
-
-                        if payload.get("action") == "screenshot" and result.get("has_screenshot"):
-                            await ws.send(json.dumps({
-                                "type": "screenshot",
-                                "payload": {"image": result["screenshot"], "changed": True},
-                                "ts": int(time.time() * 1000),
-                            }))
-                        else:
-                            await ws.send(json.dumps({
-                                "type": "action_result",
-                                "payload": result,
-                                "ts": int(time.time() * 1000),
-                            }))
+                        await ws.send(json.dumps({
+                            "type": "action_result",
+                            "payload": result,
+                            "ts": int(time.time() * 1000),
+                        }))
 
                     elif msg_type == "audio_playback":
-                        # AI audio → speaker (direct) or BlackHole (meet)
-                        # Run in thread pool to avoid blocking asyncio event loop
-                        # (PyAudio write is synchronous and can block ping handling)
                         audio_data = payload.get("audio", "")
                         if audio_data and audio_mode in ("direct", "meet_bridge"):
                             loop = asyncio.get_event_loop()
@@ -580,21 +408,9 @@ async def main():
                     elif msg_type == "config":
                         print(f"[Sidecar] Config update received: {payload}")
 
-                        # ── Screen capture mode ──
-                        new_capture = payload.get("capture_mode")
-                        if new_capture in ("mouse", "meeting_app"):
-                            capture_mode = new_capture
-                            _locked_monitor_idx = None  # reset lock on mode change
-                            app = payload.get("meeting_app", "")
-                            if app:
-                                meeting_app_name = app
-                            print(f"[Sidecar] Capture mode: {capture_mode}"
-                                  f"{f' (app={meeting_app_name})' if capture_mode == 'meeting_app' else ''}")
-
                         new_mode = payload.get("audio_mode")
 
                         if new_mode in ("direct", "meet_bridge") and audio_mode != new_mode:
-                            # Stop previous audio if running
                             if audio_mode in ("direct", "meet_bridge"):
                                 audio_bridge.stop()
                                 if audio_capture_task:
@@ -607,8 +423,7 @@ async def main():
                                 audio_capture_task = asyncio.create_task(
                                     audio_bridge.capture_loop(ws)
                                 )
-                                print(f"[Sidecar] ✅ Audio mode switched to: {new_mode.upper()}")
-                                # Send confirmation back to Bun
+                                print(f"[Sidecar] Audio mode switched to: {new_mode.upper()}")
                                 await ws.send(json.dumps({
                                     "type": "status",
                                     "payload": {
@@ -620,7 +435,7 @@ async def main():
                                 }))
                             else:
                                 audio_mode = "default"
-                                print("[Sidecar] ❌ Audio start failed, back to DEFAULT")
+                                print("[Sidecar] Audio start failed, back to DEFAULT")
                                 await ws.send(json.dumps({
                                     "type": "status",
                                     "payload": {
@@ -641,14 +456,12 @@ async def main():
                             print("[Sidecar] Audio mode: DEFAULT (no audio)")
 
                     elif msg_type == "ping":
-                        # Heartbeat from Bun — respond with current state
                         await ws.send(json.dumps({
                             "type": "status",
                             "payload": {
                                 "status": "alive",
                                 "audio_mode": audio_mode,
                                 "audio_running": audio_bridge.running,
-                                "capture_running": capture_running,
                             },
                             "ts": int(time.time() * 1000),
                         }))
@@ -663,12 +476,6 @@ async def main():
         except Exception as e:
             print(f"[Sidecar] Unexpected error: {e}, reconnecting in 3s...")
         finally:
-            # Cancel all background tasks before reconnecting
-            capture_running = False
-            if capture_task and not capture_task.done():
-                capture_task.cancel()
-                try: await capture_task
-                except: pass
             if audio_capture_task and not audio_capture_task.done():
                 audio_capture_task.cancel()
                 try: await audio_capture_task
