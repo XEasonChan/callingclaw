@@ -19,6 +19,7 @@ import { SHARED_DIR, SHARED_NOTES_DIR } from "../config";
 import { appendFileSync, readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 import type { MeetingPrepBrief } from "../skills/meeting-prep";
+import type { EventBus } from "./event-bus";
 
 const SESSIONS_PATH = resolve(SHARED_DIR, "sessions.json");
 
@@ -280,11 +281,15 @@ export async function startLiveLog(topic: string, meetingId?: string): Promise<s
 /**
  * Append a line to the active live log file.
  * Appends synchronously for minimal latency.
+ * If eventBus + meetingId provided, also emits meeting.live_entry for real-time frontend updates.
  */
-export function appendToLiveLog(filepath: string, entry: string): void {
+export function appendToLiveLog(filepath: string, entry: string, eventBus?: EventBus, meetingId?: string): void {
   try {
     const timestamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
     appendFileSync(filepath, `[${timestamp}] ${entry}\n`);
+    if (eventBus && meetingId) {
+      eventBus.emit("meeting.live_entry", { meetingId, entry, timestamp });
+    }
   } catch (e: any) {
     console.warn(`[SharedDocs] Failed to append live log: ${e.message}`);
   }

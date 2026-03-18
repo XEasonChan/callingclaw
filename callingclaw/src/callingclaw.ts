@@ -58,9 +58,16 @@ const openclawBridge = new OpenClawBridge();
 
 const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
 
-// Forward live notes to EventBus for Desktop UI visibility
+// Track active meeting ID for live log event emission
+let activeMeetingId: string | null = null;
+
+// Forward live notes to EventBus for Desktop UI visibility + live log streaming
 meetingPrepSkill.onLiveNote((note, topic) => {
   eventBus.emit("meeting.live_note", { note, topic, timestamp: Date.now() });
+  // Also emit as live_entry so the frontend sidebar gets it
+  if (activeMeetingId) {
+    eventBus.emit("meeting.live_entry", { meetingId: activeMeetingId, entry: `[NOTE] ${note}`, timestamp: new Date().toLocaleTimeString("zh-CN", { hour12: false }) });
+  }
 });
 
 // Load OpenClaw's MEMORY.md at startup (non-blocking)
@@ -159,9 +166,9 @@ const vision = new VisionModule({
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
 
-    // Append to live log file on disk
+    // Append to live log file on disk (+ emit WS event for real-time frontend)
     if (meetingPrepSkill.liveLogPath) {
-      appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`);
+      appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`, eventBus, activeMeetingId || undefined);
     }
 
     // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
@@ -178,7 +185,9 @@ const vision = new VisionModule({
 });
 
 // Auto-start meeting vision + open transparency view + activate auditor when meeting starts
-eventBus.on("meeting.started", () => {
+eventBus.on("meeting.started", (data) => {
+  // Track active meeting ID for live log event emission
+  activeMeetingId = data?.meetingId || activeMeetingId || `cc_${Date.now().toString(36)}_live`;
   if (!vision.isMeetingMode) {
     vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");
@@ -315,6 +324,7 @@ eventBus.on("voice.stopped", () => {
 });
 
 eventBus.on("meeting.ended", () => {
+  activeMeetingId = null;
   stopMeetingVisionAndFlush("Meeting ended");
 
   // Stop DOM context capture
@@ -528,11 +538,11 @@ context.on("note", (note) => {
   }
 });
 
-// Write transcript entries to live log file on disk
+// Write transcript entries to live log file on disk (+ emit WS event for real-time frontend)
 context.on("transcript", (entry: any) => {
   if (meetingPrepSkill.liveLogPath && meeting.getNotes().isRecording) {
     const role = entry.role === "user" ? "USER" : entry.role === "assistant" ? "AI" : entry.role?.toUpperCase() || "???";
-    appendToLiveLog(meetingPrepSkill.liveLogPath, `[${role}] ${entry.text}`);
+    appendToLiveLog(meetingPrepSkill.liveLogPath, `[${role}] ${entry.text}`, eventBus, activeMeetingId || undefined);
   }
 });
 

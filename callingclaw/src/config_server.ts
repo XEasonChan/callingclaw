@@ -37,7 +37,7 @@ import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { buildVoiceInstructions, prepareMeeting } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
-import { readManifest, readSharedFile, listPrepFiles } from "./modules/shared-documents";
+import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
 import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
@@ -944,6 +944,11 @@ export function startConfigServer(services: Services) {
           }, { status: 400, headers });
         }
 
+        // Generate stable meetingId for session tracking
+        const { generateMeetingId: genId, upsertSession: upsertSess } = await import("./modules/shared-documents");
+        const meetingId = genId();
+        upsertSess({ meetingId, topic: body.instructions?.slice(0, 200) || "Meeting", meetUrl: validated.url, status: "active" });
+
         // Step 1: Start OpenAI Realtime voice session (if not already running)
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
@@ -1064,6 +1069,7 @@ export function startConfigServer(services: Services) {
           services.eventBus.emit("meeting.started", {
             url: validated.url,
             platform: validated.platform,
+            meetingId,
           });
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
@@ -1143,6 +1149,7 @@ export function startConfigServer(services: Services) {
         const attendeeNames = meetAttendees.filter((a: any) => !a.self).map((a: any) => a.displayName || a.email);
 
         return Response.json({
+          meetingId,
           status: joinState,
           success: joinSuccess,
           joinSummary,
@@ -1615,6 +1622,11 @@ STEP-BY-STEP FLOW:
         const body = (await req.json().catch(() => ({}))) as { topic?: string };
         const topic = body.topic || "Local Conversation";
 
+        // Generate stable meetingId for session tracking
+        const { generateMeetingId, upsertSession } = await import("./modules/shared-documents");
+        const meetingId = generateMeetingId();
+        upsertSession({ meetingId, topic, status: "active" });
+
         // Step 1: Start voice session with direct audio (local mic/speaker)
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
@@ -1673,6 +1685,7 @@ STEP-BY-STEP FLOW:
         services.eventBus.emit("meeting.started", {
           platform: "local",
           topic,
+          meetingId,
         });
         services.eventBus.emit("voice.started", { audio_mode: "direct" });
         console.log("[TalkLocally] meeting.started emitted — full meeting stack active");
@@ -1682,6 +1695,7 @@ STEP-BY-STEP FLOW:
 
         return Response.json({
           ok: true,
+          meetingId,
           topic,
           voice: voiceStarted ? "connected" : "failed",
           audio_mode: "direct",
