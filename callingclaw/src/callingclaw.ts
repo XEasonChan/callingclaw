@@ -22,7 +22,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.4.5";
+let APP_VERSION = "2.4.6";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -324,10 +324,11 @@ eventBus.on("meeting.ended", () => {
     context.clearBrowserContext?.();
   }
 
-  // ── Stop admission monitor ──
+  // ── Stop admission monitor + browser session ──
   if (playwrightCli.isAdmissionMonitoring) {
     playwrightCli.stopAdmissionMonitor();
   }
+  playwrightCli.stop(); // Prevent auto-start from spawning empty Chrome windows
 
   // ── Deactivate TranscriptAuditor + ContextRetriever + restore all tools ──
   if (transcriptAuditor.active) {
