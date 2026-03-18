@@ -170,13 +170,6 @@ const vision = new VisionModule({
   context,
   browserCapture,
   onScreenDescription: (description, _screenshot) => {
-    // Buffer descriptions for periodic OpenClaw push
-    _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
-
-const vision = new VisionModule({
-  context,
-  browserCapture,
-  onScreenDescription: (description, _screenshot) => {
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
 
