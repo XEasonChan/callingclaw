@@ -26,6 +26,7 @@ const DEFAULT_PROFILE_DIR = resolve(homedir(), ".callingclaw", "browser-profile"
 
 export class PlaywrightCLIClient {
   private _connected = false;
+  private _explicitlyStopped = false; // Prevents auto-start after explicit stop/reset
   private headless: boolean;
   private profileDir: string;
 
@@ -39,6 +40,7 @@ export class PlaywrightCLIClient {
   /** Start by opening a blank page (launches the browser daemon) */
   async start(): Promise<void> {
     if (this._connected) return;
+    this._explicitlyStopped = false; // Clear stopped flag on explicit start
 
     // Ensure profile directory exists
     try { mkdirSync(this.profileDir, { recursive: true }); } catch {}
@@ -189,12 +191,12 @@ export class PlaywrightCLIClient {
       await this.navigate(url);
       await this.wait(1500);
 
-      // ── Step 2: ALL-IN-ONE — dismiss + detect + configure + join ──
-      // Single eval does everything: dismiss dialogs, detect state, set camera/mic/name, click join.
-      // This replaces 6 separate eval calls + 8s of waits with 1 call + 0 waits.
-      log("Detecting + configuring + joining (single pass)...");
-      const allInOneResult = await this.evaluate(`() => {
-        const R = { state: 'unknown', config: [], join: 'none' };
+      // ── Step 2: Dismiss + detect + configure (NO join yet) ──
+      // Single eval: dismiss dialogs, detect state, set camera/mic/name.
+      // Join click is deferred to Step 4 so audio devices can be selected first.
+      log("Detecting + configuring (single pass)...");
+      const configResult = await this.evaluate(`() => {
+        const R = { state: 'unknown', config: [], hasJoinBtn: false };
 
         // 1. Dismiss blocking dialogs
         const dismiss = ['got it', 'dismiss', 'continue without', 'not now', 'block', 'deny'];
@@ -220,7 +222,7 @@ export class PlaywrightCLIClient {
 
         // 3. Handle "Switch here"
         const switchBtn = btns.find(b => ['Switch here', '切换到这里'].includes(b.textContent.trim()));
-        if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; R.join = 'switch'; return JSON.stringify(R); }
+        if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; return JSON.stringify(R); }
 
         // 4. Configure camera OFF
         ${muteCamera ? `
@@ -246,24 +248,19 @@ export class PlaywrightCLIClient {
           if (s) { s.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); R.config.push('name:set'); }
         }
 
-        // 7. Click join button
+        // 7. Check if join button exists (don't click yet — need to set devices first)
         const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
         for (const b of btns) {
-          const t = b.textContent.trim();
-          if (joinTargets.includes(t)) {
-            if (b.disabled) { b.disabled = false; b.removeAttribute('disabled'); }
-            b.click();
-            R.state = 'joining'; R.join = t; return JSON.stringify(R);
-          }
+          if (joinTargets.includes(b.textContent.trim())) { R.hasJoinBtn = true; break; }
         }
 
-        R.state = btnTexts.length > 0 ? 'no_join_button' : 'loading';
+        R.state = R.hasJoinBtn ? 'ready_to_join' : (btnTexts.length > 0 ? 'no_join_button' : 'loading');
         return JSON.stringify(R);
       }`);
 
       let parsed: any;
-      try { parsed = JSON.parse(allInOneResult); } catch { parsed = { state: "parse_error" }; }
-      log(`Result: state=${parsed.state} join=${parsed.join} config=[${(parsed.config || []).join(',')}]`);
+      try { parsed = JSON.parse(configResult); } catch { parsed = { state: "parse_error" }; }
+      log(`Result: state=${parsed.state} config=[${(parsed.config || []).join(',')}]`);
 
       // Handle terminal states
       if (parsed.state === "already_in") {
@@ -275,19 +272,19 @@ export class PlaywrightCLIClient {
       if (parsed.state === "error") {
         return { success: false, summary: "Cannot access meeting", steps, state: "failed" };
       }
+      if (parsed.state === "switch_here") {
+        // Switch here already clicked, go straight to verify
+        log("Switched — skipping device selection");
+      }
 
-      // If page was loading (no buttons found), retry once after short wait
+      // If page was loading, retry config once after short wait
       if (parsed.state === "loading" || parsed.state === "no_join_button") {
         log("Page still loading — retrying in 2s...");
         await this.wait(2000);
-        // Quick retry: just try to click join
         const retry = await this.evaluate(`() => {
           const btns = [...document.querySelectorAll('button')];
           for (const b of btns) {
-            const t = b.textContent.trim();
-            if (['Join now','Ask to join','Join','加入会议','请求加入'].includes(t)) {
-              b.click(); return 'clicked:' + t;
-            }
+            if (['Join now','Ask to join','Join','加入会议','请求加入'].includes(b.textContent.trim())) return 'found';
           }
           return 'still_no_button';
         }`);
@@ -297,9 +294,33 @@ export class PlaywrightCLIClient {
         }
       }
 
-      // ── Step 3: Set audio devices (needs separate evals for dropdown interaction) ──
-      await this.selectMeetDevice("microphone", micDevice, log);
-      await this.selectMeetDevice("speaker", speakerDevice, log);
+      // ── Step 3: Set audio devices BEFORE joining (needs separate evals for dropdown interaction) ──
+      if (parsed.state !== "switch_here") {
+        await this.selectMeetDevice("microphone", micDevice, log);
+        await this.selectMeetDevice("speaker", speakerDevice, log);
+      }
+
+      // ── Step 4: Click join button ──
+      if (parsed.state !== "switch_here") {
+        log("Clicking join...");
+        const joinResult = await this.evaluate(`() => {
+          const btns = [...document.querySelectorAll('button')];
+          const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+          for (const b of btns) {
+            const t = b.textContent.trim();
+            if (joinTargets.includes(t)) {
+              if (b.disabled) { b.disabled = false; b.removeAttribute('disabled'); }
+              b.click();
+              return 'joined:' + t;
+            }
+          }
+          return 'no_join_button';
+        }`);
+        log(`Join: ${joinResult}`);
+        if (joinResult.includes("no_join_button")) {
+          return { success: false, summary: "Join button disappeared", steps, state: "failed" };
+        }
+      }
 
       // ── Step 4: Verify join state (poll up to 20s) ──
       log("Verifying join state...");
@@ -558,6 +579,8 @@ export class PlaywrightCLIClient {
       clearInterval(this._admissionInterval);
       this._admissionInterval = null;
     }
+    // Always clear meeting-end callback to prevent standalone watcher from restarting
+    this._meetingEndCallback = null;
     const admitted = [...this._admittedSet];
     console.log(`[MeetAdmit] Monitor stopped. Admitted ${admitted.length} attendees.`);
     return admitted;
@@ -637,8 +660,16 @@ export class PlaywrightCLIClient {
 
   /**
    * Select an audio device in Google Meet's pre-join device picker.
-   * The device buttons are [aria-label="Microphone: ..."] / [aria-label="Speaker: ..."]
-   * Clicking opens a dropdown menu. Each item is an <li> with the device name.
+   *
+   * Google Meet opens a SINGLE settings panel with 3 sections when you click
+   * any device button. Each section is a separate <ul> with aria-label:
+   *   - "Device selection for the microphone"
+   *   - "Device selection for the speaker"
+   *   - "Device selection for the camera"
+   *
+   * IMPORTANT: Must search ONLY within the correct section's <ul>,
+   * otherwise `textContent.includes("BlackHole 16ch")` may match a device
+   * in the wrong section (e.g. speaker instead of microphone).
    */
   private async selectMeetDevice(
     deviceType: "microphone" | "speaker" | "camera",
@@ -663,7 +694,7 @@ export class PlaywrightCLIClient {
       return;
     }
 
-    // Click the device selector button to open dropdown
+    // Click the device selector button to open the settings panel
     const clicked = await this.evaluate(`() => {
       const btn = document.querySelector('[aria-label^="${labelPrefix}:"], [aria-label^="${labelPrefix === "Microphone" ? "麦克风" : "扬声器"}:"]');
       if (btn) { btn.click(); return 'opened'; }
@@ -677,21 +708,44 @@ export class PlaywrightCLIClient {
 
     await this.wait(500);
 
-    // Find and click the target device in the dropdown
+    // Find and click the target device WITHIN the correct section only.
+    // Google Meet uses ul[aria-label="Device selection for the <type>"]
     const selected = await this.evaluate(`() => {
-      const items = document.querySelectorAll('[role="menuitemradio"], [role="option"], li[role="presentation"], ul[aria-label*="${deviceType}"] li');
-      for (const item of items) {
-        if (item.textContent.includes(${JSON.stringify(targetName)})) {
-          item.click();
-          return 'selected: ' + item.textContent.trim().substring(0, 50);
-        }
+      // Step 1: Find the correct section by aria-label
+      const sectionLabels = {
+        microphone: ['Device selection for the microphone', '麦克风设备选择'],
+        speaker: ['Device selection for the speaker', '扬声器设备选择'],
+        camera: ['Device selection for the camera', '摄像头设备选择'],
+      };
+      const labels = sectionLabels[${JSON.stringify(deviceType)}] || [];
+      let section = null;
+      for (const label of labels) {
+        section = document.querySelector('ul[aria-label="' + label + '"]');
+        if (section) break;
       }
-      // Try broader search
-      const allItems = document.querySelectorAll('li, [role="menuitem"], [role="menuitemradio"]');
+
+      // Step 2: Search within the section
+      if (section) {
+        const items = section.querySelectorAll('[role="menuitemradio"]');
+        for (const item of items) {
+          const text = (item.textContent || '').trim();
+          if (text.includes(${JSON.stringify(targetName)})) {
+            item.click();
+            return 'selected: ' + text.substring(0, 60);
+          }
+        }
+        return 'not_in_section (items: ' + items.length + ')';
+      }
+
+      // Fallback: section not found by aria-label, search all menuitemradio
+      // but prefer exact device name match to avoid cross-section confusion
+      const allItems = document.querySelectorAll('[role="menuitemradio"]');
       for (const item of allItems) {
-        if (item.textContent.includes(${JSON.stringify(targetName)})) {
+        const text = (item.textContent || '').trim();
+        // Exact start match: "BlackHole 16ch" must be at the beginning
+        if (text.startsWith(${JSON.stringify(targetName)})) {
           item.click();
-          return 'selected: ' + item.textContent.trim().substring(0, 50);
+          return 'fallback_selected: ' + text.substring(0, 60);
         }
       }
       return 'target_not_found';
@@ -700,7 +754,7 @@ export class PlaywrightCLIClient {
     if (selected.includes("selected")) {
       log(`${labelPrefix}: ${selected}`);
     } else {
-      log(`${labelPrefix}: ${targetName} not found in dropdown, pressing Escape`);
+      log(`${labelPrefix}: ${targetName} not found — ${selected}`);
       await this.pressKey("Escape");
     }
     await this.wait(300);
@@ -710,6 +764,7 @@ export class PlaywrightCLIClient {
   stop() {
     if (!this._connected) return;
     this._connected = false;
+    this._explicitlyStopped = true; // Prevent auto-start from run()
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
     const stopCmd = `${quotedCmd} -s=${SESSION} close`;
     Bun.$`${{ raw: stopCmd }}`.quiet().nothrow();
@@ -768,6 +823,12 @@ export class PlaywrightCLIClient {
 
   /** Run a playwright-cli command and return stdout */
   private async run(subcommand: string): Promise<string> {
+    // Block auto-start if browser was explicitly stopped (e.g. after leaving meeting).
+    // Only an explicit start() call clears this flag.
+    if (this._explicitlyStopped && !this._connected) {
+      throw new Error("Browser session was stopped. Call start() to reconnect.");
+    }
+
     // Auto-start on first use (lazy initialization — avoids opening Chrome at startup)
     if (!this._connected && !subcommand.startsWith("open")) {
       await this.start();
