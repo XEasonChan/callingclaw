@@ -836,6 +836,7 @@ async function refreshAll() {
     fetchJSON(API + '/api/meeting/notes'), fetchJSON(API + '/api/tasks'),
   ]);
   S.status = status;
+  S.calendarConnected = evts?.connected !== false; // Track calendar connection state
   // Normalize calendar events — API returns flat start/end strings + meetLink,
   // but rendering code expects { start: { dateTime }, hangoutLink }
   const rawMeetings = Array.isArray(evts) ? evts : (evts?.events || []);
@@ -968,7 +969,11 @@ function renderMeetings() {
     }
     html += '</div>';
   } else if (!activeMeeting) {
-    html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
+    if (!S.calendarConnected) {
+      html += '<div class="empty fade-in"><p style="color:var(--muted);">⚠️ Google Calendar disconnected — check OAuth token in Settings</p></div>';
+    } else {
+      html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
+    }
   }
 
   // Past meetings (from notes)

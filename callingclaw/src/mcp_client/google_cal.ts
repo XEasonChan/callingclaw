@@ -366,4 +366,37 @@ export class GoogleCalendarClient {
     this._connected = false;
     this.accessToken = "";
   }
+
+  /**
+   * Start a background reconnection loop.
+   * If calendar is disconnected, retries connect() every intervalMs.
+   * Stops once connected. Safe to call multiple times (no-ops if already running).
+   */
+  private _reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  startAutoReconnect(intervalMs = 5 * 60_000) {
+    if (this._reconnectTimer) return;
+    this._reconnectTimer = setInterval(async () => {
+      if (this._connected) {
+        // Already connected, stop retrying
+        if (this._reconnectTimer) {
+          clearInterval(this._reconnectTimer);
+          this._reconnectTimer = null;
+        }
+        return;
+      }
+      console.log("[Calendar] Auto-reconnect attempt...");
+      try {
+        await this.connect();
+        if (this._connected) {
+          console.log("[Calendar] Auto-reconnect succeeded");
+          if (this._reconnectTimer) {
+            clearInterval(this._reconnectTimer);
+            this._reconnectTimer = null;
+          }
+        }
+      } catch (e: any) {
+        console.warn("[Calendar] Auto-reconnect failed:", e.message);
+      }
+    }, intervalMs);
+  }
 }

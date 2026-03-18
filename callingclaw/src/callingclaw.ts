@@ -561,6 +561,8 @@ calendar.connect().then(() => {
   }
 }).catch((e) => {
   console.warn("[Init] Google Calendar not available (optional):", e.message);
+  // Auto-retry connection every 5 minutes
+  calendar.startAutoReconnect();
 });
 
 // ── 7. HTTP Config Server ───────────────────────────────────────
