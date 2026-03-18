@@ -35,6 +35,21 @@ import { CONFIG } from "../config";
 
 // ── Types ──
 
+/** Layer 1: What topic is being discussed right now? */
+export interface TopicClassification {
+  topic: string;        // e.g., "memdex blog performance"
+  direction: string;    // e.g., "user asking about metrics and ROI"
+  shifted: boolean;     // true if topic changed from last classification
+}
+
+/** Layer 2: What information does this topic need? (only runs on topic shift) */
+export interface NeedInference {
+  needsRetrieval: boolean;
+  queries: string[];    // Need-based, not noun-based: "memdex blog conversion metrics Q1"
+  reasoning: string;
+}
+
+// Combined result (backward-compatible)
 export interface GapAnalysis {
   needsRetrieval: boolean;
   queries: string[];
@@ -64,6 +79,11 @@ export class ContextRetriever {
   private _lastAnalysisTs = 0;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastScreenUrl = "";  // Track URL changes to trigger analysis
+
+  // ── Layer 1: Topic tracking ──
+  private _currentTopic = "";           // Last classified topic
+  private _currentDirection = "";       // What the user is trying to learn/decide
+  private _topicStableSince = 0;        // When topic last changed (avoids re-retrieving)
 
   // ── Retrieved context accumulator ──
   private _retrievedContexts: RetrievedContext[] = [];
@@ -173,7 +193,20 @@ export class ContextRetriever {
     this._debounceTimer = setTimeout(() => this.runAnalysis(), this.DEBOUNCE_MS);
   }
 
-  // ── Core analysis loop ──
+  // ══════════════════════════════════════════════════════════════
+  // Core analysis loop — Two-Layer Gap Detection
+  //
+  //   Layer 1: classifyTopic (~50 tokens out, ALWAYS runs)
+  //     "What specific topic is being discussed right now?"
+  //     → If same topic as last time → SKIP (context still adequate)
+  //     → If topic shifted → proceed to Layer 2
+  //
+  //   Layer 2: inferNeeds (~100 tokens out, only on topic shift)
+  //     "Given this topic + conversation direction, what information
+  //      would help the AI respond better?"
+  //     → Need-based queries: "memdex blog conversion metrics" not "memdex"
+  //     → Then: semantic search → inject into Voice
+  // ══════════════════════════════════════════════════════════════
 
   private async runAnalysis() {
     if (!this._active || this._processing) return;
@@ -184,58 +217,69 @@ export class ContextRetriever {
     const startTs = Date.now();
 
     try {
-      // Step 1: Get recent transcript
       const entries = this.context.getRecentTranscript(20);
       if (entries.length < 2) return;
 
-      // Step 2: Fast model analyzes for knowledge gaps
-      const gapAnalysis = await this.analyzeGaps(entries);
+      // ── Layer 1: Topic Classification (cheap, always runs) ──
+      const topicResult = await this.classifyTopic(entries);
 
-      this.eventBus.emit("retriever.analysis", {
-        needsRetrieval: gapAnalysis.needsRetrieval,
-        queries: gapAnalysis.queries,
-        reasoning: gapAnalysis.reasoning,
+      this.eventBus.emit("retriever.topic", {
+        topic: topicResult.topic,
+        direction: topicResult.direction,
+        shifted: topicResult.shifted,
         durationMs: Date.now() - startTs,
       });
 
-      if (!gapAnalysis.needsRetrieval || gapAnalysis.queries.length === 0) {
-        console.log(`[ContextRetriever] No gaps detected (${Date.now() - startTs}ms)`);
+      if (!topicResult.shifted) {
+        console.log(`[ContextRetriever] L1: Same topic "${this._currentTopic.slice(0, 40)}" — skip (${Date.now() - startTs}ms)`);
         return;
       }
 
-      console.log(
-        `[ContextRetriever] Gaps found: ${gapAnalysis.queries.length} queries (${Date.now() - startTs}ms)`
-      );
+      // Update topic state
+      this._currentTopic = topicResult.topic;
+      this._currentDirection = topicResult.direction;
+      this._topicStableSince = Date.now();
+      console.log(`[ContextRetriever] L1: Topic shift → "${topicResult.topic}" (${topicResult.direction})`);
 
-      // Step 3: Semantic search on MEMORY.md via fast model
-      const retrievalStartTs = Date.now();
-      const results = await this.semanticSearch(gapAnalysis.queries);
+      // ── Layer 2: Need Inference (only on topic shift) ──
+      const needsResult = await this.inferNeeds(entries, topicResult);
+
+      this.eventBus.emit("retriever.analysis", {
+        needsRetrieval: needsResult.needsRetrieval,
+        queries: needsResult.queries,
+        reasoning: needsResult.reasoning,
+        durationMs: Date.now() - startTs,
+      });
+
+      if (!needsResult.needsRetrieval || needsResult.queries.length === 0) {
+        console.log(`[ContextRetriever] L2: No gaps for "${topicResult.topic}" (${Date.now() - startTs}ms)`);
+        return;
+      }
+
+      console.log(`[ContextRetriever] L2: ${needsResult.queries.length} need-based queries (${Date.now() - startTs}ms)`);
+
+      // ── Semantic search + inject ──
+      const searchStartTs = Date.now();
+      const results = await this.semanticSearch(needsResult.queries);
 
       if (results.length === 0) {
-        console.log(`[ContextRetriever] No results found (${Date.now() - retrievalStartTs}ms)`);
+        console.log(`[ContextRetriever] Search: no results (${Date.now() - searchStartTs}ms)`);
         return;
       }
 
-      // Step 4: Accumulate retrieved context
-      for (const r of results) {
-        this._retrievedContexts.push(r);
-      }
-      while (this._retrievedContexts.length > this.MAX_RETRIEVED_CONTEXTS) {
-        this._retrievedContexts.shift();
-      }
+      for (const r of results) this._retrievedContexts.push(r);
+      while (this._retrievedContexts.length > this.MAX_RETRIEVED_CONTEXTS) this._retrievedContexts.shift();
 
-      // Step 5: Inject into Voice AI
       this.injectIntoVoice(results);
 
       const totalMs = Date.now() - startTs;
       console.log(
-        `[ContextRetriever] Complete: ${results.length} contexts injected (` +
-        `analysis: ${retrievalStartTs - startTs}ms, search: ${Date.now() - retrievalStartTs}ms, ` +
-        `total: ${totalMs}ms)`
+        `[ContextRetriever] Done: ${results.length} contexts (L1: ${searchStartTs - startTs}ms, search: ${Date.now() - searchStartTs}ms, total: ${totalMs}ms)`
       );
 
       this.eventBus.emit("retriever.complete", {
-        queriesCount: gapAnalysis.queries.length,
+        topic: topicResult.topic,
+        queriesCount: needsResult.queries.length,
         resultsCount: results.length,
         totalMs,
       });
@@ -306,77 +350,125 @@ export class ContextRetriever {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // Step 2: Gap Analysis
+  // Layer 1: Topic Classification
+  // ── Cheap (~50 tokens output), always runs ──
+  // Answers: "What specific topic is being discussed RIGHT NOW?"
+  // If topic hasn't changed → skip Layer 2 entirely (saves cost)
   // ══════════════════════════════════════════════════════════════
 
-  private async analyzeGaps(entries: TranscriptEntry[]): Promise<GapAnalysis> {
+  private async classifyTopic(entries: TranscriptEntry[]): Promise<TopicClassification> {
+    // Use only last 8 entries for topic classification (cheaper + more focused)
+    const recent = entries.slice(-8);
+    const transcriptText = recent
+      .map((e) => `[${e.role}] ${e.text}`)
+      .join("\n");
+
+    const screen = this.context.screen;
+    const screenLine = screen.description
+      ? `[screen] ${screen.description}${screen.url ? ` (${screen.url})` : ""}`
+      : "";
+
+    const prompt = `What specific topic is being discussed RIGHT NOW in this meeting conversation?
+
+${transcriptText}
+${screenLine}
+
+Previous topic: "${this._currentTopic || "none"}"
+
+Reply with JSON only (no other text):
+{"topic": "specific topic in 3-8 words", "direction": "what the user wants to know or decide", "shifted": true/false}
+
+"shifted" = true ONLY if the topic is meaningfully different from the previous topic. Subtopic shifts within the same area count as shifted. Small talk → topic = "small talk", shifted = true only if previous wasn't small talk.`;
+
+    try {
+      const text = await this.callModel(prompt, {
+        model: CONFIG.analysis.model,
+        maxTokens: 100,
+      });
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) return { topic: this._currentTopic, direction: "", shifted: false };
+      const parsed = JSON.parse(match[0]);
+      return {
+        topic: parsed.topic || this._currentTopic,
+        direction: parsed.direction || "",
+        shifted: this._currentTopic === "" ? true : !!parsed.shifted,
+      };
+    } catch {
+      return { topic: this._currentTopic, direction: "", shifted: false };
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Layer 2: Need Inference
+  // ── Only runs when topic shifted ──
+  // Instead of searching for nouns ("memdex"), infers what the
+  // conversation NEEDS: "memdex blog conversion metrics Q1 2026"
+  // ══════════════════════════════════════════════════════════════
+
+  private async inferNeeds(
+    entries: TranscriptEntry[],
+    topic: TopicClassification,
+  ): Promise<NeedInference> {
     const transcriptText = entries
       .map((e) => `[${e.role}${e.speaker ? ` (${e.speaker})` : ""}] ${e.text}`)
       .join("\n");
 
-    // Include current screen context (what's being shown/presented)
     const screen = this.context.screen;
     const screenContext = screen.description
       ? `\n## Current Screen\n${screen.description}${screen.url ? ` (${screen.url})` : ""}${screen.title ? ` — ${screen.title}` : ""}`
       : "";
 
     const brief = this.meetingPrepSkill.currentBrief;
-    const currentContextSummary = brief
-      ? `Topic: ${brief.topic}\nKey Points: ${brief.keyPoints.join("; ")}\n` +
-        `Already retrieved: ${this._retrievedContexts.map((r) => r.query).join("; ") || "none"}`
-      : "No meeting brief loaded.";
+    const briefContext = brief
+      ? `Meeting topic: ${brief.topic}\nPrep covers: ${brief.keyPoints.join("; ")}`
+      : "No meeting brief.";
 
-    const prompt = `You analyze a live meeting (conversation + screen content) to detect knowledge gaps that need retrieval from local files and memory.
+    const alreadyRetrieved = this._retrievedContexts.map((r) => r.query).join("; ") || "nothing yet";
 
-## Current Context Already Available
-${currentContextSummary}
+    const prompt = `The meeting just shifted to a new topic. Determine what specific information would help the AI assistant respond well.
+
+## New Topic
+Topic: ${topic.topic}
+Direction: ${topic.direction}
+
+## Meeting Context
+${briefContext}
+Already retrieved: ${alreadyRetrieved}
 
 ## Recent Transcript
 ${transcriptText}
 ${screenContext}
 
 ## Task
-Analyze BOTH the conversation AND the screen content. Determine if the discussion or the presented content references concepts, projects, decisions, metrics, or history that are NOT covered by the current context.
+Think about what the AI assistant NEEDS to know to be helpful on this topic.
+- NOT: search for the noun that was mentioned ("memdex")
+- YES: search for what the conversation needs ("memdex blog performance metrics and conversion data")
 
-Context gaps include:
-- User or screen mentions a project/feature name not in the context
-- Screen shows a document, PRD, or dashboard with unfamiliar references
-- User references a past decision, conversation, or metric not covered
-- Discussion or screen shifted to a topic the prep brief doesn't cover
-- Screen shows code, PR, or architecture diagram that needs background context
+Ask yourself: "If I were the AI in this conversation, what specific facts, numbers, decisions, or history would I need to answer well?"
 
-NOT gaps (do not flag):
-- General discussion within the prep brief's scope
-- User's opinions or new ideas (nothing to retrieve)
-- Small talk or greetings
-- Topics already retrieved (see "Already retrieved" above)
-- Screen showing meeting grid / no shared content
+If the prep brief already covers this topic adequately, or the topic is just opinions/brainstorming (nothing to look up), return needsRetrieval=false.
 
 ## Output
 JSON only:
-{"needsRetrieval": true/false, "queries": ["specific search query 1", "specific search query 2"], "reasoning": "brief explanation"}
+{"needsRetrieval": true/false, "queries": ["need-based search query 1", "need-based search query 2"], "reasoning": "what info is missing and why it matters for this conversation"}
 
-Keep queries specific and searchable. Max 3 queries per analysis.`;
+Max 3 queries. Each query should be a specific information need, not a keyword.`;
 
-    const text = await this.callModel(prompt, {
-      model: CONFIG.analysis.model,
-      maxTokens: 256,
-    });
-    return this.parseGapAnalysis(text);
-  }
-
-  private parseGapAnalysis(text: string): GapAnalysis {
     try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
-      const parsed = JSON.parse(jsonMatch[0]);
+      const text = await this.callModel(prompt, {
+        model: CONFIG.analysis.model,
+        maxTokens: 256,
+      });
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
+      const parsed = JSON.parse(match[0]);
       return {
         needsRetrieval: !!parsed.needsRetrieval,
         queries: Array.isArray(parsed.queries) ? parsed.queries.slice(0, 3) : [],
         reasoning: parsed.reasoning || "",
       };
     } catch {
-      return { needsRetrieval: false, queries: [], reasoning: "json_parse_error" };
+      return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
     }
   }
 
@@ -701,6 +793,9 @@ RULES:
       processing: this._processing,
       charsSinceLastAnalysis: this._charsSinceLastAnalysis,
       lastAnalysisTs: this._lastAnalysisTs,
+      currentTopic: this._currentTopic,
+      currentDirection: this._currentDirection,
+      topicStableSince: this._topicStableSince,
       retrievedContextsCount: this._retrievedContexts.length,
       retrievedQueries: this._retrievedContexts.map((r) => r.query),
     };
