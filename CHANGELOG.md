@@ -17,6 +17,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **Desktop voice test panel** — Provider dropdown with automatic voice option switching (OpenAI voices ↔ Grok voices: Eve, Ara, Rex, Sal, Leo).
 - **`VOICE_PROVIDER` env var** — Default provider configurable via `.env` (defaults to `openai`).
 
+## [2.4.5] - 2026-03-18
+
+### Added
+- **gstack skills reference** — CLAUDE.md Section 20 documenting all available gstack skills for agent use
+- **Meeting tasks** — 11 new action items from audio/sidecar debugging meeting (task extraction pipeline)
+
 ## [2.4.1] - 2026-03-18
 
 ### Fixed
