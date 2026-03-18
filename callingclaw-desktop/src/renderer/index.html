@@ -514,7 +514,7 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 .ob-dot.active { background: var(--accent); width: 24px; border-radius: 4px; }
 
 /* ── Animation Canvases ──────────────────────────────── */
-.anim-canvas { width: 100%; height: 100%; position: relative; }
+.anim-canvas { width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
 
 /* Step 1: Welcome — Lobster enters meeting room */
 .anim-welcome { display: flex; align-items: center; justify-content: center; }
@@ -1580,6 +1580,66 @@ function obSkipAll() {
   showView('home');
   refreshAll();
 }
+
+async function obFinish(startEngine) {
+  localStorage.setItem('onboarding_completed', '1');
+  if (startEngine) {
+    try { await window.callingclaw.daemon.start(); } catch {}
+  }
+  showView('home');
+  setTimeout(refreshAll, 1500);
+}
+
+async function obGrantScreen() {
+  try { await window.callingclaw.permissions.request('screenRecording'); } catch {}
+  obPollPermission('screenRecording', 'ob-screen-status', 'ob-screen-btn', '屏幕录制');
+}
+
+async function obGrantAccess() {
+  try { await window.callingclaw.permissions.request('accessibility'); } catch {}
+  obPollPermission('accessibility', 'ob-access-status', 'ob-access-btn', '辅助功能');
+}
+
+function obPollPermission(permName, statusId, btnId, label) {
+  const el = document.getElementById(statusId);
+  el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;animation:pulse 1s infinite;"></div> 等待授权...请在系统设置中允许';
+  _obPollTimer = setInterval(async () => {
+    try {
+      const perms = await window.callingclaw.permissions.check();
+      if (perms[permName]?.granted) {
+        clearInterval(_obPollTimer); _obPollTimer = null;
+        el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权';
+        const btn = document.getElementById(btnId);
+        if (btn) { btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; }
+      }
+    } catch {}
+  }, 2000);
+}
+
+async function obSaveKeys() {
+  const openaiKey = document.getElementById('ob-key-openai')?.value?.trim();
+  const openrouterKey = document.getElementById('ob-key-openrouter')?.value?.trim();
+  if (openaiKey) {
+    try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_api_key: openaiKey, openrouter_api_key: openrouterKey || undefined }) }); } catch {}
+  }
+  obNext();
+}
+
+async function obInstallSkill() {
+  const btn = document.getElementById('ob-skill-btn');
+  if (btn) { btn.textContent = '安装中...'; btn.disabled = true; }
+  try {
+    await window.callingclaw.skill.install();
+    const el = document.getElementById('ob-skill-status');
+    if (el) el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装';
+    if (btn) { btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; }
+  } catch (e) {
+    if (btn) { btn.textContent = '安装失败，重试'; btn.disabled = false; btn.className = 'btn btn-primary'; }
+  }
+}
+
+let _obPollTimer = null;
+function obStopPolling() { if (_obPollTimer) { clearInterval(_obPollTimer); _obPollTimer = null; } }
 
 function obRestart() {
   localStorage.removeItem('onboarding_completed');
