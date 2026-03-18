@@ -1205,3 +1205,26 @@ main (稳定版) ← dev/frontend, dev/backend, dev/ai (worktrees)
 | Frontend | `/Users/admin/dev/callingclaw-worktrees/frontend` | `dev/frontend` |
 | Backend | `/Users/admin/dev/callingclaw-worktrees/backend` | `dev/backend` |
 | AI | `/Users/admin/dev/callingclaw-worktrees/ai` | `dev/ai` |
+
+---
+
+## 20. gstack Skills
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+Available skills:
+- `/plan-ceo-review` — CEO-level product review of feature plans
+- `/plan-eng-review` — Engineering architecture review with diagrams and test matrices
+- `/plan-design-review` — Design audit with AI slop detection
+- `/design-consultation` — Design consultation
+- `/review` — Paranoid code review with auto-fixes
+- `/ship` — Release engineer: ship the PR
+- `/browse` — Headless browser for web browsing, QA, and verification
+- `/qa` — Full QA: opens real browser, clicks through flows, finds bugs
+- `/qa-only` — QA without code fixes
+- `/qa-design-review` — QA with design review
+- `/setup-browser-cookies` — Configure browser cookies for QA
+- `/retro` — Developer stats retrospective
+- `/document-release` — Generate release documentation
+
+If gstack skills aren't working, run: `cd ~/.claude/skills/gstack && ./setup`
