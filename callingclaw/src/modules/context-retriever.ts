@@ -84,6 +84,14 @@ export class ContextRetriever {
   private _currentTopic = "";           // Last classified topic
   private _currentDirection = "";       // What the user is trying to learn/decide
   private _topicStableSince = 0;        // When topic last changed (avoids re-retrieving)
+  private _pendingQuestion = false;     // True when user asked a question (triggers cache lookup)
+
+  // ── P1: Topic Prefetch Cache ──
+  // When a topic shift triggers retrieval, ALL results are cached under the topic.
+  // Follow-up questions within the same topic hit the cache (<1ms) instead of
+  // making API calls. VoiceAgentRAG reports 316x speedup with this pattern.
+  private _topicCache = new Map<string, RetrievedContext[]>();
+  private TOPIC_CACHE_MAX_TOPICS = 5;   // Keep last N topics cached
 
   // ── Retrieved context accumulator ──
   private _retrievedContexts: RetrievedContext[] = [];
@@ -148,9 +156,11 @@ export class ContextRetriever {
 
     this._charsSinceLastAnalysis += entry.text.length;
 
+    const isQuestion = this.QUESTION_BOOST && entry.role === "user" && this.looksLikeQuestion(entry.text);
+    if (isQuestion) this._pendingQuestion = true;
+
     const shouldTrigger =
-      this._charsSinceLastAnalysis >= this.CHAR_THRESHOLD ||
-      (this.QUESTION_BOOST && entry.role === "user" && this.looksLikeQuestion(entry.text));
+      this._charsSinceLastAnalysis >= this.CHAR_THRESHOLD || isQuestion;
 
     if (shouldTrigger && !this._processing) {
       this.scheduleAnalysis();
@@ -230,12 +240,33 @@ export class ContextRetriever {
         durationMs: Date.now() - startTs,
       });
 
+      const hadQuestion = this._pendingQuestion;
+      this._pendingQuestion = false;
+
       if (!topicResult.shifted) {
-        console.log(`[ContextRetriever] L1: Same topic "${this._currentTopic.slice(0, 40)}" — skip (${Date.now() - startTs}ms)`);
+        // ── Same topic: try cache if user asked a question ──
+        if (hadQuestion && this._topicCache.has(this._currentTopic)) {
+          const cached = this._topicCache.get(this._currentTopic)!;
+          const lastUserText = entries.filter(e => e.role === "user").pop()?.text || "";
+          const cacheHits = this.searchCache(cached, lastUserText);
+          if (cacheHits.length > 0) {
+            this.injectIntoVoice(cacheHits);
+            console.log(`[ContextRetriever] Cache hit: ${cacheHits.length} results for question in "${this._currentTopic.slice(0, 30)}" (<1ms)`);
+            this.eventBus.emit("retriever.cache_hit", {
+              topic: this._currentTopic,
+              resultsCount: cacheHits.length,
+              question: lastUserText.slice(0, 60),
+            });
+          } else {
+            console.log(`[ContextRetriever] Cache miss for question in "${this._currentTopic.slice(0, 30)}" — no relevant cached content`);
+          }
+        } else {
+          console.log(`[ContextRetriever] L1: Same topic "${this._currentTopic.slice(0, 40)}" — skip (${Date.now() - startTs}ms)`);
+        }
         return;
       }
 
-      // Update topic state
+      // ── Topic shifted ──
       this._currentTopic = topicResult.topic;
       this._currentDirection = topicResult.direction;
       this._topicStableSince = Date.now();
@@ -258,7 +289,14 @@ export class ContextRetriever {
 
       console.log(`[ContextRetriever] L2: ${needsResult.queries.length} need-based queries (${Date.now() - startTs}ms)`);
 
-      // ── Semantic search + inject ──
+      // ── P2: Emit searching event for filler mechanism ──
+      this.eventBus.emit("retriever.searching", {
+        topic: topicResult.topic,
+        direction: topicResult.direction,
+        queries: needsResult.queries,
+      });
+
+      // ── Semantic search + inject + cache ──
       const searchStartTs = Date.now();
       const results = await this.semanticSearch(needsResult.queries);
 
@@ -269,6 +307,9 @@ export class ContextRetriever {
 
       for (const r of results) this._retrievedContexts.push(r);
       while (this._retrievedContexts.length > this.MAX_RETRIEVED_CONTEXTS) this._retrievedContexts.shift();
+
+      // ── P1: Cache results under current topic for follow-up questions ──
+      this.cacheForTopic(topicResult.topic, results);
 
       this.injectIntoVoice(results);
 
@@ -785,6 +826,73 @@ RULES:
     console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI`);
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // P1: Topic Prefetch Cache
+  // ── Cache search results per topic. Follow-up questions within
+  //    the same topic hit the cache (<1ms) instead of API calls. ──
+  //
+  // VoiceAgentRAG benchmarks: 110ms (vector DB) → 0.35ms (cache)
+  // = 316x speedup. Cache hit rate reaches 86% by turns 5-9.
+  // ══════════════════════════════════════════════════════════════
+
+  /** Store search results under the current topic */
+  private cacheForTopic(topic: string, results: RetrievedContext[]): void {
+    // Merge with existing cache for this topic (don't replace)
+    const existing = this._topicCache.get(topic) || [];
+    const merged = [...existing, ...results];
+    // Dedup by query
+    const seen = new Set<string>();
+    const deduped = merged.filter((r) => {
+      if (seen.has(r.query)) return false;
+      seen.add(r.query);
+      return true;
+    });
+    this._topicCache.set(topic, deduped);
+
+    // Evict oldest topics if cache exceeds max
+    if (this._topicCache.size > this.TOPIC_CACHE_MAX_TOPICS) {
+      const oldest = this._topicCache.keys().next().value;
+      if (oldest) this._topicCache.delete(oldest);
+    }
+
+    console.log(`[ContextRetriever] Cached ${results.length} results for topic "${topic.slice(0, 30)}" (${deduped.length} total cached)`);
+  }
+
+  /**
+   * Search the cache for content relevant to a user's question.
+   * Uses keyword overlap — no API call, <1ms.
+   */
+  private searchCache(cached: RetrievedContext[], question: string): RetrievedContext[] {
+    if (!question || cached.length === 0) return [];
+
+    // Extract significant words from the question (>2 chars, skip common words)
+    const stopWords = new Set(["the", "is", "at", "which", "on", "a", "an", "and", "or", "but", "in", "to", "for",
+      "的", "了", "在", "是", "有", "和", "就", "不", "也", "都", "这", "那", "你", "我", "他", "她", "吗", "呢"]);
+    const questionWords = new Set(
+      question.toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g, " ").split(/\s+/)
+        .filter((w) => w.length > 2 && !stopWords.has(w))
+    );
+
+    if (questionWords.size === 0) return [];
+
+    // Score each cached context by keyword overlap with the question
+    const scored = cached.map((ctx) => {
+      const ctxText = `${ctx.query} ${ctx.content}`.toLowerCase();
+      let hits = 0;
+      for (const word of questionWords) {
+        if (ctxText.includes(word)) hits++;
+      }
+      return { ctx, score: hits / questionWords.size };
+    });
+
+    // Return contexts with >30% keyword overlap
+    return scored
+      .filter((s) => s.score > 0.3)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map((s) => s.ctx);
+  }
+
   // ── Status ──
 
   getStatus() {
@@ -796,6 +904,8 @@ RULES:
       currentTopic: this._currentTopic,
       currentDirection: this._currentDirection,
       topicStableSince: this._topicStableSince,
+      topicCacheSize: this._topicCache.size,
+      topicCacheTopics: [...this._topicCache.keys()],
       retrievedContextsCount: this._retrievedContexts.length,
       retrievedQueries: this._retrievedContexts.map((r) => r.query),
     };

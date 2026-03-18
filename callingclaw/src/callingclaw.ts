@@ -479,6 +479,28 @@ const contextRetriever = new ContextRetriever({
   meetingPrepSkill,
 });
 
+// ── P2: Filler mechanism — Voice AI says "让我看看..." while search runs ──
+// When ContextRetriever detects a topic shift and starts searching, the user
+// would otherwise hear silence for 2-8s. The filler fills this gap naturally.
+// GetStream reports this buys 1.5-2s of perceived zero-latency.
+const FILLER_PHRASES = [
+  "让我看看相关的资料...",
+  "我查一下这个的背景...",
+  "让我找一下相关信息...",
+  "我看看之前的记录...",
+];
+let _lastFillerTs = 0;
+eventBus.on("retriever.searching", (data) => {
+  // Only inject filler if voice is connected and not too frequent
+  const now = Date.now();
+  if (voice.connected && now - _lastFillerTs > 30_000) {
+    _lastFillerTs = now;
+    const filler = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
+    voice.sendText(filler!);
+    console.log(`[Filler] Sent "${filler}" while searching for "${(data as any).topic?.slice(0, 30)}"`);
+  }
+});
+
 // ── 3. Voice Module (OpenAI Realtime) ───────────────────────────
 
 // ── 4. Meeting Module (before voice, since tools need it) ──────
