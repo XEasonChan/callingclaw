@@ -1,5 +1,126 @@
 [
   {
+    "id": "task_mmvmxnzm_h1ib",
+    "task": "Adjust audio configuration parameters for resampling and sample rate compatibility.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2023-11-21",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795250,
+    "updatedAt": 1773813795250
+  },
+  {
+    "id": "task_mmvmxnzm_jx5q",
+    "task": "Provide AudioBridge related code segments for further analysis.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2023-11-22",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795250,
+    "updatedAt": 1773813795250
+  },
+  {
+    "id": "task_mmvmxnzm_lum3",
+    "task": "Continue testing the isolation of audio and screen capture to reduce conflicts.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Claude Code",
+    "deadline": "2023-11-23",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795250,
+    "updatedAt": 1773813795250
+  },
+  {
+    "id": "task_mmvmxnzl_ml2s",
+    "task": "Verify the effectiveness of the code changes applied to address the crash issue.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Claude",
+    "deadline": "2023-11-20",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_8tlg",
+    "task": "Monitor the sidecar process for stability after the fixes have been applied.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew and team",
+    "deadline": "2023-11-23",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_cxt3",
+    "task": "Document the findings related to the BlackHole virtual audio device and the crash issues for future reference.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Claude",
+    "deadline": "2023-11-24",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_o1l1",
+    "task": "测试会议中的音频",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Xueyi Chen",
+    "deadline": "2023-11-19",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_hlvi",
+    "task": "Implement a patch to resolve the 'Illegal instruction: 4' issue.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Development Team",
+    "deadline": "2023-11-21",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_4scn",
+    "task": "Conduct further testing to validate the impact of the patch on Sidecar stability.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "QA Team",
+    "deadline": "2023-11-22",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_go0f",
+    "task": "Restart the python_sidecar process using PYTHONUNBUFFERED=1.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2023-11-20",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
+    "id": "task_mmvmxnzl_3kgi",
+    "task": "Implement additional debug logging in the audio playback and capture loop in main.py.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2023-11-20",
+    "sourceMeetingId": "mtg_mmvmhlva_x3zw",
+    "createdAt": 1773813795249,
+    "updatedAt": 1773813795249
+  },
+  {
     "id": "task_mmuk8737_ahm6",
     "task": "Verify Confluence's full data fetching and filter support.",
     "status": "pending",
