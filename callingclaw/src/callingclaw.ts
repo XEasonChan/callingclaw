@@ -15,7 +15,8 @@ import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
-import { OC007_PROMPT, type OC007_Request } from "./openclaw-protocol";
+// OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
+// ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { readFileSync } from "fs";
@@ -153,25 +154,22 @@ const vision = new VisionModule({
   context,
   browserCapture,
   onScreenDescription: (description, _screenshot) => {
-    // Buffer descriptions for periodic OpenClaw push
-    _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
-
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
 
-    // Append to live log file on disk
+    // Append to live log file on disk (timeline for post-meeting analysis)
     if (meetingPrepSkill.liveLogPath) {
       appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`);
     }
 
-    // Push visual context to OpenClaw every 5 descriptions (~40 seconds) via OC-007
-    if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
-      const batch = _meetingVisionBuffer.splice(0);
-      const req: OC007_Request = { id: "OC-007", reason: "batch", screenDescriptions: batch };
-      openclawBridge.sendTask(OC007_PROMPT(req)).catch(() => {});
-      eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
-      console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to OpenClaw`);
-    }
+    // Buffer for final flush only (meeting end summary)
+    _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
+
+    // NOTE: No OC-007 batch push during meetings.
+    // Screen descriptions feed into ContextRetriever's gap analysis instead —
+    // it detects what context is MISSING and retrieves from local files/memory.
+    // OpenClaw is too slow (2-15s) for meeting-time context enrichment.
+    // Post-meeting: the complete live log timeline is used for summary + todos.
   },
 });
 
@@ -247,12 +245,10 @@ eventBus.on("meeting.started", () => {
 function stopMeetingVisionAndFlush(reason: string) {
   if (!vision.isMeetingMode) return;
   vision.stopMeetingVision();
-  // Flush remaining buffer to OpenClaw via OC-007 (final)
-  if (_meetingVisionBuffer.length > 0 && openclawBridge.connected) {
-    const batch = _meetingVisionBuffer.splice(0);
-    const req: OC007_Request = { id: "OC-007", reason: "final", screenDescriptions: batch };
-    openclawBridge.sendTask(OC007_PROMPT(req)).catch(() => {});
-    eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
+  // Clear vision buffer (screen descriptions are preserved in live log file)
+  if (_meetingVisionBuffer.length > 0) {
+    console.log(`[MeetingVision] Discarded ${_meetingVisionBuffer.length} buffered descriptions (preserved in live log)`);
+    _meetingVisionBuffer.length = 0;
   }
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }

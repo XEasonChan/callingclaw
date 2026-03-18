@@ -63,6 +63,7 @@ export class ContextRetriever {
   private _charsSinceLastAnalysis = 0;
   private _lastAnalysisTs = 0;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private _lastScreenUrl = "";  // Track URL changes to trigger analysis
 
   // ── Retrieved context accumulator ──
   private _retrievedContexts: RetrievedContext[] = [];
@@ -98,10 +99,12 @@ export class ContextRetriever {
     this._charsSinceLastAnalysis = 0;
     this._lastAnalysisTs = Date.now();
     this._retrievedContexts = [];
+    this._lastScreenUrl = "";
 
     this.context.on("transcript", this._onTranscript);
+    this.context.on("screen", this._onScreenChange);
 
-    console.log("[ContextRetriever] Activated — monitoring transcript for knowledge gaps");
+    console.log("[ContextRetriever] Activated — monitoring transcript + screen for knowledge gaps");
     this.eventBus.emit("retriever.activated", {});
   }
 
@@ -132,6 +135,24 @@ export class ContextRetriever {
     if (shouldTrigger && !this._processing) {
       this.scheduleAnalysis();
     }
+  };
+
+  /** Trigger analysis when screen URL/title changes significantly (e.g., new page shared) */
+  private _onScreenChange = (screenState: any) => {
+    if (!this._active) return;
+    if (!screenState.description) return;
+
+    // Only trigger on URL change (not every 1s screenshot update)
+    const url = screenState.url || "";
+    if (url && url !== this._lastScreenUrl && this._lastScreenUrl) {
+      this._lastScreenUrl = url;
+      // Treat as a significant context shift — boost char count to trigger analysis
+      this._charsSinceLastAnalysis += this.CHAR_THRESHOLD;
+      if (!this._processing) {
+        this.scheduleAnalysis();
+      }
+    }
+    this._lastScreenUrl = url;
   };
 
   private looksLikeQuestion(text: string): boolean {
@@ -293,34 +314,43 @@ export class ContextRetriever {
       .map((e) => `[${e.role}${e.speaker ? ` (${e.speaker})` : ""}] ${e.text}`)
       .join("\n");
 
+    // Include current screen context (what's being shown/presented)
+    const screen = this.context.screen;
+    const screenContext = screen.description
+      ? `\n## Current Screen\n${screen.description}${screen.url ? ` (${screen.url})` : ""}${screen.title ? ` — ${screen.title}` : ""}`
+      : "";
+
     const brief = this.meetingPrepSkill.currentBrief;
     const currentContextSummary = brief
       ? `Topic: ${brief.topic}\nKey Points: ${brief.keyPoints.join("; ")}\n` +
         `Already retrieved: ${this._retrievedContexts.map((r) => r.query).join("; ") || "none"}`
       : "No meeting brief loaded.";
 
-    const prompt = `You analyze meeting transcript to detect knowledge gaps that need retrieval.
+    const prompt = `You analyze a live meeting (conversation + screen content) to detect knowledge gaps that need retrieval from local files and memory.
 
 ## Current Context Already Available
 ${currentContextSummary}
 
 ## Recent Transcript
 ${transcriptText}
+${screenContext}
 
 ## Task
-Determine if the conversation has mentioned concepts, projects, decisions, or history that are NOT covered by the current context. Only flag genuine gaps — if the AI assistant already has enough context to respond well, return needsRetrieval=false.
+Analyze BOTH the conversation AND the screen content. Determine if the discussion or the presented content references concepts, projects, decisions, metrics, or history that are NOT covered by the current context.
 
-Examples of gaps:
-- User mentions a project name not in the context
-- User references a past decision or conversation not covered
-- User asks about specific metrics/results not available
-- Discussion shifted to a topic the prep brief doesn't cover
+Context gaps include:
+- User or screen mentions a project/feature name not in the context
+- Screen shows a document, PRD, or dashboard with unfamiliar references
+- User references a past decision, conversation, or metric not covered
+- Discussion or screen shifted to a topic the prep brief doesn't cover
+- Screen shows code, PR, or architecture diagram that needs background context
 
 NOT gaps (do not flag):
 - General discussion within the prep brief's scope
 - User's opinions or new ideas (nothing to retrieve)
 - Small talk or greetings
 - Topics already retrieved (see "Already retrieved" above)
+- Screen showing meeting grid / no shared content
 
 ## Output
 JSON only:
