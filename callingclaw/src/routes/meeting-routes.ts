@@ -478,10 +478,11 @@ STEP-BY-STEP FLOW:
 
       // POST /api/meeting/leave — Leave current meeting + generate follow-up report
       if (url.pathname === "/api/meeting/leave" && req.method === "POST") {
-        // Stop admission monitor if running
+        // Stop admission monitor + meeting-end watcher
         if (services.playwrightCli?.isAdmissionMonitoring) {
           services.playwrightCli.stopAdmissionMonitor();
         }
+        services.playwrightCli?.clearMeetingEndCallback();
         const summary = await services.meeting.generateSummary();
         const filepath = await services.meeting.exportToMarkdown(summary);
         services.meeting.stopRecording();

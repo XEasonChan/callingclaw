@@ -370,6 +370,18 @@ export class MeetJoiner {
       if (muteMic) {
         this.bridge.sendAction("key", { key: "command+d" });
         await this.wait(500);
+      } else {
+        // Ensure mic is ON — Chrome/Meet may default to muted.
+        // Unmute via JS: click the "Turn on microphone" button if present.
+        console.log("[Meet] Ensuring mic is unmuted for BlackHole bridge...");
+        this.bridge.send("action", {
+          action: "run_command",
+          command: `osascript -e 'tell application "Google Chrome" to execute front window'"'"'s active tab javascript "
+            var micOn = document.querySelector(\\"[aria-label*=\\\\\\"Turn on microphone\\\\\\"], [aria-label*=\\\\\\"打开麦克风\\\\\\"]\\");
+            if (micOn) { micOn.click(); \\\\\\"unmuted\\\\\\"; } else { \\\\\\"already_on_or_not_found\\\\\\"; }
+          "'`
+        });
+        await this.wait(500);
       }
 
       // Step 7: Click "Join now" or "Ask to join" button
@@ -404,12 +416,16 @@ export class MeetJoiner {
       });
       await this.wait(5000);
 
-      // Step 8: Setup virtual audio routing on the sidecar
-      this.bridge.send("config", {
-        audio_mode: "meet_bridge",
-        capture_system_audio: true,
-        virtual_mic_output: true,
-      });
+      // Step 8: Setup virtual audio routing on the sidecar (with verification + retry)
+      const audioOk = await this.bridge.sendConfigAndVerify(
+        { audio_mode: "meet_bridge", capture_system_audio: true, virtual_mic_output: true },
+        { timeoutMs: 3000, retries: 3 }
+      );
+      if (audioOk) {
+        console.log("[Meet] ✅ Audio bridge confirmed: meet_bridge");
+      } else {
+        console.error("[Meet] ⚠️ Audio bridge config NOT confirmed — voice may not work!");
+      }
 
       this.currentSession!.status = "in_meeting";
       console.log("[Meet] Successfully joined Google Meet with BlackHole audio bridging");
@@ -458,13 +474,17 @@ export class MeetJoiner {
         }
       }
 
-      // Step 4: Setup virtual audio routing (same as Meet)
+      // Step 4: Setup virtual audio routing (same as Meet, with verification)
       if (this.bridge.ready) {
-        this.bridge.send("config", {
-          audio_mode: "meet_bridge",
-          capture_system_audio: true,
-          virtual_mic_output: true,
-        });
+        const audioOk = await this.bridge.sendConfigAndVerify(
+          { audio_mode: "meet_bridge", capture_system_audio: true, virtual_mic_output: true },
+          { timeoutMs: 3000, retries: 3 }
+        );
+        if (audioOk) {
+          console.log("[Meet] ✅ Zoom audio bridge confirmed: meet_bridge");
+        } else {
+          console.error("[Meet] ⚠️ Zoom audio bridge config NOT confirmed!");
+        }
       }
 
       this.currentSession!.status = "in_meeting";
@@ -500,11 +520,12 @@ export class MeetJoiner {
       this.bridge.sendAction("key", { key: "command+shift+h" });
     }
 
-    // Stop virtual audio routing
+    // Stop virtual audio routing + reset screen capture to mouse-tracking
     this.bridge.send("config", {
       audio_mode: "default",
       capture_system_audio: false,
       virtual_mic_output: false,
+      capture_mode: "mouse",
     });
 
     // Restore original audio devices

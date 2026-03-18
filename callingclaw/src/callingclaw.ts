@@ -4,7 +4,7 @@
 
 import { CONFIG } from "./config";
 import { PythonBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { PeekabooClient } from "./mcp_client/peekaboo";
@@ -20,7 +20,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.4.1";
+let APP_VERSION = "2.4.2";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -55,6 +55,11 @@ const contextSync = new ContextSync();
 const openclawBridge = new OpenClawBridge();
 
 const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
+
+// Forward live notes to EventBus for Desktop UI visibility
+meetingPrepSkill.onLiveNote((note, topic) => {
+  eventBus.emit("meeting.live_note", { note, topic, timestamp: Date.now() });
+});
 
 // Load OpenClaw's MEMORY.md at startup (non-blocking)
 contextSync.loadOpenClawMemory().then((ok) => {
@@ -124,6 +129,9 @@ contextSync.onUpdate(() => {
   }
 });
 
+// Browser DOM context capture interval (started on meeting.started, cleared on meeting.ended)
+let _domContextInterval: ReturnType<typeof setInterval> | null = null;
+
 // Wire OpenClaw activity events to EventBus for real-time visibility
 openclawBridge.onActivity((kind, summary, detail) => {
   eventBus.emit(kind, { summary, detail });
@@ -142,11 +150,20 @@ const vision = new VisionModule({
     // Buffer descriptions for periodic OpenClaw push
     _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
 
+    // Emit vision event for Desktop UI visibility
+    eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
+
+    // Append to live log file on disk
+    if (meetingPrepSkill.liveLogPath) {
+      appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`);
+    }
+
     // Push visual context to OpenClaw every 5 descriptions (~40 seconds) via OC-007
     if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
       const batch = _meetingVisionBuffer.splice(0);
       const req: OC007_Request = { id: "OC-007", reason: "batch", screenDescriptions: batch };
       openclawBridge.sendTask(OC007_PROMPT(req)).catch(() => {});
+      eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
       console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to OpenClaw`);
     }
   },
@@ -158,9 +175,9 @@ eventBus.on("meeting.started", () => {
     vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");
   }
-  // Open meeting transparency panel in browser (foreground)
-  Bun.spawn(["open", `http://localhost:${CONFIG.port}/meeting-view.html`]);
-  console.log("[Init] Meeting transparency view opened in browser");
+  // Meeting view disabled — now shown in Electron sidebar only
+  // Bun.spawn(["open", `http://localhost:${CONFIG.port}/meeting-view.html`]);
+  // console.log("[Init] Meeting transparency view opened in browser");
 
   // ── Activate TranscriptAuditor: take over automation from OpenAI ──
   if (voice.connected) {
@@ -177,6 +194,47 @@ eventBus.on("meeting.started", () => {
     // Activate context retriever (knowledge gap fill)
     contextRetriever.activate(voice);
   }
+
+  // ── Safety: auto-stop after 3 hours to prevent cost leakage ──
+  setTimeout(() => {
+    if (vision.isMeetingMode) {
+      console.warn("[Init] Meeting exceeded 3 hour limit — auto-stopping vision to prevent cost leakage");
+      stopMeetingVisionAndFlush("3 hour safety limit reached");
+    }
+  }, 3 * 60 * 60 * 1000);
+
+  // ── Start Browser DOM context capture (both modes) ──
+  // Captures active browser tab DOM every 10s for richer context.
+  // In Meet mode: captures non-Meet tabs when Playwright is free.
+  // In Talk Locally: captures whatever the user is browsing.
+  if (playwrightCli.connected) {
+    _domContextInterval = setInterval(async () => {
+      if (!playwrightCli.connected) return;
+      try {
+        const raw = await playwrightCli.evaluate(`() => {
+          // Skip if on Google Meet page (Meet mode uses it for other things)
+          if (location.hostname === 'meet.google.com') return JSON.stringify({ skip: true });
+          return JSON.stringify({
+            url: location.href,
+            title: document.title,
+            scrollY: window.scrollY,
+            scrollHeight: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight,
+            visibleText: document.body.innerText.substring(0, 2000),
+            links: document.querySelectorAll('a').length,
+            buttons: document.querySelectorAll('button').length,
+            inputs: document.querySelectorAll('input,textarea').length,
+          });
+        }`);
+        const domInfo = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!domInfo.skip) {
+          context.updateBrowserContext?.(domInfo);
+          eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
+        }
+      } catch {} // Browser busy or not accessible
+    }, 10000);
+    console.log("[Init] Browser DOM context capture started (10s interval)");
+  }
 });
 
 // Auto-stop vision when meeting ends or recording stops
@@ -188,12 +246,33 @@ function stopMeetingVisionAndFlush(reason: string) {
     const batch = _meetingVisionBuffer.splice(0);
     const req: OC007_Request = { id: "OC-007", reason: "final", screenDescriptions: batch };
     openclawBridge.sendTask(OC007_PROMPT(req)).catch(() => {});
+    eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
   }
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }
 
+// ── Safety net: auto-stop meeting when voice disconnects ──
+// Prevents vision/recording from leaking if user closes session without proper stop
+eventBus.on("voice.stopped", () => {
+  if (vision.isMeetingMode || meeting.getNotes().isRecording) {
+    console.log("[Init] Voice stopped while meeting active — auto-stopping vision + recording");
+    stopMeetingVisionAndFlush("Voice disconnected");
+    if (_domContextInterval) { clearInterval(_domContextInterval); _domContextInterval = null; }
+    meeting.stopRecording();
+    if (transcriptAuditor.active) transcriptAuditor.deactivate();
+    if (contextRetriever.active) contextRetriever.deactivate();
+  }
+});
+
 eventBus.on("meeting.ended", () => {
   stopMeetingVisionAndFlush("Meeting ended");
+
+  // Stop DOM context capture
+  if (_domContextInterval) {
+    clearInterval(_domContextInterval);
+    _domContextInterval = null;
+    context.clearBrowserContext?.();
+  }
 
   // ── Stop admission monitor ──
   if (playwrightCli.isAdmissionMonitoring) {
@@ -311,12 +390,9 @@ const peekaboo = new PeekabooClient();
 const zoomSkill = new ZoomSkill(bridge);
 const automationRouter = new AutomationRouter(bridge, eventBus, playwrightCli, peekaboo);
 
-// Start Layer 2 (Playwright CLI) in background — non-blocking
-playwrightCli.start().then(() => {
-  console.log("[Init] Layer 2 (Playwright CLI) ready");
-}).catch((e) => {
-  console.warn("[Init] Layer 2 (Playwright CLI) not available:", e.message);
-});
+// Layer 2 (Playwright CLI) — lazy start, only launches Chrome when first needed
+// (avoids opening an empty Chrome window on CallingClaw startup)
+console.log("[Init] Layer 2 (Playwright CLI) ready (lazy — Chrome launches on first use)");
 
 // Check Layer 3 (Peekaboo) availability — non-blocking
 peekaboo.checkAvailability().then((ok) => {
@@ -402,6 +478,14 @@ context.on("note", (note) => {
       text: note.text,
       assignee: note.assignee,
     });
+  }
+});
+
+// Write transcript entries to live log file on disk
+context.on("transcript", (entry: any) => {
+  if (meetingPrepSkill.liveLogPath && meeting.getNotes().isRecording) {
+    const role = entry.role === "user" ? "USER" : entry.role === "assistant" ? "AI" : entry.role?.toUpperCase() || "???";
+    appendToLiveLog(meetingPrepSkill.liveLogPath, `[${role}] ${entry.text}`);
   }
 });
 

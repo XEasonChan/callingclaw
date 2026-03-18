@@ -31,7 +31,7 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
     computerUse,
     eventBus,
     context,
-    voice,
+    // voice accessed lazily via deps.voice (created after buildAllTools)
     bridge,
     playwrightCli,
     zoomSkill,
@@ -132,7 +132,7 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
             });
             // Notify Voice AI of task completion during meetings (persistent live note)
             if (meetingPrepSkill.currentBrief) {
-              notifyTaskCompletion(voice, meetingPrepSkill, args.instruction, routerResult.result);
+              notifyTaskCompletion(deps.voice, meetingPrepSkill, args.instruction, routerResult.result, eventBus);
             }
             return `[${routerResult.layer}${routerResult.fallback ? " (fallback)" : ""}, ${routerResult.durationMs}ms] ${routerResult.result}`;
           }
@@ -145,7 +145,7 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           eventBus.emit("computer.task_done", { instruction: args.instruction, summary: cuResult.summary, layer: "computer_use" });
           // Notify Voice AI of task completion during meetings
           if (meetingPrepSkill.currentBrief) {
-            notifyTaskCompletion(voice, meetingPrepSkill, args.instruction, cuResult.summary);
+            notifyTaskCompletion(deps.voice, meetingPrepSkill, args.instruction, cuResult.summary, eventBus);
           }
           return cuResult.summary;
         }

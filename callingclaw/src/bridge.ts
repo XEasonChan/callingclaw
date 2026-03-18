@@ -9,7 +9,8 @@ export type BridgeMessageType =
   | "action"            // PyAutoGUI command to Python
   | "action_result"     // Result from Python action
   | "status"            // Status/heartbeat
-  | "config";           // Configuration update
+  | "config"            // Configuration update
+  | "ping";             // Heartbeat ping to sidecar
 
 export interface BridgeMessage {
   type: BridgeMessageType;
@@ -27,6 +28,7 @@ export class PythonBridge {
   private _pingInterval: ReturnType<typeof setInterval> | null = null;
   private _lastPong = 0;
   private _pendingConfigConfirm: ((ok: boolean) => void) | null = null;
+  private _lastConfigPayload: any = null;
 
   get ready() {
     return this._ready;
@@ -52,6 +54,16 @@ export class PythonBridge {
           self._ready = true;
           self._lastPong = Date.now();
           self._startPing();
+
+          // Re-send last config on reconnect (sidecar resets to "default" mode)
+          if (self._lastConfigPayload) {
+            console.log("[Bridge] Re-sending cached config to reconnected sidecar...");
+            setTimeout(() => {
+              self.sendConfigAndVerify(self._lastConfigPayload, { timeoutMs: 3000, retries: 3 })
+                .then(ok => console.log(`[Bridge] Config replay on reconnect: ${ok ? "✅" : "❌"}`))
+                .catch(() => console.warn("[Bridge] Config replay failed"));
+            }, 500); // Small delay to let sidecar finish init
+          }
         },
         message(ws, raw) {
           try {
@@ -97,8 +109,9 @@ export class PythonBridge {
         this._ready = false;
         return;
       }
-      // If no pong in 15s, mark as disconnected
-      if (Date.now() - this._lastPong > 15000) {
+      // If no pong in 30s, mark as disconnected
+      // (PyAudio blocking I/O can delay pong; 15s was too aggressive)
+      if (Date.now() - this._lastPong > 30000) {
         console.warn("[Bridge] Sidecar ping timeout — marking disconnected");
         this._ready = false;
         try { this.client.close(); } catch {}
@@ -193,6 +206,7 @@ export class PythonBridge {
 
       if (confirmed) {
         console.log(`[Bridge] Config verified on attempt ${attempt}`);
+        this._lastConfigPayload = payload;
         return true;
       }
       console.warn(`[Bridge] Config not confirmed (attempt ${attempt}/${retries}), retrying...`);

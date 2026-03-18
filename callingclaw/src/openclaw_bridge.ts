@@ -12,7 +12,7 @@ export type OpenClawActivityFn = (kind: string, summary: string, detail?: string
 
 const OPENCLAW_WS_URL = "ws://localhost:18789";
 const CONNECT_TIMEOUT = 6000;
-const TASK_TIMEOUT = 120000; // 2 minutes per task
+const TASK_TIMEOUT = 600000; // 10 minutes per task (deep research needs time, no rush)
 
 interface PendingRequest {
   resolve: (payload: any) => void;
@@ -175,7 +175,7 @@ export class OpenClawBridge {
     return new Promise<string>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.chatResolve = null;
-        resolve("OpenClaw task timed out (2 minutes).");
+        resolve("OpenClaw task timed out (5 minutes). OpenClaw may be busy or the research topic is too broad.");
       }, TASK_TIMEOUT);
 
       this.chatResolve = (text: string) => {

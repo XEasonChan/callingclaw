@@ -13,6 +13,7 @@ type EventHandler = (event: any) => void;
 export class RealtimeClient {
   private ws: WebSocket | null = null;
   private handlers = new Map<string, EventHandler[]>();
+  private _audioLogThrottle = 0;
   private tools: RealtimeTool[] = [];
   private _connected = false;
 
@@ -71,8 +72,17 @@ export class RealtimeClient {
           const data = typeof event.data === "string" ? event.data : String(event.data);
           const parsed = JSON.parse(data);
 
-          // Log non-audio events for debugging
-          if (!parsed.type?.includes("audio")) {
+          // Log events (audio events logged sparingly to avoid spam)
+          if (parsed.type?.includes("audio")) {
+            if (parsed.type === "response.audio.delta") {
+              if (!this._audioLogThrottle || Date.now() - this._audioLogThrottle > 5000) {
+                console.log(`[Realtime] Audio streaming... (delta ${parsed.delta?.length || 0} chars)`);
+                this._audioLogThrottle = Date.now();
+              }
+            } else {
+              console.log(`[Realtime] Audio event: ${parsed.type}`);
+            }
+          } else {
             console.log(`[Realtime] Event: ${parsed.type}`);
           }
 

@@ -3,6 +3,7 @@
 //        save_meeting_notes, share_screen, stop_sharing, open_file
 
 import type { ToolModule } from "./types";
+import { CONFIG } from "../config";
 import type { GoogleCalendarClient, CalendarAttendee } from "../mcp_client/google_cal";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { MeetJoiner } from "../meet_joiner";
@@ -41,13 +42,14 @@ export interface MeetingToolDeps {
 }
 
 export function meetingTools(deps: MeetingToolDeps): ToolModule {
+  // NOTE: `voice` is NOT destructured here — it must be accessed lazily via deps.voice
+  // because VoiceModule is created AFTER buildAllTools() is called.
   const {
     calendar,
     playwrightCli,
     meetJoiner,
     openclawBridge,
     meetingPrepSkill,
-    voice,
     meeting,
     eventBus,
     automationRouter,
@@ -169,8 +171,8 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           if (openclawBridge.connected) {
             try {
               prepResult = await prepareMeeting(meetingPrepSkill, meetTopic, undefined, meetAttendees);
-              if (voice.connected) {
-                voice.updateInstructions(prepResult.instructions);
+              if (deps.voice.connected) {
+                deps.voice.updateInstructions(prepResult.instructions);
                 console.log("[Meeting] Voice switched to MEETING_PERSONA with prep brief");
               }
             } catch (e: any) {
@@ -185,6 +187,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           let joinSummary = "";
 
           let joinState: "in_meeting" | "waiting_room" | "failed" = "failed";
+
+          // Ensure Playwright is started (lazy init)
+          if (!playwrightCli.connected) {
+            try { await playwrightCli.start(); } catch {}
+          }
 
           if (playwrightCli.connected) {
             console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
@@ -294,11 +301,17 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           const corrId = eventBus.startCorrelation("mtg");
           eventBus.emit("meeting.creating", { summary: args.summary });
 
+          // Auto-add user email as attendee if configured
+          const meetingAttendees = [...(args.attendees || [])];
+          if (CONFIG.userEmail && !meetingAttendees.includes(CONFIG.userEmail)) {
+            meetingAttendees.push(CONFIG.userEmail);
+          }
+
           const session = await meetJoiner.createAndJoinMeeting(
             calendar,
             args.summary,
             args.duration_minutes || 30,
-            args.attendees || []
+            meetingAttendees
           );
           if (session.status === "in_meeting") {
             meeting.startRecording();
@@ -380,11 +393,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           // Clear meeting prep state + revert voice to default persona
           meetingPrepSkill.clear();
-          if (voice.connected) {
+          if (deps.voice.connected) {
             const defaultBrief = contextSync.getBrief().voice;
             const defaultInstructions = buildVoiceInstructions() +
               (defaultBrief ? `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${defaultBrief}` : "");
-            voice.updateInstructions(defaultInstructions);
+            deps.voice.updateInstructions(defaultInstructions);
             console.log("[Meeting] Voice reverted to DEFAULT_PERSONA");
           }
 

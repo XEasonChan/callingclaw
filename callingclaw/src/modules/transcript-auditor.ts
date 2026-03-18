@@ -459,7 +459,8 @@ Respond with JSON only:
           this.voice,
           this.meetingPrepSkill,
           instruction,
-          executionResult
+          executionResult,
+          this.eventBus
         );
       }
 
@@ -487,7 +488,7 @@ Respond with JSON only:
 
     // Push updated context to Voice AI so it can ask the user
     if (this.voice?.connected) {
-      pushContextUpdate(this.voice, this.meetingPrepSkill);
+      pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
     }
 
     this.eventBus.emit("auditor.suggest", {

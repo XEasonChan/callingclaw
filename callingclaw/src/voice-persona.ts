@@ -35,6 +35,7 @@
 import type { VoiceModule } from "./modules/voice";
 import type { MeetingPrepSkill, MeetingPrepBrief } from "./skills/meeting-prep";
 import type { CalendarAttendee } from "./mcp_client/google_cal";
+import type { EventBus } from "./modules/event-bus";
 
 // ══════════════════════════════════════════════════════════════
 // 1. DEFAULT VOICE PERSONA (no meeting prep)
@@ -211,6 +212,7 @@ export function buildVoiceInstructions(brief?: MeetingPrepBrief | null): string 
 export function pushContextUpdate(
   voiceModule: VoiceModule,
   prepSkill: MeetingPrepSkill,
+  eventBus?: EventBus,
 ): boolean {
   const brief = prepSkill.currentBrief;
   if (!brief) return false;
@@ -220,6 +222,11 @@ export function pushContextUpdate(
 
   if (sent) {
     console.log(`[VoicePersona] Context pushed to Voice (${brief.liveNotes.length} live notes)`);
+    eventBus?.emit("meeting.context_pushed", {
+      topic: brief.topic,
+      liveNotesCount: brief.liveNotes.length,
+      timestamp: Date.now(),
+    });
   }
   return sent;
 }
@@ -237,9 +244,10 @@ export function notifyTaskCompletion(
   prepSkill: MeetingPrepSkill,
   task: string,
   result: string,
+  eventBus?: EventBus,
 ): string {
   const entry = prepSkill.recordTaskCompletion(task, result);
-  pushContextUpdate(voiceModule, prepSkill);
+  pushContextUpdate(voiceModule, prepSkill, eventBus);
   return entry;
 }
 

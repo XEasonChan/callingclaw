@@ -1,5 +1,38 @@
 // CallingClaw 2.0 — Central Configuration
 
+import { resolve } from "path";
+import { homedir } from "os";
+import { mkdirSync } from "fs";
+
+// ── Shared local document directory ──
+// Used by CallingClaw, OpenClaw, and Desktop UI for meeting artifacts
+export const SHARED_DIR = resolve(homedir(), ".callingclaw", "shared");
+export const SHARED_PREP_DIR = resolve(SHARED_DIR, "prep");
+export const SHARED_NOTES_DIR = resolve(SHARED_DIR, "notes");
+export const SHARED_LOGS_DIR = resolve(SHARED_DIR, "logs");
+export const SHARED_MANIFEST_PATH = resolve(SHARED_DIR, "manifest.json");
+
+// Ensure shared directories exist on import (startup)
+try {
+  mkdirSync(SHARED_PREP_DIR, { recursive: true });
+  mkdirSync(SHARED_NOTES_DIR, { recursive: true });
+  mkdirSync(SHARED_LOGS_DIR, { recursive: true });
+} catch {
+  // Permissions issue — will fail gracefully on write
+}
+
+// ── Load persistent user config from ~/.callingclaw/user-config.json ──
+const USER_CONFIG_PATH = `${process.env.HOME}/.callingclaw/user-config.json`;
+let _userConfig: Record<string, string> = {};
+try {
+  const f = Bun.file(USER_CONFIG_PATH);
+  if (await f.exists()) {
+    _userConfig = await f.json();
+  }
+} catch {
+  // File doesn't exist yet or is invalid — use defaults
+}
+
 export const CONFIG = {
   // Server
   port: parseInt(process.env.PORT || "4000"),
@@ -81,6 +114,11 @@ export const CONFIG = {
     // Peekaboo CLI path (defaults to system PATH)
     cliPath: process.env.PEEKABOO_PATH || "peekaboo",
   },
+
+  // User identity — auto-added as attendee to every calendar event
+  userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };
 
 export type CallingClawConfig = typeof CONFIG;
+
+export { USER_CONFIG_PATH };

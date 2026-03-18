@@ -1,7 +1,7 @@
 {
   "name": "callingclaw-desktop",
-  "version": "2.2.1",
-  "description": "CallingClaw Desktop — Electron shell for the CallingClaw AI meeting assistant",
+  "version": "2.4.2",
+  "description": "CallingClaw Desktop \u2014 Electron shell for the CallingClaw AI meeting assistant",
   "main": "src/main/index.js",
   "scripts": {
     "start": "unset ELECTRON_RUN_AS_NODE && electron .",

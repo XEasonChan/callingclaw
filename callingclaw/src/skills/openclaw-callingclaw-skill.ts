@@ -6,6 +6,7 @@
 // Usage in OpenClaw:
 //   /callingclaw voice start       — Start voice session
 //   /callingclaw voice stop        — Stop voice session
+//   /callingclaw prepare <topic>   — Create meeting (calendar + Meet link + deep research)
 //   /callingclaw join <url>        — Join a meeting
 //   /callingclaw leave             — Leave meeting + generate follow-up
 //   /callingclaw status            — Check CallingClaw status
@@ -55,6 +56,38 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return { success: false, error: "Usage: /callingclaw voice start|stop [instructions]" };
       }
 
+      case "prep-result": {
+        // Submit completed prep brief to CallingClaw for rendering
+        // OpenClaw calls this after deep research is done
+        if (!rest) return { success: false, error: "Usage: /callingclaw prep-result <JSON>" };
+        try {
+          const briefJson = JSON.parse(rest);
+          return await apiPost("/api/meeting/prep-result", briefJson);
+        } catch {
+          return { success: false, error: "Invalid JSON. Send the full MeetingPrepBrief object." };
+        }
+      }
+
+      case "prepare":
+      case "create": {
+        // Create a meeting: calendar event + Meet link + background deep research
+        // Auto-adds CONFIG.userEmail as attendee
+        if (!rest) return { success: false, error: "Usage: /callingclaw prepare <topic> [--attendees email1,email2] [--time 2026-03-17T20:00]" };
+        const body: any = { topic: rest };
+        // Parse optional flags
+        const attendeeMatch = rest.match(/--attendees?\s+([\w@.,]+)/);
+        if (attendeeMatch) {
+          body.attendees = attendeeMatch[1].split(",").map((e: string) => e.trim());
+          body.topic = rest.replace(/--attendees?\s+[\w@.,]+/, "").trim();
+        }
+        const timeMatch = rest.match(/--time\s+([\d\-T:+]+)/);
+        if (timeMatch) {
+          body.start_time = timeMatch[1];
+          body.topic = body.topic.replace(/--time\s+[\d\-T:+]+/, "").trim();
+        }
+        return await apiPost("/api/meeting/prepare", body);
+      }
+
       case "join": {
         const url = parts[1];
         if (!url) return { success: false, error: "Usage: /callingclaw join <meeting-url>" };
@@ -78,6 +111,12 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
 
       case "calendar":
         return await apiGet("/api/calendar/events");
+
+      case "user-email":
+      case "email":
+        // Get or set the user's default email (used for calendar invites)
+        if (rest) return await apiPost("/api/config/user-email", { email: rest });
+        return await apiGet("/api/config/user-email");
 
       case "tasks":
         return await apiGet("/api/tasks?status=pending");
@@ -105,7 +144,27 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return await apiPost("/api/bridge/action", { action: "screenshot" });
 
       case "notes":
+        // Reads from ~/.callingclaw/shared/notes/ (+ legacy meeting_notes/)
         return await apiGet("/api/meeting/notes");
+
+      case "prep-files":
+      case "preps": {
+        // List available prep briefs from ~/.callingclaw/shared/prep/
+        return await apiGet("/api/shared/prep");
+      }
+
+      case "manifest": {
+        // Get shared directory manifest for quick file discovery
+        return await apiGet("/api/shared/manifest");
+      }
+
+      case "shared": {
+        // Read a file from the shared directory
+        // Usage: /callingclaw shared prep/2026-03-17_topic.md
+        const sharedPath = rest;
+        if (!sharedPath) return { success: false, error: "Usage: /callingclaw shared <relative-path>" };
+        return await apiGet(`/api/shared/file?path=${encodeURIComponent(sharedPath)}`);
+      }
 
       case "transcript": {
         const count = parseInt(parts[1]) || 20;
@@ -139,6 +198,7 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
             commands: [
               "/callingclaw status              — Check if CallingClaw is running",
               "/callingclaw voice start|stop     — Start/stop voice session",
+              "/callingclaw prepare <topic>      — Create meeting (calendar + Meet + research)",
               "/callingclaw join <url>           — Join a meeting",
               "/callingclaw leave                — Leave meeting + follow-up",
               "/callingclaw say <text>           — Send text to voice AI",
@@ -149,7 +209,10 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw context <note>       — Add shared context note",
               "/callingclaw pin <path> [summary] — Pin file to shared context",
               "/callingclaw screenshot           — Take screenshot",
-              "/callingclaw notes                — List saved meeting notes",
+              "/callingclaw notes                — List saved meeting notes (from ~/.callingclaw/shared/notes/)",
+              "/callingclaw prep-files           — List available prep briefs (from ~/.callingclaw/shared/prep/)",
+              "/callingclaw manifest             — Get shared directory file index",
+              "/callingclaw shared <path>        — Read a file from ~/.callingclaw/shared/ by relative path",
               "/callingclaw transcript [count]   — Get live transcript",
               "/callingclaw health               — Health check all subsystems",
               "/callingclaw recover browser      — Kill + restart browser",
@@ -157,6 +220,13 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw recover voice        — Restart voice session",
               "/callingclaw recover all          — Reset all subsystems",
             ],
+            sharedDir: "~/.callingclaw/shared/",
+            sharedSubdirs: {
+              prep: "Meeting prep briefs (.md + .json)",
+              notes: "Meeting notes/summaries (.md)",
+              logs: "Live meeting logs (.md)",
+              "manifest.json": "File index for quick discovery",
+            },
           },
         };
 
@@ -201,8 +271,8 @@ async function apiPatch(path: string, body: any): Promise<CallingClawSkillResult
 
 export const CALLINGCLAW_SKILL_MANIFEST = {
   name: "callingclaw",
-  version: "2.2.1",
-  description: "Control CallingClaw — voice AI, computer use, meetings, screen capture, self-recovery",
+  version: "2.2.4",
+  description: "Control CallingClaw — voice AI, computer use, meetings, screen capture, self-recovery, shared documents",
   trigger: "/callingclaw",
   examples: [
     "/callingclaw status",
@@ -213,6 +283,9 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     "/callingclaw leave",
     "/callingclaw health",
     "/callingclaw recover browser",
+    "/callingclaw prep-files",
+    "/callingclaw manifest",
+    "/callingclaw shared prep/2026-03-17_topic.md",
   ],
   capabilities: [
     "voice_conversation",
@@ -224,9 +297,20 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     "task_management",
     "context_sharing",
     "self_recovery",
+    "shared_documents",
   ],
   endpoint: "http://localhost:4000",
   healthCheck: "http://localhost:4000/api/recovery/health",
+
+  // ── Shared Document Convention ──
+  sharedDir: "~/.callingclaw/shared/",
+  sessionsIndex: "~/.callingclaw/shared/sessions.json",
+  fileSuffixes: {
+    prep: "_prep.md",
+    live: "_live.md",
+    summary: "_summary.md",
+    transcript: "_transcript.md",
+  },
 
   // ── OpenClaw → CallingClaw Protocol Schemas ──
   // All message schemas for CallingClaw → OpenClaw calls (via sendTask).

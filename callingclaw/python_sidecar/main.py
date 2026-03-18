@@ -44,12 +44,99 @@ BRIDGE_URL = f"ws://localhost:{BRIDGE_PORT}"
 last_screenshot_hash = None
 capture_running = False
 audio_mode = "default"  # "default" | "direct" | "meet_bridge"
+capture_mode = "mouse"  # "mouse" | "meeting_app"
+meeting_app_name = ""   # e.g. "Google Chrome", "zoom.us" — set by config
+_locked_monitor_idx = None  # cached monitor index for meeting_app mode
+
+
+# ── Multi-Monitor Display Detection ─────────────────────────
+
+def _get_monitor_for_mouse(sct_monitors):
+    """Return mss monitor index (1-based) containing the mouse cursor."""
+    try:
+        mx, my = pyautogui.position()
+        for i, mon in enumerate(sct_monitors):
+            if i == 0:
+                continue  # skip combined virtual desktop
+            if (mon["left"] <= mx < mon["left"] + mon["width"] and
+                    mon["top"] <= my < mon["top"] + mon["height"]):
+                return i
+        return 1  # fallback: primary
+    except Exception:
+        return 1
+
+
+def _get_monitor_for_app(sct_monitors, app_name):
+    """Return mss monitor index (1-based) containing the frontmost window of app_name.
+
+    Uses macOS CGWindowListCopyWindowInfo to locate the app's window,
+    then maps its center point to the mss monitor list.
+    Falls back to primary monitor on error or non-macOS.
+    """
+    if sys.platform != "darwin" or not app_name:
+        return 1
+    try:
+        from Quartz import (  # type: ignore
+            CGWindowListCopyWindowInfo,
+            kCGWindowListOptionOnScreenOnly,
+            kCGNullWindowID,
+        )
+        windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+        for w in windows:
+            owner = w.get("kCGWindowOwnerName", "")
+            # Match by app name (case-insensitive contains)
+            if app_name.lower() not in owner.lower():
+                continue
+            # Skip tiny helper windows (menubar extras, etc.)
+            b = w.get("kCGWindowBounds", {})
+            ww, wh = b.get("Width", 0), b.get("Height", 0)
+            if ww < 200 or wh < 200:
+                continue
+            cx = b.get("X", 0) + ww / 2
+            cy = b.get("Y", 0) + wh / 2
+            for i, mon in enumerate(sct_monitors):
+                if i == 0:
+                    continue
+                if (mon["left"] <= cx < mon["left"] + mon["width"] and
+                        mon["top"] <= cy < mon["top"] + mon["height"]):
+                    return i
+            break  # found the window but didn't map — fall through
+    except ImportError:
+        # Quartz/PyObjC not available — fall back
+        pass
+    except Exception as e:
+        print(f"[Screen] App monitor detection error: {e}")
+    return 1
+
+
+def _resolve_capture_monitor(sct_monitors):
+    """Pick which monitor to capture based on current capture_mode.
+
+    Both modes lock on first detection — no per-frame re-detection.
+    meeting_app: locks to the display containing the meeting window.
+    mouse: locks to the display containing the mouse cursor at session start.
+    Reset _locked_monitor_idx (via config message) to re-detect.
+    """
+    global _locked_monitor_idx
+
+    if _locked_monitor_idx is not None and _locked_monitor_idx < len(sct_monitors):
+        return _locked_monitor_idx
+
+    if capture_mode == "meeting_app":
+        idx = _get_monitor_for_app(sct_monitors, meeting_app_name)
+    else:
+        idx = _get_monitor_for_mouse(sct_monitors)
+
+    _locked_monitor_idx = idx
+    print(f"[Screen] Locked to monitor {idx} ({capture_mode})")
+    return idx
 
 
 def take_screenshot() -> str:
-    """Capture screen and return base64 PNG."""
+    """Capture the appropriate monitor and return base64 PNG."""
     with mss.mss() as sct:
-        monitor = sct.monitors[1]  # Primary monitor
+        idx = _resolve_capture_monitor(sct.monitors)
+        monitor = sct.monitors[idx]
         img = sct.grab(monitor)
         from mss.tools import to_png
         png_bytes = to_png(img.rgb, img.size)
@@ -336,9 +423,13 @@ class AudioBridge:
         if not self.capture_stream:
             return
 
+        loop = asyncio.get_event_loop()
         while self.running:
             try:
-                data = self.capture_stream.read(self._chunk, exception_on_overflow=False)
+                # Run PyAudio read in thread pool to avoid blocking event loop
+                data = await loop.run_in_executor(
+                    None, self.capture_stream.read, self._chunk, False
+                )
                 b64 = base64.b64encode(data).decode("utf-8")
                 await ws.send(json.dumps({
                     "type": "audio_chunk",
@@ -395,6 +486,10 @@ async def screen_capture_loop(ws):
 
     while capture_running:
         try:
+            # Check if websocket is still open before doing work
+            if ws.closed:
+                break
+
             screenshot_b64 = take_screenshot()
             raw = base64.b64decode(screenshot_b64)
             current_hash = simple_hash(raw)
@@ -406,7 +501,8 @@ async def screen_capture_loop(ws):
                     "payload": {"image": screenshot_b64, "changed": True},
                     "ts": int(time.time() * 1000),
                 }
-                await ws.send(json.dumps(msg))
+                if not ws.closed:
+                    await ws.send(json.dumps(msg))
 
             consecutive_errors = 0  # Reset on success
             await asyncio.sleep(1.0)
@@ -423,13 +519,20 @@ async def screen_capture_loop(ws):
 # ── Main ──────────────────────────────────────────────────────
 
 async def main():
-    global audio_mode, capture_running
+    global audio_mode, capture_running, capture_mode, meeting_app_name, _locked_monitor_idx
 
     audio_bridge = AudioBridge()
 
     print(f"[Sidecar] Connecting to {BRIDGE_URL}...")
 
-    async for ws in websockets.connect(BRIDGE_URL):
+    while True:
+        try:
+            ws = await websockets.connect(BRIDGE_URL)
+        except Exception as e:
+            print(f"[Sidecar] Connection failed: {e}, retrying in 3s...")
+            await asyncio.sleep(3)
+            continue
+
         try:
             print("[Sidecar] Connected to Bun bridge!")
 
@@ -467,12 +570,27 @@ async def main():
 
                     elif msg_type == "audio_playback":
                         # AI audio → speaker (direct) or BlackHole (meet)
+                        # Run in thread pool to avoid blocking asyncio event loop
+                        # (PyAudio write is synchronous and can block ping handling)
                         audio_data = payload.get("audio", "")
                         if audio_data and audio_mode in ("direct", "meet_bridge"):
-                            audio_bridge.play_audio(audio_data)
+                            loop = asyncio.get_event_loop()
+                            loop.run_in_executor(None, audio_bridge.play_audio, audio_data)
 
                     elif msg_type == "config":
                         print(f"[Sidecar] Config update received: {payload}")
+
+                        # ── Screen capture mode ──
+                        new_capture = payload.get("capture_mode")
+                        if new_capture in ("mouse", "meeting_app"):
+                            capture_mode = new_capture
+                            _locked_monitor_idx = None  # reset lock on mode change
+                            app = payload.get("meeting_app", "")
+                            if app:
+                                meeting_app_name = app
+                            print(f"[Sidecar] Capture mode: {capture_mode}"
+                                  f"{f' (app={meeting_app_name})' if capture_mode == 'meeting_app' else ''}")
+
                         new_mode = payload.get("audio_mode")
 
                         if new_mode in ("direct", "meet_bridge") and audio_mode != new_mode:
@@ -540,12 +658,26 @@ async def main():
                 except Exception as e:
                     print(f"[Sidecar] Message handling error: {e}")
 
-        except websockets.ConnectionClosed:
-            print("[Sidecar] Disconnected, reconnecting in 2s...")
+        except (websockets.ConnectionClosed, ConnectionError, OSError) as e:
+            print(f"[Sidecar] Disconnected: {e}, reconnecting in 3s...")
+        except Exception as e:
+            print(f"[Sidecar] Unexpected error: {e}, reconnecting in 3s...")
+        finally:
+            # Cancel all background tasks before reconnecting
             capture_running = False
+            if capture_task and not capture_task.done():
+                capture_task.cancel()
+                try: await capture_task
+                except: pass
+            if audio_capture_task and not audio_capture_task.done():
+                audio_capture_task.cancel()
+                try: await audio_capture_task
+                except: pass
             audio_bridge.stop()
             audio_mode = "default"
-            await asyncio.sleep(2)
+            try: await ws.close()
+            except: pass
+            await asyncio.sleep(3)
 
 
 if __name__ == "__main__":

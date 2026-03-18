@@ -19,11 +19,15 @@ import type { GoogleCalendarClient, CalendarEvent } from "../mcp_client/google_c
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
 import { OC003_PROMPT, parseOC003, type OC003_Request } from "../openclaw-protocol";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { resolve, dirname } from "path";
+import { homedir } from "os";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LOOKAHEAD_MS = 2 * 60 * 60 * 1000; // 2 hours ahead
 const PREP_LEAD_MS = 2 * 60 * 1000; // Join 2 min before meeting start
 const CALLINGCLAW_API = "http://localhost:4000";
+const SCHEDULED_CACHE_PATH = resolve(homedir(), ".callingclaw", "scheduled-meetings.json");
 
 interface ScheduledMeeting {
   calendarEventId: string;
@@ -61,7 +65,11 @@ export class MeetingScheduler {
   start() {
     if (this._active) return;
     this._active = true;
-    console.log("[MeetingScheduler] Started — polling every 5 min");
+
+    // Load previously scheduled meetings from disk (survives restarts)
+    this.loadCache();
+
+    console.log(`[MeetingScheduler] Started — ${this.scheduled.size} cached, polling every 5 min`);
 
     // Initial poll after 10s (let other services initialize)
     setTimeout(() => this.poll(), 10_000);
@@ -106,8 +114,8 @@ export class MeetingScheduler {
         // Skip events already past or too far in the future
         if (startMs < now - 60_000 || startMs > cutoff) continue;
 
-        // Generate a stable event ID from meetLink + start time
-        const eventId = `${event.meetLink}_${event.start}`;
+        // Use Google Calendar event ID (stable across polls) with fallback
+        const eventId = event.id || `${event.meetLink}_${event.start}`;
 
         // Skip if already scheduled
         if (this.scheduled.has(eventId)) continue;
@@ -130,6 +138,7 @@ export class MeetingScheduler {
           });
           newScheduled++;
 
+          this.saveCache(); // Persist to disk so restarts don't re-register
           console.log(`[MeetingScheduler] Scheduled: "${event.summary}" → join at ${new Date(joinAt).toLocaleTimeString("zh-CN")}`);
           this.eventBus.emit("scheduler.meeting_scheduled", {
             summary: event.summary,
@@ -213,6 +222,31 @@ export class MeetingScheduler {
       meetLink: meetUrl,
     };
     return this.registerCronJob(event, joinAtISO);
+  }
+
+  /** Load scheduled meetings cache from disk */
+  private loadCache() {
+    try {
+      const raw = readFileSync(SCHEDULED_CACHE_PATH, "utf-8");
+      const entries: [string, ScheduledMeeting][] = JSON.parse(raw);
+      const now = Date.now();
+      // Only restore entries that are still in the future (within lookahead)
+      for (const [id, meeting] of entries) {
+        if (meeting.scheduledAt > now - 60_000) {
+          this.scheduled.set(id, meeting);
+        }
+      }
+    } catch { /* no cache or corrupt — start fresh */ }
+  }
+
+  /** Save scheduled meetings cache to disk */
+  private saveCache() {
+    try {
+      mkdirSync(dirname(SCHEDULED_CACHE_PATH), { recursive: true });
+      writeFileSync(SCHEDULED_CACHE_PATH, JSON.stringify([...this.scheduled.entries()], null, 2));
+    } catch (e: any) {
+      console.warn("[MeetingScheduler] Cache save failed:", e.message);
+    }
   }
 
   /**

@@ -26,6 +26,7 @@ const DEFAULT_PROFILE_DIR = resolve(homedir(), ".callingclaw", "browser-profile"
 
 export class PlaywrightCLIClient {
   private _connected = false;
+  private _explicitlyStopped = false; // Prevents auto-start after explicit stop/reset
   private headless: boolean;
   private profileDir: string;
 
@@ -39,6 +40,7 @@ export class PlaywrightCLIClient {
   /** Start by opening a blank page (launches the browser daemon) */
   async start(): Promise<void> {
     if (this._connected) return;
+    this._explicitlyStopped = false; // Clear stopped flag on explicit start
 
     // Ensure profile directory exists
     try { mkdirSync(this.profileDir, { recursive: true }); } catch {}
@@ -184,231 +186,166 @@ export class PlaywrightCLIClient {
     const log = (msg: string) => { steps.push(msg); opts?.onStep?.(msg); console.log(`[MeetJoin] ${msg}`); };
 
     try {
-      // ── Phase 1: Navigate + detect page state ──
-      log("Navigating to meeting URL...");
+      // ── Step 1: Navigate to Meet URL ──
+      log("Navigating...");
       await this.navigate(url);
-      await this.wait(2000);
+      await this.wait(1500);
 
-      // Dismiss any blocking dialogs first (Got it, cookie consent, notification, etc.)
-      log("Dismissing dialogs...");
-      await this.evaluate(`() => {
+      // ── Step 2: Dismiss + detect + configure (NO join yet) ──
+      // Single eval: dismiss dialogs, detect state, set camera/mic/name.
+      // Join click is deferred to Step 4 so audio devices can be selected first.
+      log("Detecting + configuring (single pass)...");
+      const configResult = await this.evaluate(`() => {
+        const R = { state: 'unknown', config: [], hasJoinBtn: false };
+
+        // 1. Dismiss blocking dialogs
         const dismiss = ['got it', 'dismiss', 'continue without', 'not now', 'block', 'deny'];
         document.querySelectorAll('button, [role="button"]').forEach(b => {
           const t = (b.textContent || '').trim().toLowerCase();
           if (dismiss.some(d => t === d || t.includes(d))) b.click();
         });
-      }`);
-      await this.wait(500);
 
-      // ── Phase 2: Detect pre-join page state (retry up to 12s) ──
-      log("Detecting page state...");
-      type MeetPageState = "prejoin" | "switch_here" | "already_in" | "ended" | "error" | "loading";
-      let pageState: MeetPageState = "loading";
-      let joinButtonText = "";
+        // 2. Detect page state
+        const body = document.body.innerText || '';
+        const btns = [...document.querySelectorAll('button')];
+        const btnTexts = btns.map(b => b.textContent.trim());
 
-      for (let i = 0; i < 6; i++) {
-        const stateResult = await this.evaluate(`() => {
-          const body = document.body.innerText || '';
-          const btns = [...document.querySelectorAll('button')];
-          const btnTexts = btns.map(b => b.textContent.trim());
-
-          // Check for "Switch here" button (already in meeting on another device)
-          if (btnTexts.some(t => t === 'Switch here' || t === '切换到这里')) return 'switch_here';
-
-          // Check for standard join buttons
-          const joinBtn = btnTexts.find(t => ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'].includes(t));
-          if (joinBtn) return 'prejoin:' + joinBtn;
-
-          // Check if already in meeting
-          if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) return 'already_in';
-
-          // Check meeting ended
-          if (body.includes('This meeting has ended') || body.includes('会议已结束') || body.includes('You can\\'t join this video call')) return 'ended';
-
-          // Check error states
-          if (body.includes('not allowed') || body.includes('denied') || body.includes('Check your meeting code')) return 'error';
-
-          return 'loading';
-        }`);
-
-        if (stateResult.startsWith("prejoin:")) {
-          pageState = "prejoin";
-          joinButtonText = stateResult.slice(8);
-          break;
+        if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) {
+          R.state = 'already_in'; return JSON.stringify(R);
         }
-        if (stateResult === "switch_here") { pageState = "switch_here"; break; }
-        if (stateResult === "already_in") { pageState = "already_in"; break; }
-        if (stateResult === "ended") { pageState = "ended"; break; }
-        if (stateResult === "error") { pageState = "error"; break; }
-
-        if (i < 5) await this.wait(2000);
-      }
-
-      log(`Page state: ${pageState}${joinButtonText ? ` (${joinButtonText})` : ""}`);
-
-      if (pageState === "ended") {
-        return { success: false, summary: "Meeting has ended", steps, state: "failed" };
-      }
-      if (pageState === "error") {
-        return { success: false, summary: "Cannot access meeting (check URL or permissions)", steps, state: "failed" };
-      }
-      if (pageState === "already_in") {
-        log("Already in meeting!");
-        return { success: true, summary: "Already in meeting", steps, state: "in_meeting" };
-      }
-      if (pageState === "loading") {
-        log("Page did not load to a known state — attempting join anyway");
-      }
-
-      // ── Phase 3: Handle "Switch here" (already in meeting on another device) ──
-      if (pageState === "switch_here") {
-        log("Clicking 'Switch here' — transferring meeting to this device...");
-        await this.evaluate(`() => {
-          const btns = document.querySelectorAll('button');
-          for (const b of btns) {
-            const t = b.textContent.trim();
-            if (t === 'Switch here' || t === '切换到这里') { b.click(); return 'clicked'; }
-          }
-          return 'not_found';
-        }`);
-        await this.wait(3000);
-
-        // After switching, we should be in the meeting
-        const switchCheck = await this.evaluate(`() => {
-          return (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) ? 'in_meeting' : 'not_yet';
-        }`);
-        if (switchCheck.includes("in_meeting")) {
-          log("Switched to this device — now in meeting!");
-          return { success: true, summary: "Switched to this device — in meeting", steps, state: "in_meeting" };
+        if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
+          R.state = 'ended'; return JSON.stringify(R);
         }
-        // Fall through to configure and join if switch didn't immediately land us in meeting
-        log("Switch may require additional join step, continuing...");
-      }
-
-      // ── Phase 4: Configure camera, mic, display name, devices (parallel-safe) ──
-      // All done in one big evaluate() to minimize round-trips
-      log("Configuring camera/mic/name...");
-      const configResult = await this.evaluate(`() => {
-        const results = [];
-
-        // Display name
-        const nameInput = document.querySelector('input[aria-label="Your name"], input[placeholder*="name"], input[placeholder*="名字"]');
-        if (nameInput && (!nameInput.value || nameInput.value === 'Guest')) {
-          const nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-          if (nativeSet) {
-            nativeSet.call(nameInput, ${JSON.stringify(displayName)});
-            nameInput.dispatchEvent(new Event('input', {bubbles: true}));
-            nameInput.dispatchEvent(new Event('change', {bubbles: true}));
-            results.push('name: set');
-          }
-        } else {
-          results.push('name: ' + (nameInput ? 'already_set' : 'no_field'));
+        if (body.includes('not allowed') || body.includes('Check your meeting code')) {
+          R.state = 'error'; return JSON.stringify(R);
         }
 
-        // Camera OFF
+        // 3. Handle "Switch here"
+        const switchBtn = btns.find(b => ['Switch here', '切换到这里'].includes(b.textContent.trim()));
+        if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; return JSON.stringify(R); }
+
+        // 4. Configure camera OFF
         ${muteCamera ? `
         const camOff = document.querySelector('[aria-label="Turn off camera"], [aria-label="关闭摄像头"]');
-        if (camOff) { camOff.click(); results.push('camera: turned_off'); }
-        else {
-          const camOn = document.querySelector('[aria-label="Turn on camera"], [aria-label="打开摄像头"]');
-          results.push('camera: ' + (camOn ? 'already_off' : 'not_found'));
-        }
-        ` : `results.push('camera: skipped');`}
+        if (camOff) { camOff.click(); R.config.push('cam:off'); }
+        else R.config.push('cam:already_off');
+        ` : `R.config.push('cam:skip');`}
 
-        // Mic ON (for BlackHole bridge) or OFF
+        // 5. Configure mic
         ${muteMic ? `
         const micOff = document.querySelector('[aria-label="Turn off microphone"], [aria-label="关闭麦克风"]');
-        if (micOff) { micOff.click(); results.push('mic: muted'); }
-        else results.push('mic: already_muted_or_not_found');
+        if (micOff) { micOff.click(); R.config.push('mic:muted'); }
         ` : `
         const micOn = document.querySelector('[aria-label="Turn on microphone"], [aria-label="打开麦克风"]');
-        if (micOn) { micOn.click(); results.push('mic: unmuted'); }
-        else {
-          const micOffCheck = document.querySelector('[aria-label="Turn off microphone"], [aria-label="关闭麦克风"]');
-          results.push('mic: ' + (micOffCheck ? 'already_on' : 'not_found'));
-        }
+        if (micOn) { micOn.click(); R.config.push('mic:on'); }
+        else R.config.push('mic:already_on');
         `}
 
-        return results.join(' | ');
-      }`);
-      log(`Config: ${configResult}`);
-
-      // ── Phase 5: Set audio devices to BlackHole ──
-      await this.selectMeetDevice("microphone", micDevice, log);
-      await this.selectMeetDevice("speaker", speakerDevice, log);
-
-      // ── Phase 6: Click the join button ──
-      log("Clicking Join button...");
-      const joinResult = await this.evaluate(`() => {
-        const targets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', 'Switch here', '切换到这里'];
-        const btns = document.querySelectorAll('button');
-        for (const b of btns) {
-          const text = b.textContent.trim();
-          if (targets.includes(text) && !b.disabled) {
-            b.click();
-            return 'clicked: ' + text;
-          }
+        // 6. Set display name
+        const nameInput = document.querySelector('input[aria-label="Your name"], input[placeholder*="name"]');
+        if (nameInput && (!nameInput.value || nameInput.value === 'Guest')) {
+          const s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+          if (s) { s.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); R.config.push('name:set'); }
         }
-        // Retry: force-enable disabled buttons
-        for (const b of btns) {
-          const text = b.textContent.trim();
-          if (targets.includes(text)) {
-            b.disabled = false;
-            b.removeAttribute('disabled');
-            b.click();
-            return 'force_clicked: ' + text;
-          }
-        }
-        return 'join_button_not_found';
-      }`);
-      log(`Join: ${joinResult}`);
 
-      if (joinResult.includes("not_found")) {
-        return { success: false, summary: "Join button not found on page", steps, state: "failed" };
+        // 7. Check if join button exists (don't click yet — need to set devices first)
+        const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+        for (const b of btns) {
+          if (joinTargets.includes(b.textContent.trim())) { R.hasJoinBtn = true; break; }
+        }
+
+        R.state = R.hasJoinBtn ? 'ready_to_join' : (btnTexts.length > 0 ? 'no_join_button' : 'loading');
+        return JSON.stringify(R);
+      }`);
+
+      let parsed: any;
+      try { parsed = JSON.parse(configResult); } catch { parsed = { state: "parse_error" }; }
+      log(`Result: state=${parsed.state} config=[${(parsed.config || []).join(',')}]`);
+
+      // Handle terminal states
+      if (parsed.state === "already_in") {
+        return { success: true, summary: "Already in meeting", steps, state: "in_meeting" };
+      }
+      if (parsed.state === "ended") {
+        return { success: false, summary: "Meeting has ended", steps, state: "failed" };
+      }
+      if (parsed.state === "error") {
+        return { success: false, summary: "Cannot access meeting", steps, state: "failed" };
+      }
+      if (parsed.state === "switch_here") {
+        // Switch here already clicked, go straight to verify
+        log("Switched — skipping device selection");
       }
 
-      const isAskToJoin = joinResult.includes("Ask to join") || joinResult.includes("请求加入");
+      // If page was loading, retry config once after short wait
+      if (parsed.state === "loading" || parsed.state === "no_join_button") {
+        log("Page still loading — retrying in 2s...");
+        await this.wait(2000);
+        const retry = await this.evaluate(`() => {
+          const btns = [...document.querySelectorAll('button')];
+          for (const b of btns) {
+            if (['Join now','Ask to join','Join','加入会议','请求加入'].includes(b.textContent.trim())) return 'found';
+          }
+          return 'still_no_button';
+        }`);
+        log(`Retry: ${retry}`);
+        if (retry.includes("still_no_button")) {
+          return { success: false, summary: "Join button not found after retry", steps, state: "failed" };
+        }
+      }
 
-      // ── Phase 7: Wait for meeting to load and verify state ──
-      log("Waiting for meeting to load...");
-      await this.wait(3000);
+      // ── Step 3: Set audio devices BEFORE joining (needs separate evals for dropdown interaction) ──
+      if (parsed.state !== "switch_here") {
+        await this.selectMeetDevice("microphone", micDevice, log);
+        await this.selectMeetDevice("speaker", speakerDevice, log);
+      }
 
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const meetingState = await this.evaluate(`() => {
-          const leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
-          const controls = document.querySelector('[aria-label="Call controls"]');
-          if (leaveBtn || controls) return 'in_meeting';
-          const text = document.body.innerText;
-          if (text.includes('Waiting for the host') || text.includes('Someone will let you in') || text.includes('等待主持人')) return 'waiting_room';
-          if (text.includes('Ready to join') || text.includes('Join now')) return 'still_prejoin';
+      // ── Step 4: Click join button ──
+      if (parsed.state !== "switch_here") {
+        log("Clicking join...");
+        const joinResult = await this.evaluate(`() => {
+          const btns = [...document.querySelectorAll('button')];
+          const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+          for (const b of btns) {
+            const t = b.textContent.trim();
+            if (joinTargets.includes(t)) {
+              if (b.disabled) { b.disabled = false; b.removeAttribute('disabled'); }
+              b.click();
+              return 'joined:' + t;
+            }
+          }
+          return 'no_join_button';
+        }`);
+        log(`Join: ${joinResult}`);
+        if (joinResult.includes("no_join_button")) {
+          return { success: false, summary: "Join button disappeared", steps, state: "failed" };
+        }
+      }
+
+      // ── Step 4: Verify join state (poll up to 20s) ──
+      log("Verifying join state...");
+      await this.wait(2000);
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const state = await this.evaluate(`() => {
+          if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) return 'in_meeting';
+          const t = document.body.innerText;
+          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人')) return 'waiting_room';
           return 'loading';
         }`);
 
-        if (meetingState.includes("in_meeting")) {
-          log("Successfully joined the meeting!");
+        if (state.includes("in_meeting")) {
+          log("Joined!");
           return { success: true, summary: "Joined meeting — camera off, mic on (BlackHole)", steps, state: "in_meeting" };
         }
-
-        if (meetingState.includes("waiting_room")) {
-          log("In waiting room — waiting for host to admit...");
-          // Wait up to 60s for admission
-          for (let i = 0; i < 12; i++) {
-            await this.wait(5000);
-            const check = await this.evaluate(`() => {
-              return (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) ? 'in_meeting' : 'still_waiting';
-            }`);
-            if (check.includes("in_meeting")) {
-              log("Admitted to meeting!");
-              return { success: true, summary: "Joined meeting (admitted from waiting room)", steps, state: "in_meeting" };
-            }
-          }
-          return { success: false, summary: "Timed out waiting in waiting room (60s)", steps, state: "waiting_room" };
+        if (state.includes("waiting_room")) {
+          log("In waiting room");
+          return { success: false, summary: "In waiting room — waiting for host", steps, state: "waiting_room" };
         }
-
-        if (attempt < 7) await this.wait(2000);
+        if (attempt < 5) await this.wait(3000);
       }
 
-      return { success: false, summary: "Could not confirm meeting join state after 16s", steps, state: "failed" };
+      return { success: false, summary: "Could not confirm join state", steps, state: "failed" };
 
     } catch (err: any) {
       log(`Error: ${err.message}`);
@@ -493,12 +430,16 @@ export class PlaywrightCLIClient {
           const step2 = await this._admitEval();
           if (step2.startsWith("admitted:")) {
             this._recordAdmitted(step2.slice(9));
+            await this.wait(500);
+            await this._dismissAdmitConfirmation();
           } else {
             // Sidebar opened but no Admit button yet — try once more
             await this.wait(600);
             const step3 = await this._admitEval();
             if (step3.startsWith("admitted:")) {
               this._recordAdmitted(step3.slice(9));
+              await this.wait(500);
+              await this._dismissAdmitConfirmation();
             } else {
               console.log(`[MeetAdmit] Panel open but Admit button not found after 2 retries`);
             }
@@ -546,19 +487,15 @@ export class PlaywrightCLIClient {
       });
       if (admit) { admit.click(); return 'admitted:' + admit.textContent.trim().substring(0, 60); }
 
-      // Step B2: "Admit all" as fallback — then handle confirmation dialog
+      // Step B2: "Admit all" as fallback — confirmation dialog handled by _dismissAdmitConfirmation()
       const admitAll = all.find(b => {
         const t = (b.textContent || '').trim();
         return t === 'Admit all' || t === '全部准许';
       });
       if (admitAll) {
         admitAll.click();
-        // Handle confirmation dialog: look for confirm button after short delay
-        const confirm = all.find(b => {
-          const t = (b.textContent || '').trim();
-          return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认';
-        });
-        if (confirm && confirm !== admitAll) { confirm.click(); }
+        // Note: "Admit all" triggers an async confirmation dialog.
+        // The caller (_dismissAdmitConfirmation) handles it with retries.
         return 'admitted:' + admitAll.textContent.trim().substring(0, 60);
       }
 
@@ -595,21 +532,31 @@ export class PlaywrightCLIClient {
 
   /**
    * Dismiss "Admit all" confirmation dialog if it appeared.
-   * Google Meet shows a second "Admit all" or "Confirm" button after clicking the first one.
+   * Google Meet renders a second "Admit all" or "Confirm" button ASYNCHRONOUSLY
+   * after clicking the first one. We retry up to 3 times with increasing waits
+   * to catch the async DOM render.
    */
   private async _dismissAdmitConfirmation(): Promise<void> {
-    try {
-      await this.evaluate(`() => {
-        const all = [...document.querySelectorAll('button, [role="button"], div[tabindex]')];
-        // Look for confirmation dialog buttons
-        const confirmBtn = all.find(b => {
-          const t = (b.textContent || '').trim();
-          return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认' || t === 'OK' || t === '确定';
-        });
-        if (confirmBtn) { confirmBtn.click(); return 'confirmed'; }
-        return 'no_dialog';
-      }`);
-    } catch {}
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await this.evaluate(`() => {
+          // Look for dialog/overlay containers (confirmation renders inside these)
+          const all = [...document.querySelectorAll('button, [role="button"], [role="dialog"] button, div[role="alertdialog"] button')];
+          const confirmBtn = all.find(b => {
+            const t = (b.textContent || '').trim();
+            return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认' || t === 'OK' || t === '确定';
+          });
+          if (confirmBtn) { confirmBtn.click(); return 'confirmed'; }
+          return 'no_dialog';
+        }`);
+        if (result.includes("confirmed")) {
+          console.log(`[MeetAdmit] Confirmation dialog dismissed (attempt ${attempt + 1})`);
+          return;
+        }
+      } catch {}
+      // Increasing wait: 500ms, 800ms, 1200ms — gives DOM time to render
+      await this.wait(500 + attempt * 300);
+    }
   }
 
   /** Record admitted attendees */
@@ -632,6 +579,8 @@ export class PlaywrightCLIClient {
       clearInterval(this._admissionInterval);
       this._admissionInterval = null;
     }
+    // Always clear meeting-end callback to prevent standalone watcher from restarting
+    this._meetingEndCallback = null;
     const admitted = [...this._admittedSet];
     console.log(`[MeetAdmit] Monitor stopped. Admitted ${admitted.length} attendees.`);
     return admitted;
@@ -711,8 +660,16 @@ export class PlaywrightCLIClient {
 
   /**
    * Select an audio device in Google Meet's pre-join device picker.
-   * The device buttons are [aria-label="Microphone: ..."] / [aria-label="Speaker: ..."]
-   * Clicking opens a dropdown menu. Each item is an <li> with the device name.
+   *
+   * Google Meet opens a SINGLE settings panel with 3 sections when you click
+   * any device button. Each section is a separate <ul> with aria-label:
+   *   - "Device selection for the microphone"
+   *   - "Device selection for the speaker"
+   *   - "Device selection for the camera"
+   *
+   * IMPORTANT: Must search ONLY within the correct section's <ul>,
+   * otherwise `textContent.includes("BlackHole 16ch")` may match a device
+   * in the wrong section (e.g. speaker instead of microphone).
    */
   private async selectMeetDevice(
     deviceType: "microphone" | "speaker" | "camera",
@@ -737,7 +694,7 @@ export class PlaywrightCLIClient {
       return;
     }
 
-    // Click the device selector button to open dropdown
+    // Click the device selector button to open the settings panel
     const clicked = await this.evaluate(`() => {
       const btn = document.querySelector('[aria-label^="${labelPrefix}:"], [aria-label^="${labelPrefix === "Microphone" ? "麦克风" : "扬声器"}:"]');
       if (btn) { btn.click(); return 'opened'; }
@@ -751,21 +708,44 @@ export class PlaywrightCLIClient {
 
     await this.wait(500);
 
-    // Find and click the target device in the dropdown
+    // Find and click the target device WITHIN the correct section only.
+    // Google Meet uses ul[aria-label="Device selection for the <type>"]
     const selected = await this.evaluate(`() => {
-      const items = document.querySelectorAll('[role="menuitemradio"], [role="option"], li[role="presentation"], ul[aria-label*="${deviceType}"] li');
-      for (const item of items) {
-        if (item.textContent.includes(${JSON.stringify(targetName)})) {
-          item.click();
-          return 'selected: ' + item.textContent.trim().substring(0, 50);
-        }
+      // Step 1: Find the correct section by aria-label
+      const sectionLabels = {
+        microphone: ['Device selection for the microphone', '麦克风设备选择'],
+        speaker: ['Device selection for the speaker', '扬声器设备选择'],
+        camera: ['Device selection for the camera', '摄像头设备选择'],
+      };
+      const labels = sectionLabels[${JSON.stringify(deviceType)}] || [];
+      let section = null;
+      for (const label of labels) {
+        section = document.querySelector('ul[aria-label="' + label + '"]');
+        if (section) break;
       }
-      // Try broader search
-      const allItems = document.querySelectorAll('li, [role="menuitem"], [role="menuitemradio"]');
+
+      // Step 2: Search within the section
+      if (section) {
+        const items = section.querySelectorAll('[role="menuitemradio"]');
+        for (const item of items) {
+          const text = (item.textContent || '').trim();
+          if (text.includes(${JSON.stringify(targetName)})) {
+            item.click();
+            return 'selected: ' + text.substring(0, 60);
+          }
+        }
+        return 'not_in_section (items: ' + items.length + ')';
+      }
+
+      // Fallback: section not found by aria-label, search all menuitemradio
+      // but prefer exact device name match to avoid cross-section confusion
+      const allItems = document.querySelectorAll('[role="menuitemradio"]');
       for (const item of allItems) {
-        if (item.textContent.includes(${JSON.stringify(targetName)})) {
+        const text = (item.textContent || '').trim();
+        // Exact start match: "BlackHole 16ch" must be at the beginning
+        if (text.startsWith(${JSON.stringify(targetName)})) {
           item.click();
-          return 'selected: ' + item.textContent.trim().substring(0, 50);
+          return 'fallback_selected: ' + text.substring(0, 60);
         }
       }
       return 'target_not_found';
@@ -774,7 +754,7 @@ export class PlaywrightCLIClient {
     if (selected.includes("selected")) {
       log(`${labelPrefix}: ${selected}`);
     } else {
-      log(`${labelPrefix}: ${targetName} not found in dropdown, pressing Escape`);
+      log(`${labelPrefix}: ${targetName} not found — ${selected}`);
       await this.pressKey("Escape");
     }
     await this.wait(300);
@@ -784,6 +764,7 @@ export class PlaywrightCLIClient {
   stop() {
     if (!this._connected) return;
     this._connected = false;
+    this._explicitlyStopped = true; // Prevent auto-start from run()
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
     const stopCmd = `${quotedCmd} -s=${SESSION} close`;
     Bun.$`${{ raw: stopCmd }}`.quiet().nothrow();
@@ -842,8 +823,15 @@ export class PlaywrightCLIClient {
 
   /** Run a playwright-cli command and return stdout */
   private async run(subcommand: string): Promise<string> {
+    // Block auto-start if browser was explicitly stopped (e.g. after leaving meeting).
+    // Only an explicit start() call clears this flag.
+    if (this._explicitlyStopped && !this._connected) {
+      throw new Error("Browser session was stopped. Call start() to reconnect.");
+    }
+
+    // Auto-start on first use (lazy initialization — avoids opening Chrome at startup)
     if (!this._connected && !subcommand.startsWith("open")) {
-      throw new Error("Playwright CLI not started");
+      await this.start();
     }
 
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
