@@ -188,6 +188,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           let joinState: "in_meeting" | "waiting_room" | "failed" = "failed";
 
+          // Ensure Playwright is started (lazy init)
+          if (!playwrightCli.connected) {
+            try { await playwrightCli.start(); } catch {}
+          }
+
           if (playwrightCli.connected) {
             console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
             const result = await playwrightCli.joinGoogleMeet(args.meet_url, {

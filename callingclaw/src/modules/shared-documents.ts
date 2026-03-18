@@ -15,7 +15,7 @@
 // Desktop renders by looking up meetingId → reading the corresponding .md files.
 // ═══════════════════════════════════════════════════════════════════
 
-import { SHARED_DIR } from "../config";
+import { SHARED_DIR, SHARED_NOTES_DIR } from "../config";
 import { appendFileSync, readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 import type { MeetingPrepBrief } from "../skills/meeting-prep";
