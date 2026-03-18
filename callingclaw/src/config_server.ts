@@ -1024,6 +1024,13 @@ export function startConfigServer(services: Services) {
         let joinSummary = "";
         let joinMethod = "meetjoiner";
 
+        // Ensure Playwright is started (lazy init — may not be connected yet)
+        if (services.playwrightCli && !services.playwrightCli.connected) {
+          try { await services.playwrightCli.start(); } catch (e: any) {
+            console.warn("[Meeting] Playwright start failed:", e.message);
+          }
+        }
+
         if (services.playwrightCli?.connected && validated.platform === "google_meet") {
           console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
           joinMethod = "playwright_eval";
