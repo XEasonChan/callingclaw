@@ -3,6 +3,17 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.1] - 2026-03-18
+
+### Fixed
+- **P0: Desktop UI completely broken** — TypeScript `(pc: any)` syntax in browser JS caused SyntaxError, killing all JS execution. Entire page was static (no meeting list, no settings, no input).
+- **P0: Onboarding "启动 CallingClaw" button dead** — `obFinish()` function was never defined. Now starts daemon + completes onboarding + enters home.
+- **6 missing onboarding functions** — `obGrantScreen`, `obGrantAccess`, `obSaveKeys`, `obInstallSkill`, `obStopPolling`, `obFinish` all added with full functionality.
+- **Onboarding animation off-center** — `.anim-canvas` now uses flexbox centering.
+- **HTML hardcoded v2.4.0** — updated to dynamic version from app.info().
+- **`readManifest` import error** — replaced with `readSessions` after shared-documents refactor.
+- **Permission polling** — Screen Recording and Accessibility buttons now open System Settings and poll every 2s until granted.
+
 ## [2.3.1] - 2026-03-17
 
 ### Added
