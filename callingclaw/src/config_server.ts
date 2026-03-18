@@ -221,7 +221,10 @@ export function startConfigServer(services: Services) {
               : "disconnected",
             calendar: services.calendar.connected
               ? "connected"
-              : "disconnected",
+              : services.calendar.authError
+                ? "auth_error"
+                : "disconnected",
+            calendarAuthError: services.calendar.authError || null,
             openclaw: services.computerUse.openclawConnected
               ? "connected"
               : "disconnected",
@@ -1455,6 +1458,16 @@ STEP-BY-STEP FLOW:
               }
 
               // Step 3: Create Google Calendar
+              if (!services.calendar.connected) {
+                const reason = services.calendar.authError
+                  ? `Google OAuth 已过期: ${services.calendar.authError}`
+                  : "Google 日历未连接";
+                emit("calendar_skipped", {
+                  message: `⚠️ 跳过日历创建 — ${reason}。请在设置中重新授权 Google 账号。`,
+                  reason,
+                  authError: !!services.calendar.authError,
+                });
+              }
               if (services.calendar.connected) {
                 emit("creating_calendar", { message: "正在创建日历和会议链接..." });
                 const prepAttendees = (body.attendees || []).map((e: string) => ({ email: e }));

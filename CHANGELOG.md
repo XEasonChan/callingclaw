@@ -3,6 +3,19 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.6] - 2026-03-18
+
+### Fixed
+- **Google OAuth auth error detection** — runtime refresh token expiration now detected, sets `_connected = false`, exposes `authError` getter, fires `onAuthError` callback
+- **Silent calendar failure** — `getToken()` catch-and-notify replaces silent error swallowing; `createEvent()` returns specific auth error message
+- **Desktop UI WebSocket event mismatch** — EventBus sends `type` field but desktop checked `msg.event`; normalized to `msg.type || msg.event` for all handlers
+
+### Added
+- **Calendar status dot** — status bar shows green/yellow/empty for connected/auth_error/disconnected
+- **Calendar auth warning banner** — amber warning in meeting list when OAuth expired, with "去设置" button
+- **`calendar.auth_error` EventBus event** — real-time notification to Desktop UI and OpenClaw
+- **`calendar_skipped` prep step** — meeting creation pipeline emits explicit warning when calendar unavailable
+- **`calendarAuthError` in /api/status** — API now returns auth error details for programmatic consumers
 ## [2.4.7] - 2026-03-18
 
 ### Added
