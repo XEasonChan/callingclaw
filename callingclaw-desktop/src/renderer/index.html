@@ -691,6 +691,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <div class="set-panel" id="panel-voice">
         <div class="vt-grid">
           <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="vt-card"><label>引擎 <span style="font-size:11px;color:var(--text3);font-weight:400;">A/B Test</span></label><select class="vt-sel" id="vt-provider"><option value="openai" selected>OpenAI Realtime (~$0.30/min)</option><option value="grok">Grok Voice Agent (~$0.05/min)</option></select><div id="vt-provider-note" style="font-size:11px;color:var(--text3);margin-top:4px;"></div></div>
             <div class="vt-card"><label>语音</label><select class="vt-sel" id="vt-voice"><option>alloy</option><option>ash</option><option>ballad</option><option>coral</option><option>echo</option><option>fable</option><option>marin</option><option>nova</option><option>onyx</option><option selected>sage</option><option>shimmer</option><option>verse</option></select></div>
             <div class="vt-card"><label>System Instructions</label><textarea class="vt-ta" id="vt-instr" rows="4">你是 CallingClaw 的语音助手。简洁、友好地回答问题。</textarea><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><button class="btn btn-sm btn-ghost" onclick="vtUpdateInstructions()">更新</button><span id="vt-instr-status" style="font-size:11px;color:var(--green);"></span></div></div>
             <div class="vt-card"><label>麦克风电平</label><div class="mic-track"><div class="mic-fill" id="vt-mic-bar"></div></div><div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-sm btn-primary" id="vt-btn-start" onclick="vtStart()">开始语音</button><button class="btn btn-sm btn-danger" id="vt-btn-stop" style="display:none" onclick="vtStop()">停止</button></div><div style="font-size:11px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px;"><div class="st-dot" id="vt-status-dot"></div><span id="vt-ws-status">--</span></div></div>
@@ -1405,9 +1406,24 @@ window.callingclaw.daemon.onError(err => { const d = document.createElement('div
 // Voice Test
 let vtWs = null, vtAudioCtx = null, vtMicStream = null, vtMicSource = null, vtMicProcessor = null, vtMicAnalyser = null, vtPlaybackNode = null;
 let vtPlaybackQueue = [], vtIsPlaying = false, vtSessionActive = false, vtMicRAF = null, vtLayerInfo = null, vtEnabledLayers = new Set();
+const GROK_VOICES = ['Eve', 'Ara', 'Rex', 'Sal', 'Leo'];
+const OPENAI_VOICES = ['alloy','ash','ballad','coral','echo','fable','marin','nova','onyx','sage','shimmer','verse'];
 (async () => {
   try { const r = await fetchJSON(API + '/api/config'); if (r?.openai_voice) document.getElementById('vt-voice').value = r.openai_voice; } catch {}
   try { const r = await fetchJSON(API + '/api/voice/instructions'); if (r?.instructions) document.getElementById('vt-instr').value = r.instructions; } catch {}
+  // Provider dropdown: switch voice options + show note
+  const provSel = document.getElementById('vt-provider');
+  const voiceSel = document.getElementById('vt-voice');
+  const provNote = document.getElementById('vt-provider-note');
+  function vtUpdateProviderUI() {
+    const isGrok = provSel.value === 'grok';
+    const voices = isGrok ? GROK_VOICES : OPENAI_VOICES;
+    const defaultVoice = isGrok ? 'Ara' : 'sage';
+    voiceSel.innerHTML = voices.map(v => `<option${v===defaultVoice?' selected':''}>${v}</option>`).join('');
+    provNote.textContent = isGrok ? 'Grok: max 30min/session, 自动重连' : '';
+  }
+  provSel.addEventListener('change', vtUpdateProviderUI);
+  vtUpdateProviderUI();
 })();
 function vtUpdateInstructions() {
   const text = document.getElementById('vt-instr').value.trim(); if (!text) return;
@@ -1445,8 +1461,9 @@ async function vtStart() {
     vtWs.onopen = () => {
       document.getElementById('vt-ws-status').textContent = '已连接';
       vtWs.send(JSON.stringify({ type: 'get_layers' }));
+      const vtProvider = document.getElementById('vt-provider').value;
       fetch(API + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_voice: document.getElementById('vt-voice').value }) }).catch(() => {});
-      vtWs.send(JSON.stringify({ type: 'start', instructions: document.getElementById('vt-instr').value.trim() || undefined }));
+      vtWs.send(JSON.stringify({ type: 'start', instructions: document.getElementById('vt-instr').value.trim() || undefined, provider: vtProvider }));
     };
     vtWs.onmessage = event => {
       try {

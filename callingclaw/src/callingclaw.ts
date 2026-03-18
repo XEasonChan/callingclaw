@@ -513,6 +513,13 @@ const voice = new VoiceModule({
   context,
   tools: toolDefinitions,
   onToolCall: toolHandler,
+  onReconnectFailed: () => {
+    console.error("[Voice] Auto-reconnect failed — all retries exhausted");
+    eventBus.emit("voice.reconnect_failed", {
+      provider: voice.provider,
+      timestamp: Date.now(),
+    });
+  },
 });
 
 // Forward meeting action items to EventBus
