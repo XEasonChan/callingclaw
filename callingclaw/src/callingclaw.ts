@@ -11,6 +11,8 @@ import { PeekabooClient } from "./mcp_client/peekaboo";
 import { ZoomSkill } from "./skills/zoom";
 import { MeetJoiner } from "./meet_joiner";
 import { OpenClawBridge } from "./openclaw_bridge";
+import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
+import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
 import { OC007_PROMPT, type OC007_Request } from "./openclaw-protocol";
@@ -20,7 +22,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.4.2";
+let APP_VERSION = "2.4.4";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -142,10 +144,14 @@ openclawBridge.onActivity((kind, summary, detail) => {
 // Accumulated screen descriptions for periodic OpenClaw push
 let _meetingVisionBuffer: string[] = [];
 
+// ── Browser Capture Provider (CDP) — used by VisionModule for 1s screenshots ──
+const browserCapture = new BrowserCaptureProvider();
+// Desktop Capture Provider (screencapture CLI) — used by ComputerUseModule
+const desktopCapture = new DesktopCaptureProvider();
+
 const vision = new VisionModule({
-  bridge,
   context,
-  analysisIntervalMs: 1000, // Analyze every 1 second during meetings
+  browserCapture,
   onScreenDescription: (description, _screenshot) => {
     // Buffer descriptions for periodic OpenClaw push
     _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
@@ -251,12 +257,53 @@ function stopMeetingVisionAndFlush(reason: string) {
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }
 
-// ── Safety net: auto-stop meeting when voice disconnects ──
+// ── Screen capture lifecycle: start on voice.started, stop on voice.stopped ──
+// Talk Locally: voice.started → screen capture in "talk_locally" mode
+// Meeting: meeting.started → screen capture in "meeting" mode (overrides TL)
+eventBus.on("voice.started", async () => {
+  // Connect CDP for browser screenshots (discovers Chrome's debug port)
+  if (!await browserCapture.isAvailable()) {
+    await browserCapture.connect();
+  }
+  // Start screen capture in Talk Locally mode (meeting.started will upgrade to meeting mode)
+  if (!vision.isCapturing) {
+    vision.startScreenCapture("talk_locally");
+  }
+});
+
+// Push screen changes to Voice AI in real-time
+context.on("screen", (screenState) => {
+  if (screenState.description && voice.connected) {
+    // Rebuild voice instructions with latest screen context and push
+    // Only push if description actually changed (not just a new screenshot)
+    const brief = screenState.description.slice(0, 300);
+    const screenCtx = `\n\n[Current Screen] ${brief}${screenState.url ? ` (${screenState.url})` : ""}`;
+    // The existing ContextSync refresh mechanism will pick this up,
+    // but we also emit an event for immediate consumers (overlay, sidebar)
+    eventBus.emit("screen.updated", {
+      description: screenState.description,
+      url: screenState.url,
+      title: screenState.title,
+      timestamp: screenState.capturedAt,
+    });
+  }
+});
+
+// ── Safety net: auto-stop when voice disconnects ──
 // Prevents vision/recording from leaking if user closes session without proper stop
 eventBus.on("voice.stopped", () => {
-  if (vision.isMeetingMode || meeting.getNotes().isRecording) {
-    console.log("[Init] Voice stopped while meeting active — auto-stopping vision + recording");
-    stopMeetingVisionAndFlush("Voice disconnected");
+  // Stop screen capture (both Talk Locally and Meeting modes)
+  if (vision.isCapturing) {
+    if (vision.isMeetingMode) {
+      stopMeetingVisionAndFlush("Voice disconnected");
+    } else {
+      vision.stopScreenCapture();
+      console.log("[Init] Talk Locally screen capture stopped (voice disconnected)");
+    }
+  }
+
+  if (meeting.getNotes().isRecording) {
+    console.log("[Init] Voice stopped while meeting active — auto-stopping recording");
     if (_domContextInterval) { clearInterval(_domContextInterval); _domContextInterval = null; }
     meeting.stopRecording();
     if (transcriptAuditor.active) transcriptAuditor.deactivate();
@@ -371,13 +418,10 @@ let _waitingRoomAbort: AbortController | null = null;
 // ── 2. Computer Use Module ──────────────────────────────────────
 
 const computerUse = new ComputerUseModule(bridge, context, eventBus);
+computerUse.desktopCapture = desktopCapture;
 
-// Update SharedContext when sidecar sends screenshots (only when vision module is NOT handling it)
-bridge.on("screenshot", (msg) => {
-  if (!vision.isMeetingMode) {
-    context.updateScreen(msg.payload.image);
-  }
-});
+// Screen capture is now handled by BrowserCaptureProvider (CDP) and DesktopCaptureProvider.
+// Python sidecar no longer sends screenshots.
 
 // ── 2b. Automation Layers (Playwright + Peekaboo + Router) ──────
 

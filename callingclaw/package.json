@@ -1,6 +1,6 @@
 {
   "name": "callingclaw",
-  "version": "2.4.2",
+  "version": "2.4.4",
   "description": "CallingClaw 2.0 \u2014 Voice + Vision + Computer Use AI Agent",
   "module": "src/callingclaw.ts",
   "type": "module",
