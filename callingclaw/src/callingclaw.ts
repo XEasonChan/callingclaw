@@ -22,7 +22,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.4.5";
+let APP_VERSION = "2.4.6";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -47,6 +47,15 @@ const calendar = new GoogleCalendarClient();
 const meetJoiner = new MeetJoiner(bridge);
 const eventBus = new EventBus();
 const taskStore = new TaskStore(eventBus);
+
+// Wire calendar auth error detection → EventBus + OpenClaw notification
+calendar.onAuthError = (error: string) => {
+  console.warn(`[Calendar] Auth error detected: ${error}`);
+  eventBus.emit("calendar.auth_error", {
+    error,
+    message: "Google OAuth refresh token 已过期或被撤销，日历功能暂时不可用。请重新授权。",
+  });
+};
 
 // Load persisted tasks
 await taskStore.load();

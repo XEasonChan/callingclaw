@@ -112,6 +112,10 @@ export class GoogleCalendarClient {
   private accessToken: string = "";
   private tokenExpiry: number = 0;
   private _connected = false;
+  private _authError: string | null = null;
+
+  /** Called when an auth error is detected at runtime (e.g. refresh token expired) */
+  onAuthError?: (error: string) => void;
 
   constructor() {
     this.clientId = process.env.GOOGLE_CLIENT_ID || "";
@@ -121,6 +125,11 @@ export class GoogleCalendarClient {
 
   get connected() {
     return this._connected;
+  }
+
+  /** Returns the current auth error message, or null if healthy */
+  get authError(): string | null {
+    return this._authError;
   }
 
   /**
@@ -152,10 +161,12 @@ export class GoogleCalendarClient {
     try {
       await this.refreshAccessToken();
       this._connected = true;
+      this._authError = null;
       console.log("[Calendar] Google Calendar connected");
     } catch (e: any) {
       console.warn("[Calendar] Failed to connect:", e.message);
       this._connected = false;
+      this._authError = e.message;
     }
   }
 
@@ -185,7 +196,22 @@ export class GoogleCalendarClient {
   /** Get a valid access token, refreshing if expired */
   private async getToken(): Promise<string> {
     if (!this.accessToken || Date.now() >= this.tokenExpiry) {
-      await this.refreshAccessToken();
+      try {
+        await this.refreshAccessToken();
+        // Clear any previous auth error on successful refresh
+        if (this._authError) {
+          this._authError = null;
+          console.log("[Calendar] Token refreshed successfully — auth error cleared");
+        }
+      } catch (e: any) {
+        // Runtime auth failure — mark disconnected and notify
+        const msg = e.message || "Unknown auth error";
+        console.error("[Calendar] Runtime auth failure:", msg);
+        this._connected = false;
+        this._authError = msg;
+        this.onAuthError?.(msg);
+        throw e;
+      }
     }
     return this.accessToken;
   }
@@ -264,7 +290,9 @@ export class GoogleCalendarClient {
   }
 
   async createEvent(event: CalendarEvent): Promise<string> {
-    if (!this._connected) return "Calendar not connected";
+    if (!this._connected) return this._authError
+      ? `Calendar auth error: ${this._authError}`
+      : "Calendar not connected";
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;

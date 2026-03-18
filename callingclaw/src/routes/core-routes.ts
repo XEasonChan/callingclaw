@@ -36,7 +36,10 @@ export function coreRoutes(services: Services): RouteHandler {
               : "disconnected",
             calendar: services.calendar.connected
               ? "connected"
-              : "disconnected",
+              : services.calendar.authError
+                ? "auth_error"
+                : "disconnected",
+            calendarAuthError: services.calendar.authError || null,
             openclaw: services.computerUse.openclawConnected
               ? "connected"
               : "disconnected",

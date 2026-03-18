@@ -721,6 +721,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <div class="st-item" title="Bun 引擎状态"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">引擎</span></div>
     <div class="st-item" title="实时语音连接"><div class="st-dot" id="st-voice"></div><span>语音</span></div>
     <div class="st-item" title="OpenClaw 网关"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
+    <div class="st-item" title="Google 日历"><div class="st-dot" id="st-cal"></div><span>日历</span></div>
     <div class="st-item" title="BlackHole 音频桥接"><div class="st-dot" id="st-audio"></div><span>音频</span></div>
   </div>
   <div class="st-right">
@@ -892,9 +893,21 @@ function updateStatusBar() {
     const v = S.status.voice?.connected || S.status.realtime?.connected;
     document.getElementById('st-voice').className = 'st-dot ' + (v ? 'green' : '');
     document.getElementById('st-oc').className = 'st-dot ' + (S.status.openclaw?.connected ? 'green' : '');
+    // Calendar: green = connected, yellow = auth_error, empty = disconnected
+    const calEl = document.getElementById('st-cal');
+    if (S.status.calendar === 'connected') {
+      calEl.className = 'st-dot green';
+      calEl.parentElement.title = 'Google 日历已连接';
+    } else if (S.status.calendar === 'auth_error') {
+      calEl.className = 'st-dot yellow';
+      calEl.parentElement.title = '⚠️ Google OAuth 已过期 — 请重新授权';
+    } else {
+      calEl.className = 'st-dot';
+      calEl.parentElement.title = 'Google 日历未连接';
+    }
     document.getElementById('st-audio').className = 'st-dot ' + ((S.status.sidecar?.connected || S.status.audio?.bridgeActive) ? 'green' : '');
   } else if (!S.daemon) {
-    ['st-voice','st-oc','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
+    ['st-voice','st-oc','st-cal','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
   }
 }
 
@@ -926,6 +939,16 @@ function renderMeetings() {
   const now = Date.now();
   const activeMeeting = S.status?.meeting?.active;
   let html = '';
+
+  // Calendar auth warning banner
+  if (S.status?.calendar === 'auth_error') {
+    html += '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">';
+    html += '<span style="font-size:18px;">⚠️</span>';
+    html += '<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#92400E;">Google 日历授权已过期</div>';
+    html += '<div style="font-size:12px;color:#A16207;margin-top:2px;">OAuth refresh token 已失效，无法获取日程。请重新授权 Google 账号。</div></div>';
+    html += '<button class="btn btn-sm" style="background:#F59E0B;color:white;white-space:nowrap;" onclick="showView(\'settings\')">去设置</button>';
+    html += '</div>';
+  }
 
   // Active meeting banner
   if (activeMeeting) {
@@ -1219,10 +1242,18 @@ function connectWS() {
     S.wsEvents.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.event === 'meeting.started' || msg.event === 'meeting.ended' || msg.event === 'meeting.agenda') setTimeout(refreshAll, 500);
+        // EventBus sends CallingClawEvent with `type` field — normalize for compat
+        const evt = msg.type || msg.event;
+        if (evt === 'meeting.started' || evt === 'meeting.ended' || evt === 'meeting.agenda') setTimeout(refreshAll, 500);
+
+        // ── Calendar auth error — instant status update ──
+        if (evt === 'calendar.auth_error') {
+          console.warn('[WS] Calendar auth error:', msg.data?.message);
+          setTimeout(refreshAll, 300);
+        }
 
         // ── Real-time prep pipeline progress (Pneuma-style log) ──
-        if (msg.event === 'meeting.prep_progress' && msg.data) {
+        if (evt === 'meeting.prep_progress' && msg.data) {
           const cards = window['_prepCards'] || {};
           for (const [cid, pc] of Object.entries(cards)) {
             if (pc.prepBrief) continue; // Already done
@@ -1257,7 +1288,7 @@ function connectWS() {
         }
 
         // Feed OpenClaw agent activity into prep cards
-        if (msg.event === 'openclaw.delta' || msg.event === 'openclaw.done') {
+        if (evt === 'openclaw.delta' || evt === 'openclaw.done') {
           const cards = window['_prepCards'] || {};
           for (const [cid, pc] of Object.entries(cards)) {
             if (!pc.prepBrief && pc.agentFeed) {
@@ -1270,7 +1301,7 @@ function connectWS() {
           }
         }
         // Handle prep research completion
-        if (msg.event === 'meeting.prep_ready' && msg.data) {
+        if (evt === 'meeting.prep_ready' && msg.data) {
           // OpenClaw wrote .md file and notified us — render directly
           const mdContent = msg.data.mdContent || '';
           const topic = msg.data.topic || '';
@@ -1314,10 +1345,10 @@ function connectWS() {
         }
         // Feed events into local talk panel
         const evtEl = document.getElementById('sp-events');
-        if (evtEl && msg.event) {
+        if (evtEl && evt) {
           const line = document.createElement('div');
           line.className = 'sp-event-line';
-          line.textContent = new Date().toLocaleTimeString('zh-CN') + ' ' + msg.event + (msg.data ? ': ' + JSON.stringify(msg.data).slice(0, 80) : '');
+          line.textContent = new Date().toLocaleTimeString('zh-CN') + ' ' + evt + (msg.data ? ': ' + JSON.stringify(msg.data).slice(0, 80) : '');
           evtEl.appendChild(line);
           if (evtEl.children.length > 50) evtEl.removeChild(evtEl.firstChild);
           evtEl.scrollTop = evtEl.scrollHeight;
