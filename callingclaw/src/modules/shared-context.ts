@@ -10,9 +10,11 @@ export interface TranscriptEntry {
 }
 
 export interface ScreenState {
-  latestScreenshot: string | null; // base64 PNG
+  latestScreenshot: string | null; // base64 JPEG (or PNG legacy)
   capturedAt: number;
   description?: string; // AI-generated screen description
+  url?: string;         // Current page URL (from CDP)
+  title?: string;       // Current page title (from CDP)
 }
 
 export interface MeetingNote {
@@ -89,11 +91,13 @@ export class SharedContext {
     return this._screen;
   }
 
-  updateScreen(screenshot: string, description?: string) {
+  updateScreen(screenshot: string, description?: string, url?: string, title?: string) {
     this._screen = {
       latestScreenshot: screenshot,
       capturedAt: Date.now(),
       description,
+      url,
+      title,
     };
     this.emit("screen", this._screen);
   }
