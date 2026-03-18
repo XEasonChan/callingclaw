@@ -602,6 +602,47 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+/* ── Meeting Panel (unified sidebar for Talk Locally + Remote Meeting) ── */
+.mp-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; font-size: 11px; font-weight: 700;
+  color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border); cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+}
+.mp-section-header:hover { background: var(--surface); }
+.mp-chevron { font-size: 10px; transition: transform 0.2s; }
+.mp-chevron.collapsed { transform: rotate(-90deg); }
+.mp-prep { border-bottom: 1px solid var(--border); display: none; }
+.mp-prep.show { display: block; }
+.mp-prep-body { padding: 10px 20px 12px; overflow: hidden; transition: max-height 0.2s; }
+.mp-prep-body.collapsed { max-height: 0 !important; padding: 0 20px; }
+.mp-prep-topic { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; line-height: 1.3; }
+.mp-prep-goal { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+.mp-prep-points { list-style: none; padding: 0; margin: 0; }
+.mp-prep-points li { font-size: 12px; color: var(--text2); line-height: 1.5; padding-left: 14px; position: relative; }
+.mp-prep-points li::before { content: '\00b7'; position: absolute; left: 3px; color: var(--accent); font-weight: 700; }
+.mp-activity { border-bottom: 1px solid var(--border); }
+.mp-activity-body { max-height: 200px; overflow-y: auto; padding: 6px 20px; font-size: 12px; transition: max-height 0.2s; }
+.mp-activity-body.collapsed { max-height: 0; padding: 0 20px; overflow: hidden; }
+.mp-activity-entry { margin-bottom: 5px; line-height: 1.4; display: flex; gap: 6px; align-items: baseline; }
+.mp-activity-badge {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  flex-shrink: 0; text-transform: uppercase; white-space: nowrap;
+}
+.mp-activity-badge.delta { background: var(--blue-soft); color: var(--blue); }
+.mp-activity-badge.done { background: var(--green-soft); color: var(--green); }
+.mp-activity-badge.error { background: rgba(230,57,70,0.1); color: var(--accent); }
+.mp-activity-badge.tool { background: var(--yellow-soft); color: var(--yellow); }
+.mp-activity-text { color: var(--text2); word-break: break-word; }
+.mp-activity-time { font-size: 9px; color: var(--text3); margin-left: auto; flex-shrink: 0; }
+.mp-transcript { flex: 1; overflow-y: auto; padding: 10px 20px; font-size: 13px; line-height: 1.6; min-height: 120px; border-bottom: 1px solid var(--border); }
+.mp-transcript-entry { margin-bottom: 8px; }
+.mp-transcript-speaker { font-weight: 600; font-size: 11px; color: var(--blue); margin-bottom: 2px; }
+.mp-transcript-text { color: var(--text); }
+.mp-transcript-action { color: var(--green); font-size: 12px; font-style: italic; padding: 3px 8px; background: var(--green-soft); border-radius: 6px; margin-top: 3px; }
+.mp-transcript-time { font-size: 10px; color: var(--text3); }
 </style>
 </head>
 <body>
@@ -691,7 +732,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <div class="set-panel" id="panel-voice">
         <div class="vt-grid">
           <div style="display:flex;flex-direction:column;gap:16px;">
-            <div class="vt-card"><label>引擎 <span style="font-size:11px;color:var(--text3);font-weight:400;">A/B Test</span></label><select class="vt-sel" id="vt-provider"><option value="openai" selected>OpenAI Realtime (~$0.30/min)</option><option value="grok">Grok Voice Agent (~$0.05/min)</option></select><div id="vt-provider-note" style="font-size:11px;color:var(--text3);margin-top:4px;"></div></div>
             <div class="vt-card"><label>语音</label><select class="vt-sel" id="vt-voice"><option>alloy</option><option>ash</option><option>ballad</option><option>coral</option><option>echo</option><option>fable</option><option>marin</option><option>nova</option><option>onyx</option><option selected>sage</option><option>shimmer</option><option>verse</option></select></div>
             <div class="vt-card"><label>System Instructions</label><textarea class="vt-ta" id="vt-instr" rows="4">你是 CallingClaw 的语音助手。简洁、友好地回答问题。</textarea><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><button class="btn btn-sm btn-ghost" onclick="vtUpdateInstructions()">更新</button><span id="vt-instr-status" style="font-size:11px;color:var(--green);"></span></div></div>
             <div class="vt-card"><label>麦克风电平</label><div class="mic-track"><div class="mic-fill" id="vt-mic-bar"></div></div><div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-sm btn-primary" id="vt-btn-start" onclick="vtStart()">开始语音</button><button class="btn btn-sm btn-danger" id="vt-btn-stop" style="display:none" onclick="vtStop()">停止</button></div><div style="font-size:11px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px;"><div class="st-dot" id="vt-status-dot"></div><span id="vt-ws-status">--</span></div></div>
@@ -722,7 +762,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <div class="st-item" title="Bun 引擎状态"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">引擎</span></div>
     <div class="st-item" title="实时语音连接"><div class="st-dot" id="st-voice"></div><span>语音</span></div>
     <div class="st-item" title="OpenClaw 网关"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
-    <div class="st-item" title="Google 日历"><div class="st-dot" id="st-cal"></div><span>日历</span></div>
     <div class="st-item" title="BlackHole 音频桥接"><div class="st-dot" id="st-audio"></div><span>音频</span></div>
   </div>
   <div class="st-right">
@@ -731,10 +770,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   </div>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script>
 const API = 'http://localhost:4000';
-const S = { daemon: false, meetings: [], notes: [], tasks: [], status: null, prepBrief: null, wsEvents: null };
+const S = { daemon: false, meetings: [], notes: [], tasks: [], status: null, prepBrief: null, wsEvents: null, activeMeetingId: null, meetingMode: null };
 let localTalkTimer = null, localTalkTopic = '';
+let lastEventTs = 0, reconnectDelay = 1000;
 
 const IC = {
   doc: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
@@ -765,40 +806,203 @@ function fmtDateParts(dateStr) {
   return { day, month: months[d.getMonth()], weekday: weekdays[d.getDay()] };
 }
 
-// Markdown renderer
+// Markdown renderer (using marked.js for full CommonMark support)
 function renderMd(src) {
-  let html = '', inCode = false, codeBuf = '';
-  for (const line of src.split('\n')) {
-    if (line.startsWith('```')) {
-      if (inCode) { html += '<pre><code>' + esc(codeBuf.trim()) + '</code></pre>'; codeBuf = ''; }
-      inCode = !inCode; continue;
-    }
-    if (inCode) { codeBuf += line + '\n'; continue; }
-    let l = line;
-    if (/^### /.test(l)) { html += '<h3>' + esc(l.slice(4)) + '</h3>'; continue; }
-    if (/^## /.test(l)) { html += '<h2>' + esc(l.slice(3)) + '</h2>'; continue; }
-    if (/^# /.test(l)) { html += '<h1>' + esc(l.slice(2)) + '</h1>'; continue; }
-    if (/^[-*] /.test(l)) { html += '<li>' + inlineMd(l.slice(2)) + '</li>'; continue; }
-    if (l.trim() === '') { html += '<br>'; continue; }
-    html += '<p>' + inlineMd(l) + '</p>';
+  if (typeof marked !== 'undefined' && marked.parse) {
+    return marked.parse(src || '', { breaks: true });
   }
-  if (inCode) html += '<pre><code>' + esc(codeBuf.trim()) + '</code></pre>';
-  return html;
-}
-function inlineMd(s) {
-  return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
+  // Fallback if marked.js hasn't loaded yet
+  return esc(src || '').replace(/\n/g, '<br>');
 }
 
-// Side panel
+// Side panel — generic markdown display
 function openPanel(title, content) {
   document.getElementById('sp-title').textContent = title;
-  document.getElementById('sp-body').innerHTML = typeof content === 'string' && content.startsWith('<') ? content : renderMd(content || '');
+  S.meetingMode = null; // Not a meeting panel
+  document.getElementById('sp-body').innerHTML = typeof content === 'string' && content.startsWith('<') ? content : '<div class="md">' + renderMd(content || '') + '</div>';
   document.getElementById('sp-stop-btn').style.display = 'none';
   document.getElementById('side-panel').classList.add('open');
 }
 function closePanel() {
   document.getElementById('side-panel').classList.remove('open');
+  S.meetingMode = null;
+  S.activeMeetingId = null;
   stopLocalTalk();
+}
+
+// ── Unified Meeting Panel (Talk Locally + Remote Meeting) ──
+function openMeetingPanel(meetingId, mode) {
+  S.activeMeetingId = meetingId;
+  S.meetingMode = mode; // 'local' or 'remote'
+  const title = mode === 'local' ? '本地对话: ' + localTalkTopic : '会议';
+  document.getElementById('sp-title').textContent = title;
+  document.getElementById('sp-stop-btn').style.display = '';
+  document.getElementById('sp-body').innerHTML = [
+    // Prep section
+    '<div class="mp-prep" id="mp-prep">',
+    '  <div class="mp-section-header" onclick="toggleMpSection(\'prep\')"><span>会议准备</span><span class="mp-chevron" id="mp-prep-chevron">▾</span></div>',
+    '  <div class="mp-prep-body" id="mp-prep-body">',
+    '    <div class="mp-prep-topic" id="mp-prep-topic">加载中...</div>',
+    '    <div class="mp-prep-goal" id="mp-prep-goal"></div>',
+    '    <ul class="mp-prep-points" id="mp-prep-points"></ul>',
+    '    <div class="md" id="mp-prep-md" style="display:none"></div>',
+    '  </div>',
+    '</div>',
+    // Activity section
+    '<div class="mp-activity">',
+    '  <div class="mp-section-header" onclick="toggleMpSection(\'activity\')"><span>AI 活动</span><span class="mp-chevron" id="mp-activity-chevron">▾</span></div>',
+    '  <div class="mp-activity-body" id="mp-activity-body"></div>',
+    '</div>',
+    // Transcript section
+    '<div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>实时记录</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
+    '<div class="mp-transcript" id="mp-transcript"></div>',
+    // Screenshot section (local mode only)
+    mode === 'local' ? '<div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
+  ].join('\n');
+  document.getElementById('side-panel').classList.add('open');
+  // Load prep brief from shared files
+  loadPrepBrief(meetingId);
+}
+
+function toggleMpSection(id) {
+  const bodyId = id === 'prep' ? 'mp-prep-body' : id === 'activity' ? 'mp-activity-body' : 'mp-transcript';
+  const chevronId = 'mp-' + id + '-chevron';
+  const body = document.getElementById(bodyId);
+  const chevron = document.getElementById(chevronId);
+  if (body) body.classList.toggle('collapsed');
+  if (chevron) chevron.classList.toggle('collapsed');
+}
+
+async function loadPrepBrief(meetingId) {
+  if (!meetingId) return;
+  try {
+    // Try loading the _prep.md file by meetingId
+    const data = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + '_prep.md'));
+    if (data && data.content) {
+      const mdEl = document.getElementById('mp-prep-md');
+      const topicEl = document.getElementById('mp-prep-topic');
+      const goalEl = document.getElementById('mp-prep-goal');
+      const pointsEl = document.getElementById('mp-prep-points');
+      if (mdEl) { mdEl.innerHTML = renderMd(data.content); mdEl.style.display = ''; }
+      if (topicEl) topicEl.style.display = 'none';
+      if (goalEl) goalEl.style.display = 'none';
+      if (pointsEl) pointsEl.style.display = 'none';
+      document.getElementById('mp-prep')?.classList.add('show');
+      return;
+    }
+  } catch {}
+  // Fallback: try the prep-brief API
+  try {
+    const apiData = await fetchJSON(API + '/api/meeting/prep-brief');
+    if (apiData?.prepBrief?.topic) {
+      showMpPrepBrief(apiData.prepBrief);
+      return;
+    }
+  } catch {}
+  // No prep available — hide section
+  const topicEl = document.getElementById('mp-prep-topic');
+  if (topicEl) topicEl.textContent = '尚未生成会前调研';
+}
+
+function showMpPrepBrief(brief) {
+  document.getElementById('mp-prep-topic').textContent = brief.topic || '';
+  document.getElementById('mp-prep-goal').textContent = brief.goal ? '目标: ' + brief.goal : '';
+  const pointsEl = document.getElementById('mp-prep-points');
+  if (pointsEl) {
+    pointsEl.innerHTML = '';
+    (brief.keyPoints || []).forEach(function(p) { const li = document.createElement('li'); li.textContent = p; pointsEl.appendChild(li); });
+  }
+  document.getElementById('mp-prep')?.classList.add('show');
+}
+
+// ── Unified Meeting Event Handler (ported from overlay.html) ──
+function handleMeetingEvent(event) {
+  const type = event.type || event.event;
+  const data = event.data || {};
+  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Track last event timestamp for reconnect replay
+  if (event.timestamp) lastEventTs = Math.max(lastEventTs, event.timestamp);
+
+  switch (type) {
+    case 'meeting.started':
+      if (data.meetingId && !S.activeMeetingId) S.activeMeetingId = data.meetingId;
+      addMpActivity('done', '已加入会议');
+      break;
+    case 'meeting.ended':
+      addMpActivity('done', '会议已结束');
+      S.meetingMode = null;
+      break;
+    case 'meeting.agenda':
+      if (data.topic) showMpPrepBrief(data);
+      break;
+    case 'voice.tool_call':
+      addMpActivity('tool', data.tool || 'tool call');
+      break;
+    case 'computer.task_done':
+      addMpTranscript('自动化', data.summary || data.instruction || '', 'action');
+      addMpActivity('done', data.summary || data.instruction || 'task completed');
+      break;
+    case 'openclaw.delta':
+      addMpActivity('delta', data.summary || data.text || '...');
+      break;
+    case 'openclaw.done':
+      addMpActivity('done', data.summary || '任务完成');
+      break;
+    case 'openclaw.error':
+      addMpActivity('error', data.summary || data.message || '错误');
+      break;
+    case 'meeting.action_item':
+      addMpTranscript('行动项', data.text || '', 'action');
+      break;
+    case 'transcript.entry':
+      addMpTranscript(data.speaker || '参与者', data.text || '');
+      break;
+    case 'meeting.live_entry':
+      addMpTranscript('', data.entry || '', 'log');
+      break;
+    case 'meeting.live_note':
+      addMpActivity('delta', data.note || '');
+      break;
+    case 'meeting.prep_ready':
+      if (data.meetingId) loadPrepBrief(data.meetingId);
+      else if (S.activeMeetingId) loadPrepBrief(S.activeMeetingId);
+      addMpActivity('done', '调研完成');
+      break;
+    case 'meeting.vision':
+      addMpActivity('delta', '[视觉] ' + (data.description || '').slice(0, 60));
+      break;
+  }
+}
+
+function addMpActivity(kind, text) {
+  const body = document.getElementById('mp-activity-body');
+  if (!body) return;
+  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const div = document.createElement('div');
+  div.className = 'mp-activity-entry';
+  div.innerHTML = '<span class="mp-activity-badge ' + kind + '">' + kind + '</span><span class="mp-activity-text">' + esc(text) + '</span><span class="mp-activity-time">' + time + '</span>';
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+  while (body.children.length > 50) body.removeChild(body.firstChild);
+}
+
+function addMpTranscript(speaker, text, type) {
+  const el = document.getElementById('mp-transcript');
+  if (!el) return;
+  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const div = document.createElement('div');
+  div.className = 'mp-transcript-entry';
+  if (type === 'log') {
+    // Raw live log entry — parse [ROLE] prefix
+    div.innerHTML = '<div class="mp-transcript-text" style="font-family:var(--mono);font-size:12px;color:var(--text2);">' + esc(text) + '</div>';
+  } else if (type === 'action') {
+    div.innerHTML = '<div class="mp-transcript-speaker">' + esc(speaker) + ' <span class="mp-transcript-time">' + time + '</span></div><div class="mp-transcript-action">' + esc(text) + '</div>';
+  } else {
+    div.innerHTML = '<div class="mp-transcript-speaker">' + esc(speaker) + ' <span class="mp-transcript-time">' + time + '</span></div><div class="mp-transcript-text">' + esc(text) + '</div>';
+  }
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  while (el.children.length > 100) el.removeChild(el.firstChild);
 }
 
 // View switching
@@ -838,7 +1042,6 @@ async function refreshAll() {
     fetchJSON(API + '/api/meeting/notes'), fetchJSON(API + '/api/tasks'),
   ]);
   S.status = status;
-  S.calendarConnected = evts?.connected !== false; // Track calendar connection state
   // Normalize calendar events — API returns flat start/end strings + meetLink,
   // but rendering code expects { start: { dateTime }, hangoutLink }
   const rawMeetings = Array.isArray(evts) ? evts : (evts?.events || []);
@@ -895,21 +1098,9 @@ function updateStatusBar() {
     const v = S.status.voice?.connected || S.status.realtime?.connected;
     document.getElementById('st-voice').className = 'st-dot ' + (v ? 'green' : '');
     document.getElementById('st-oc').className = 'st-dot ' + (S.status.openclaw?.connected ? 'green' : '');
-    // Calendar: green = connected, yellow = auth_error, empty = disconnected
-    const calEl = document.getElementById('st-cal');
-    if (S.status.calendar === 'connected') {
-      calEl.className = 'st-dot green';
-      calEl.parentElement.title = 'Google 日历已连接';
-    } else if (S.status.calendar === 'auth_error') {
-      calEl.className = 'st-dot yellow';
-      calEl.parentElement.title = '⚠️ Google OAuth 已过期 — 请重新授权';
-    } else {
-      calEl.className = 'st-dot';
-      calEl.parentElement.title = 'Google 日历未连接';
-    }
     document.getElementById('st-audio').className = 'st-dot ' + ((S.status.sidecar?.connected || S.status.audio?.bridgeActive) ? 'green' : '');
   } else if (!S.daemon) {
-    ['st-voice','st-oc','st-cal','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
+    ['st-voice','st-oc','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
   }
 }
 
@@ -941,16 +1132,6 @@ function renderMeetings() {
   const now = Date.now();
   const activeMeeting = S.status?.meeting?.active;
   let html = '';
-
-  // Calendar auth warning banner
-  if (S.status?.calendar === 'auth_error') {
-    html += '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">';
-    html += '<span style="font-size:18px;">⚠️</span>';
-    html += '<div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#92400E;">Google 日历授权已过期</div>';
-    html += '<div style="font-size:12px;color:#A16207;margin-top:2px;">OAuth refresh token 已失效，无法获取日程。请重新授权 Google 账号。</div></div>';
-    html += '<button class="btn btn-sm" style="background:#F59E0B;color:white;white-space:nowrap;" onclick="showView(\'settings\')">去设置</button>';
-    html += '</div>';
-  }
 
   // Active meeting banner
   if (activeMeeting) {
@@ -993,11 +1174,7 @@ function renderMeetings() {
     }
     html += '</div>';
   } else if (!activeMeeting) {
-    if (!S.calendarConnected) {
-      html += '<div class="empty fade-in"><p style="color:var(--muted);">⚠️ Google Calendar disconnected — check OAuth token in Settings</p></div>';
-    } else {
-      html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
-    }
+    html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
   }
 
   // Past meetings (from notes)
@@ -1062,7 +1239,10 @@ async function submitTopic() {
       data = await r.json();
     }
     const pc = window['_prepCards'][cardId];
-    if (pc) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw 已接管，自主处理中...' : '后端直接处理中...'));
+    if (pc) {
+      pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw 已接管，自主处理中...' : '后端直接处理中...'));
+      if (data.meetingId) pc.meetingId = data.meetingId; // Store meetingId from delegate response
+    }
     if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cardId);
     // All subsequent updates come via WebSocket events
   } catch(e) {
@@ -1074,63 +1254,51 @@ async function submitTopic() {
 // Open prep panel showing agent feed + brief (or loading state)
 function openPrepPanel(cardId) {
   const pc = window['_prepCards']?.[cardId];
-  if (!pc) { openPrepBriefFull(); return; }
+  if (!pc) { openPanel('会前调研', '暂无准备资料。'); return; }
   // If OpenClaw already wrote the markdown, render it directly
   if (pc.mdContent) {
     openPanel('📋 ' + (pc.title || pc.topic), pc.mdContent);
     return;
   }
-  let md = '# ' + esc(pc.title || pc.topic) + '\n\n';
-  if (pc.prepBrief) {
-    md = buildPrepMarkdown(pc.prepBrief);
-  } else {
-    md += '> OpenClaw 正在深度调研中...\n\n';
-    md += '## Agent Activity\n\n';
-    md += pc.agentFeed.map(f => '- ' + f).join('\n');
-    md += '\n\n*调研完成后将自动更新*';
+  // If we have a meetingId, try loading from shared file
+  if (pc.meetingId) {
+    loadPrepBrief(pc.meetingId);
   }
+  let md = '# ' + esc(pc.title || pc.topic) + '\n\n';
+  md += '> OpenClaw 正在深度调研中...\n\n';
+  md += '## Agent Activity\n\n';
+  md += pc.agentFeed.map(function(f) { return '- ' + f; }).join('\n');
+  md += '\n\n*调研完成后将自动更新*';
   openPanel('📋 ' + (pc.title || pc.topic), md);
 }
 
 function submitTopicFor(topic) { document.getElementById('topic-input').value = topic; submitTopic(); }
 
-function openPrepBriefFull() {
-  if (!S.prepBrief?.prepBrief) { openPanel('会前调研', '暂无准备资料。'); return; }
-  const b = S.prepBrief.prepBrief;
-  let md = '# ' + (b.topic || '会前调研') + '\n\n';
-  if (b.goal) md += '**目标:** ' + b.goal + '\n\n';
-  if (b.summary) md += b.summary + '\n\n';
-  if (b.keyPoints?.length) md += '## 要点\n' + b.keyPoints.map(p => '- ' + p).join('\n') + '\n\n';
-  if (b.architectureDecisions?.length) md += '## 架构决策\n' + b.architectureDecisions.map(d => '- **' + d.decision + '**: ' + d.rationale).join('\n') + '\n\n';
-  if (b.expectedQuestions?.length) md += '## 预期问题\n' + b.expectedQuestions.map(q => '- **Q:** ' + q.question + '\n  **A:** ' + q.suggestedAnswer).join('\n') + '\n\n';
-  if (b.filePaths?.length) md += '## 相关文件\n' + b.filePaths.map(f => '- `' + f.path + '` — ' + f.description).join('\n') + '\n\n';
-  if (b.browserUrls?.length) md += '## 相关链接\n' + b.browserUrls.map(u => '- [' + u.description + '](' + u.url + ')').join('\n') + '\n\n';
-  if (b.previousContext) md += '## 历史背景\n' + b.previousContext + '\n';
-  openPanel('📋 会前调研: ' + (b.topic || ''), md);
-}
-
 async function openCalendarMeetingPanel(topic, meetUrl) {
   // Show loading state
   openPanel(topic || '会议详情', '正在加载会议信息...');
-  let md = '# ' + (topic || '会议') + '\n\n';
-  // Try multiple sources: in-memory → localStorage cache → API
-  let brief = null;
-  if (S.prepBrief?.prepBrief?.topic === topic) {
-    brief = S.prepBrief.prepBrief;
+  // Look up meetingId from sessions.json via manifest API
+  let meetingId = null;
+  try {
+    const manifest = await fetchJSON(API + '/api/shared/manifest');
+    if (manifest?.sessions) {
+      // Find session matching this topic or calendar event
+      const session = manifest.sessions.find(function(s) { return s.topic === topic || s.meetUrl === meetUrl; });
+      if (session) meetingId = session.meetingId;
+    }
+  } catch {}
+  // Try loading prep.md by meetingId
+  let md = '';
+  if (meetingId) {
+    try {
+      const data = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + '_prep.md'));
+      if (data?.content) md = data.content;
+    } catch {}
   }
-  if (!brief) {
-    try { const cached = JSON.parse(localStorage.getItem('cc_prep_cache') || '{}'); brief = cached[topic]; } catch {}
+  if (!md) {
+    md = '# ' + (topic || '会议') + '\n\n> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
   }
-  if (!brief) {
-    const apiData = await fetchJSON(API + '/api/meeting/prep-brief');
-    if (apiData?.prepBrief) brief = apiData.prepBrief;
-  }
-  if (brief) {
-    md = buildPrepMarkdown(brief);
-  } else {
-    md += '> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
-  }
-  if (meetUrl) md += '\n---\n🔗 **会议链接:** ' + meetUrl + '\n';
+  if (meetUrl) md += '\n---\n**会议链接:** ' + meetUrl + '\n';
   md += '\n---\n';
   md += '**操作:** ';
   if (meetUrl) md += '[加入会议](' + meetUrl + ') | ';
@@ -1138,22 +1306,16 @@ async function openCalendarMeetingPanel(topic, meetUrl) {
   openPanel(topic || '会议详情', md);
 }
 
-function buildPrepMarkdown(b) {
-  let md = '# ' + (b.topic || '会前调研') + '\n\n';
-  if (b.goal) md += '**目标:** ' + b.goal + '\n\n';
-  if (b.summary) md += b.summary + '\n\n';
-  if (b.keyPoints?.length) md += '## 要点\n' + b.keyPoints.map(p => '- ' + p).join('\n') + '\n\n';
-  if (b.architectureDecisions?.length) md += '## 架构决策\n' + b.architectureDecisions.map(d => '- **' + d.decision + '**: ' + d.rationale).join('\n') + '\n\n';
-  if (b.expectedQuestions?.length) md += '## 预期问题\n' + b.expectedQuestions.map(q => '- **Q:** ' + q.question + '\n  **A:** ' + q.suggestedAnswer).join('\n') + '\n\n';
-  if (b.filePaths?.length) md += '## 相关文件\n' + b.filePaths.map(f => '- `' + f.path + '` — ' + f.description).join('\n') + '\n\n';
-  if (b.browserUrls?.length) md += '## 相关链接\n' + b.browserUrls.map(u => '- [' + u.description + '](' + u.url + ')').join('\n') + '\n\n';
-  if (b.previousContext) md += '## 历史背景\n' + b.previousContext + '\n';
-  return md;
-}
-
 async function joinMeeting(url) {
   if (!url) return;
-  try { await fetch(API + '/api/meeting/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) }); } catch {}
+  try {
+    const r = await fetch(API + '/api/meeting/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+    const data = await r.json();
+    if (data.meetingId) {
+      S.activeMeetingId = data.meetingId;
+      openMeetingPanel(data.meetingId, 'remote');
+    }
+  } catch {}
   setTimeout(refreshAll, 3000);
 }
 
@@ -1163,12 +1325,9 @@ async function leaveMeeting() {
 }
 
 // Talk Locally — full meeting intelligence stack (voice + transcript + auditor + vision + DOM context)
+// Talk Locally — unified meeting panel with full meeting intelligence stack
 async function startLocalTalk(topic) {
   localTalkTopic = topic || 'Local Conversation';
-  document.getElementById('sp-title').textContent = '本地对话: ' + localTalkTopic;
-  document.getElementById('sp-stop-btn').style.display = '';
-  document.getElementById('sp-body').innerHTML = '<div class="sp-screenshot" id="sp-screenshot">Connecting...</div><div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">Activity</div><div class="sp-events" id="sp-events"></div>';
-  document.getElementById('side-panel').classList.add('open');
   try {
     const r = await fetch(API + '/api/meeting/talk-locally', {
       method: 'POST',
@@ -1176,17 +1335,18 @@ async function startLocalTalk(topic) {
       body: JSON.stringify({ topic: localTalkTopic }),
     });
     const data = await r.json();
-    if (data?.prepBrief) {
-      const evtEl = document.getElementById('sp-events');
-      if (evtEl) {
-        const line = document.createElement('div');
-        line.className = 'sp-event-line';
-        line.textContent = new Date().toLocaleTimeString('zh-CN') + ' meeting.prep: ' + data.prepBrief.keyPoints + ' key points loaded';
-        evtEl.appendChild(line);
-      }
+    const meetingId = data.meetingId || null;
+    S.activeMeetingId = meetingId;
+    // Open unified meeting panel
+    openMeetingPanel(meetingId, 'local');
+    if (data.prepBrief) {
+      addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
     }
-  } catch {}
-  // Poll screenshot for side panel display
+  } catch {
+    // Fallback: open panel without meetingId
+    openMeetingPanel(null, 'local');
+  }
+  // Poll screenshot for the panel
   localTalkTimer = setInterval(async () => {
     try {
       const r = await fetch(API + '/api/bridge/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'screenshot' }) });
@@ -1203,30 +1363,32 @@ async function stopLocalTalk() {
     const r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
     const data = await r.json();
     if (data?.filepath) {
-      const evtEl = document.getElementById('sp-events');
-      if (evtEl) {
-        const line = document.createElement('div');
-        line.className = 'sp-event-line';
-        line.textContent = new Date().toLocaleTimeString('zh-CN') + ' meeting.ended: Notes saved to ' + data.filepath;
-        evtEl.appendChild(line);
-      }
+      addMpActivity('done', '会议记录已保存: ' + data.filepath);
     }
   } catch {}
   document.getElementById('sp-stop-btn').style.display = 'none';
+  S.meetingMode = null;
+  S.activeMeetingId = null;
 }
 
 async function openPrepBrief(topic) {
   openPanel('会前调研: ' + topic, '加载中...');
-  const data = await fetchJSON(API + '/api/meeting/prep-brief');
-  if (data) {
-    let md = '# ' + (data.topic || topic) + '\n\n';
-    if (data.goal) md += '**目标:** ' + data.goal + '\n\n';
-    if (data.summary) md += data.summary + '\n\n';
-    if (data.keyPoints?.length) { md += '## 要点\n\n'; data.keyPoints.forEach(p => md += '- ' + p + '\n'); md += '\n'; }
-    if (data.architectureDecisions?.length) { md += '## 技术决策\n\n'; data.architectureDecisions.forEach(d => md += '- **' + d.decision + '**: ' + d.rationale + '\n'); md += '\n'; }
-    if (data.expectedQuestions?.length) { md += '## 预期问题\n\n'; data.expectedQuestions.forEach(q => md += '- **Q:** ' + q.question + '\n  **A:** ' + q.suggestedAnswer + '\n'); }
-    openPanel('会前调研: ' + topic, md);
-  } else { openPanel('会前调研: ' + topic, '暂无准备资料。请先使用「准备会议」功能。'); }
+  // Try to find meetingId from sessions
+  let meetingId = null;
+  try {
+    const manifest = await fetchJSON(API + '/api/shared/manifest');
+    if (manifest?.sessions) {
+      const session = manifest.sessions.find(function(s) { return s.topic === topic; });
+      if (session) meetingId = session.meetingId;
+    }
+  } catch {}
+  if (meetingId) {
+    try {
+      const data = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + '_prep.md'));
+      if (data?.content) { openPanel('会前调研: ' + topic, data.content); return; }
+    } catch {}
+  }
+  openPanel('会前调研: ' + topic, '暂无准备资料。请先使用「准备会议」功能。');
 }
 
 async function openNoteFor(topic) {
@@ -1241,128 +1403,122 @@ async function openNote(filename) {
   openPanel(parseNoteFilename(filename).title, data?.content || data?.text || '无法加载笔记内容');
 }
 
-// WebSocket event stream
+// WebSocket event stream (with exponential backoff + history replay)
 function connectWS() {
   try {
     S.wsEvents = new WebSocket('ws://localhost:4000/ws/events');
+    S.wsEvents.onopen = async () => {
+      reconnectDelay = 1000; // Reset backoff on successful connect
+      // Replay missed events on reconnect
+      if (lastEventTs > 0) {
+        try {
+          const history = await fetchJSON(API + '/api/events?count=50');
+          if (history?.events) {
+            history.events.forEach(function(e) {
+              if (e.timestamp > lastEventTs) {
+                routeWsEvent({ type: e.type, event: e.type, data: e.data, timestamp: e.timestamp });
+              }
+            });
+          }
+        } catch {}
+      }
+    };
     S.wsEvents.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
-        // EventBus sends CallingClawEvent with `type` field — normalize for compat
-        const evt = msg.type || msg.event;
-        if (evt === 'meeting.started' || evt === 'meeting.ended' || evt === 'meeting.agenda') setTimeout(refreshAll, 500);
-
-        // ── Calendar auth error — instant status update ──
-        if (evt === 'calendar.auth_error') {
-          console.warn('[WS] Calendar auth error:', msg.data?.message);
-          setTimeout(refreshAll, 300);
-        }
-
-        // ── Real-time prep pipeline progress (Pneuma-style log) ──
-        if (evt === 'meeting.prep_progress' && msg.data) {
-          const cards = window['_prepCards'] || {};
-          for (const [cid, pc] of Object.entries(cards)) {
-            if (pc.prepBrief) continue; // Already done
-            const step = msg.data.step || '';
-            const message = msg.data.message || step;
-            pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + message);
-
-            // Update card info based on step
-            const card = document.getElementById(cid);
-            if (card) {
-              if (msg.data.title) { const t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pc.title = msg.data.title; }
-              if (msg.data.startTime) { const t = card.querySelector('.meet-time'); if (t) t.textContent = new Date(msg.data.startTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + message; }
-              if (msg.data.meetUrl) {
-                pc.meetUrl = msg.data.meetUrl;
-                const actions = card.querySelector('.meet-actions');
-                if (actions && !actions.querySelector('.green')) {
-                  actions.insertAdjacentHTML('beforeend', '<span class="meet-link green" onclick="event.stopPropagation();joinMeeting(\'' + esc(msg.data.meetUrl) + '\')">Join Meeting</span>');
-                }
-              }
-              if (msg.data.calendarEventId && !pc.calendarEventId) {
-                pc.calendarEventId = msg.data.calendarEventId;
-                // Add to S.meetings so it persists
-                S.meetings.unshift({ id: msg.data.calendarEventId, summary: pc.title || pc.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
-              }
-            }
-
-            // Always refresh side panel if any prep card is active
-            if (document.getElementById('side-panel')?.classList.contains('open')) {
-              openPrepPanel(cid);
-            }
-          }
-        }
-
-        // Feed OpenClaw agent activity into prep cards
-        if (evt === 'openclaw.delta' || evt === 'openclaw.done') {
-          const cards = window['_prepCards'] || {};
-          for (const [cid, pc] of Object.entries(cards)) {
-            if (!pc.prepBrief && pc.agentFeed) {
-              const text = msg.data?.text || msg.data?.delta || '';
-              if (text) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (text.length > 60 ? text.slice(0,60) + '...' : text));
-              if (document.getElementById('side-panel')?.classList.contains('open')) {
-                openPrepPanel(cid);
-              }
-            }
-          }
-        }
-        // Handle prep research completion
-        if (evt === 'meeting.prep_ready' && msg.data) {
-          // OpenClaw wrote .md file and notified us — render directly
-          const mdContent = msg.data.mdContent || '';
-          const topic = msg.data.topic || '';
-          const filePath = msg.data.filePath || '';
-
-          // Update any active prep card
-          const cards = window['_prepCards'] || {};
-          for (const [cid, pc] of Object.entries(cards)) {
-            if (!pc.prepDone) {
-              pc.prepDone = true;
-              pc.mdContent = mdContent;
-              pc.filePath = filePath;
-              pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ✅ 调研完成');
-              // Cache markdown content by topic
-              cachePrepBrief(pc.title || pc.topic, { mdContent, filePath });
-              // Update prep attachment badge
-              const prepEl = document.getElementById(cid + '-prep');
-              if (prepEl) {
-                prepEl.classList.remove('shimmer');
-                prepEl.classList.add('done');
-                prepEl.textContent = '✅ Meeting Prep — 调研完成，点击查看';
-              }
-              // Auto-open side panel with rendered markdown
-              if (mdContent) {
-                openPanel('📋 ' + (pc.title || topic), mdContent);
-              }
-              // Clean up so renderMeetings takes over
-              setTimeout(() => {
-                const wrap = document.getElementById(cid + '-wrap');
-                if (wrap) wrap.remove();
-                renderMeetings();
-              }, 500);
-              break;
-            }
-          }
-
-          // No active card — just open panel directly (e.g., from Telegram flow)
-          if (!Object.values(cards).some((pc) => pc.prepDone)) {
-            if (mdContent) openPanel('📋 ' + topic, mdContent);
-          }
-        }
-        // Feed events into local talk panel
-        const evtEl = document.getElementById('sp-events');
-        if (evtEl && evt) {
-          const line = document.createElement('div');
-          line.className = 'sp-event-line';
-          line.textContent = new Date().toLocaleTimeString('zh-CN') + ' ' + evt + (msg.data ? ': ' + JSON.stringify(msg.data).slice(0, 80) : '');
-          evtEl.appendChild(line);
-          if (evtEl.children.length > 50) evtEl.removeChild(evtEl.firstChild);
-          evtEl.scrollTop = evtEl.scrollHeight;
-        }
+        routeWsEvent(msg);
       } catch {}
     };
-    S.wsEvents.onclose = () => setTimeout(connectWS, 5000);
+    S.wsEvents.onclose = () => {
+      setTimeout(connectWS, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000); // Exponential backoff, max 30s
+    };
   } catch {}
+}
+
+// Route a WebSocket event to the appropriate handler
+function routeWsEvent(msg) {
+  const eventType = msg.type || msg.event;
+  // Track timestamp for reconnect replay dedup
+  if (msg.timestamp) lastEventTs = Math.max(lastEventTs, msg.timestamp);
+
+  // Dashboard-level events (meeting lifecycle → refresh calendar/status)
+  if (eventType === 'meeting.started' || eventType === 'meeting.ended' || eventType === 'meeting.agenda') {
+    setTimeout(refreshAll, 500);
+  }
+
+  // ── Route to unified meeting panel if active ──
+  if (S.meetingMode) {
+    handleMeetingEvent({ type: eventType, data: msg.data || {} , timestamp: msg.timestamp });
+  }
+
+  // ── Prep pipeline events (update prep cards in meeting list) ──
+  if (eventType === 'meeting.prep_progress' && msg.data) {
+    const cards = window['_prepCards'] || {};
+    for (const [cid, pc] of Object.entries(cards)) {
+      if (pc.prepBrief) continue;
+      const message = msg.data.message || msg.data.step || '';
+      pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + message);
+      // Store meetingId from prep progress
+      if (msg.data.meetingId && !pc.meetingId) pc.meetingId = msg.data.meetingId;
+      const card = document.getElementById(cid);
+      if (card) {
+        if (msg.data.title) { const t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pc.title = msg.data.title; }
+        if (msg.data.startTime) { const t = card.querySelector('.meet-time'); if (t) t.textContent = new Date(msg.data.startTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + message; }
+        if (msg.data.meetUrl) {
+          pc.meetUrl = msg.data.meetUrl;
+          const actions = card.querySelector('.meet-actions');
+          if (actions && !actions.querySelector('.green')) {
+            actions.insertAdjacentHTML('beforeend', '<span class="meet-link green" onclick="event.stopPropagation();joinMeeting(\'' + esc(msg.data.meetUrl) + '\')">Join Meeting</span>');
+          }
+        }
+        if (msg.data.calendarEventId && !pc.calendarEventId) {
+          pc.calendarEventId = msg.data.calendarEventId;
+          S.meetings.unshift({ id: msg.data.calendarEventId, summary: pc.title || pc.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
+        }
+      }
+      if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cid);
+    }
+  }
+
+  // Feed OpenClaw activity into prep cards
+  if ((eventType === 'openclaw.delta' || eventType === 'openclaw.done') && !S.meetingMode) {
+    const cards = window['_prepCards'] || {};
+    for (const [cid, pc] of Object.entries(cards)) {
+      if (!pc.prepBrief && pc.agentFeed) {
+        const text = msg.data?.text || msg.data?.delta || '';
+        if (text) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (text.length > 60 ? text.slice(0,60) + '...' : text));
+        if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cid);
+      }
+    }
+  }
+
+  // Handle prep research completion
+  if (eventType === 'meeting.prep_ready' && msg.data) {
+    const mdContent = msg.data.mdContent || '';
+    const topic = msg.data.topic || '';
+    const filePath = msg.data.filePath || '';
+    const cards = window['_prepCards'] || {};
+    for (const [cid, pc] of Object.entries(cards)) {
+      if (!pc.prepDone) {
+        pc.prepDone = true;
+        pc.mdContent = mdContent;
+        pc.filePath = filePath;
+        if (msg.data.meetingId) pc.meetingId = msg.data.meetingId;
+        pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 调研完成');
+        // Cache by meetingId if available, fallback to title
+        cachePrepBrief(pc.meetingId || pc.title || pc.topic, { mdContent, filePath });
+        const prepEl = document.getElementById(cid + '-prep');
+        if (prepEl) { prepEl.classList.remove('shimmer'); prepEl.classList.add('done'); prepEl.textContent = 'Meeting Prep — 调研完成，点击查看'; }
+        if (mdContent) openPanel('📋 ' + (pc.title || topic), mdContent);
+        setTimeout(() => { const wrap = document.getElementById(cid + '-wrap'); if (wrap) wrap.remove(); renderMeetings(); }, 500);
+        break;
+      }
+    }
+    if (!Object.values(cards).some(function(pc) { return pc.prepDone; })) {
+      if (mdContent) openPanel('📋 ' + topic, mdContent);
+    }
+  }
 }
 
 // Setup checks
@@ -1442,24 +1598,9 @@ window.callingclaw.daemon.onError(err => { const d = document.createElement('div
 // Voice Test
 let vtWs = null, vtAudioCtx = null, vtMicStream = null, vtMicSource = null, vtMicProcessor = null, vtMicAnalyser = null, vtPlaybackNode = null;
 let vtPlaybackQueue = [], vtIsPlaying = false, vtSessionActive = false, vtMicRAF = null, vtLayerInfo = null, vtEnabledLayers = new Set();
-const GROK_VOICES = ['Eve', 'Ara', 'Rex', 'Sal', 'Leo'];
-const OPENAI_VOICES = ['alloy','ash','ballad','coral','echo','fable','marin','nova','onyx','sage','shimmer','verse'];
 (async () => {
   try { const r = await fetchJSON(API + '/api/config'); if (r?.openai_voice) document.getElementById('vt-voice').value = r.openai_voice; } catch {}
   try { const r = await fetchJSON(API + '/api/voice/instructions'); if (r?.instructions) document.getElementById('vt-instr').value = r.instructions; } catch {}
-  // Provider dropdown: switch voice options + show note
-  const provSel = document.getElementById('vt-provider');
-  const voiceSel = document.getElementById('vt-voice');
-  const provNote = document.getElementById('vt-provider-note');
-  function vtUpdateProviderUI() {
-    const isGrok = provSel.value === 'grok';
-    const voices = isGrok ? GROK_VOICES : OPENAI_VOICES;
-    const defaultVoice = isGrok ? 'Ara' : 'sage';
-    voiceSel.innerHTML = voices.map(v => `<option${v===defaultVoice?' selected':''}>${v}</option>`).join('');
-    provNote.textContent = isGrok ? 'Grok: max 30min/session, 自动重连' : '';
-  }
-  provSel.addEventListener('change', vtUpdateProviderUI);
-  vtUpdateProviderUI();
 })();
 function vtUpdateInstructions() {
   const text = document.getElementById('vt-instr').value.trim(); if (!text) return;
@@ -1497,9 +1638,8 @@ async function vtStart() {
     vtWs.onopen = () => {
       document.getElementById('vt-ws-status').textContent = '已连接';
       vtWs.send(JSON.stringify({ type: 'get_layers' }));
-      const vtProvider = document.getElementById('vt-provider').value;
       fetch(API + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_voice: document.getElementById('vt-voice').value }) }).catch(() => {});
-      vtWs.send(JSON.stringify({ type: 'start', instructions: document.getElementById('vt-instr').value.trim() || undefined, provider: vtProvider }));
+      vtWs.send(JSON.stringify({ type: 'start', instructions: document.getElementById('vt-instr').value.trim() || undefined }));
     };
     vtWs.onmessage = event => {
       try {

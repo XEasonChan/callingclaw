@@ -312,9 +312,7 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     transcript: "_transcript.md",
   },
 
-  // ── OpenClaw → CallingClaw Protocol Schemas ──
-  // All message schemas for CallingClaw → OpenClaw calls (via sendTask).
-  // See docs/openclaw-protocol.md for full documentation.
+  // ── OpenClaw ↔ CallingClaw Protocol Schemas ──
   // Source of truth: src/openclaw-protocol.ts
   protocolSchemas: [
     { id: "OC-001", name: "Meeting Prep Brief Generation", responseFormat: "JSON", latency: "5-15s" },

@@ -20,7 +20,6 @@ import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
 import type { MeetingSummary } from "./meeting";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
-import { saveHtml } from "./shared-documents";
 import {
   OC004_PROMPT, parseOC004, type OC004_Request,
   OC005_PROMPT, type OC005_Request,
@@ -107,18 +106,10 @@ export class PostMeetingDelivery {
       });
     });
 
-    // Generate HTML version of summary for Vercel deployment
-    let htmlPath: string | undefined;
-    try {
-      const summaryMd = this.buildSummaryMarkdown(summary);
-      htmlPath = await saveHtml(summaryMd, topic, meetingId, "summary");
-    } catch (e: any) {
-      console.warn(`[PostMeeting] HTML generation failed: ${e.message}`);
-    }
-
     if (todos.length === 0) {
-      console.log("[PostMeeting] No action items — sending summary only");
-      await this.sendSummaryOnly(topic, summary, htmlPath);
+      console.log("[PostMeeting] No action items — skipping delivery");
+      // Still send a brief summary
+      await this.sendSummaryOnly(topic, summary);
       return null;
     }
 
@@ -137,7 +128,7 @@ export class PostMeetingDelivery {
     this.deliveries.set(meetingId, delivery);
 
     // Send to OpenClaw with instructions to deliver via Telegram with inline buttons
-    await this.sendTodoMessage(delivery, htmlPath);
+    await this.sendTodoMessage(delivery);
 
     this.eventBus.emit("postmeeting.delivered", {
       meetingId,
@@ -186,8 +177,8 @@ export class PostMeetingDelivery {
   /**
    * Send todo list to user via OpenClaw message tool with inline buttons (OC-004).
    */
-  private async sendTodoMessage(delivery: MeetingDelivery, htmlPath?: string): Promise<void> {
-    const { meetingId, topic, todos, fullSummary } = delivery;
+  private async sendTodoMessage(delivery: MeetingDelivery): Promise<void> {
+    const { meetingId, topic, todos } = delivery;
 
     const req: OC004_Request = {
       id: "OC-004",
@@ -200,18 +191,11 @@ export class PostMeetingDelivery {
         assignee: t.assignee,
         deadline: t.deadline,
       })),
-      summaryMarkdown: this.buildSummaryMarkdown(fullSummary),
-      htmlPath,
     };
 
     try {
-      const raw = await this.openclawBridge.sendTask(OC004_PROMPT(req));
-      const { sent } = parseOC004(raw);
-      if (sent) {
-        console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
-      } else {
-        console.warn("[PostMeeting] OpenClaw did not confirm message was sent");
-      }
+      await this.openclawBridge.sendTask(instruction);
+      console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
 
       this.eventBus.emit("postmeeting.todos_sent", {
         meetingId,
@@ -226,14 +210,12 @@ export class PostMeetingDelivery {
   /**
    * Send summary-only message when there are no action items (OC-005).
    */
-  private async sendSummaryOnly(topic: string, summary: MeetingSummary, htmlPath?: string): Promise<void> {
+  private async sendSummaryOnly(topic: string, summary: MeetingSummary): Promise<void> {
     const req: OC005_Request = {
       id: "OC-005",
       topic,
       keyPoints: (summary.keyPoints || []).slice(0, 5),
       decisions: summary.decisions || [],
-      summaryMarkdown: this.buildSummaryMarkdown(summary),
-      htmlPath,
     };
 
     try {
@@ -400,52 +382,5 @@ export class PostMeetingDelivery {
         deliveredAt: new Date(d.deliveredAt).toISOString(),
       })),
     };
-  }
-
-  /** Build a markdown string from MeetingSummary for delivery / HTML generation */
-  private buildSummaryMarkdown(summary: MeetingSummary): string {
-    const parts: string[] = [];
-    parts.push(`# ${summary.title || "Meeting Summary"}`);
-    parts.push("");
-    if (summary.duration) parts.push(`*${summary.duration} minutes*`);
-    if (summary.participants?.length) parts.push(`*Participants: ${summary.participants.join(", ")}*`);
-    parts.push("");
-    parts.push("---");
-    parts.push("");
-
-    if (summary.keyPoints?.length) {
-      parts.push("## Key Points");
-      parts.push("");
-      summary.keyPoints.forEach((p) => parts.push(`- ${p}`));
-      parts.push("");
-    }
-
-    if (summary.decisions?.length) {
-      parts.push("## Decisions");
-      parts.push("");
-      summary.decisions.forEach((d) => parts.push(`- ${d}`));
-      parts.push("");
-    }
-
-    if (summary.actionItems?.length) {
-      parts.push("## Action Items");
-      parts.push("");
-      summary.actionItems.forEach((a) => {
-        const meta = [a.assignee, a.deadline].filter(Boolean).join(", ");
-        parts.push(`- ${a.task}${meta ? ` (${meta})` : ""}`);
-      });
-      parts.push("");
-    }
-
-    if (summary.followUps?.length) {
-      parts.push("## Follow-ups");
-      parts.push("");
-      summary.followUps.forEach((f) => parts.push(`- ${f}`));
-      parts.push("");
-    }
-
-    parts.push("---");
-    parts.push("*Generated by CallingClaw × OpenClaw*");
-    return parts.join("\n");
   }
 }

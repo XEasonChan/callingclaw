@@ -37,7 +37,7 @@ import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { buildVoiceInstructions, prepareMeeting } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
-import { readManifest, readSharedFile, listPrepFiles } from "./modules/shared-documents";
+import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
 import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
@@ -109,12 +109,11 @@ export function startConfigServer(services: Services) {
             if (data.type === "audio" && data.audio) {
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "start") {
-              // Start voice session from browser (supports provider selection for A/B test)
+              // Start voice session from browser
               const instructions = data.instructions || undefined;
-              const provider = data.provider || undefined;
-              services.realtime.start(instructions, provider).then(() => {
-                ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
-                services.eventBus.emit("voice.started", { audio_mode: "browser", provider: services.realtime.provider });
+              services.realtime.start(instructions).then(() => {
+                ws.send(JSON.stringify({ type: "status", voiceConnected: true }));
+                services.eventBus.emit("voice.started", { audio_mode: "browser" });
               }).catch((e: any) => {
                 ws.send(JSON.stringify({ type: "error", message: e.message }));
               });
@@ -222,10 +221,7 @@ export function startConfigServer(services: Services) {
               : "disconnected",
             calendar: services.calendar.connected
               ? "connected"
-              : services.calendar.authError
-                ? "auth_error"
-                : "disconnected",
-            calendarAuthError: services.calendar.authError || null,
+              : "disconnected",
             openclaw: services.computerUse.openclawConnected
               ? "connected"
               : "disconnected",
@@ -948,6 +944,11 @@ export function startConfigServer(services: Services) {
           }, { status: 400, headers });
         }
 
+        // Generate stable meetingId for session tracking
+        const { generateMeetingId: genId, upsertSession: upsertSess } = await import("./modules/shared-documents");
+        const meetingId = genId();
+        upsertSess({ meetingId, topic: body.instructions?.slice(0, 200) || "Meeting", meetUrl: validated.url, status: "active" });
+
         // Step 1: Start OpenAI Realtime voice session (if not already running)
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
@@ -1068,6 +1069,7 @@ export function startConfigServer(services: Services) {
           services.eventBus.emit("meeting.started", {
             url: validated.url,
             platform: validated.platform,
+            meetingId,
           });
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
@@ -1147,6 +1149,7 @@ export function startConfigServer(services: Services) {
         const attendeeNames = meetAttendees.filter((a: any) => !a.self).map((a: any) => a.displayName || a.email);
 
         return Response.json({
+          meetingId,
           status: joinState,
           success: joinSuccess,
           joinSummary,
@@ -1459,16 +1462,6 @@ STEP-BY-STEP FLOW:
               }
 
               // Step 3: Create Google Calendar
-              if (!services.calendar.connected) {
-                const reason = services.calendar.authError
-                  ? `Google OAuth 已过期: ${services.calendar.authError}`
-                  : "Google 日历未连接";
-                emit("calendar_skipped", {
-                  message: `⚠️ 跳过日历创建 — ${reason}。请在设置中重新授权 Google 账号。`,
-                  reason,
-                  authError: !!services.calendar.authError,
-                });
-              }
               if (services.calendar.connected) {
                 emit("creating_calendar", { message: "正在创建日历和会议链接..." });
                 const prepAttendees = (body.attendees || []).map((e: string) => ({ email: e }));
@@ -1629,6 +1622,11 @@ STEP-BY-STEP FLOW:
         const body = (await req.json().catch(() => ({}))) as { topic?: string };
         const topic = body.topic || "Local Conversation";
 
+        // Generate stable meetingId for session tracking
+        const { generateMeetingId, upsertSession } = await import("./modules/shared-documents");
+        const meetingId = generateMeetingId();
+        upsertSession({ meetingId, topic, status: "active" });
+
         // Step 1: Start voice session with direct audio (local mic/speaker)
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
@@ -1687,6 +1685,7 @@ STEP-BY-STEP FLOW:
         services.eventBus.emit("meeting.started", {
           platform: "local",
           topic,
+          meetingId,
         });
         services.eventBus.emit("voice.started", { audio_mode: "direct" });
         console.log("[TalkLocally] meeting.started emitted — full meeting stack active");
@@ -1696,6 +1695,7 @@ STEP-BY-STEP FLOW:
 
         return Response.json({
           ok: true,
+          meetingId,
           topic,
           voice: voiceStarted ? "connected" : "failed",
           audio_mode: "direct",
