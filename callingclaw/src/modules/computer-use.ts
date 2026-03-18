@@ -12,6 +12,7 @@ import type { PythonBridge } from "../bridge";
 import type { SharedContext } from "./shared-context";
 import type { EventBus } from "./event-bus";
 import type { ContextSync } from "./context-sync";
+import type { DesktopCaptureProvider } from "../capture/desktop-capture-provider";
 import { CONFIG } from "../config";
 import { OpenClawBridge } from "../openclaw_bridge";
 
@@ -56,9 +57,13 @@ export class ComputerUseModule {
   private openclaw: OpenClawBridge;
   private eventBus?: EventBus;
   private _contextSync?: ContextSync;
+  private _desktopCapture?: DesktopCaptureProvider;
 
   /** Inject ContextSync for shared memory/pinned file access */
   set contextSync(cs: ContextSync) { this._contextSync = cs; }
+
+  /** Inject DesktopCaptureProvider for screencapture-based screenshots (replaces Python sidecar) */
+  set desktopCapture(dc: DesktopCaptureProvider) { this._desktopCapture = dc; }
 
   constructor(bridge: PythonBridge, context: SharedContext, eventBus?: EventBus) {
     this.bridge = bridge;
@@ -576,10 +581,11 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
           console.log(`[ComputerUse] ${stepDesc}`);
           this.emitActivity("ai.openclaw", `Task: ${task?.slice(0, 60)}`);
 
+          // OC-008: Computer Use Task Delegation
           const result = await this.openclaw.sendTask(task);
-          console.log(`[ComputerUse] OpenClaw result: ${result.slice(0, 200)}`);
+          console.log(`[ComputerUse] OpenClaw result (OC-008): ${result.slice(0, 200)}`);
 
-          // Cap output to prevent token explosion
+          // Cap output to prevent token explosion (per OC-008 spec: 10K limit)
           const capped = result.length > 10000
             ? result.slice(0, 10000) + "\n...(truncated)"
             : result;
@@ -767,14 +773,32 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
     }
   }
 
-  private requestScreenshot(): Promise<string | null> {
+  private async requestScreenshot(): Promise<string | null> {
+    // Use DesktopCaptureProvider (screencapture CLI + sips resize) if available.
+    // Falls back to Python sidecar bridge if desktop capture not injected.
+    if (this._desktopCapture) {
+      try {
+        const result = await this._desktopCapture.capture({
+          targetWidth: API_SCREEN_WIDTH,
+          targetHeight: API_SCREEN_HEIGHT,
+        });
+        if (result) {
+          console.log(`[ComputerUse] Desktop screenshot: ${Math.round(result.image.length * 0.75 / 1024)}KB JPEG ${result.width}x${result.height}`);
+          return result.image;
+        }
+        console.warn("[ComputerUse] Desktop capture returned null");
+      } catch (e: any) {
+        console.error(`[ComputerUse] Desktop capture error: ${e.message}`);
+      }
+    }
+
+    // Fallback: Python sidecar bridge (legacy path)
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         console.warn("[ComputerUse] Screenshot timeout (5s) — Python sidecar may not be responding");
         resolve(null);
       }, 5000);
 
-      // Use once() to avoid accumulating permanent listeners
       this.bridge.once("screenshot", (msg) => {
         clearTimeout(timeout);
         const img = msg.payload?.image;

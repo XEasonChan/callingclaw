@@ -6,6 +6,7 @@ import type { ContextSync } from "../modules/context-sync";
 import type { ContextRetriever } from "../modules/context-retriever";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "../modules/event-bus";
+import { OC002_PROMPT, parseOC002, type OC002_Request } from "../openclaw-protocol";
 
 export interface AIToolDeps {
   contextSync: ContextSync;
@@ -79,16 +80,18 @@ export function aiTools(deps: AIToolDeps): ToolModule {
             // Quick search found nothing — auto-escalate to thorough
           }
 
-          // Path B: Thorough — delegate to OpenClaw (2-15s)
+          // Path B: Thorough — delegate to OpenClaw via OC-002 (2-15s)
           console.log(`[RecallContext] Delegating to OpenClaw: "${query.slice(0, 80)}"`);
-          const openclawResult = await openclawBridge.sendTask(
-            `The user asked a question that requires context recall. Search your memory (MEMORY.md), recent files, and conversation history to find relevant information.\n\n` +
-            `User's question context: "${query}"\n\n` +
-            `${localResult ? `I found some potentially relevant local context:\n${localResult}\n\nPlease expand on this with more details.` : "No local context found. Please search broadly."}\n\n` +
-            `Return a concise factual answer (under 500 words) that the voice assistant can relay to the user. Focus on concrete facts, dates, metrics, and actionable information. Answer in the user's language (likely Chinese).`
-          );
+          const req: OC002_Request = {
+            id: "OC-002",
+            query,
+            localContext: localResult || undefined,
+            language: "zh",
+          };
+          const raw = await openclawBridge.sendTask(OC002_PROMPT(req));
+          const { answer } = parseOC002(raw);
 
-          return `[OpenClaw recall]\n${openclawResult}`;
+          return `[OpenClaw recall]\n${answer}`;
         }
         default:
           return `Unknown AI tool: ${name}`;

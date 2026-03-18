@@ -18,6 +18,7 @@ import type { SharedContext } from "../modules/shared-context";
 import type { ContextSync } from "../modules/context-sync";
 import type { PostMeetingDelivery } from "../modules/post-meeting-delivery";
 import { buildVoiceInstructions, prepareMeeting, getPostMeetingSummary } from "../voice-persona";
+import { OC009_PROMPT, type OC009_Request } from "../openclaw-protocol";
 
 export interface MeetingToolDeps {
   calendar: GoogleCalendarClient;
@@ -186,6 +187,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           let joinSummary = "";
 
           let joinState: "in_meeting" | "waiting_room" | "failed" = "failed";
+
+          // Ensure Playwright is started (lazy init)
+          if (!playwrightCli.connected) {
+            try { await playwrightCli.start(); } catch {}
+          }
 
           if (playwrightCli.connected) {
             console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
@@ -373,15 +379,15 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             console.error("[PostMeeting] Delivery failed:", e.message);
             // Fallback: push full report to OpenClaw directly
             if (openclawBridge.connected) {
-              const followUpText = [
-                `## 会议结束 — Follow-up Report`,
-                `**主题**: ${summary.title || "Meeting"}`,
-                `**时间**: ${new Date().toLocaleString("zh-CN")}`,
-                `**记录文件**: ${filepath}`,
-                summary.keyPoints?.length > 0 ? `\n### 关键结论\n${summary.keyPoints.map((p: string) => `- ${p}`).join("\n")}` : "",
-                createdTasks.length > 0 ? `\n### 待执行任务\n${createdTasks.map((t: any) => `- [ ] ${t.task}`).join("\n")}` : "",
-              ].filter(Boolean).join("\n");
-              openclawBridge.sendTask(`Meeting follow-up (delivery failed, sending raw):\n\n${followUpText}`).catch(() => {});
+              const req: OC009_Request = {
+                id: "OC-009",
+                topic: summary.title || "Meeting",
+                time: new Date().toISOString(),
+                filepath,
+                keyPoints: summary.keyPoints || [],
+                tasks: createdTasks.map((t: any) => ({ task: t.task })),
+              };
+              openclawBridge.sendTask(OC009_PROMPT(req)).catch(() => {});
             }
           });
 

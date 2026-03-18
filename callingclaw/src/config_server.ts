@@ -8,7 +8,7 @@ import { resolve, dirname } from "path";
 import type { PythonBridge } from "./bridge";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.2.4";
+let APP_VERSION = "2.4.2";
 try {
   // Try callingclaw/VERSION first, then root CallingClaw 2.0/VERSION
   try {
@@ -37,6 +37,8 @@ import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { buildVoiceInstructions, prepareMeeting } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
+import { readManifest, readSharedFile, listPrepFiles } from "./modules/shared-documents";
+import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
 
@@ -1022,6 +1024,13 @@ export function startConfigServer(services: Services) {
         let joinSummary = "";
         let joinMethod = "meetjoiner";
 
+        // Ensure Playwright is started (lazy init — may not be connected yet)
+        if (services.playwrightCli && !services.playwrightCli.connected) {
+          try { await services.playwrightCli.start(); } catch (e: any) {
+            console.warn("[Meeting] Playwright start failed:", e.message);
+          }
+        }
+
         if (services.playwrightCli?.connected && validated.platform === "google_meet") {
           console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
           joinMethod = "playwright_eval";
@@ -1234,7 +1243,124 @@ STEP-BY-STEP FLOW:
         return Response.json({ aborted: false, reason: "No browser loop running" }, { headers });
       }
 
-      // POST /api/meeting/prepare — Generate pre-meeting agenda for user confirmation
+      // POST /api/meeting/delegate — Delegate meeting creation to OpenClaw (agent-first pattern)
+      // Desktop sends topic → CallingClaw relays to OpenClaw → OpenClaw uses /callingclaw skill
+      // All progress comes back via EventBus → WebSocket → Desktop side panel
+      if (url.pathname === "/api/meeting/delegate" && req.method === "POST") {
+        const body = (await req.json()) as { topic: string };
+        if (!body.topic) {
+          return Response.json({ error: "topic is required" }, { status: 400, headers });
+        }
+        if (!services.openclawBridge?.connected) {
+          return Response.json({ error: "OpenClaw not connected" }, { status: 503, headers });
+        }
+
+        const { generateMeetingId, upsertSession } = await import("./modules/shared-documents");
+        const meetingId = generateMeetingId();
+        upsertSession({ meetingId, topic: body.topic, status: "preparing" });
+
+        services.eventBus.emit("meeting.prep_progress", {
+          meetingId, step: "delegating", message: "正在委托 OpenClaw 处理...",
+        });
+
+        // Fire-and-forget: OpenClaw handles everything autonomously
+        (async () => {
+          try {
+            const taskPrompt = [
+              `用户想要准备一个会议，话题是: "${body.topic}"`,
+              `会议ID（meetingId）: ${meetingId}`,
+              ``,
+              `请完成以下步骤:`,
+              ``,
+              `## Step 1: 获取用户邮箱`,
+              `执行 /callingclaw email 获取用户的默认参会邮箱`,
+              ``,
+              `## Step 2: 创建日历事件`,
+              `- 从话题推断会议时间（如"今晚八点"→20:00），没提到时间就用下一个半小时整点`,
+              `- 用 Google Calendar tool 创建事件（带 Meet 链接），邀请用户邮箱`,
+              ``,
+              `## Step 3: 深度调研`,
+              `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度会前调研。`,
+              ``,
+              `## Step 4: 写入 Markdown 到共享目录（必须！）`,
+              `文件路径: ~/.callingclaw/shared/${meetingId}_prep.md`,
+              `注意: meetingId 已经生成好了，就是 ${meetingId}，请直接使用这个 ID！`,
+              ``,
+              `Markdown 自由格式，建议包含:`,
+              `# 标题, 目标, 概要, 要点, 架构决策, 预期问题, 历史背景, 相关文件和链接`,
+              ``,
+              `## Step 5: 通知 CallingClaw 渲染`,
+              `\`\`\`bash`,
+              `curl -X POST http://localhost:4000/api/meeting/prep-result \\`,
+              `  -H "Content-Type: application/json" \\`,
+              `  -d '{"topic":"会议主题","meetingId":"${meetingId}"}'`,
+              `\`\`\``,
+              `CallingClaw 自动读取 ~/.callingclaw/shared/${meetingId}_prep.md 并渲染。`,
+              `**不写文件 + 不调 API = Desktop 看不到！**`,
+            ].join("\n");
+
+            await services.openclawBridge.sendTask(taskPrompt);
+          } catch (e: any) {
+            services.eventBus.emit("meeting.prep_progress", {
+              prepId, step: "error", message: `OpenClaw 处理失败: ${e.message}`,
+            });
+          }
+        })();
+
+        return Response.json({ ok: true, meetingId, topic: body.topic, delegatedTo: "openclaw" }, { headers });
+      }
+
+      // POST /api/meeting/prep-result — OpenClaw notifies "prep file is ready"
+      // OpenClaw wrote {meetingId}_prep.md to ~/.callingclaw/shared/
+      // This endpoint tells Desktop which meetingId to render
+      if (url.pathname === "/api/meeting/prep-result" && req.method === "POST") {
+        const body = await req.json() as { topic: string; meetingId?: string; filePath?: string; meetUrl?: string; calendarEventId?: string };
+        if (!body.topic) {
+          return Response.json({ error: "topic is required" }, { status: 400, headers });
+        }
+
+        const { getMeetingFilePath, upsertSession, generateMeetingId, SHARED_DIR: SD } = await import("./modules/shared-documents");
+
+        // meetingId must be provided (generated by /api/meeting/delegate)
+        const meetingId = body.meetingId || generateMeetingId();
+
+        // Resolve file path — by convention: {meetingId}_prep.md
+        let filePath = body.filePath || getMeetingFilePath(meetingId, "prep");
+        if (filePath.startsWith("~")) filePath = filePath.replace("~", process.env.HOME || "");
+
+        // Read the markdown content
+        let mdContent = "";
+        try { mdContent = await Bun.file(filePath).text(); } catch {
+          // Try the path OpenClaw might have used
+          try { mdContent = await Bun.file(resolve(SHARED_DIR, meetingId + "_prep.md")).text(); } catch {}
+        }
+
+        // Update sessions index
+        upsertSession({
+          meetingId,
+          topic: body.topic,
+          meetUrl: body.meetUrl,
+          calendarEventId: body.calendarEventId,
+          status: "ready",
+          files: { prep: meetingId + "_prep.md" },
+        });
+
+        // Emit event — Desktop renders markdown directly
+        services.eventBus.emit("meeting.prep_ready", {
+          topic: body.topic,
+          title: body.topic,
+          meetingId,
+          meetUrl: body.meetUrl || null,
+          calendarEventId: body.calendarEventId || null,
+          filePath,
+          mdContent, // Desktop can render directly without another file read
+        });
+
+        console.log(`[PrepResult] File ready: "${body.topic}" → ${filePath}`);
+        return Response.json({ ok: true, filePath, contentLength: mdContent.length }, { headers });
+      }
+
+      // POST /api/meeting/prepare — Direct meeting creation (fallback if OpenClaw unavailable)
       // Returns: meeting prep brief + agenda items that user can review before joining
       if (url.pathname === "/api/meeting/prepare" && req.method === "POST") {
         const body = (await req.json()) as {
@@ -1249,137 +1375,136 @@ STEP-BY-STEP FLOW:
           return Response.json({ error: "topic is required" }, { status: 400, headers });
         }
 
-        // ── Step 1: Quick title generation (<2s) ──
-        // User may type a long description; compress into short calendar title
-        let meetingTitle = body.topic;
-        if (services.openclawBridge?.connected && body.topic.length > 30) {
-          try {
-            const titleResult = await services.openclawBridge.sendTask(
-              `Generate a short meeting title (under 50 chars, in the user's language) for this topic. Return ONLY the title, nothing else:\n\n"${body.topic}"`
-            );
-            if (titleResult && !titleResult.includes("timed out") && titleResult.length < 80) {
-              meetingTitle = titleResult.trim().replace(/^["']|["']$/g, "");
-            }
-          } catch { /* use original topic */ }
-        }
+        // ── INSTANT RESPONSE — all AI work async via EventBus ──
+        // Desktop gets response in <1s. OpenClaw handles everything in background.
+        // Each step emits progress events → Desktop shows real-time log in side panel.
 
-        // ── Step 2: Create Google Calendar event (schedule, don't auto-join) ──
-        // Default: next half-hour slot. User joins manually or at scheduled time.
-        let meetUrl = body.url || null;
-        let calendarEvent: any = null;
-        let meetAttendees: import("./mcp_client/google_cal").CalendarAttendee[] = [];
-        if (services.calendar.connected) {
-          try {
-            let start: Date;
-            if (body.start_time) {
-              start = new Date(body.start_time);
-            } else {
-              // Try to extract time from natural language in the topic
-              // e.g., "今晚八点讨论callingclaw官网" → 20:00 today
-              let parsedTime: Date | null = null;
-              if (services.openclawBridge?.connected) {
-                try {
-                  const now = new Date();
-                  const timeResult = await services.openclawBridge.sendTask(
-                    `Extract the meeting time from this text. Current time: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}. ` +
-                    `Return ONLY an ISO 8601 datetime string (e.g., 2026-03-17T20:00:00+08:00). If no time is mentioned, return "none".\n\nText: "${body.topic}"`
-                  );
-                  if (timeResult && !timeResult.includes("none") && !timeResult.includes("timed out")) {
-                    const d = new Date(timeResult.trim());
-                    if (!isNaN(d.getTime())) parsedTime = d;
-                  }
-                } catch {}
-              }
-              if (parsedTime) {
-                start = parsedTime;
-              } else {
-                // Fallback: next half-hour mark, at least 10 min away
-                const now = new Date();
-                const mins = now.getMinutes();
-                start = new Date(now);
-                start.setMinutes(mins < 30 ? 30 : 60, 0, 0);
-                if (mins >= 30) start.setHours(start.getHours());
-                if (start.getTime() - now.getTime() < 10 * 60000) {
-                  start = new Date(start.getTime() + 30 * 60000);
-                }
-              }
-            }
-            const duration = (body.duration_minutes || 30) * 60000;
-            const end = new Date(start.getTime() + duration);
-            const prepAttendees: import("./mcp_client/google_cal").CalendarAttendee[] =
-              (body.attendees || []).map((e: string) => ({ email: e }));
-            if (CONFIG.userEmail && !prepAttendees.some(a => a.email === CONFIG.userEmail)) {
-              prepAttendees.push({ email: CONFIG.userEmail });
-            }
-            const calResult = await services.calendar.createEvent({
-              summary: meetingTitle,
-              start: start.toISOString(),
-              end: end.toISOString(),
-              attendees: prepAttendees,
-            });
-            // createEvent returns JSON string — parse it
-            try {
-              calendarEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult;
-            } catch { calendarEvent = { id: null, meetLink: null, start: start.toISOString(), end: end.toISOString() }; }
-            meetUrl = calendarEvent.meetLink || calendarEvent.hangoutLink || meetUrl;
-            meetAttendees = calendarEvent.attendees || prepAttendees;
-            // Store actual start/end from the created event
-            calendarEvent.start = { dateTime: calendarEvent.start || start.toISOString() };
-            calendarEvent.end = { dateTime: calendarEvent.end || end.toISOString() };
-            console.log(`[MeetingPrepare] Calendar: "${meetingTitle}" at ${start.toLocaleTimeString()}, Meet: ${meetUrl}`);
-          } catch (e: any) {
-            console.warn("[MeetingPrepare] Calendar create failed:", e.message);
-          }
-        }
+        const prepId = `prep_${Date.now()}`;
 
-        // ── Step 3: Return immediately — no auto-join, research in background ──
+        // Return immediately with just the topic
         const agenda = {
+          prepId,
           topic: body.topic,
-          title: meetingTitle,
-          meetUrl,
-          calendarEventId: calendarEvent?.id || null,
-          startTime: calendarEvent?.start?.dateTime || null,
-          endTime: calendarEvent?.end?.dateTime || null,
+          title: body.topic.length > 60 ? body.topic.slice(0, 57) + "..." : body.topic,
+          meetUrl: body.url || null,
+          calendarEventId: null as string | null,
+          startTime: body.start_time || null,
+          endTime: null as string | null,
           generatedAt: Date.now(),
-          prepStatus: "researching",
+          prepStatus: "processing",
           prepBrief: null,
         };
 
         services.eventBus.emit("meeting.agenda", agenda);
 
-        // ── Step 4: Background OpenClaw deep research (no time limit) ──
-        // MeetingScheduler handles auto-join at scheduled time (not here)
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        // ── Background pipeline: title → time → calendar → deep research ──
+        // Every step emits "meeting.prep_progress" so Desktop can show live log
+        if (services.openclawBridge?.connected) {
           (async () => {
+            const emit = (step: string, data?: any) => {
+              services.eventBus.emit("meeting.prep_progress", { prepId, step, ...data });
+              console.log(`[MeetingPrepare] ${step}`);
+            };
+
+            let title = agenda.title;
+            let meetUrl = body.url || null;
+            let startTime: string | null = body.start_time || null;
+            let endTime: string | null = null;
+            let calEventId: string | null = null;
+            let meetAttendees: any[] = [];
+
             try {
-              console.log(`[MeetingPrepare] Background research: "${meetingTitle}"`);
-              const prepResult = await prepareMeeting(
-                services.meetingPrepSkill, body.topic, body.context, meetAttendees
-              );
-              const prepBriefData = {
-                topic: prepResult.brief.topic,
-                goal: prepResult.brief.goal,
-                summary: prepResult.brief.summary,
-                keyPoints: prepResult.brief.keyPoints,
-                architectureDecisions: prepResult.brief.architectureDecisions,
-                expectedQuestions: prepResult.brief.expectedQuestions,
-                filePaths: prepResult.brief.filePaths,
-                browserUrls: prepResult.brief.browserUrls,
-                previousContext: prepResult.brief.previousContext,
-              };
-              console.log(`[MeetingPrepare] Research complete: ${prepBriefData.keyPoints?.length || 0} key points, ${prepBriefData.filePaths?.length || 0} files`);
-              services.eventBus.emit("meeting.prep_ready", {
-                topic: body.topic,
-                meetUrl,
-                calendarEventId: calendarEvent?.id || null,
-                prepBrief: prepBriefData,
-              });
+              // Step 1: AI title generation
+              emit("generating_title", { message: "正在生成会议标题..." });
+              if (body.topic.length > 15) {
+                const titleResult = await services.openclawBridge.sendTask(
+                  `Generate a short meeting title (under 50 chars, in the user's language) for this topic. Return ONLY the title, nothing else:\n\n"${body.topic}"`
+                );
+                if (titleResult && !titleResult.includes("timed out") && titleResult.length < 80) {
+                  title = titleResult.trim().replace(/^["']|["']$/g, "");
+                }
+              }
+              emit("title_ready", { title, message: `标题: ${title}` });
+
+              // Step 2: AI time parsing
+              if (!startTime) {
+                emit("parsing_time", { message: "正在解析会议时间..." });
+                const now = new Date();
+                const timeResult = await services.openclawBridge.sendTask(
+                  `Extract the meeting time from this text. Current time: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}. ` +
+                  `Return ONLY an ISO 8601 datetime string (e.g., 2026-03-17T20:00:00+08:00). If no time is mentioned, return "none".\n\nText: "${body.topic}"`
+                );
+                if (timeResult && !timeResult.includes("none") && !timeResult.includes("timed out")) {
+                  const d = new Date(timeResult.trim());
+                  if (!isNaN(d.getTime())) startTime = d.toISOString();
+                }
+                if (!startTime) {
+                  // Fallback: next half-hour mark
+                  const mins = now.getMinutes();
+                  const fallback = new Date(now);
+                  fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
+                  if (mins >= 30) fallback.setHours(fallback.getHours());
+                  if (fallback.getTime() - now.getTime() < 10 * 60000) {
+                    fallback.setTime(fallback.getTime() + 30 * 60000);
+                  }
+                  startTime = fallback.toISOString();
+                }
+                const duration = (body.duration_minutes || 30) * 60000;
+                endTime = new Date(new Date(startTime).getTime() + duration).toISOString();
+                emit("time_ready", { startTime, endTime, message: `时间: ${new Date(startTime).toLocaleTimeString('zh-CN')}` });
+              }
+
+              // Step 3: Create Google Calendar
+              if (services.calendar.connected) {
+                emit("creating_calendar", { message: "正在创建日历和会议链接..." });
+                const prepAttendees = (body.attendees || []).map((e: string) => ({ email: e }));
+                if (CONFIG.userEmail && !prepAttendees.some((a: any) => a.email === CONFIG.userEmail)) {
+                  prepAttendees.push({ email: CONFIG.userEmail });
+                }
+                const calResult = await services.calendar.createEvent({
+                  summary: title,
+                  start: startTime!,
+                  end: endTime || new Date(new Date(startTime!).getTime() + 30*60000).toISOString(),
+                  attendees: prepAttendees,
+                });
+                let calEvent: any;
+                try { calEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult; } catch { calEvent = {}; }
+                meetUrl = calEvent.meetLink || calEvent.hangoutLink || meetUrl;
+                calEventId = calEvent.id || null;
+                meetAttendees = calEvent.attendees || prepAttendees;
+                emit("calendar_ready", { title, meetUrl, calendarEventId: calEventId, startTime, endTime, message: `日历已创建 — Meet: ${meetUrl || '无链接'}` });
+              }
+
+              // Step 4: Deep research (meeting prep)
+              if (services.meetingPrepSkill) {
+                emit("researching", { message: "OpenClaw 正在深度调研..." });
+                const prepResult = await prepareMeeting(
+                  services.meetingPrepSkill, body.topic, body.context, meetAttendees
+                );
+                const prepBriefData = {
+                  topic: prepResult.brief.topic || title,
+                  goal: prepResult.brief.goal,
+                  summary: prepResult.brief.summary,
+                  keyPoints: prepResult.brief.keyPoints,
+                  architectureDecisions: prepResult.brief.architectureDecisions,
+                  expectedQuestions: prepResult.brief.expectedQuestions,
+                  filePaths: prepResult.brief.filePaths,
+                  browserUrls: prepResult.brief.browserUrls,
+                  previousContext: prepResult.brief.previousContext,
+                };
+                emit("research_complete", {
+                  message: `调研完成 — ${prepBriefData.keyPoints?.length || 0} 要点, ${prepBriefData.filePaths?.length || 0} 文件`,
+                });
+
+                services.eventBus.emit("meeting.prep_ready", {
+                  prepId, topic: body.topic, title, meetUrl, calendarEventId: calEventId,
+                  startTime, endTime, prepBrief: prepBriefData,
+                });
+              }
             } catch (e: any) {
-              console.error("[MeetingPrepare] Background research failed:", e.message);
+              emit("error", { message: `失败: ${e.message}` });
               services.eventBus.emit("meeting.prep_ready", {
-                topic: body.topic,
-                prepBrief: null,
-                error: e.message,
+                prepId, topic: body.topic, prepBrief: null, error: e.message,
               });
             }
           })();
@@ -1394,6 +1519,10 @@ STEP-BY-STEP FLOW:
         const workspace = services.context.workspace;
         const syncBrief = services.contextSync?.getBrief();
 
+        // Also list persisted prep briefs from shared directory
+        let persistedPreps: string[] = [];
+        try { persistedPreps = await listPrepFiles(); } catch {}
+
         return Response.json({
           workspace: workspace || null,
           voiceBrief: syncBrief?.voice || null,
@@ -1401,6 +1530,8 @@ STEP-BY-STEP FLOW:
           voiceBriefChars: syncBrief?.voice?.length || 0,
           computerBriefChars: syncBrief?.computer?.length || 0,
           pinnedFiles: services.contextSync?.getPinnedFiles() || [],
+          persistedPreps,
+          sharedPrepDir: SHARED_PREP_DIR,
         }, { headers });
       }
 
@@ -1546,34 +1677,8 @@ STEP-BY-STEP FLOW:
         services.eventBus.emit("voice.started", { audio_mode: "direct" });
         console.log("[TalkLocally] meeting.started emitted — full meeting stack active");
 
-        // Step 5: Start browser DOM context capture (unique to Talk Locally)
-        // Captures active browser tab DOM every 10 seconds for richer context
-        const domContextInterval = setInterval(async () => {
-          if (!services.playwrightCli?.connected) return;
-          try {
-            const raw = await services.playwrightCli.evaluate(`() => ({
-              url: location.href,
-              title: document.title,
-              scrollY: window.scrollY,
-              scrollHeight: document.documentElement.scrollHeight,
-              viewportHeight: window.innerHeight,
-              visibleText: document.body.innerText.substring(0, 2000),
-              links: document.querySelectorAll('a').length,
-              buttons: document.querySelectorAll('button').length,
-              inputs: document.querySelectorAll('input,textarea').length,
-            })`);
-            const domInfo = typeof raw === "string" ? JSON.parse(raw) : raw;
-            services.context.updateBrowserContext(domInfo);
-            services.eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
-          } catch {
-            // Browser might not be active — silently skip
-          }
-        }, 10000);
-
-        // Store interval ID on the eventBus for cleanup on stop
-        // Using a well-known key so talk-locally/stop can clear it
-        (services.eventBus as any)._talkLocallyDomInterval = domContextInterval;
-        (services.eventBus as any)._talkLocallyTopic = topic;
+        // DOM context capture now unified in callingclaw.ts meeting.started handler
+        // (both Talk Locally and Meet Mode get it automatically)
 
         return Response.json({
           ok: true,
@@ -1891,6 +1996,36 @@ STEP-BY-STEP FLOW:
         }
         const loaded = await services.contextSync.loadOpenClawMemory();
         return Response.json({ ok: loaded, status: services.contextSync.getStatus() }, { headers });
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // ── Shared Documents API (~/.callingclaw/shared/) ──
+      // ══════════════════════════════════════════════════════════════
+
+      // GET /api/shared/manifest — Return the shared directory manifest
+      if (url.pathname === "/api/shared/manifest" && req.method === "GET") {
+        const { readSessions } = await import("./modules/shared-documents");
+        return Response.json(readSessions(), { headers });
+      }
+
+      // GET /api/shared/file?path=prep/xxx.md — Read any file from shared directory
+      if (url.pathname === "/api/shared/file" && req.method === "GET") {
+        const filePath = url.searchParams.get("path");
+        if (!filePath) {
+          return Response.json({ error: "path query parameter is required" }, { status: 400, headers });
+        }
+        try {
+          const content = await readSharedFile(filePath);
+          return Response.json({ path: filePath, content }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 404, headers });
+        }
+      }
+
+      // GET /api/shared/prep — List available prep brief files
+      if (url.pathname === "/api/shared/prep" && req.method === "GET") {
+        const files = await listPrepFiles();
+        return Response.json({ files, dir: SHARED_PREP_DIR }, { headers });
       }
 
       // ══════════════════════════════════════════════════════════════

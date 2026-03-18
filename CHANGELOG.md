@@ -3,6 +3,52 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.1] - 2026-03-18
+
+### Fixed
+- **P0: Desktop UI completely broken** — TypeScript `(pc: any)` syntax in browser JS caused SyntaxError, killing all JS execution. Entire page was static (no meeting list, no settings, no input).
+- **P0: Onboarding "启动 CallingClaw" button dead** — `obFinish()` function was never defined. Now starts daemon + completes onboarding + enters home.
+- **6 missing onboarding functions** — `obGrantScreen`, `obGrantAccess`, `obSaveKeys`, `obInstallSkill`, `obStopPolling`, `obFinish` all added with full functionality.
+- **Onboarding animation off-center** — `.anim-canvas` now uses flexbox centering.
+- **HTML hardcoded v2.4.0** — updated to dynamic version from app.info().
+- **`readManifest` import error** — replaced with `readSessions` after shared-documents refactor.
+- **Permission polling** — Screen Recording and Accessibility buttons now open System Settings and poll every 2s until granted.
+
+## [2.3.1] - 2026-03-17
+
+### Added
+- **OpenClaw Protocol Schemas (OC-001 to OC-009)** — typed request/response definitions for all CallingClaw ↔ OpenClaw calls in `openclaw-protocol.ts`
+- **Multi-monitor screenshot** — sidecar captures mouse-following or app-locked monitor
+- **Protocol documentation** — `docs/openclaw-protocol.md`
+
+### Fixed
+- **P0: Vision + recording leak after meeting ends** — three safety nets: voice.stopped auto-stop, 3h timeout, meeting.ended cleanup
+
+## [2.3.0] - 2026-03-17
+
+### Added
+- **Shared document directory** — `~/.callingclaw/shared/` with unified `{meetingId}` file naming
+- **Agent-first meeting creation** — Desktop delegates to OpenClaw via `/api/meeting/delegate`
+- **Pneuma-style agent log** — real-time OpenClaw progress in Desktop side panel
+- **`POST /api/meeting/prep-result`** — OpenClaw writes markdown, notifies CallingClaw to render
+- **Multi-monitor screenshot** — sidecar detects mouse/app monitor via macOS CGWindowListCopyWindowInfo
+- **Unified BrowserContext DOM capture** — both Talk Locally and Meet Mode (skips Meet tab)
+- **Architecture v2 documentation** — complete system diagrams in `docs/architecture-v2.md`
+- **ROADMAP.md** — v3.0 Electron consolidation plan
+
+### Changed
+- **meetingId generated upfront** — `cc_{ts}_{rand}` format, no dependency on Google Calendar
+- **OpenClaw writes prep markdown directly** — CallingClaw is pure display layer, no format conversion
+- **File naming convention** — `{meetingId}_prep.md`, `_live.md`, `_summary.md`, `_transcript.md`
+- **sessions.json** replaces manifest.json as meeting index
+
+### Fixed
+- **Sidecar crash loop** — cancel asyncio tasks on disconnect, ws.closed guard
+- **Merge conflict markers** — 12 unresolved markers in index.html cleaned up
+- **Calendar API format mismatch** — normalized flat start/meetLink to nested format for Desktop
+- **"(no response)" meeting titles** — removed synchronous OpenClaw calls, all async now
+- **Mouse-mode monitor lock** — first frame now also uses correct monitor
+
 ## [2.2.4] - 2026-03-17
 
 ### Added

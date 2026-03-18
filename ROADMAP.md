@@ -1,10 +1,36 @@
 # CallingClaw Roadmap
 
-## v3.0 — Single-Process Electron Architecture (Branch: `refactor/electron-consolidation`)
+## v3.0 — 消灭 Python Sidecar (Branch: `refactor/electron-consolidation`)
+
+> **状态：调研完成，待决策。** 音频方案需先做 spike 测试。
 
 ### 目标
-消除 3 进程架构（Electron + Bun + Python），合并为单进程 Electron 应用。
-解决 sidecar WebSocket 频繁断连的根本问题。
+消灭 Python sidecar，解决 WebSocket 频繁断连的根本问题。
+
+### 推荐方案：A — 保留 Bun + 消灭 Python
+Bun 继续做 AI 编排/API，硬件 I/O 移到 Electron。
+- Bun 代码几乎不改（50+ 处 API 调用保留）
+- 只改 Python 相关的桥接代码
+- 改动量最小，风险最低
+
+### 备选方案：B — 全部合并到 Electron/Node
+所有逻辑迁入 Electron main process（Node.js）。
+- 改动量大（Bun→Node 机械转换 50+ 处）
+- 最简单的架构（1 个进程）
+- 失去 Bun 的性能和语法优势
+
+### 决策前置条件
+- [ ] **音频 spike 测试**：在 Electron 用 Web Audio 捕获 BlackHole 2ch，测延迟和质量
+  - 延迟 < 50ms → 方案 A 可行，完全消灭 Python
+  - 延迟 > 50ms → 混合方案（保留 Python 仅做音频，200 行）
+
+### Python sidecar 三个功能的替代评估
+
+| 功能 | 当前 | 替代 | 风险 |
+|------|------|------|------|
+| 截图 | Python mss | Electron desktopCapturer | **零风险**，立刻可替代 |
+| 鼠标键盘 | Python pyautogui | robotjs（但几乎不用了，L2/L4 已替代） | **低风险** |
+| 音频 I/O | Python pyaudio + BlackHole | node-portaudio 或 Web Audio | **中风险，需 spike** |
 
 ### 当前架构 (v2.x)
 ```

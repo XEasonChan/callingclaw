@@ -4,22 +4,25 @@
 
 import { CONFIG } from "./config";
 import { PythonBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { PeekabooClient } from "./mcp_client/peekaboo";
 import { ZoomSkill } from "./skills/zoom";
 import { MeetJoiner } from "./meet_joiner";
 import { OpenClawBridge } from "./openclaw_bridge";
+import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
+import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
+import { OC007_PROMPT, type OC007_Request } from "./openclaw-protocol";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
 // ── Read unified VERSION file ────────────────────────────────
-let APP_VERSION = "2.2.4";
+let APP_VERSION = "2.4.4";
 try {
   APP_VERSION = readFileSync(resolve(__dirname, "..", "VERSION"), "utf-8").trim();
 } catch {}
@@ -128,6 +131,9 @@ contextSync.onUpdate(() => {
   }
 });
 
+// Browser DOM context capture interval (started on meeting.started, cleared on meeting.ended)
+let _domContextInterval: ReturnType<typeof setInterval> | null = null;
+
 // Wire OpenClaw activity events to EventBus for real-time visibility
 openclawBridge.onActivity((kind, summary, detail) => {
   eventBus.emit(kind, { summary, detail });
@@ -138,16 +144,25 @@ openclawBridge.onActivity((kind, summary, detail) => {
 // Accumulated screen descriptions for periodic OpenClaw push
 let _meetingVisionBuffer: string[] = [];
 
+// ── Browser Capture Provider (CDP) — used by VisionModule for 1s screenshots ──
+const browserCapture = new BrowserCaptureProvider();
+// Desktop Capture Provider (screencapture CLI) — used by ComputerUseModule
+const desktopCapture = new DesktopCaptureProvider();
+
 const vision = new VisionModule({
-  bridge,
   context,
-  analysisIntervalMs: 1000, // Analyze every 1 second during meetings
+  browserCapture,
   onScreenDescription: (description, _screenshot) => {
     // Buffer descriptions for periodic OpenClaw push
     _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
 
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
+
+    // Append to live log file on disk
+    if (meetingPrepSkill.liveLogPath) {
+      appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`);
+    }
 
     // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
     if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
@@ -187,13 +202,54 @@ eventBus.on("meeting.started", () => {
     // Activate context retriever (knowledge gap fill)
     contextRetriever.activate(voice);
   }
+
+  // ── Safety: auto-stop after 3 hours to prevent cost leakage ──
+  setTimeout(() => {
+    if (vision.isMeetingMode) {
+      console.warn("[Init] Meeting exceeded 3 hour limit — auto-stopping vision to prevent cost leakage");
+      stopMeetingVisionAndFlush("3 hour safety limit reached");
+    }
+  }, 3 * 60 * 60 * 1000);
+
+  // ── Start Browser DOM context capture (both modes) ──
+  // Captures active browser tab DOM every 10s for richer context.
+  // In Meet mode: captures non-Meet tabs when Playwright is free.
+  // In Talk Locally: captures whatever the user is browsing.
+  if (playwrightCli.connected) {
+    _domContextInterval = setInterval(async () => {
+      if (!playwrightCli.connected) return;
+      try {
+        const raw = await playwrightCli.evaluate(`() => {
+          // Skip if on Google Meet page (Meet mode uses it for other things)
+          if (location.hostname === 'meet.google.com') return JSON.stringify({ skip: true });
+          return JSON.stringify({
+            url: location.href,
+            title: document.title,
+            scrollY: window.scrollY,
+            scrollHeight: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight,
+            visibleText: document.body.innerText.substring(0, 2000),
+            links: document.querySelectorAll('a').length,
+            buttons: document.querySelectorAll('button').length,
+            inputs: document.querySelectorAll('input,textarea').length,
+          });
+        }`);
+        const domInfo = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!domInfo.skip) {
+          context.updateBrowserContext?.(domInfo);
+          eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
+        }
+      } catch {} // Browser busy or not accessible
+    }, 10000);
+    console.log("[Init] Browser DOM context capture started (10s interval)");
+  }
 });
 
 // Auto-stop vision when meeting ends or recording stops
 function stopMeetingVisionAndFlush(reason: string) {
   if (!vision.isMeetingMode) return;
   vision.stopMeetingVision();
-  // Flush remaining buffer to OpenClaw
+  // Flush remaining buffer to OpenClaw via OC-007 (final)
   if (_meetingVisionBuffer.length > 0 && openclawBridge.connected) {
     const batch = _meetingVisionBuffer.splice(0);
     openclawBridge.sendTask(
@@ -204,8 +260,69 @@ function stopMeetingVisionAndFlush(reason: string) {
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }
 
+// ── Screen capture lifecycle: start on voice.started, stop on voice.stopped ──
+// Talk Locally: voice.started → screen capture in "talk_locally" mode
+// Meeting: meeting.started → screen capture in "meeting" mode (overrides TL)
+eventBus.on("voice.started", async () => {
+  // Connect CDP for browser screenshots (discovers Chrome's debug port)
+  if (!await browserCapture.isAvailable()) {
+    await browserCapture.connect();
+  }
+  // Start screen capture in Talk Locally mode (meeting.started will upgrade to meeting mode)
+  if (!vision.isCapturing) {
+    vision.startScreenCapture("talk_locally");
+  }
+});
+
+// Push screen changes to Voice AI in real-time
+context.on("screen", (screenState) => {
+  if (screenState.description && voice.connected) {
+    // Rebuild voice instructions with latest screen context and push
+    // Only push if description actually changed (not just a new screenshot)
+    const brief = screenState.description.slice(0, 300);
+    const screenCtx = `\n\n[Current Screen] ${brief}${screenState.url ? ` (${screenState.url})` : ""}`;
+    // The existing ContextSync refresh mechanism will pick this up,
+    // but we also emit an event for immediate consumers (overlay, sidebar)
+    eventBus.emit("screen.updated", {
+      description: screenState.description,
+      url: screenState.url,
+      title: screenState.title,
+      timestamp: screenState.capturedAt,
+    });
+  }
+});
+
+// ── Safety net: auto-stop when voice disconnects ──
+// Prevents vision/recording from leaking if user closes session without proper stop
+eventBus.on("voice.stopped", () => {
+  // Stop screen capture (both Talk Locally and Meeting modes)
+  if (vision.isCapturing) {
+    if (vision.isMeetingMode) {
+      stopMeetingVisionAndFlush("Voice disconnected");
+    } else {
+      vision.stopScreenCapture();
+      console.log("[Init] Talk Locally screen capture stopped (voice disconnected)");
+    }
+  }
+
+  if (meeting.getNotes().isRecording) {
+    console.log("[Init] Voice stopped while meeting active — auto-stopping recording");
+    if (_domContextInterval) { clearInterval(_domContextInterval); _domContextInterval = null; }
+    meeting.stopRecording();
+    if (transcriptAuditor.active) transcriptAuditor.deactivate();
+    if (contextRetriever.active) contextRetriever.deactivate();
+  }
+});
+
 eventBus.on("meeting.ended", () => {
   stopMeetingVisionAndFlush("Meeting ended");
+
+  // Stop DOM context capture
+  if (_domContextInterval) {
+    clearInterval(_domContextInterval);
+    _domContextInterval = null;
+    context.clearBrowserContext?.();
+  }
 
   // ── Stop admission monitor ──
   if (playwrightCli.isAdmissionMonitoring) {
@@ -304,13 +421,10 @@ let _waitingRoomAbort: AbortController | null = null;
 // ── 2. Computer Use Module ──────────────────────────────────────
 
 const computerUse = new ComputerUseModule(bridge, context, eventBus);
+computerUse.desktopCapture = desktopCapture;
 
-// Update SharedContext when sidecar sends screenshots (only when vision module is NOT handling it)
-bridge.on("screenshot", (msg) => {
-  if (!vision.isMeetingMode) {
-    context.updateScreen(msg.payload.image);
-  }
-});
+// Screen capture is now handled by BrowserCaptureProvider (CDP) and DesktopCaptureProvider.
+// Python sidecar no longer sends screenshots.
 
 // ── 2b. Automation Layers (Playwright + Peekaboo + Router) ──────
 
@@ -411,6 +525,14 @@ context.on("note", (note) => {
       text: note.text,
       assignee: note.assignee,
     });
+  }
+});
+
+// Write transcript entries to live log file on disk
+context.on("transcript", (entry: any) => {
+  if (meetingPrepSkill.liveLogPath && meeting.getNotes().isRecording) {
+    const role = entry.role === "user" ? "USER" : entry.role === "assistant" ? "AI" : entry.role?.toUpperCase() || "???";
+    appendToLiveLog(meetingPrepSkill.liveLogPath, `[${role}] ${entry.text}`);
   }
 });
 
