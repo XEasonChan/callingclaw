@@ -3,7 +3,13 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [2.4.6] - 2026-03-18
+## [2.4.7] - 2026-03-18
+
+### Added
+- **Calendar auto-reconnect** — if Google Calendar connection fails at startup (expired token, network), retries every 5 minutes automatically
+- **Prep brief enrichment** — `/api/calendar/events` now returns `_prepBrief` field by matching events against `sessions.json` meeting prep data
+- **Calendar disconnect warning** — Desktop frontend shows "Google Calendar disconnected" instead of misleading "No upcoming meetings" when calendar is down
+- **OAuth token refresh script** — `bun scripts/refresh-google-token.ts` for one-click token renewal
 
 ### Fixed
 - **Empty Chrome window keeps popping up after ending meeting** — `playwrightCli.stop()` now called in `meeting.ended` handler, setting `_explicitlyStopped` flag to prevent auto-start from spawning new browser windows
