@@ -3,6 +3,12 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.5] - 2026-03-18
+
+### Added
+- **gstack skills reference** — CLAUDE.md Section 20 documenting all available gstack skills for agent use
+- **Meeting tasks** — 11 new action items from audio/sidecar debugging meeting (task extraction pipeline)
+
 ## [2.4.1] - 2026-03-18
 
 ### Fixed
