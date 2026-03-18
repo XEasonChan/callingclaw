@@ -15,6 +15,8 @@ import time
 import base64
 import subprocess
 import sys
+import threading
+import queue
 
 # Try imports, fail gracefully with instructions
 missing = []
@@ -200,6 +202,9 @@ class AudioBridge:
     Requires pyaudio. Meet mode requires BlackHole 2ch + BlackHole 16ch.
     """
 
+    # Max queued audio chunks before dropping oldest (~2s at 50 chunks/sec)
+    _PLAYBACK_QUEUE_MAX = 100
+
     def __init__(self):
         self.running = False
         self.capture_stream = None
@@ -208,6 +213,8 @@ class AudioBridge:
         self.mode = "direct"
         self._rate = 24000  # OpenAI Realtime uses 24kHz
         self._chunk = int(self._rate * 0.02)  # 20ms = 480 samples
+        self._playback_queue: queue.Queue = queue.Queue(maxsize=self._PLAYBACK_QUEUE_MAX)
+        self._writer_thread: threading.Thread | None = None
 
     def _find_device(self, keyword, need_input=False, need_output=False):
         """Find audio device by name keyword."""
@@ -302,6 +309,18 @@ class AudioBridge:
                 print(f"[Audio] Failed to open speaker: {e}")
 
         self._ws_send = ws_send_callback
+
+        # Drain any stale chunks from a previous session
+        while not self._playback_queue.empty():
+            try: self._playback_queue.get_nowait()
+            except queue.Empty: break
+
+        # Start dedicated writer thread — serializes all stream.write() calls
+        self._writer_thread = threading.Thread(
+            target=self._playback_writer_loop, daemon=True, name="audio-writer"
+        )
+        self._writer_thread.start()
+
         print(f"[Audio] Started in {mode} mode (rate={self._rate}Hz, chunk={self._chunk})")
         return True
 
@@ -329,18 +348,52 @@ class AudioBridge:
                 await asyncio.sleep(0.1)
 
     def play_audio(self, base64_pcm: str):
-        """Play AI audio response through speaker/BlackHole."""
-        if not self.playback_stream:
+        """Enqueue audio for playback. Non-blocking, thread-safe."""
+        if not self.playback_stream or not self.running:
             return
         try:
             pcm_data = base64.b64decode(base64_pcm)
-            self.playback_stream.write(pcm_data)
+            try:
+                self._playback_queue.put_nowait(pcm_data)
+            except queue.Full:
+                # Drop oldest chunk (real-time audio: latest > stale)
+                try: self._playback_queue.get_nowait()
+                except queue.Empty: pass
+                self._playback_queue.put_nowait(pcm_data)
+                print("[Audio] Playback queue full — dropped oldest chunk", flush=True)
         except Exception as e:
-            print(f"[Audio] Playback error: {e}", flush=True)
+            print(f"[Audio] Playback enqueue error: {e}", flush=True)
+
+    def _playback_writer_loop(self):
+        """Dedicated thread: drain queue → stream.write(). One write at a time."""
+        print("[Audio] Writer thread started")
+        while self.running:
+            try:
+                chunk = self._playback_queue.get(timeout=0.1)
+                if self.playback_stream and self.running:
+                    self.playback_stream.write(chunk)
+            except queue.Empty:
+                continue
+            except Exception as e:
+                if self.running:
+                    print(f"[Audio] Writer error: {e}", flush=True)
+        # Drain remaining chunks on shutdown
+        while not self._playback_queue.empty():
+            try:
+                chunk = self._playback_queue.get_nowait()
+                if self.playback_stream:
+                    self.playback_stream.write(chunk)
+            except Exception:
+                break
+        print("[Audio] Writer thread stopped")
 
     def stop(self):
         """Stop audio capture and playback."""
         self.running = False
+        # Wait for writer thread to finish (it drains remaining queue)
+        if self._writer_thread and self._writer_thread.is_alive():
+            self._writer_thread.join(timeout=2.0)
+            self._writer_thread = None
         for stream in (self.capture_stream, self.playback_stream):
             if stream:
                 try:
