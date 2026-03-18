@@ -3,6 +3,19 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.0] - 2026-03-18
+
+### Added
+- **Grok Voice Agent (A/B test)** — xAI Grok as alternative realtime voice provider at $0.05/min (6x cheaper than OpenAI's ~$0.30/min). Desktop UI dropdown for switching providers.
+- **Multi-provider RealtimeClient** — Provider config objects isolate URL, auth headers, session format, and event name mapping. Zero if/else branching in core code.
+- **Auto-reconnect with context replay** — Both OpenAI and Grok sessions auto-reconnect on disconnect (max 3 retries, linear backoff). Last 20 transcript entries replayed as context.
+- **`voice.reconnect_failed` event** — EventBus notification when reconnect retries exhausted.
+- **19 unit tests** — Provider config generation, event name mapping, selection logic, reconnect interface.
+
+### Changed
+- **`/api/voice/start`** now accepts `{ provider: "openai" | "grok" }` parameter.
+- **Desktop voice test panel** — Provider dropdown with automatic voice option switching (OpenAI voices ↔ Grok voices: Eve, Ara, Rex, Sal, Leo).
+- **`VOICE_PROVIDER` env var** — Default provider configurable via `.env` (defaults to `openai`).
 ## [2.4.6] - 2026-03-18
 
 ### Fixed

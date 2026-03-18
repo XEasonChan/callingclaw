@@ -1,9 +1,16 @@
-// CallingClaw 2.0 — Module 2: Voice (OpenAI Realtime)
+// CallingClaw 2.0 — Module 2: Voice (Multi-Provider Realtime)
 // Handles: real-time voice conversation, live transcript, tool calls
 // Produces: transcript entries → SharedContext
 // Does NOT do: screen analysis or computer use (separate modules)
+//
+// Provider support:
+//   "openai" — OpenAI Realtime API (default, battle-tested)
+//   "grok"   — xAI Grok Voice Agent (A/B test, 6x cheaper)
+//
+// All event names are normalized by RealtimeClient — VoiceModule
+// uses the same handlers regardless of provider.
 
-import { RealtimeClient, type RealtimeTool } from "../ai_gateway/realtime_client";
+import { RealtimeClient, type RealtimeTool, type VoiceProviderName } from "../ai_gateway/realtime_client";
 import type { SharedContext } from "./shared-context";
 import { CONFIG } from "../config";
 
@@ -12,6 +19,8 @@ export interface VoiceModuleOptions {
   systemInstructions?: string;
   tools?: RealtimeTool[];
   onToolCall?: (name: string, args: any, callId: string) => Promise<string>;
+  /** Called when auto-reconnect retries are exhausted */
+  onReconnectFailed?: () => void;
 }
 
 export class VoiceModule {
@@ -21,9 +30,15 @@ export class VoiceModule {
   private _transcriptBuffer = "";
   private _lastInstructions = "";
   private _allTools: RealtimeTool[] = [];  // Full tool set (immutable reference)
+  private _provider: VoiceProviderName = "openai";
 
   get connected() {
     return this.client.connected;
+  }
+
+  /** Which voice provider is currently active */
+  get provider(): VoiceProviderName {
+    return this._provider;
   }
 
   constructor(options: VoiceModuleOptions) {
@@ -39,11 +54,17 @@ export class VoiceModule {
       }
     }
 
+    // Wire up reconnect failure callback
+    if (options.onReconnectFailed) {
+      this.client.onReconnectFailed(options.onReconnectFailed);
+    }
+
     this.setupEventHandlers();
   }
 
   private setupEventHandlers() {
     // ── Live Transcript: User speech ──
+    // Event name is the same for both providers
     this.client.on("conversation.item.input_audio_transcription.completed", (event) => {
       if (event.transcript) {
         this.context.addTranscript({
@@ -52,10 +73,14 @@ export class VoiceModule {
           ts: Date.now(),
         });
         console.log(`[Voice] User: ${event.transcript}`);
+
+        // Feed transcript to RealtimeClient for context replay on reconnect
+        this._feedTranscriptContext();
       }
     });
 
     // ── Live Transcript: AI speech ──
+    // Grok: response.output_audio_transcript.* → normalized to response.audio_transcript.*
     this.client.on("response.audio_transcript.delta", (event) => {
       this._transcriptBuffer += event.delta || "";
     });
@@ -69,11 +94,15 @@ export class VoiceModule {
           ts: Date.now(),
         });
         console.log(`[Voice] AI: ${text}`);
+
+        // Feed transcript to RealtimeClient for context replay on reconnect
+        this._feedTranscriptContext();
       }
       this._transcriptBuffer = "";
     });
 
     // ── Tool Calls ──
+    // Event name is the same for both providers
     this.client.on("response.function_call_arguments.done", async (event) => {
       const { call_id, name, arguments: argsStr } = event;
       let args: any;
@@ -112,12 +141,31 @@ export class VoiceModule {
     });
   }
 
+  /** Feed recent transcript entries to RealtimeClient for reconnect context replay */
+  private _feedTranscriptContext() {
+    const recent = this.context.getRecentTranscript(20);
+    this.client.updateTranscriptContext(
+      recent.map((e) => ({ role: e.role, text: e.text }))
+    );
+  }
+
   /**
-   * Start the voice session
+   * Start the voice session.
+   * @param instructions System prompt (optional — uses default if not provided)
+   * @param provider Which voice provider to use (optional — uses CONFIG.voiceProvider)
    */
-  async start(instructions?: string) {
-    if (!CONFIG.openai.apiKey) {
-      throw new Error("OpenAI API key not configured");
+  async start(instructions?: string, provider?: VoiceProviderName) {
+    this._provider = provider || CONFIG.voiceProvider;
+
+    // Validate API key for selected provider
+    if (this._provider === "grok") {
+      if (!CONFIG.grok.apiKey) {
+        throw new Error("Grok API key not configured (set XAI_API_KEY in .env)");
+      }
+    } else {
+      if (!CONFIG.openai.apiKey) {
+        throw new Error("OpenAI API key not configured");
+      }
     }
 
     const systemPrompt =
@@ -132,11 +180,12 @@ You can:
 Speak naturally and concisely. When you perform actions, briefly narrate what you're doing.`;
 
     this._lastInstructions = systemPrompt;
-    await this.client.connect(systemPrompt);
+    await this.client.connect(systemPrompt, this._provider);
+    console.log(`[Voice] Session started (provider: ${this._provider})`);
   }
 
   /**
-   * Dynamically update the Voice AI's system instructions (e.g. when pinned context changes).
+   * Dynamically update the Voice AI's system instructions.
    * Only works while a session is active.
    */
   updateInstructions(instructions: string): boolean {
@@ -156,7 +205,7 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
-   * Update which tools are active on the OpenAI Realtime session.
+   * Update which tools are active on the Realtime session.
    * Used by TranscriptAuditor to remove automation tools during meetings.
    */
   setActiveTools(tools: RealtimeTool[]): boolean {
@@ -164,7 +213,7 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
     return this.client.updateTools(tools);
   }
 
-  /** Restore all tools to the OpenAI session (call when meeting ends) */
+  /** Restore all tools to the session (call when meeting ends) */
   restoreAllTools(): boolean {
     return this.setActiveTools([...this._allTools]);
   }
@@ -176,14 +225,14 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
-   * Stop the voice session
+   * Stop the voice session (intentional disconnect — no auto-reconnect)
    */
   stop() {
     this.client.disconnect();
   }
 
   /**
-   * Send audio chunk from Python sidecar to OpenAI
+   * Send audio chunk from Python sidecar
    */
   sendAudio(base64Pcm: string) {
     if (this.client.connected) {
@@ -200,7 +249,8 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
-   * Get the underlying client for audio output forwarding
+   * Get the underlying client for audio output forwarding.
+   * Event name is normalized — works for both providers.
    */
   onAudioOutput(handler: (base64Pcm: string) => void) {
     this.client.on("response.audio.delta", (event) => {

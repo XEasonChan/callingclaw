@@ -2,6 +2,7 @@
 // /api/voice/start, /api/voice/stop, /api/voice/text, /api/voice/instructions
 
 import { CONFIG } from "../config";
+import type { VoiceProviderName } from "../ai_gateway/realtime_client";
 import type { Services, RouteHandler } from "./types";
 
 export function voiceRoutes(services: Services): RouteHandler {
@@ -10,15 +11,31 @@ export function voiceRoutes(services: Services): RouteHandler {
 
     handle: async (req, url, headers) => {
       // POST /api/voice/start — Start voice session + activate audio
+      // Accepts optional `provider`: "openai" | "grok" for A/B testing
       if (url.pathname === "/api/voice/start" && req.method === "POST") {
-        if (!CONFIG.openai.apiKey) {
-          return Response.json(
-            { error: "OpenAI API key not configured" },
-            { status: 400, headers }
-          );
-        }
         try {
-          const body = (await req.json()) as { instructions?: string; audio_mode?: string };
+          const body = (await req.json()) as {
+            instructions?: string;
+            audio_mode?: string;
+            provider?: VoiceProviderName;
+          };
+
+          // Select provider (request body > env config > default "openai")
+          const provider: VoiceProviderName = body.provider || CONFIG.voiceProvider;
+
+          // Validate API key for selected provider
+          if (provider === "grok" && !CONFIG.grok.apiKey) {
+            return Response.json(
+              { error: "Grok API key not configured (set XAI_API_KEY in .env)" },
+              { status: 400, headers }
+            );
+          }
+          if (provider === "openai" && !CONFIG.openai.apiKey) {
+            return Response.json(
+              { error: "OpenAI API key not configured" },
+              { status: 400, headers }
+            );
+          }
 
           // Inject shared context: workspace + ContextSync (OpenClaw memory, pinned files)
           let instructions = body.instructions || undefined;
@@ -31,18 +48,23 @@ export function voiceRoutes(services: Services): RouteHandler {
             instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
           }
 
-          await services.realtime.start(instructions);
+          await services.realtime.start(instructions, provider);
 
           const audioMode = body.audio_mode || "meet_bridge";
           const audioOk = await services.bridge.sendConfigAndVerify(
             { audio_mode: audioMode },
             { timeoutMs: 3000, retries: 3 }
           );
-          console.log(`[Voice] Audio mode: ${audioMode} (confirmed: ${audioOk})`);
+          console.log(`[Voice] Audio mode: ${audioMode}, provider: ${provider} (confirmed: ${audioOk})`);
 
-          services.eventBus.emit("voice.started", { audio_mode: audioMode });
+          services.eventBus.emit("voice.started", { audio_mode: audioMode, provider });
 
-          return Response.json({ ok: true, status: "connected", audio_mode: audioMode }, { headers });
+          return Response.json({
+            ok: true,
+            status: "connected",
+            audio_mode: audioMode,
+            provider,
+          }, { headers });
         } catch (e: any) {
           return Response.json(
             { error: e.message },

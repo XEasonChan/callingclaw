@@ -20,6 +20,7 @@
 
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { CalendarAttendee } from "../mcp_client/google_cal";
+import { OC001_PROMPT, parseOC001, type OC001_Request } from "../openclaw-protocol";
 import { savePrepBrief, startLiveLog, appendToLiveLog, stopLiveLog } from "../modules/shared-documents";
 
 // ── Meeting Prep Brief Structure ──

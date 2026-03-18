@@ -109,11 +109,12 @@ export function startConfigServer(services: Services) {
             if (data.type === "audio" && data.audio) {
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "start") {
-              // Start voice session from browser
+              // Start voice session from browser (supports provider selection for A/B test)
               const instructions = data.instructions || undefined;
-              services.realtime.start(instructions).then(() => {
-                ws.send(JSON.stringify({ type: "status", voiceConnected: true }));
-                services.eventBus.emit("voice.started", { audio_mode: "browser" });
+              const provider = data.provider || undefined;
+              services.realtime.start(instructions, provider).then(() => {
+                ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
+                services.eventBus.emit("voice.started", { audio_mode: "browser", provider: services.realtime.provider });
               }).catch((e: any) => {
                 ws.send(JSON.stringify({ type: "error", message: e.message }));
               });

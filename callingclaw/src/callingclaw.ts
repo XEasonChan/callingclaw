@@ -15,7 +15,8 @@ import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
-import { OC007_PROMPT, type OC007_Request } from "./openclaw-protocol";
+// OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
+// ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { readFileSync } from "fs";
@@ -162,27 +163,22 @@ const vision = new VisionModule({
   context,
   browserCapture,
   onScreenDescription: (description, _screenshot) => {
-    // Buffer descriptions for periodic OpenClaw push
-    _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
-
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
 
-    // Append to live log file on disk
+    // Append to live log file on disk (timeline for post-meeting analysis)
     if (meetingPrepSkill.liveLogPath) {
       appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`);
     }
 
-    // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
-    if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
-      const batch = _meetingVisionBuffer.splice(0);
-      openclawBridge.sendTask(
-        `Meeting screen update — the following visual content was shown during the meeting. ` +
-        `Add relevant details to your meeting context for later summary:\n\n${batch.join("\n")}`
-      ).catch(() => {});
-      eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
-      console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to OpenClaw`);
-    }
+    // Buffer for final flush only (meeting end summary)
+    _meetingVisionBuffer.push(`[${new Date().toLocaleTimeString("zh-CN")}] ${description}`);
+
+    // NOTE: No OC-007 batch push during meetings.
+    // Screen descriptions feed into ContextRetriever's gap analysis instead —
+    // it detects what context is MISSING and retrieves from local files/memory.
+    // OpenClaw is too slow (2-15s) for meeting-time context enrichment.
+    // Post-meeting: the complete live log timeline is used for summary + todos.
   },
 });
 
@@ -258,13 +254,10 @@ eventBus.on("meeting.started", () => {
 function stopMeetingVisionAndFlush(reason: string) {
   if (!vision.isMeetingMode) return;
   vision.stopMeetingVision();
-  // Flush remaining buffer to OpenClaw via OC-007 (final)
-  if (_meetingVisionBuffer.length > 0 && openclawBridge.connected) {
-    const batch = _meetingVisionBuffer.splice(0);
-    openclawBridge.sendTask(
-      `${reason} — final screen captures:\n\n${batch.join("\n")}`
-    ).catch(() => {});
-    eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
+  // Clear vision buffer (screen descriptions are preserved in live log file)
+  if (_meetingVisionBuffer.length > 0) {
+    console.log(`[MeetingVision] Discarded ${_meetingVisionBuffer.length} buffered descriptions (preserved in live log)`);
+    _meetingVisionBuffer.length = 0;
   }
   console.log(`[Init] Meeting vision stopped (${reason})`);
 }
@@ -405,6 +398,17 @@ async function autoLeaveMeeting() {
       console.error("[AutoLeave] Delivery failed:", e.message);
     });
 
+    // Patch calendar event with meeting notes link (non-blocking)
+    const activeMeetUrl = (meetJoiner as any).currentSession?.meetUrl;
+    if (calendar.connected && activeMeetUrl) {
+      calendar.findEventByMeetUrl(activeMeetUrl).then(async (ev) => {
+        if (ev?.id) {
+          const notesLine = `\n\n📝 Meeting Notes: ${filepath}`;
+          await calendar.patchEvent(ev.id, { description: (ev as any).description ? (ev as any).description + notesLine : notesLine });
+        }
+      }).catch(() => {});
+    }
+
     // Revert voice to default persona
     meetingPrepSkill.clear();
     if (voice.connected) {
@@ -485,6 +489,28 @@ const contextRetriever = new ContextRetriever({
   meetingPrepSkill,
 });
 
+// ── P2: Filler mechanism — Voice AI says "让我看看..." while search runs ──
+// When ContextRetriever detects a topic shift and starts searching, the user
+// would otherwise hear silence for 2-8s. The filler fills this gap naturally.
+// GetStream reports this buys 1.5-2s of perceived zero-latency.
+const FILLER_PHRASES = [
+  "让我看看相关的资料...",
+  "我查一下这个的背景...",
+  "让我找一下相关信息...",
+  "我看看之前的记录...",
+];
+let _lastFillerTs = 0;
+eventBus.on("retriever.searching", (data) => {
+  // Only inject filler if voice is connected and not too frequent
+  const now = Date.now();
+  if (voice.connected && now - _lastFillerTs > 30_000) {
+    _lastFillerTs = now;
+    const filler = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
+    voice.sendText(filler!);
+    console.log(`[Filler] Sent "${filler}" while searching for "${(data as any).topic?.slice(0, 30)}"`);
+  }
+});
+
 // ── 3. Voice Module (OpenAI Realtime) ───────────────────────────
 
 // ── 4. Meeting Module (before voice, since tools need it) ──────
@@ -526,6 +552,13 @@ const voice = new VoiceModule({
   context,
   tools: toolDefinitions,
   onToolCall: toolHandler,
+  onReconnectFailed: () => {
+    console.error("[Voice] Auto-reconnect failed — all retries exhausted");
+    eventBus.emit("voice.reconnect_failed", {
+      provider: voice.provider,
+      timestamp: Date.now(),
+    });
+  },
 });
 
 // Forward meeting action items to EventBus
