@@ -3,6 +3,11 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.6] - 2026-03-18
+
+### Fixed
+- **Empty Chrome window keeps popping up after ending meeting** — `playwrightCli.stop()` now called in `meeting.ended` handler, setting `_explicitlyStopped` flag to prevent auto-start from spawning new browser windows
+
 ## [2.4.5] - 2026-03-18
 
 ### Added
