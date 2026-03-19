@@ -72,8 +72,12 @@ var ElectronAudioBridge = (function() {
 
   // ── Start Bridge ──
 
+  var _starting = false;
+
   function start(mode, onAudioChunk) {
+    if (_starting) { console.warn('[AudioBridge] start() already in progress, ignoring'); return Promise.resolve({ ok: false, reason: 'already_starting' }); }
     if (_running) { stop(); }
+    _starting = true;
     _mode = mode || 'direct';
     _onAudioChunk = onAudioChunk;
     _playbackQueue = [];
@@ -102,8 +106,12 @@ var ElectronAudioBridge = (function() {
       });
     }).then(function() {
       _running = true;
+      _starting = false;
       console.log('[AudioBridge] Started in ' + _mode + ' mode');
       return { ok: true, mode: _mode };
+    }).catch(function(err) {
+      _starting = false;
+      throw err;
     });
   }
 
@@ -212,7 +220,9 @@ var ElectronAudioBridge = (function() {
   // ── Stop ──
 
   function stop() {
+    if (!_running && !_starting) return; // Already stopped, don't double-stop
     _running = false;
+    _starting = false;
     _onAudioChunk = null;
     _playbackQueue = [];
 

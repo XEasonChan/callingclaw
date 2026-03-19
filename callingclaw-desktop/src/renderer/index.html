@@ -930,9 +930,12 @@ function openPanel(title, content) {
 }
 function closePanel() {
   document.getElementById('side-panel').classList.remove('open');
+  // Only stop Talk Locally if we're actually in a local talk session
+  if (S.meetingMode === 'local') {
+    stopLocalTalk();
+  }
   S.meetingMode = null;
   S.activeMeetingId = null;
-  stopLocalTalk();
 }
 
 // ── Tabbed Meeting Panel (Talk Locally + Remote Meeting) ──
@@ -1789,10 +1792,7 @@ function stopAudioBridge() {
 }
 
 async function stopLocalTalk() {
-  // 1. Stop browser audio (mic + speaker + WebSocket)
-  if (browserAudio) browserAudio.stop();
-
-  // 2. Stop direct transport before ending voice session
+  // 1. Stop audio transport (only once — stopAudioBridge handles ElectronAudioBridge.stop + WS close)
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
   stopAudioBridge();
   try {
