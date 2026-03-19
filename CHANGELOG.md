@@ -3,6 +3,17 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.17] - 2026-03-20
+
+### Fixed
+- **Duplicate meeting cards** — prep card and calendar event for the same meeting no longer both appear; Coming Up list skips events that match an active prep card by topic or calendarEventId
+- **AudioBridge: suspended AudioContext** — resume AudioContext created outside user gesture (e.g. inside WS onopen callback); auto-resume on playAudio if tab was backgrounded
+- **AudioBridge: mic failure no longer kills playback** — capture error is soft; AI audio output continues even if mic permission is denied
+- **Graceful app shutdown** — Electron now stops the Bun daemon before quit, preventing orphan processes
+
+### Added
+- **Auto-start daemon** — CallingClaw daemon starts automatically on app launch (no more "启动引擎" banner on every open)
+
 ## [2.4.16] - 2026-03-20
 
 ### Fixed
