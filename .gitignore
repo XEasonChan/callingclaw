@@ -46,3 +46,4 @@ coverage/
 # ── Excalidraw log ──
 excalidraw.log
 .collaborator
+.gstack/
