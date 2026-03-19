@@ -1693,45 +1693,52 @@ STEP-BY-STEP FLOW:
             let meetAttendees: any[] = [];
 
             try {
-              // Step 1: AI title generation
-              emit("generating_title", { message: "正在生成会议标题..." });
-              if (body.topic.length > 15) {
-                const titleResult = await services.openclawBridge.sendTask(
-                  `Generate a short meeting title (under 50 chars, in the user's language) for this topic. Return ONLY the title, nothing else:\n\n"${body.topic}"`
-                );
-                if (titleResult && !titleResult.includes("timed out") && titleResult.length < 80) {
-                  title = titleResult.trim().replace(/^["']|["']$/g, "");
+              // Step 1+2: Extract title + time via fast Haiku call (NOT OpenClaw — too slow + expensive)
+              emit("generating_title", { message: "正在解析会议信息..." });
+              if (CONFIG.openrouter.apiKey && (body.topic.length > 15 || !startTime)) {
+                try {
+                  const now = new Date();
+                  const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                  const llmResp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
+                    body: JSON.stringify({
+                      model: CONFIG.analysis?.model || "anthropic/claude-haiku-4-5",
+                      messages: [{ role: "user", content: `Extract meeting info. Current: ${now.toISOString()} (${tzName})\nInput: "${body.topic}"\nJSON only: {"title":"concise title same language max 40 chars","startTime":"ISO8601 or null","duration":minutes_or_60}` }],
+                      max_tokens: 100, temperature: 0,
+                    }),
+                    signal: AbortSignal.timeout(5000),
+                  });
+                  const llmData = await llmResp.json() as any;
+                  const content = llmData.choices?.[0]?.message?.content || "";
+                  const jsonMatch = content.match(/\{[\s\S]*\}/);
+                  if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    if (parsed.title && body.topic.length > 15) title = parsed.title;
+                    if (parsed.startTime && !startTime) startTime = new Date(parsed.startTime).toISOString();
+                    if (parsed.duration) endTime = new Date(new Date(startTime || now.toISOString()).getTime() + parsed.duration * 60000).toISOString();
+                    console.log(`[Prepare] LLM: title="${title}", start=${startTime}`);
+                  }
+                } catch (e: any) {
+                  console.warn("[Prepare] LLM extraction failed:", e.message);
                 }
               }
               emit("title_ready", { title, message: `标题: ${title}` });
-
-              // Step 2: AI time parsing
               if (!startTime) {
-                emit("parsing_time", { message: "正在解析会议时间..." });
                 const now = new Date();
-                const timeResult = await services.openclawBridge.sendTask(
-                  `Extract the meeting time from this text. Current time: ${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}. ` +
-                  `Return ONLY an ISO 8601 datetime string (e.g., 2026-03-17T20:00:00+08:00). If no time is mentioned, return "none".\n\nText: "${body.topic}"`
-                );
-                if (timeResult && !timeResult.includes("none") && !timeResult.includes("timed out")) {
-                  const d = new Date(timeResult.trim());
-                  if (!isNaN(d.getTime())) startTime = d.toISOString();
+                const mins = now.getMinutes();
+                const fallback = new Date(now);
+                fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
+                if (fallback.getTime() - now.getTime() < 10 * 60000) {
+                  fallback.setTime(fallback.getTime() + 30 * 60000);
                 }
-                if (!startTime) {
-                  // Fallback: next half-hour mark
-                  const mins = now.getMinutes();
-                  const fallback = new Date(now);
-                  fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
-                  if (mins >= 30) fallback.setHours(fallback.getHours());
-                  if (fallback.getTime() - now.getTime() < 10 * 60000) {
-                    fallback.setTime(fallback.getTime() + 30 * 60000);
-                  }
-                  startTime = fallback.toISOString();
-                }
-                const duration = (body.duration_minutes || 30) * 60000;
-                endTime = new Date(new Date(startTime).getTime() + duration).toISOString();
-                emit("time_ready", { startTime, endTime, message: `时间: ${new Date(startTime).toLocaleTimeString('zh-CN')}` });
+                startTime = fallback.toISOString();
               }
+              if (!endTime) {
+                const duration = (body.duration_minutes || 60) * 60000;
+                endTime = new Date(new Date(startTime).getTime() + duration).toISOString();
+              }
+              emit("time_ready", { startTime, endTime, message: `时间: ${new Date(startTime).toLocaleTimeString('zh-CN')}` });
 
               // Step 3: Create Google Calendar
               if (services.calendar.connected) {
