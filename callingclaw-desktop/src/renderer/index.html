@@ -871,6 +871,7 @@ function getMeetingData(meetingId) {
       prep: { status: 'none', content: null },    // none | loading | done
       summary: { status: 'none', content: null },  // none | loading | done
       agentFeed: [], meetUrl: null, calendarEventId: null, startTime: null, endTime: null,
+      filePaths: {}, // { prep: '/abs/path.md', notes: '...', summary: '...' } from DB manifest
     };
   }
   return S.meetingFiles[meetingId];
@@ -879,20 +880,31 @@ function getMeetingData(meetingId) {
 async function loadMeetingFile(meetingId, type) {
   if (!meetingId) return null;
   var data = getMeetingData(meetingId);
-  var fileObj = type === 'prep' ? data.prep : data.summary;
+  var fileObj = type === 'prep' ? data.prep : (type === 'summary' ? data.summary : data.prep);
   // Return cached content if already loaded
   if (fileObj.status === 'done' && fileObj.content) return fileObj.content;
   fileObj.status = 'loading';
-  try {
-    var suffix = type === 'prep' ? '_prep.md' : '_summary.md';
-    var res = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + suffix));
-    if (res && res.content) {
-      fileObj.status = 'done';
-      fileObj.content = res.content;
-      return res.content;
-    }
-  } catch (e) {}
-  // If not found by meetingId, don't reset to none — leave as loading
+
+  // Try actual path from DB manifest first, then fallback to meetingId convention
+  var paths = [];
+  var dbPath = data.filePaths && data.filePaths[type];
+  if (dbPath) paths.push(dbPath);
+  // Also try notes path for 'prep' type if no prep path exists
+  if (type === 'notes' && data.filePaths && data.filePaths.notes) paths.push(data.filePaths.notes);
+  // Fallback: convention-based path (works for cc_xxx meetingIds)
+  var suffix = type === 'prep' ? '_prep.md' : type === 'summary' ? '_summary.md' : '_notes.md';
+  paths.push(meetingId + suffix);
+
+  for (var pi = 0; pi < paths.length; pi++) {
+    try {
+      var res = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(paths[pi]));
+      if (res && res.content) {
+        fileObj.status = 'done';
+        fileObj.content = res.content;
+        return res.content;
+      }
+    } catch (e) {}
+  }
   if (fileObj.status === 'loading') fileObj.status = 'none';
   return null;
 }
@@ -1172,12 +1184,19 @@ async function refreshAll() {
   if (S.manifest && S.manifest.sessions) {
     for (var si = 0; si < S.manifest.sessions.length; si++) {
       var sess = S.manifest.sessions[si];
-      if (sess.meetingId && !S.meetingFiles[sess.meetingId]) {
-        var sessData = getMeetingData(sess.meetingId);
-        sessData.topic = sess.topic || '';
-        sessData.status = 'ended';
-        sessData.meetUrl = sess.meetUrl || null;
-        sessData.startTime = sess.date || sess.startTime || null;
+      if (!sess.meetingId) continue;
+      var sessData = getMeetingData(sess.meetingId);
+      sessData.topic = sess.topic || sessData.topic || '';
+      sessData.status = sess.status === 'ended' ? 'ended' : sessData.status || 'ended';
+      sessData.meetUrl = sess.meetUrl || sessData.meetUrl || null;
+      sessData.startTime = sess.startTime || sess.date || sessData.startTime || null;
+      // Store actual file paths from DB so loadMeetingFile can use them
+      if (sess.files) {
+        sessData.filePaths = sess.files;
+        // Mark prep/summary as available if path exists
+        if (sess.files.prep && sessData.prep.status === 'none') sessData.prep.status = 'none'; // available to load
+        if (sess.files.summary && sessData.summary.status === 'none') sessData.summary.status = 'none';
+        if (sess.files.notes && !sessData.filePaths.notes) sessData.filePaths.notes = sess.files.notes;
       }
     }
   }
@@ -1339,21 +1358,32 @@ function findMeetingDataForEvent(calEvent) {
 
 // Render file attachment badges for a meeting card
 function renderMeetingFileAttachments(mfData, topic, meetUrl) {
+  if (!mfData) return '';
+  var mid = mfData.meetingId;
+  var hasPrep = mfData.prep.status === 'done' || mfData.prep.status === 'loading' || (mfData.filePaths && mfData.filePaths.prep);
+  var hasSummary = mfData.summary.status === 'done' || mfData.summary.status === 'loading' || (mfData.filePaths && mfData.filePaths.summary);
+  var hasNotes = mfData.filePaths && mfData.filePaths.notes;
+  if (!hasPrep && !hasSummary && !hasNotes) return '';
+
   var html = '<div class="meet-files" onclick="event.stopPropagation()">';
-  if (mfData) {
-    var mid = mfData.meetingId;
+  if (hasPrep) {
     if (mfData.prep.status === 'loading') {
-      html += '<span class="meet-file loading"><span class="meet-file-icon">📋</span> Meeting Prep...</span>';
-    } else if (mfData.prep.status === 'done') {
-      html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'prep\')"><span class="meet-file-icon">📋</span> Meeting Prep</span>';
+      html += '<span class="meet-file loading"><span class="meet-file-icon">📋</span> Prep...</span>';
+    } else {
+      html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'prep\')"><span class="meet-file-icon">📋</span> Prep</span>';
     }
-    if (mfData.summary.status === 'done') {
-      html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'summary\')"><span class="meet-file-icon">📝</span> Meeting Summary</span>';
+  }
+  if (hasNotes) {
+    html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'notes\')"><span class="meet-file-icon">📄</span> Notes</span>';
+  }
+  if (hasSummary) {
+    if (mfData.summary.status === 'loading') {
+      html += '<span class="meet-file loading"><span class="meet-file-icon">📝</span> Summary...</span>';
+    } else {
+      html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'summary\')"><span class="meet-file-icon">📝</span> Summary</span>';
     }
   }
   html += '</div>';
-  // Don't render empty container if no files
-  if (!mfData || (mfData.prep.status === 'none' && mfData.summary.status === 'none')) return '';
   return html;
 }
 
@@ -1361,8 +1391,10 @@ function renderMeetingFileAttachments(mfData, topic, meetUrl) {
 function openMeetingFileInPanel(meetingId, type) {
   var data = S.meetingFiles[meetingId];
   if (!data) return;
-  var title = type === 'prep' ? '📋 会前调研: ' + (data.topic || '') : '📝 会议总结: ' + (data.topic || '');
-  var fileObj = type === 'prep' ? data.prep : data.summary;
+  var titles = { prep: '📋 会前调研', notes: '📄 会议记录', summary: '📝 会议总结' };
+  var title = (titles[type] || type) + ': ' + (data.topic || '');
+  var fileObj = type === 'notes' ? (data._notes || (data._notes = { status: 'none', content: null })) :
+                type === 'prep' ? data.prep : data.summary;
   if (fileObj.content) {
     // If meeting is active, open tabbed panel and switch to the right tab
     if (S.meetingMode && S.activeMeetingId === meetingId) {

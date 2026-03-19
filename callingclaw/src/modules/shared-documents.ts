@@ -465,19 +465,27 @@ export async function readNoteFile(filename: string, legacyDir?: string): Promis
  * Read any file from the shared directory by relative path.
  * Validates the path is within SHARED_DIR to prevent traversal.
  */
-export async function readSharedFile(relativePath: string): Promise<string> {
-  // Normalize and prevent traversal
-  const safePath = relativePath.replace(/\.\./g, "").replace(/^\/+/, "");
-  const fullPath = resolve(SHARED_DIR, safePath);
+export async function readSharedFile(pathOrRelative: string): Promise<string> {
+  let fullPath: string;
 
-  // Ensure it's still within SHARED_DIR
-  if (!fullPath.startsWith(SHARED_DIR)) {
-    throw new Error("Path traversal not allowed");
+  if (pathOrRelative.startsWith("/")) {
+    // Absolute path (from SQLite DB) — validate it's within SHARED_DIR
+    fullPath = pathOrRelative;
+    if (!fullPath.startsWith(SHARED_DIR)) {
+      throw new Error("Path traversal not allowed");
+    }
+  } else {
+    // Relative path (legacy) — resolve against SHARED_DIR
+    const safePath = pathOrRelative.replace(/\.\./g, "").replace(/^\/+/, "");
+    fullPath = resolve(SHARED_DIR, safePath);
+    if (!fullPath.startsWith(SHARED_DIR)) {
+      throw new Error("Path traversal not allowed");
+    }
   }
 
   const f = Bun.file(fullPath);
   if (!(await f.exists())) {
-    throw new Error(`File not found: ${safePath}`);
+    throw new Error(`File not found: ${fullPath}`);
   }
   return await f.text();
 }
