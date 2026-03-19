@@ -903,7 +903,17 @@ export class PlaywrightCLIClient {
     return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
 
-  /** Ensure Chrome profile preferences block notification prompts */
+  /**
+   * Ensure Chrome profile preferences for CallingClaw meeting audio:
+   *
+   * 1. Block notification prompts (can't be dismissed via playwright-cli)
+   * 2. Microphone = ALLOW for meet.google.com (BlackHole 16ch → Meet mic input)
+   * 3. Camera = BLOCK for meet.google.com (CallingClaw is audio-only, no camera)
+   *
+   * Audio device mapping (configured in joinGoogleMeet → selectMeetDevice):
+   *   Mic:     BlackHole 16ch  (AI voice → Meet call)
+   *   Speaker: BlackHole 2ch   (Meet call → AI hearing)
+   */
   private ensureChromePreferences() {
     const prefsPath = resolve(this.profileDir, "Default", "Preferences");
     try {
@@ -915,36 +925,58 @@ export class PlaywrightCLIClient {
         prefs = JSON.parse(readFileSync(prefsPath, "utf-8"));
       }
 
-      // Block notification permission prompts (Chrome native dialog can't be clicked via playwright-cli)
+      let changed = false;
+
+      // ── 1. Block notification prompts ──
       if (!prefs.profile) prefs.profile = {};
       if (!prefs.profile.default_content_setting_values) prefs.profile.default_content_setting_values = {};
 
-      const csv = prefs.profile.default_content_setting_values;
-      const changed = csv.notifications !== 2 || csv.media_stream_mic !== 1 || csv.media_stream_camera !== 1;
+      if (prefs.profile.default_content_setting_values.notifications !== 2) {
+        prefs.profile.default_content_setting_values.notifications = 2;
+        changed = true;
+      }
 
-      // Block notification prompts
-      csv.notifications = 2;
-      // Allow microphone + camera (required for Meet audio via BlackHole)
-      csv.media_stream_mic = 1;     // 1 = allow
-      csv.media_stream_camera = 1;  // 1 = allow
+      // ── 2. Site-specific permissions for Meet ──
+      // Chrome content_settings: setting 1 = Allow, 2 = Block
+      if (!prefs.profile.content_settings) prefs.profile.content_settings = {};
+      if (!prefs.profile.content_settings.exceptions) prefs.profile.content_settings.exceptions = {};
 
-      // Also set site-specific permission for meet.google.com
-      if (!prefs.content_settings) prefs.content_settings = {};
-      if (!prefs.content_settings.exceptions) prefs.content_settings.exceptions = {};
-      const meetPattern = "https://meet.google.com,*";
-      for (const key of ["media_stream_mic", "media_stream_camera"]) {
-        if (!prefs.content_settings.exceptions[key]) prefs.content_settings.exceptions[key] = {};
-        prefs.content_settings.exceptions[key][meetPattern] = {
-          expiration: "0",
-          last_modified: String(Date.now()),
-          model: 0,
-          setting: 1  // 1 = allow
-        };
+      const meetDomains = [
+        "https://meet.google.com,*",
+        "https://[*.]meet.google.com,*",
+      ];
+
+      const ts = String(Date.now());
+
+      // Microphone = ALLOW (Meet needs mic access for BlackHole 16ch audio bridge)
+      if (!prefs.profile.content_settings.exceptions.media_stream_mic) {
+        prefs.profile.content_settings.exceptions.media_stream_mic = {};
+      }
+      for (const domain of meetDomains) {
+        if (prefs.profile.content_settings.exceptions.media_stream_mic[domain]?.setting !== 1) {
+          prefs.profile.content_settings.exceptions.media_stream_mic[domain] = {
+            expiration: "0", last_modified: ts, model: 0, setting: 1,
+          };
+          changed = true;
+        }
+      }
+
+      // Camera = BLOCK (CallingClaw is audio-only — no camera needed)
+      if (!prefs.profile.content_settings.exceptions.media_stream_camera) {
+        prefs.profile.content_settings.exceptions.media_stream_camera = {};
+      }
+      for (const domain of meetDomains) {
+        if (prefs.profile.content_settings.exceptions.media_stream_camera[domain]?.setting !== 2) {
+          prefs.profile.content_settings.exceptions.media_stream_camera[domain] = {
+            expiration: "0", last_modified: ts, model: 0, setting: 2,
+          };
+          changed = true;
+        }
       }
 
       if (changed) {
         writeFileSync(prefsPath, JSON.stringify(prefs));
-        console.log("[PlaywrightCLI] Set Chrome preferences: notifications=block, mic=allow, camera=allow");
+        console.log("[PlaywrightCLI] Chrome prefs: notifications=block, meet mic=allow, meet camera=block");
       }
     } catch (e: any) {
       console.warn(`[PlaywrightCLI] Could not set Chrome preferences: ${e.message}`);

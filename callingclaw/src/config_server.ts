@@ -1291,39 +1291,86 @@ STEP-BY-STEP FLOW:
           meetingId, step: "delegating", message: "正在委托 OpenClaw 处理...",
         });
 
-        // Fire-and-forget: OpenClaw handles everything autonomously
+        // Fire-and-forget: CallingClaw creates calendar, OpenClaw does research only
+        // IMPORTANT: Calendar creation is handled HERE (not by OpenClaw) to prevent
+        // duplicate events. OpenClaw previously created its own event AND could also
+        // trigger /callingclaw prepare which creates another one.
         (async () => {
           try {
+            // ── Step 1: Create calendar event (CallingClaw-side, single source of truth) ──
+            let meetUrl: string | null = null;
+            let calEventId: string | null = null;
+            let title = body.topic.length > 60 ? body.topic.slice(0, 57) + "..." : body.topic;
+
+            if (services.calendar.connected) {
+              services.eventBus.emit("meeting.prep_progress", {
+                meetingId, step: "creating_calendar", message: "正在创建日历和会议链接...",
+              });
+
+              // Parse time from topic or use next half-hour
+              const now = new Date();
+              const mins = now.getMinutes();
+              const fallback = new Date(now);
+              fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
+              if (fallback.getTime() - now.getTime() < 10 * 60000) {
+                fallback.setTime(fallback.getTime() + 30 * 60000);
+              }
+              const startTime = fallback.toISOString();
+              const endTime = new Date(fallback.getTime() + 30 * 60000).toISOString();
+
+              const attendees = CONFIG.userEmail ? [{ email: CONFIG.userEmail }] : [];
+              const calResult = await services.calendar.createEvent({
+                summary: title,
+                start: startTime,
+                end: endTime,
+                attendees,
+              });
+              let calEvent: any;
+              try { calEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult; } catch { calEvent = {}; }
+              meetUrl = calEvent.meetLink || calEvent.hangoutLink || null;
+              calEventId = calEvent.id || null;
+
+              services.eventBus.emit("meeting.prep_progress", {
+                meetingId, step: "calendar_ready",
+                title, meetUrl, calendarEventId: calEventId, startTime, endTime,
+                message: `日历已创建 — Meet: ${meetUrl || '无链接'}`,
+              });
+            } else {
+              const reason = services.calendar.authError
+                ? `Google OAuth 已过期`
+                : "Google 日历未连接";
+              services.eventBus.emit("meeting.prep_progress", {
+                meetingId, step: "calendar_skipped",
+                message: `⚠️ 跳过日历创建 — ${reason}`,
+              });
+            }
+
+            // ── Step 2: Delegate RESEARCH ONLY to OpenClaw (no calendar creation!) ──
             const taskPrompt = [
               `用户想要准备一个会议，话题是: "${body.topic}"`,
               `会议ID（meetingId）: ${meetingId}`,
+              meetUrl ? `Meet 链接（已创建，不要再创建日历！）: ${meetUrl}` : `（日历未创建，跳过）`,
+              ``,
+              `## 重要：不要创建日历事件！日历已由 CallingClaw 创建完毕。`,
+              `## 也不要调用 /callingclaw prepare — 会导致重复创建日历。`,
               ``,
               `请完成以下步骤:`,
               ``,
-              `## Step 1: 获取用户邮箱`,
-              `执行 /callingclaw email 获取用户的默认参会邮箱`,
-              ``,
-              `## Step 2: 创建日历事件`,
-              `- 从话题推断会议时间（如"今晚八点"→20:00），没提到时间就用下一个半小时整点`,
-              `- 必须且只能通过 /callingclaw 命令创建日历事件：`,
-              `  执行: /callingclaw calendar create {"summary":"会议标题","start":"ISO时间","end":"ISO时间"}`,
-              `- ⚠️ 不要使用你自己的 Google Calendar MCP tool，只用 /callingclaw 命令！否则会创建重复事件`,
-              ``,
-              `## Step 3: 深度调研`,
+              `## Step 1: 深度调研`,
               `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度会前调研。`,
               ``,
-              `## Step 4: 写入 Markdown 到共享目录（必须！）`,
+              `## Step 2: 写入 Markdown 到共享目录（必须！）`,
               `文件路径: ~/.callingclaw/shared/${meetingId}_prep.md`,
               `注意: meetingId 已经生成好了，就是 ${meetingId}，请直接使用这个 ID！`,
               ``,
               `Markdown 自由格式，建议包含:`,
               `# 标题, 目标, 概要, 要点, 架构决策, 预期问题, 历史背景, 相关文件和链接`,
               ``,
-              `## Step 5: 通知 CallingClaw 渲染`,
+              `## Step 3: 通知 CallingClaw 渲染`,
               `\`\`\`bash`,
               `curl -X POST http://localhost:4000/api/meeting/prep-result \\`,
               `  -H "Content-Type: application/json" \\`,
-              `  -d '{"topic":"会议主题","meetingId":"${meetingId}"}'`,
+              `  -d '{"topic":"${title.replace(/'/g, "\\'")}","meetingId":"${meetingId}"${meetUrl ? `,"meetUrl":"${meetUrl}"` : ""}}'`,
               `\`\`\``,
               `CallingClaw 自动读取 ~/.callingclaw/shared/${meetingId}_prep.md 并渲染。`,
               `**不写文件 + 不调 API = Desktop 看不到！**`,
@@ -1332,7 +1379,7 @@ STEP-BY-STEP FLOW:
             await services.openclawBridge.sendTask(taskPrompt);
           } catch (e: any) {
             services.eventBus.emit("meeting.prep_progress", {
-              prepId, step: "error", message: `OpenClaw 处理失败: ${e.message}`,
+              meetingId, step: "error", message: `OpenClaw 处理失败: ${e.message}`,
             });
           }
         })();
