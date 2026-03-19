@@ -125,6 +125,7 @@ function createMainWindow() {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: false, // Allow file:// → http://localhost:4000 API calls
     },
   });
 
