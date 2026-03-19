@@ -1169,6 +1169,7 @@ async function refreshAll() {
   // Fetch manifest (with 30s TTL cache) for past meeting grouping
   fetchManifestCached();
   S.status = status;
+  S.calendarConnected = status?.calendar === 'connected' || status?.calendar?.connected === true;
   // Normalize calendar events — API returns flat start/end strings + meetLink,
   // but rendering code expects { start: { dateTime }, hangoutLink }
   const rawMeetings = Array.isArray(evts) ? evts : (evts?.events || []);
@@ -1992,13 +1993,31 @@ async function runAllChecks() {
   try { await fetch('http://localhost:18789', { signal: AbortSignal.timeout(2000) }); ocOk = true; } catch {}
   document.getElementById('chk-conn').innerHTML = [
     { ok: ocOk, label: 'OpenClaw Gateway', val: ocOk ? '已连接' : '未连接' },
-    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? '已配置' : '未配置' },
-  ].map(i => `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`).join('');
+    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? '已配置' : '未配置', action: !envChecks.googleCredentials?.ok ? 'scanGoogle' : null },
+  ].map(i => {
+    var act = i.action === 'scanGoogle' ? ' <button class="btn btn-sm btn-ghost" onclick="scanGoogleCreds()" style="margin-left:8px;font-size:11px;">扫描凭证</button>' : '';
+    return `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}${act}</span></div>`;
+  }).join('');
   document.getElementById('chk-audio').innerHTML = [
     { ok: envChecks.blackhole2ch?.ok, label: 'BlackHole 2ch', val: envChecks.blackhole2ch?.ok ? '已安装' : '未安装' },
     { ok: envChecks.blackhole16ch?.ok, label: 'BlackHole 16ch', val: envChecks.blackhole16ch?.ok ? '已安装' : '未安装' },
     { ok: envChecks.switchAudioSource?.ok, label: 'SwitchAudioSource', val: envChecks.switchAudioSource?.ok ? '已安装' : '未安装' },
   ].map(i => `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`).join('');
+}
+async function scanGoogleCreds() {
+  try {
+    var r = await fetchJSON(API + '/api/google/scan');
+    if (r && r.found && r.found.length > 0) {
+      // Auto-apply the first found credential
+      var cred = r.found[0];
+      await fetch(API + '/api/google/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) });
+      setTimeout(runAllChecks, 1000);
+    } else {
+      alert('未找到 Google OAuth 凭证。请确保 ~/.openclaw/workspace/ 或 ~/.callingclaw/ 下有 google-credentials.json 和 google-token.json');
+    }
+  } catch (e) {
+    alert('扫描失败: ' + (e.message || e));
+  }
 }
 async function reqPerm(name) { await window.callingclaw.permissions.request(name); setTimeout(runAllChecks, 1000); }
 function openPerm(name) { window.callingclaw.permissions.openSettings(name); }
