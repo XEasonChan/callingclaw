@@ -14,7 +14,7 @@ import { OpenClawBridge } from "./openclaw_bridge";
 import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
-import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary } from "./voice-persona";
+import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState } from "./voice-persona";
 // OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
 // ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
 import { startConfigServer } from "./config_server";
@@ -204,6 +204,8 @@ const vision = new VisionModule({
 eventBus.on("meeting.started", (data) => {
   // Track active meeting ID for live log event emission
   activeMeetingId = data?.meetingId || activeMeetingId || `cc_${Date.now().toString(36)}_live`;
+  // Reset incremental context injection state for new meeting
+  resetContextInjectionState();
   if (!vision.isMeetingMode) {
     vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");

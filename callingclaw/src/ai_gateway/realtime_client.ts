@@ -7,12 +7,21 @@
 //   - Event name mapping (3 audio events differ between providers)
 //   - Auto-reconnect with transcript context replay (both providers)
 //
+// Context Injection (v2.4.9+):
+//   Instead of replacing the full system instructions on every context update,
+//   we inject context incrementally via conversation.item.create (role: system).
+//   This avoids interrupting in-progress responses (session.update is deferred
+//   by the Realtime API until the next turn, causing audio breaks).
+//   A FIFO queue manages context items; oldest are deleted when the queue is full.
+//
 // Architecture:
 //   RealtimeClient
 //     ├── provider: RealtimeProviderConfig (openai | grok)
 //     ├── connect() → provider.url + provider.headers + provider.buildSession()
 //     ├── onmessage → provider.eventMap normalizes event names
-//     └── onclose → auto-reconnect with context replay (max 3 retries)
+//     ├── injectContext() → conversation.item.create (incremental, no audio break)
+//     ├── removeContext() → conversation.item.delete (FIFO eviction)
+//     └── onclose → auto-reconnect with context + context queue replay
 
 import { CONFIG } from "../config";
 
@@ -125,6 +134,17 @@ const RECONNECT_MAX_RETRIES = 3;
 const RECONNECT_DELAY_MS = 3000;       // 3s between retries
 const RECONNECT_CONTEXT_ENTRIES = 20;   // Replay last 20 transcript entries
 
+// ── Incremental Context Injection ────────────────────────────────
+
+/** Max context items before FIFO eviction kicks in */
+const MAX_CONTEXT_ITEMS = 15;
+
+export interface ContextItem {
+  id: string;
+  text: string;
+  injectedAt: number;
+}
+
 // ── RealtimeClient ─────────────────────────────────────────────────
 
 export class RealtimeClient {
@@ -142,6 +162,9 @@ export class RealtimeClient {
   private _lastInstructions = "";
   private _transcriptContext: string[] = [];  // Recent transcript for context replay
   private _onReconnectFailed?: () => void;
+
+  // Incremental context injection queue
+  private _contextQueue: ContextItem[] = [];
 
   get connected() {
     return this._connected;
@@ -297,6 +320,23 @@ export class RealtimeClient {
         }
         await this._connectInternal(instructions);
         console.log(`[Realtime] Reconnected to ${this._provider.name} successfully`);
+
+        // Wait for session.updated before replaying context items
+        // (items sent before session is configured may be rejected)
+        const replayHandler = () => {
+          this._replayContextQueue();
+        };
+        // One-shot listener: replay once after session is configured
+        const existingHandlers = this.handlers.get("session.updated") || [];
+        const wrappedHandler = (event: any) => {
+          replayHandler();
+          // Remove this one-shot handler
+          const list = this.handlers.get("session.updated") || [];
+          const idx = list.indexOf(wrappedHandler);
+          if (idx !== -1) list.splice(idx, 1);
+        };
+        existingHandlers.push(wrappedHandler);
+        this.handlers.set("session.updated", existingHandlers);
       } catch (e: any) {
         console.error(`[Realtime] Reconnect attempt ${this._reconnectRetries} failed: ${e.message}`);
         // onclose will fire → _scheduleReconnect again
@@ -365,6 +405,91 @@ export class RealtimeClient {
         })),
       },
     });
+  }
+
+  // ── Incremental Context Injection ─────────────────────────────────
+  //
+  // Instead of session.update (which defers during in-progress responses
+  // and can cause audio breaks), inject context as conversation items.
+  // These are immediately visible to the model on its next turn without
+  // disrupting the current response.
+
+  /**
+   * Inject context into the conversation as a system message.
+   * Does NOT trigger a response — the model sees it on the next turn.
+   * FIFO eviction: oldest items are deleted when queue exceeds MAX_CONTEXT_ITEMS.
+   *
+   * @param text - The context text to inject (e.g., "[CONTEXT] PRD目标是...")
+   * @param id - Optional custom item ID (auto-generated if omitted)
+   * @returns The item ID if sent, false if not connected
+   */
+  injectContext(text: string, id?: string): string | false {
+    if (!this._connected) return false;
+    if (!text) return false;
+
+    const itemId = id || `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+    const sent = this.sendEvent("conversation.item.create", {
+      item: {
+        id: itemId,
+        type: "message",
+        role: "system",
+        content: [{ type: "input_text", text }],
+      },
+    });
+
+    if (!sent) return false;
+
+    this._contextQueue.push({ id: itemId, text, injectedAt: Date.now() });
+
+    // FIFO eviction — delete oldest items when over limit
+    while (this._contextQueue.length > MAX_CONTEXT_ITEMS) {
+      const oldest = this._contextQueue.shift()!;
+      this.sendEvent("conversation.item.delete", { item_id: oldest.id });
+      console.log(`[Realtime] Context evicted: ${oldest.id} (queue full, max ${MAX_CONTEXT_ITEMS})`);
+    }
+
+    return itemId;
+  }
+
+  /**
+   * Remove a specific context item by ID.
+   * @returns true if the delete event was sent
+   */
+  removeContext(itemId: string): boolean {
+    const idx = this._contextQueue.findIndex((c) => c.id === itemId);
+    if (idx !== -1) this._contextQueue.splice(idx, 1);
+    return this.sendEvent("conversation.item.delete", { item_id: itemId });
+  }
+
+  /** Get a copy of the current context queue (for debugging/status) */
+  getContextQueue(): readonly ContextItem[] {
+    return this._contextQueue;
+  }
+
+  /** Clear the context queue (e.g., when session ends) */
+  clearContextQueue() {
+    this._contextQueue = [];
+  }
+
+  /**
+   * Replay all context items after a reconnect.
+   * Called internally after session.updated is received on reconnect.
+   */
+  private _replayContextQueue() {
+    if (this._contextQueue.length === 0) return;
+
+    console.log(`[Realtime] Replaying ${this._contextQueue.length} context items after reconnect`);
+    for (const item of this._contextQueue) {
+      this.sendEvent("conversation.item.create", {
+        item: {
+          id: item.id,
+          type: "message",
+          role: "system",
+          content: [{ type: "input_text", text: item.text }],
+        },
+      });
+    }
   }
 
   /** Send text message */
