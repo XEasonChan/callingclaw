@@ -1134,7 +1134,7 @@ function renderMeetings() {
     const el = document.getElementById('meeting-list');
     if (!el) return;
     // Remove only non-prep-card children (meeting rows, section titles, empty messages)
-    const toRemove: Element[] = [];
+    const toRemove = [];
     for (const child of el.children) {
       if (!child.id?.startsWith('prep-card-') && !child.id?.endsWith('-wrap')) toRemove.push(child);
     }
