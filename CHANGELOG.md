@@ -3,6 +3,13 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.14] - 2026-03-19
+
+### Fixed
+- **P0: Empty Desktop UI** — `new BrowserAudio()` threw ReferenceError at page top, killing all JS including data fetching. PR #8 renamed class to `ElectronAudioBridge` (IIFE singleton). Fixed reference + null guards
+- **P0: Main process crash on ready-to-show** — `isDev` undefined, should be `IS_DEV`. Caused Electron to crash before renderer could initialize IPC
+- **Backend VERSION mismatch** — `callingclaw/VERSION` was stuck at 2.4.9 while root `VERSION` was 2.4.13. Both now synced
+
 ## [2.4.13] - 2026-03-19
 
 ### Added
