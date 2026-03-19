@@ -811,6 +811,8 @@ export class PlaywrightCLIClient {
 
   /** Build global flags for every CLI invocation */
   private get globalFlags(): string {
+    // Config file with --use-fake-ui-for-media-stream for auto-allowing mic/camera
+    const configPath = resolve(homedir(), ".callingclaw", "playwright-config.json");
     const flags = [
       `-s=${SESSION}`,
       "--persistent",
@@ -818,6 +820,7 @@ export class PlaywrightCLIClient {
       "--browser=chrome",
     ];
     if (!this.headless) flags.push("--headed");
+    if (existsSync(configPath)) flags.push(`--config=${this.shellQuote(configPath)}`);
     return flags.join(" ");
   }
 
@@ -916,12 +919,32 @@ export class PlaywrightCLIClient {
       if (!prefs.profile) prefs.profile = {};
       if (!prefs.profile.default_content_setting_values) prefs.profile.default_content_setting_values = {};
 
-      const changed = prefs.profile.default_content_setting_values.notifications !== 2;
-      prefs.profile.default_content_setting_values.notifications = 2;
+      const csv = prefs.profile.default_content_setting_values;
+      const changed = csv.notifications !== 2 || csv.media_stream_mic !== 1 || csv.media_stream_camera !== 1;
+
+      // Block notification prompts
+      csv.notifications = 2;
+      // Allow microphone + camera (required for Meet audio via BlackHole)
+      csv.media_stream_mic = 1;     // 1 = allow
+      csv.media_stream_camera = 1;  // 1 = allow
+
+      // Also set site-specific permission for meet.google.com
+      if (!prefs.content_settings) prefs.content_settings = {};
+      if (!prefs.content_settings.exceptions) prefs.content_settings.exceptions = {};
+      const meetPattern = "https://meet.google.com,*";
+      for (const key of ["media_stream_mic", "media_stream_camera"]) {
+        if (!prefs.content_settings.exceptions[key]) prefs.content_settings.exceptions[key] = {};
+        prefs.content_settings.exceptions[key][meetPattern] = {
+          expiration: "0",
+          last_modified: String(Date.now()),
+          model: 0,
+          setting: 1  // 1 = allow
+        };
+      }
 
       if (changed) {
         writeFileSync(prefsPath, JSON.stringify(prefs));
-        console.log("[PlaywrightCLI] Set Chrome preference: notifications=block");
+        console.log("[PlaywrightCLI] Set Chrome preferences: notifications=block, mic=allow, camera=allow");
       }
     } catch (e: any) {
       console.warn(`[PlaywrightCLI] Could not set Chrome preferences: ${e.message}`);

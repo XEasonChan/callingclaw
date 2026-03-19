@@ -455,6 +455,9 @@ app.whenReady().then(async () => {
   createTray();
   createMainWindow();
 
+  // Start health check immediately to detect externally-started daemon
+  daemon._startHealthCheck();
+
   // Forward daemon events to renderer
   daemon.on('started', () => {
     mainWindow?.webContents.send('daemon-status', true);
@@ -470,6 +473,13 @@ app.whenReady().then(async () => {
   });
   daemon.on('log', (line) => {
     mainWindow?.webContents.send('daemon-log', line);
+  });
+  daemon.on('health', () => {
+    // When health check succeeds, notify renderer that daemon is alive
+    // This handles the case where daemon was started externally
+    if (daemon.isRunning()) {
+      mainWindow?.webContents.send('daemon-status', true);
+    }
   });
 });
 
