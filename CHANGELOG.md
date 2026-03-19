@@ -3,6 +3,24 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.13] - 2026-03-19
+
+### Added
+- **`/ws/audio-bridge` WebSocket endpoint** — Bun server now handles Electron AudioBridge messages (audio_chunk, audio_playback, config, ping) on port 4000, replacing Python sidecar bridge on port 4001
+- **`meeting.summary_ready` event** — backend emits when summary markdown is written, frontend auto-loads summary tab
+- **Python sidecar conditional launch** — `AUDIO_SOURCE=electron` config flag disables sidecar; defaults to Electron audio path
+- **Electron AudioBridge** — `audio-bridge.js` (256 lines) replaces Python PyAudio with Web Audio API + BlackHole device selection
+- **Automation IPC** — `osascript`-based click/type/key from Electron main process replaces PyAutoGUI
+- **Meeting files UI** — persistent prep/summary badges on meeting cards, tabbed side panel
+
+### Changed
+- Architecture simplified: 3 processes → 2, 2 IPC boundaries → 1
+- Talk Locally uses browser-native audio (getUserMedia + AudioContext) instead of Python sidecar
+- `config_server.ts` Talk Locally endpoint returns `voiceInstructions` for browser client
+
+### Fixed
+- **Root cause of Talk Locally silence** — Python sidecar duplicate config race condition eliminated by bypassing sidecar entirely
+
 ## [2.4.12] - 2026-03-19
 
 ### Fixed
