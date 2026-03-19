@@ -133,6 +133,7 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    if (IS_DEV) mainWindow.webContents.openDevTools({ mode: 'detach' });
   });
 
   mainWindow.on('closed', () => {

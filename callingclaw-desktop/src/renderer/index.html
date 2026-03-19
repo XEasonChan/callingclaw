@@ -820,7 +820,7 @@ const S = {
   manifest: null, manifestTs: 0, // cached manifest with TTL
 };
 let localTalkTimer = null, localTalkTopic = '';
-const browserAudio = new BrowserAudio();
+const browserAudio = typeof ElectronAudioBridge !== 'undefined' ? ElectronAudioBridge : null;
 let lastEventTs = 0, reconnectDelay = 1000;
 
 const IC = {
@@ -1617,7 +1617,7 @@ async function leaveMeeting() {
 
 // Talk Locally — full meeting intelligence stack
 async function startLocalTalk(topic) {
-  if (browserAudio.isActive || browserAudio.isStarting) return; // double-start guard
+  if (browserAudio && browserAudio.getStatus().running) return; // double-start guard
   localTalkTopic = topic || 'Local Conversation';
 
   // 1. Tell backend to start meeting lifecycle (transcript, vision, auditor, etc.)
@@ -1705,7 +1705,7 @@ function stopAudioBridge() {
 
 async function stopLocalTalk() {
   // 1. Stop browser audio (mic + speaker + WebSocket)
-  browserAudio.stop();
+  if (browserAudio) browserAudio.stop();
 
   // 2. Stop screenshot polling
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
