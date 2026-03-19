@@ -901,10 +901,15 @@ export class PlaywrightCLIClient {
   }
 
   /**
-   * Ensure Chrome profile preferences:
+   * Ensure Chrome profile preferences for CallingClaw meeting audio:
+   *
    * 1. Block notification prompts (can't be dismissed via playwright-cli)
-   * 2. Pre-authorize microphone + camera for meet.google.com
-   *    (without this, Meet shows mic as "on" in UI but BlackHole gets no audio)
+   * 2. Microphone = ALLOW for meet.google.com (BlackHole 16ch → Meet mic input)
+   * 3. Camera = BLOCK for meet.google.com (CallingClaw is audio-only, no camera)
+   *
+   * Audio device mapping (configured in joinGoogleMeet → selectMeetDevice):
+   *   Mic:     BlackHole 16ch  (AI voice → Meet call)
+   *   Speaker: BlackHole 2ch   (Meet call → AI hearing)
    */
   private ensureChromePreferences() {
     const prefsPath = resolve(this.profileDir, "Default", "Preferences");
@@ -928,7 +933,7 @@ export class PlaywrightCLIClient {
         changed = true;
       }
 
-      // ── 2. Pre-authorize mic + camera for Meet domains ──
+      // ── 2. Site-specific permissions for Meet ──
       // Chrome content_settings: setting 1 = Allow, 2 = Block
       if (!prefs.profile.content_settings) prefs.profile.content_settings = {};
       if (!prefs.profile.content_settings.exceptions) prefs.profile.content_settings.exceptions = {};
@@ -938,38 +943,37 @@ export class PlaywrightCLIClient {
         "https://[*.]meet.google.com,*",
       ];
 
-      const permEntry = {
-        expiration: "0",
-        last_modified: String(Date.now()),
-        model: 0,
-        setting: 1, // 1 = Allow
-      };
+      const ts = String(Date.now());
 
-      // Microphone permission
+      // Microphone = ALLOW (Meet needs mic access for BlackHole 16ch audio bridge)
       if (!prefs.profile.content_settings.exceptions.media_stream_mic) {
         prefs.profile.content_settings.exceptions.media_stream_mic = {};
       }
       for (const domain of meetDomains) {
         if (prefs.profile.content_settings.exceptions.media_stream_mic[domain]?.setting !== 1) {
-          prefs.profile.content_settings.exceptions.media_stream_mic[domain] = { ...permEntry };
+          prefs.profile.content_settings.exceptions.media_stream_mic[domain] = {
+            expiration: "0", last_modified: ts, model: 0, setting: 1,
+          };
           changed = true;
         }
       }
 
-      // Camera permission
+      // Camera = BLOCK (CallingClaw is audio-only — no camera needed)
       if (!prefs.profile.content_settings.exceptions.media_stream_camera) {
         prefs.profile.content_settings.exceptions.media_stream_camera = {};
       }
       for (const domain of meetDomains) {
-        if (prefs.profile.content_settings.exceptions.media_stream_camera[domain]?.setting !== 1) {
-          prefs.profile.content_settings.exceptions.media_stream_camera[domain] = { ...permEntry };
+        if (prefs.profile.content_settings.exceptions.media_stream_camera[domain]?.setting !== 2) {
+          prefs.profile.content_settings.exceptions.media_stream_camera[domain] = {
+            expiration: "0", last_modified: ts, model: 0, setting: 2,
+          };
           changed = true;
         }
       }
 
       if (changed) {
         writeFileSync(prefsPath, JSON.stringify(prefs));
-        console.log("[PlaywrightCLI] Chrome preferences updated: notifications=block, meet.google.com mic+camera=allow");
+        console.log("[PlaywrightCLI] Chrome prefs: notifications=block, meet mic=allow, meet camera=block");
       }
     } catch (e: any) {
       console.warn(`[PlaywrightCLI] Could not set Chrome preferences: ${e.message}`);
