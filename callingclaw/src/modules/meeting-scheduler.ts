@@ -44,6 +44,7 @@ export class MeetingScheduler {
   private eventBus: EventBus;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private scheduled = new Map<string, ScheduledMeeting>(); // calendarEventId → info
+  private _everScheduled = new Set<string>(); // ALL event IDs ever scheduled (persistent dedup)
   private _active = false;
 
   constructor(opts: {
@@ -117,8 +118,8 @@ export class MeetingScheduler {
         // Use Google Calendar event ID (stable across polls) with fallback
         const eventId = event.id || `${event.meetLink}_${event.start}`;
 
-        // Skip if already scheduled
-        if (this.scheduled.has(eventId)) continue;
+        // Skip if already scheduled (current session OR any past session)
+        if (this.scheduled.has(eventId) || this._everScheduled.has(eventId)) continue;
 
         // Calculate when to join (2 min before start, but not in the past)
         const joinAt = Math.max(startMs - PREP_LEAD_MS, now + 30_000); // At least 30s from now
@@ -136,6 +137,7 @@ export class MeetingScheduler {
             startTime: event.start,
             scheduledAt: joinAt,
           });
+          this._everScheduled.add(eventId);
           newScheduled++;
 
           this.saveCache(); // Persist to disk so restarts don't re-register
@@ -228,14 +230,19 @@ export class MeetingScheduler {
   private loadCache() {
     try {
       const raw = readFileSync(SCHEDULED_CACHE_PATH, "utf-8");
-      const entries: [string, ScheduledMeeting][] = JSON.parse(raw);
+      const data = JSON.parse(raw);
       const now = Date.now();
-      // Only restore entries that are still in the future (within lookahead)
+      // Support both old format (array of entries) and new format (object with everScheduled)
+      const entries: [string, ScheduledMeeting][] = Array.isArray(data) ? data : (data.scheduled || []);
+      const ever: string[] = data.everScheduled || [];
       for (const [id, meeting] of entries) {
         if (meeting.scheduledAt > now - 60_000) {
           this.scheduled.set(id, meeting);
         }
+        this._everScheduled.add(id);
       }
+      // Restore ALL ever-scheduled IDs (even expired ones — prevents re-registration)
+      for (const id of ever) this._everScheduled.add(id);
     } catch { /* no cache or corrupt — start fresh */ }
   }
 
@@ -243,7 +250,10 @@ export class MeetingScheduler {
   private saveCache() {
     try {
       mkdirSync(dirname(SCHEDULED_CACHE_PATH), { recursive: true });
-      writeFileSync(SCHEDULED_CACHE_PATH, JSON.stringify([...this.scheduled.entries()], null, 2));
+      writeFileSync(SCHEDULED_CACHE_PATH, JSON.stringify({
+        scheduled: [...this.scheduled.entries()],
+        everScheduled: [...this._everScheduled],
+      }, null, 2));
     } catch (e: any) {
       console.warn("[MeetingScheduler] Cache save failed:", e.message);
     }

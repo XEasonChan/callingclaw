@@ -81,6 +81,117 @@ export function startConfigServer(services: Services) {
   const browserVoiceClients = new Set<any>();
   // ── Electron Audio Bridge clients (replaces Python sidecar) ──
   const audioBridgeClients = new Set<any>();
+  const voiceSessionState: {
+    active: boolean;
+    mode: "default" | "local" | "meeting" | "test";
+    transport: "direct" | "meet_bridge" | "browser" | "none";
+    topic: string | null;
+    provider: string | null;
+    startedAt: number | null;
+  } = {
+    active: false,
+    mode: "default",
+    transport: "none",
+    topic: null,
+    provider: null,
+    startedAt: null,
+  };
+
+  const buildSessionInstructions = (baseInstructions?: string) => {
+    let instructions = baseInstructions || undefined;
+    const workspacePrompt = services.context.getWorkspacePrompt();
+    if (workspacePrompt) {
+      instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
+    }
+    const syncBrief = services.contextSync?.getBrief().voice;
+    if (syncBrief) {
+      instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
+    }
+    return instructions;
+  };
+
+  const markVoiceSession = (opts: {
+    mode: "default" | "local" | "meeting" | "test";
+    transport: "direct" | "meet_bridge" | "browser" | "none";
+    topic?: string | null;
+    provider?: string | null;
+  }) => {
+    voiceSessionState.active = true;
+    voiceSessionState.mode = opts.mode;
+    voiceSessionState.transport = opts.transport;
+    voiceSessionState.topic = opts.topic ?? null;
+    voiceSessionState.provider = opts.provider ?? services.realtime.provider;
+    voiceSessionState.startedAt = Date.now();
+  };
+
+  const clearVoiceSession = () => {
+    voiceSessionState.active = false;
+    voiceSessionState.mode = "default";
+    voiceSessionState.transport = "none";
+    voiceSessionState.topic = null;
+    voiceSessionState.provider = null;
+    voiceSessionState.startedAt = null;
+  };
+
+  const startVoiceSession = async (opts: {
+    instructions?: string;
+    transport?: "direct" | "meet_bridge" | "browser";
+    mode?: "default" | "local" | "meeting" | "test";
+    topic?: string;
+  }) => {
+    if (!CONFIG.openai.apiKey) {
+      throw new Error("OpenAI API key not configured");
+    }
+
+    const transport = opts.transport || "meet_bridge";
+    const mode = opts.mode || "default";
+    const instructions = buildSessionInstructions(opts.instructions);
+
+    if (services.realtime.connected) {
+      services.realtime.stop();
+    }
+
+    await services.realtime.start(instructions);
+
+    if (transport === "meet_bridge") {
+      const audioOk = await services.bridge.sendConfigAndVerify(
+        { audio_mode: "meet_bridge" },
+        { timeoutMs: 3000, retries: 3 }
+      );
+      console.log(`[VoiceSession] Audio mode: meet_bridge (confirmed: ${audioOk})`);
+    }
+
+    markVoiceSession({
+      mode,
+      transport,
+      topic: opts.topic,
+      provider: services.realtime.provider,
+    });
+    services.eventBus.emit("voice.started", { audio_mode: transport, mode, topic: opts.topic || null });
+
+    return {
+      ok: true,
+      status: "connected",
+      connected: true,
+      mode,
+      transport,
+      topic: opts.topic || null,
+      provider: services.realtime.provider,
+      startedAt: voiceSessionState.startedAt,
+    };
+  };
+
+  const stopVoiceSession = (opts?: { resetBridge?: boolean }) => {
+    if (services.realtime.connected) {
+      services.realtime.stop();
+    }
+    if (opts?.resetBridge !== false) {
+      services.bridge.send("config", { audio_mode: "default", capture_mode: "mouse" });
+    }
+    clearVoiceSession();
+    services.eventBus.emit("voice.stopped", {});
+    return { ok: true, status: "disconnected", connected: false };
+  };
 
   const server = Bun.serve({
     port: CONFIG.port,
@@ -263,6 +374,10 @@ export function startConfigServer(services: Services) {
             taskStats: services.taskStore.stats(),
             automation: services.automationRouter?.getStatus() || null,
             transcriptAuditor: services.transcriptAuditor?.active ? "active" : "standby",
+            voiceSession: {
+              connected: services.realtime.connected,
+              ...voiceSessionState,
+            },
             uptime: process.uptime(),
           },
           { headers }
@@ -376,38 +491,15 @@ export function startConfigServer(services: Services) {
 
       // POST /api/voice/start — Start voice session + activate audio
       if (url.pathname === "/api/voice/start" && req.method === "POST") {
-        if (!CONFIG.openai.apiKey) {
-          return Response.json(
-            { error: "OpenAI API key not configured" },
-            { status: 400, headers }
-          );
-        }
         try {
           const body = (await req.json()) as { instructions?: string; audio_mode?: string };
-
-          // Inject shared context: workspace + ContextSync (OpenClaw memory, pinned files)
-          let instructions = body.instructions || undefined;
-          const workspacePrompt = services.context.getWorkspacePrompt();
-          if (workspacePrompt) {
-            instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
-          }
-          const syncBrief = services.contextSync?.getBrief().voice;
-          if (syncBrief) {
-            instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
-          }
-
-          await services.realtime.start(instructions);
-
-          const audioMode = body.audio_mode || "meet_bridge";
-          const audioOk = await services.bridge.sendConfigAndVerify(
-            { audio_mode: audioMode },
-            { timeoutMs: 3000, retries: 3 }
-          );
-          console.log(`[Voice] Audio mode: ${audioMode} (confirmed: ${audioOk})`);
-
-          services.eventBus.emit("voice.started", { audio_mode: audioMode });
-
-          return Response.json({ ok: true, status: "connected", audio_mode: audioMode }, { headers });
+          const audioMode = (body.audio_mode as "direct" | "meet_bridge" | "browser" | undefined) || "meet_bridge";
+          const result = await startVoiceSession({
+            instructions: body.instructions,
+            transport: audioMode,
+            mode: audioMode === "meet_bridge" ? "meeting" : "default",
+          });
+          return Response.json({ ...result, audio_mode: audioMode }, { headers });
         } catch (e: any) {
           return Response.json(
             { error: e.message },
@@ -416,12 +508,44 @@ export function startConfigServer(services: Services) {
         }
       }
 
+      // POST /api/voice/session/start — Start voice session without assuming a transport implementation
+      if (url.pathname === "/api/voice/session/start" && req.method === "POST") {
+        try {
+          const body = (await req.json().catch(() => ({}))) as {
+            instructions?: string;
+            transport?: "direct" | "meet_bridge" | "browser";
+            mode?: "default" | "local" | "meeting" | "test";
+            topic?: string;
+          };
+          const result = await startVoiceSession({
+            instructions: body.instructions,
+            transport: body.transport || "direct",
+            mode: body.mode || "default",
+            topic: body.topic,
+          });
+          return Response.json(result, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
+      }
+
       // POST /api/voice/stop — Stop voice session + deactivate audio
       if (url.pathname === "/api/voice/stop" && req.method === "POST") {
-        services.realtime.stop();
-        services.bridge.send("config", { audio_mode: "default", capture_mode: "mouse" });
-        services.eventBus.emit("voice.stopped", {});
-        return Response.json({ ok: true, status: "disconnected" }, { headers });
+        return Response.json(stopVoiceSession(), { headers });
+      }
+
+      // GET /api/voice/session/status — Inspect current unified voice session state
+      if (url.pathname === "/api/voice/session/status" && req.method === "GET") {
+        return Response.json({
+          connected: services.realtime.connected,
+          ...voiceSessionState,
+          instructions: services.realtime.getLastInstructions(),
+        }, { headers });
+      }
+
+      // POST /api/voice/session/stop — Stop unified voice session without assuming meeting teardown
+      if (url.pathname === "/api/voice/session/stop" && req.method === "POST") {
+        return Response.json(stopVoiceSession(), { headers });
       }
 
       // GET /api/voice/instructions — Get current voice instructions
@@ -1315,6 +1439,7 @@ STEP-BY-STEP FLOW:
 
         const { generateMeetingId, upsertSession } = await import("./modules/shared-documents");
         const meetingId = generateMeetingId();
+        // Store raw topic initially, will update with extracted title after LLM call
         upsertSession({ meetingId, topic: body.topic, status: "preparing" });
 
         services.eventBus.emit("meeting.prep_progress", {
@@ -1323,30 +1448,77 @@ STEP-BY-STEP FLOW:
 
         // Fire-and-forget: CallingClaw creates calendar, OpenClaw does research only
         // IMPORTANT: Calendar creation is handled HERE (not by OpenClaw) to prevent
-        // duplicate events. OpenClaw previously created its own event AND could also
-        // trigger /callingclaw prepare which creates another one.
+        // duplicate events.
         (async () => {
           try {
-            // ── Step 1: Create calendar event (CallingClaw-side, single source of truth) ──
+            // ── Step 0: Extract title + time from user input using fast LLM ──
+            let title = body.topic.length > 60 ? body.topic.slice(0, 57) + "..." : body.topic;
+            let parsedStart: string | null = null;
+            let parsedDuration = 60; // minutes
+
+            if (CONFIG.openrouter.apiKey) {
+              try {
+                const now = new Date();
+                const tzOffset = now.toLocaleString("en-US", { timeZoneName: "short" }).split(" ").pop();
+                const llmResp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: CONFIG.analysis?.model || "anthropic/claude-haiku-4-5",
+                    messages: [{
+                      role: "user",
+                      content: `Extract meeting info from this user input. Current time: ${now.toISOString()} (${tzOffset})\n\nInput: "${body.topic}"\n\nRespond with ONLY JSON, no explanation:\n{"title": "concise meeting title in same language as input (max 40 chars)", "startTime": "ISO 8601 datetime or null if not mentioned", "duration": minutes_number_or_60}`
+                    }],
+                    max_tokens: 100,
+                    temperature: 0,
+                  }),
+                  signal: AbortSignal.timeout(5000),
+                });
+                const llmData = await llmResp.json() as any;
+                const content = llmData.choices?.[0]?.message?.content || "";
+                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                  const parsed = JSON.parse(jsonMatch[0]);
+                  if (parsed.title) title = parsed.title;
+                  if (parsed.startTime) parsedStart = parsed.startTime;
+                  if (parsed.duration) parsedDuration = parsed.duration;
+                  console.log(`[Delegate] LLM extracted: title="${title}", start=${parsedStart}, duration=${parsedDuration}min`);
+                }
+              } catch (e: any) {
+                console.warn("[Delegate] LLM title/time extraction failed, using fallback:", e.message);
+              }
+            }
+
+            // ── Step 1: Create calendar event ──
             let meetUrl: string | null = null;
             let calEventId: string | null = null;
-            let title = body.topic.length > 60 ? body.topic.slice(0, 57) + "..." : body.topic;
 
             if (services.calendar.connected) {
               services.eventBus.emit("meeting.prep_progress", {
                 meetingId, step: "creating_calendar", message: "正在创建日历和会议链接...",
               });
 
-              // Parse time from topic or use next half-hour
-              const now = new Date();
-              const mins = now.getMinutes();
-              const fallback = new Date(now);
-              fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
-              if (fallback.getTime() - now.getTime() < 10 * 60000) {
-                fallback.setTime(fallback.getTime() + 30 * 60000);
+              // Use LLM-parsed time, or fallback to next half-hour
+              let startTime: string;
+              let endTime: string;
+              if (parsedStart) {
+                const start = new Date(parsedStart);
+                startTime = start.toISOString();
+                endTime = new Date(start.getTime() + parsedDuration * 60000).toISOString();
+              } else {
+                const now = new Date();
+                const mins = now.getMinutes();
+                const fallback = new Date(now);
+                fallback.setMinutes(mins < 30 ? 30 : 60, 0, 0);
+                if (fallback.getTime() - now.getTime() < 10 * 60000) {
+                  fallback.setTime(fallback.getTime() + 30 * 60000);
+                }
+                startTime = fallback.toISOString();
+                endTime = new Date(fallback.getTime() + 60 * 60000).toISOString();
               }
-              const startTime = fallback.toISOString();
-              const endTime = new Date(fallback.getTime() + 30 * 60000).toISOString();
 
               const attendees = CONFIG.userEmail ? [{ email: CONFIG.userEmail }] : [];
               const calResult = await services.calendar.createEvent({
@@ -1776,7 +1948,6 @@ STEP-BY-STEP FLOW:
           topic,
           meetingId,
         });
-        services.eventBus.emit("voice.started", { audio_mode: "direct" });
         console.log("[TalkLocally] meeting.started emitted — full meeting stack active");
 
         // DOM context capture now unified in callingclaw.ts meeting.started handler
@@ -1786,8 +1957,8 @@ STEP-BY-STEP FLOW:
           ok: true,
           meetingId,
           topic,
-          voice: "browser",
-          audio_mode: "browser",
+          voice: services.realtime.connected ? "connected" : "pending_session",
+          audio_mode: "pending_transport",
           voiceInstructions: voiceInstructions || undefined,
           prepBrief: prepBrief ? {
             topic: prepBrief.topic,

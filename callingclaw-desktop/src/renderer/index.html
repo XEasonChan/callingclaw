@@ -1228,7 +1228,7 @@ function updateStatusBar() {
   if (S.status) {
     // API returns strings ("connected"/"disconnected") or objects ({connected: bool}) — handle both
     const isConn = v => v === 'connected' || v === true || v?.connected === true;
-    const v = isConn(S.status.voice) || isConn(S.status.realtime);
+    const v = isConn(S.status.voiceSession) || isConn(S.status.voice) || isConn(S.status.realtime);
     document.getElementById('st-voice').className = 'st-dot ' + (v ? 'green' : '');
     document.getElementById('st-oc').className = 'st-dot ' + (isConn(S.status.openclaw) ? 'green' : '');
     document.getElementById('st-audio').className = 'st-dot ' + (isConn(S.status.bridge) || isConn(S.status.sidecar) || S.status.audio?.bridgeActive ? 'green' : '');
@@ -1592,12 +1592,22 @@ function submitTopicFor(topic) { document.getElementById('topic-input').value = 
 
 async function openCalendarMeetingPanel(topic, meetUrl) {
   openPanel(topic || '会议详情', '正在加载会议信息...');
-  // Find meetingId from manifest
+  // Find meetingId from manifest — match by meetUrl first (most reliable), then topic substring
   var meetingId = null;
   var manifest = await fetchManifestCached();
   if (manifest && manifest.sessions) {
-    var session = manifest.sessions.find(function(s) { return s.topic === topic || s.meetUrl === meetUrl; });
+    var session = null;
+    if (meetUrl) session = manifest.sessions.find(function(s) { return s.meetUrl === meetUrl; });
+    if (!session) session = manifest.sessions.find(function(s) { return s.topic === topic; });
+    if (!session && topic) session = manifest.sessions.find(function(s) { return s.topic && s.topic.includes(topic.slice(0, 20)); });
     if (session) meetingId = session.meetingId;
+  }
+  // Also check meetingFiles for any entry matching by topic or meetUrl
+  if (!meetingId) {
+    for (var mid in S.meetingFiles) {
+      var mf = S.meetingFiles[mid];
+      if ((meetUrl && mf.meetUrl === meetUrl) || (topic && mf.topic === topic)) { meetingId = mid; break; }
+    }
   }
   // Load files via data model
   if (meetingId) {
@@ -1605,22 +1615,29 @@ async function openCalendarMeetingPanel(topic, meetUrl) {
     data.topic = data.topic || topic;
     data.meetUrl = data.meetUrl || meetUrl;
     var prepContent = await loadMeetingFile(meetingId, 'prep');
+    var notesContent = await loadMeetingFile(meetingId, 'notes');
     var summaryContent = await loadMeetingFile(meetingId, 'summary');
+    // Build markdown: link at top, then prep, then summary
     var md = '';
+    if (meetUrl) md += '**会议链接:** ' + meetUrl + '\n\n---\n\n';
     if (prepContent) {
       md += prepContent + '\n\n';
-    } else {
-      md += '# ' + esc(topic || '会议') + '\n\n> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
+    }
+    if (notesContent && !prepContent) {
+      md += notesContent + '\n\n';
     }
     if (summaryContent) {
       md += '---\n## 📝 会议总结\n\n' + summaryContent + '\n\n';
     }
-    if (meetUrl) md += '\n---\n**会议链接:** ' + meetUrl + '\n';
+    if (!prepContent && !notesContent && !summaryContent) {
+      md += '> 尚未生成会前调研。使用顶部输入框或点击「准备会议」开始。\n';
+    }
     openPanel(topic || '会议详情', md);
-    renderMeetings(); // Re-render to update file badges
+    renderMeetings();
   } else {
-    var md2 = '# ' + esc(topic || '会议') + '\n\n> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
-    if (meetUrl) md2 += '\n---\n**会议链接:** ' + meetUrl + '\n';
+    var md2 = '';
+    if (meetUrl) md2 += '**会议链接:** ' + meetUrl + '\n\n---\n\n';
+    md2 += '> 尚未生成会前调研。使用顶部输入框或点击「准备会议」开始。\n';
     openPanel(topic || '会议详情', md2);
   }
 }
@@ -1652,6 +1669,7 @@ async function leaveMeeting() {
 async function startLocalTalk(topic) {
   if (browserAudio && browserAudio.getStatus().running) return; // double-start guard
   localTalkTopic = topic || 'Local Conversation';
+  var voiceInstructions = '';
 
   // 1. Tell backend to start meeting lifecycle (transcript, vision, auditor, etc.)
   var meetingId = 'local_' + Date.now();
@@ -1663,12 +1681,36 @@ async function startLocalTalk(topic) {
     });
     var data = await r.json();
     meetingId = data.meetingId || meetingId;
-    if (data.prepBrief) {
-      addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
-    }
+    voiceInstructions = data.voiceInstructions || '';
   } catch (e) {
-    console.warn('[TalkLocally] Backend call failed, continuing with browser audio:', e);
+    console.warn('[TalkLocally] Backend call failed:', e);
+    addMpActivity('error', 'Talk locally lifecycle failed: ' + e.message);
+    return;
   }
+
+  // 2. Start unified voice session for local testing
+  try {
+    var sr = await fetch(API + '/api/voice/session/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'local',
+        transport: 'direct',
+        topic: localTalkTopic,
+        instructions: voiceInstructions || undefined,
+      }),
+    });
+    var session = await sr.json();
+    if (!sr.ok || session.error) {
+      throw new Error(session.error || 'Voice session start failed');
+    }
+    addMpActivity('done', 'Voice session ready (' + (session.transport || 'direct') + ')');
+  } catch (e) {
+    addMpActivity('error', 'Voice session failed: ' + e.message);
+    try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
+    return;
+  }
+
   // Set up UI
   var mfData = getMeetingData(meetingId);
   mfData.topic = localTalkTopic;
@@ -1676,7 +1718,12 @@ async function startLocalTalk(topic) {
   S.activeMeetingId = meetingId;
   openMeetingPanel(meetingId, 'local');
 
-  // Start Electron-native audio bridge (replaces Python sidecar)
+  if (data && data.prepBrief) {
+    addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
+  }
+  addMpActivity('done', 'Talk locally lifecycle ready');
+
+  // 3. Attach direct audio transport after session is ready
   startAudioBridge('direct');
 }
 
@@ -1698,11 +1745,11 @@ function startAudioBridge(mode) {
           _audioBridgeWs.send(JSON.stringify({ type: 'audio_chunk', payload: { audio: base64Pcm, format: 'pcm16', rate: 24000 } }));
         }
       }).then(function(result) {
-        addMpActivity('done', 'Audio bridge: ' + result.mode + ' mode');
-        var dot = document.getElementById('st-voice');
+        addMpActivity('done', 'Audio transport attached: ' + result.mode);
+        var dot = document.getElementById('st-audio');
         if (dot) dot.className = 'st-dot green';
       }).catch(function(err) {
-        addMpActivity('error', 'Audio bridge failed: ' + err.message);
+        addMpActivity('error', 'Audio transport failed: ' + err.message);
         console.error('[AudioBridge] Start failed:', err);
       });
     };
@@ -1716,7 +1763,7 @@ function startAudioBridge(mode) {
     };
     _audioBridgeWs.onclose = function() {
       console.log('[AudioBridge] WS disconnected');
-      var dot = document.getElementById('st-voice');
+      var dot = document.getElementById('st-audio');
       if (dot) dot.className = 'st-dot';
     };
   } catch (err) {
@@ -1732,7 +1779,7 @@ function stopAudioBridge() {
     _audioBridgeWs.close();
     _audioBridgeWs = null;
   }
-  var dot = document.getElementById('st-voice');
+  var dot = document.getElementById('st-audio');
   if (dot) dot.className = 'st-dot';
 }
 
@@ -1740,9 +1787,13 @@ async function stopLocalTalk() {
   // 1. Stop browser audio (mic + speaker + WebSocket)
   if (browserAudio) browserAudio.stop();
 
-  // 2. Stop screenshot polling
+  // 2. Stop direct transport before ending voice session
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
   stopAudioBridge();
+  try {
+    await fetch(API + '/api/voice/session/stop', { method: 'POST' });
+    addMpActivity('done', 'Voice session stopped');
+  } catch (e) {}
   try {
     var r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
     var data = await r.json();
@@ -2144,7 +2195,7 @@ function vtStop() {
 function vtSendText() {
   const inp = document.getElementById('vt-text-input'), text = inp.value.trim(); if (!text) return;
   fetch(API + '/api/voice/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-  vtAddTranscript('user', text); inp.value = '';
+  inp.value = '';
 }
 function vtAddTranscript(role, text, ts) {
   const area = document.getElementById('vt-transcript'), ph = area.querySelector('div[style*="text-align"]');
