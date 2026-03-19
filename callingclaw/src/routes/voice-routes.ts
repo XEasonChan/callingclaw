@@ -6,6 +6,54 @@ import type { VoiceProviderName } from "../ai_gateway/realtime_client";
 import type { Services, RouteHandler } from "./types";
 
 export function voiceRoutes(services: Services): RouteHandler {
+  const startVoiceSession = async (body: {
+    instructions?: string;
+    audio_mode?: string;
+    transport?: "direct" | "meet_bridge" | "browser";
+    mode?: "default" | "local" | "meeting" | "test";
+  }) => {
+    const provider: VoiceProviderName = (body as any).provider || CONFIG.voiceProvider;
+
+    if (provider === "grok" && !CONFIG.grok.apiKey) {
+      throw new Error("Grok API key not configured (set XAI_API_KEY in .env)");
+    }
+    if (provider === "openai" && !CONFIG.openai.apiKey) {
+      throw new Error("OpenAI API key not configured");
+    }
+
+    let instructions = body.instructions || undefined;
+    const workspacePrompt = services.context.getWorkspacePrompt();
+    if (workspacePrompt) {
+      instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
+    }
+    const syncBrief = services.contextSync?.getBrief().voice;
+    if (syncBrief) {
+      instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
+    }
+
+    await services.realtime.start(instructions, provider);
+
+    const transport = body.transport || (body.audio_mode as any) || "meet_bridge";
+    if (transport === "meet_bridge") {
+      const audioOk = await services.bridge.sendConfigAndVerify(
+        { audio_mode: "meet_bridge" },
+        { timeoutMs: 3000, retries: 3 }
+      );
+      console.log(`[Voice] Audio mode: meet_bridge, provider: ${provider} (confirmed: ${audioOk})`);
+    }
+
+    services.eventBus.emit("voice.started", { audio_mode: transport, provider, mode: body.mode || "default" });
+
+    return {
+      ok: true,
+      status: "connected",
+      connected: true,
+      audio_mode: transport,
+      provider,
+      mode: body.mode || "default",
+    };
+  };
+
   return {
     match: (pathname, method) => pathname.startsWith("/api/voice/"),
 
@@ -19,57 +67,29 @@ export function voiceRoutes(services: Services): RouteHandler {
             audio_mode?: string;
             provider?: VoiceProviderName;
           };
-
-          // Select provider (request body > env config > default "openai")
-          const provider: VoiceProviderName = body.provider || CONFIG.voiceProvider;
-
-          // Validate API key for selected provider
-          if (provider === "grok" && !CONFIG.grok.apiKey) {
-            return Response.json(
-              { error: "Grok API key not configured (set XAI_API_KEY in .env)" },
-              { status: 400, headers }
-            );
-          }
-          if (provider === "openai" && !CONFIG.openai.apiKey) {
-            return Response.json(
-              { error: "OpenAI API key not configured" },
-              { status: 400, headers }
-            );
-          }
-
-          // Inject shared context: workspace + ContextSync (OpenClaw memory, pinned files)
-          let instructions = body.instructions || undefined;
-          const workspacePrompt = services.context.getWorkspacePrompt();
-          if (workspacePrompt) {
-            instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
-          }
-          const syncBrief = services.contextSync?.getBrief().voice;
-          if (syncBrief) {
-            instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
-          }
-
-          await services.realtime.start(instructions, provider);
-
-          const audioMode = body.audio_mode || "meet_bridge";
-          const audioOk = await services.bridge.sendConfigAndVerify(
-            { audio_mode: audioMode },
-            { timeoutMs: 3000, retries: 3 }
-          );
-          console.log(`[Voice] Audio mode: ${audioMode}, provider: ${provider} (confirmed: ${audioOk})`);
-
-          services.eventBus.emit("voice.started", { audio_mode: audioMode, provider });
-
-          return Response.json({
-            ok: true,
-            status: "connected",
-            audio_mode: audioMode,
-            provider,
-          }, { headers });
+          const result = await startVoiceSession(body);
+          return Response.json(result, { headers });
         } catch (e: any) {
           return Response.json(
             { error: e.message },
             { status: 500, headers }
           );
+        }
+      }
+
+      // POST /api/voice/session/start — Unified session start for any transport
+      if (url.pathname === "/api/voice/session/start" && req.method === "POST") {
+        try {
+          const body = (await req.json().catch(() => ({}))) as {
+            instructions?: string;
+            transport?: "direct" | "meet_bridge" | "browser";
+            mode?: "default" | "local" | "meeting" | "test";
+            provider?: VoiceProviderName;
+          };
+          const result = await startVoiceSession(body);
+          return Response.json(result, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
         }
       }
 
@@ -81,11 +101,28 @@ export function voiceRoutes(services: Services): RouteHandler {
         return Response.json({ ok: true, status: "disconnected" }, { headers });
       }
 
+      // POST /api/voice/session/stop — Unified session stop for any transport
+      if (url.pathname === "/api/voice/session/stop" && req.method === "POST") {
+        services.realtime.stop();
+        services.bridge.send("config", { audio_mode: "default" });
+        services.eventBus.emit("voice.stopped", {});
+        return Response.json({ ok: true, status: "disconnected", connected: false }, { headers });
+      }
+
       // GET /api/voice/instructions — Get current voice instructions
       if (url.pathname === "/api/voice/instructions" && req.method === "GET") {
         return Response.json({
           instructions: services.realtime.getLastInstructions(),
           connected: services.realtime.connected,
+        }, { headers });
+      }
+
+      // GET /api/voice/session/status — Lightweight session status
+      if (url.pathname === "/api/voice/session/status" && req.method === "GET") {
+        return Response.json({
+          connected: services.realtime.connected,
+          provider: services.realtime.provider,
+          instructions: services.realtime.getLastInstructions(),
         }, { headers });
       }
 
