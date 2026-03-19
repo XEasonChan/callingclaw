@@ -50,11 +50,15 @@ export function calendarTools(deps: CalendarToolDeps): ToolModule {
     handler: async (name, args) => {
       switch (name) {
         case "schedule_meeting": {
+          // args.attendees is string[] from OpenAI tool call — map to CalendarAttendee[]
+          const attendees = (args.attendees as string[] | undefined)?.map(
+            (email: string) => ({ email })
+          );
           const result = await calendar.createEvent({
             summary: args.summary,
             start: args.start,
             end: args.end,
-            attendees: args.attendees,
+            attendees,
           });
           return result;
         }
