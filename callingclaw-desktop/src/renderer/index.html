@@ -810,7 +810,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
-<script src="audio-utils.js"></script>
+<script src="audio-bridge.js"></script>
 <script>
 const API = 'http://localhost:4000';
 const S = {
@@ -1603,6 +1603,8 @@ async function joinMeeting(url) {
       mfData.meetUrl = url;
       S.activeMeetingId = data.meetingId;
       openMeetingPanel(data.meetingId, 'remote');
+      // Start audio bridge in meet_bridge mode (BlackHole routing)
+      startAudioBridge('meet_bridge');
     }
   } catch (e) {}
   setTimeout(refreshAll, 3000);
@@ -1634,7 +1636,6 @@ async function startLocalTalk(topic) {
   } catch (e) {
     console.warn('[TalkLocally] Backend call failed, continuing with browser audio:', e);
   }
-
   // Set up UI
   var mfData = getMeetingData(meetingId);
   mfData.topic = localTalkTopic;
@@ -1642,41 +1643,64 @@ async function startLocalTalk(topic) {
   S.activeMeetingId = meetingId;
   openMeetingPanel(meetingId, 'local');
 
-  // 2. Start browser audio — mic + speaker + WebSocket to /ws/voice-test
-  try {
-    var wsUrl = API.replace('http', 'ws') + '/ws/voice-test';
-    var voiceInstructions = data?.voiceInstructions || undefined;
-    await browserAudio.start(wsUrl, {
-      instructions: voiceInstructions,
-      onTranscript: function(t) {
-        addMpActivity(t.role === 'user' ? 'info' : 'done', (t.role === 'user' ? '你: ' : 'AI: ') + t.text);
-      },
-      onStatus: function(s) {
-        if (s.voiceConnected) addMpActivity('done', '语音已连接');
-        updateStatusBar();
-      },
-      onError: function(msg) {
-        addMpActivity('error', msg);
-      },
-      onSpeaking: function(speaking) {
-        var dot = document.getElementById('st-voice');
-        if (dot) dot.className = 'st-dot ' + (speaking ? 'green pulse' : (browserAudio.isActive ? 'green' : ''));
-      },
-    });
-    addMpActivity('done', '浏览器音频已启动 — 可以开始对话');
-  } catch (e) {
-    addMpActivity('error', '音频启动失败: ' + e.message);
-  }
+  // Start Electron-native audio bridge (replaces Python sidecar)
+  startAudioBridge('direct');
+}
 
-  // 3. Poll screenshot for the panel (unchanged)
-  localTalkTimer = setInterval(async () => {
-    try {
-      var sr = await fetch(API + '/api/bridge/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'screenshot' }) });
-      var sd = await sr.json();
-      var el = document.getElementById('sp-screenshot');
-      if (el && sd?.image) { el.innerHTML = '<img src="data:image/png;base64,' + sd.image + '">'; }
-    } catch {}
-  }, 2000);
+// ── Electron Audio Bridge Integration ──
+var _audioBridgeWs = null;
+
+function startAudioBridge(mode) {
+  if (typeof ElectronAudioBridge === 'undefined') {
+    console.warn('[AudioBridge] audio-bridge.js not loaded');
+    return;
+  }
+  // Connect WS to Bun for audio relay
+  try {
+    _audioBridgeWs = new WebSocket('ws://localhost:4000/ws/audio-bridge');
+    _audioBridgeWs.onopen = function() {
+      console.log('[AudioBridge] WS connected, starting audio capture...');
+      ElectronAudioBridge.start(mode, function(base64Pcm) {
+        if (_audioBridgeWs && _audioBridgeWs.readyState === WebSocket.OPEN) {
+          _audioBridgeWs.send(JSON.stringify({ type: 'audio_chunk', payload: { audio: base64Pcm, format: 'pcm16', rate: 24000 } }));
+        }
+      }).then(function(result) {
+        addMpActivity('done', 'Audio bridge: ' + result.mode + ' mode');
+        var dot = document.getElementById('st-voice');
+        if (dot) dot.className = 'st-dot green';
+      }).catch(function(err) {
+        addMpActivity('error', 'Audio bridge failed: ' + err.message);
+        console.error('[AudioBridge] Start failed:', err);
+      });
+    };
+    _audioBridgeWs.onmessage = function(e) {
+      try {
+        var msg = JSON.parse(e.data);
+        if (msg.type === 'audio_playback' && msg.payload && msg.payload.audio) {
+          ElectronAudioBridge.playAudio(msg.payload.audio);
+        }
+      } catch (err) {}
+    };
+    _audioBridgeWs.onclose = function() {
+      console.log('[AudioBridge] WS disconnected');
+      var dot = document.getElementById('st-voice');
+      if (dot) dot.className = 'st-dot';
+    };
+  } catch (err) {
+    console.error('[AudioBridge] WS connect failed:', err);
+  }
+}
+
+function stopAudioBridge() {
+  if (typeof ElectronAudioBridge !== 'undefined') {
+    ElectronAudioBridge.stop();
+  }
+  if (_audioBridgeWs) {
+    _audioBridgeWs.close();
+    _audioBridgeWs = null;
+  }
+  var dot = document.getElementById('st-voice');
+  if (dot) dot.className = 'st-dot';
 }
 
 async function stopLocalTalk() {
@@ -1685,8 +1709,7 @@ async function stopLocalTalk() {
 
   // 2. Stop screenshot polling
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
-
-  // 3. Tell backend to finalize meeting (summary, tasks, etc.)
+  stopAudioBridge();
   try {
     var r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
     var data = await r.json();
