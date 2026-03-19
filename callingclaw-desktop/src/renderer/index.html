@@ -820,6 +820,7 @@ const S = {
   manifest: null, manifestTs: 0, // cached manifest with TTL
 };
 let localTalkTimer = null, localTalkTopic = '';
+let localTalkStarting = false;
 const browserAudio = typeof ElectronAudioBridge !== 'undefined' ? ElectronAudioBridge : null;
 let lastEventTs = 0, reconnectDelay = 1000;
 
@@ -1667,7 +1668,9 @@ async function leaveMeeting() {
 
 // Talk Locally — full meeting intelligence stack
 async function startLocalTalk(topic) {
+  if (localTalkStarting) return;
   if (browserAudio && browserAudio.getStatus().running) return; // double-start guard
+  localTalkStarting = true;
   localTalkTopic = topic || 'Local Conversation';
   var voiceInstructions = '';
 
@@ -1684,8 +1687,20 @@ async function startLocalTalk(topic) {
     voiceInstructions = data.voiceInstructions || '';
   } catch (e) {
     console.warn('[TalkLocally] Backend call failed:', e);
-    addMpActivity('error', 'Talk locally lifecycle failed: ' + e.message);
+    openPanel('本地对话', '<div class="md">启动失败：' + esc(e.message) + '</div>');
+    localTalkStarting = false;
     return;
+  }
+
+  // Set up UI immediately so the user sees feedback while session/transport are still starting
+  var mfData = getMeetingData(meetingId);
+  mfData.topic = localTalkTopic;
+  mfData.status = 'live';
+  S.activeMeetingId = meetingId;
+  openMeetingPanel(meetingId, 'local');
+  addMpActivity('done', 'Talk locally lifecycle ready');
+  if (data && data.prepBrief) {
+    addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
   }
 
   // 2. Start unified voice session for local testing
@@ -1709,19 +1724,9 @@ async function startLocalTalk(topic) {
     addMpActivity('error', 'Voice session failed: ' + e.message);
     try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
     return;
+  } finally {
+    localTalkStarting = false;
   }
-
-  // Set up UI
-  var mfData = getMeetingData(meetingId);
-  mfData.topic = localTalkTopic;
-  mfData.status = 'live';
-  S.activeMeetingId = meetingId;
-  openMeetingPanel(meetingId, 'local');
-
-  if (data && data.prepBrief) {
-    addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
-  }
-  addMpActivity('done', 'Talk locally lifecycle ready');
 
   // 3. Attach direct audio transport after session is ready
   startAudioBridge('direct');
@@ -2035,10 +2040,11 @@ async function runAllChecks() {
     { key: 'screenRecording', label: '屏幕录制', p: permChecks.screenRecording },
     { key: 'accessibility', label: '辅助功能', p: permChecks.accessibility },
   ].map(i => {
+    const p = i.p || {};
     let action = '';
-    if (!i.p.granted && i.p.canRequest) action = `<button class="btn btn-sm btn-primary" onclick="reqPerm('${i.key}')">授权</button>`;
-    else if (!i.p.granted) action = `<button class="btn btn-sm btn-ghost" onclick="openPerm('${i.key}')">去设置</button>`;
-    return `<div class="chk"><span class="chk-icon">${i.p.granted ? '&#10003;' : '&#9888;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.p.status || ''}</span>${action}</div>`;
+    if (!p.granted && p.canRequest) action = `<button class="btn btn-sm btn-primary" onclick="reqPerm('${i.key}')">授权</button>`;
+    else if (!p.granted) action = `<button class="btn btn-sm btn-ghost" onclick="openPerm('${i.key}')">去设置</button>`;
+    return `<div class="chk"><span class="chk-icon">${p.granted ? '&#10003;' : '&#9888;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${p.status || ''}</span>${action}</div>`;
   }).join('');
   let ocOk = false;
   try { await fetch('http://localhost:18789', { signal: AbortSignal.timeout(2000) }); ocOk = true; } catch {}
