@@ -11,6 +11,7 @@
 //   4. Pushes updates to live Voice sessions via session.update
 
 const OPENCLAW_MEMORY_PATH = `${process.env.HOME}/.openclaw/workspace/MEMORY.md`;
+const OPENCLAW_SANDBOX_DIR = `${process.env.HOME}/.openclaw/sandboxes`;
 const MAX_VOICE_BRIEF_CHARS = 4000;  // ~1000 tokens — enough for project summaries
 const MAX_COMPUTER_BRIEF_CHARS = 8000; // ~2000 tokens
 const MAX_FILE_CONTENT_CHARS = 4000;  // Per pinned file
@@ -34,6 +35,7 @@ export interface ContextBrief {
 
 export class ContextSync {
   private openclawMemory: string | null = null;
+  private openclawSoul: string | null = null;
   private pinnedFiles: PinnedFile[] = [];
   private customNotes: string[] = [];
   private _lastLoadedAt = 0;
@@ -57,11 +59,46 @@ export class ContextSync {
       this.openclawMemory = await file.text();
       this._lastLoadedAt = Date.now();
       console.log(`[ContextSync] Loaded OpenClaw memory (${this.openclawMemory.length} chars)`);
+      // Also load soul/persona files from OpenClaw sandbox
+      await this.loadOpenClawSoul();
       return true;
     } catch (e: any) {
       console.warn("[ContextSync] Failed to load OpenClaw memory:", e.message);
       return false;
     }
+  }
+
+  /** Load OpenClaw's soul/persona files (SOUL.md, USER.md) from sandbox */
+  private async loadOpenClawSoul(): Promise<void> {
+    try {
+      const { readdirSync } = await import("node:fs");
+      // Find the latest sandbox directory
+      const entries = readdirSync(OPENCLAW_SANDBOX_DIR, { withFileTypes: true })
+        .filter(e => e.isDirectory() && e.name.startsWith("agent-main"))
+        .map(e => e.name);
+      if (entries.length === 0) return;
+      const sandboxDir = `${OPENCLAW_SANDBOX_DIR}/${entries[entries.length - 1]}`;
+
+      const soulParts: string[] = [];
+      for (const name of ["SOUL.md", "USER.md"]) {
+        const f = Bun.file(`${sandboxDir}/${name}`);
+        if (await f.exists()) {
+          const text = await f.text();
+          if (text.trim()) soulParts.push(text.trim());
+        }
+      }
+      if (soulParts.length > 0) {
+        this.openclawSoul = soulParts.join("\n\n---\n\n");
+        console.log(`[ContextSync] Loaded OpenClaw soul (${this.openclawSoul.length} chars from ${soulParts.length} files)`);
+      }
+    } catch (e: any) {
+      console.warn("[ContextSync] Failed to load soul files:", e.message);
+    }
+  }
+
+  /** Get OpenClaw's soul/persona text (for Voice persona enrichment) */
+  getSoul(): string | null {
+    return this.openclawSoul;
   }
 
   /** Reload memory if file changed (check mtime) */

@@ -1697,22 +1697,26 @@ STEP-BY-STEP FLOW:
         const meetingId = generateMeetingId();
         upsertSession({ meetingId, topic, status: "active" });
 
-        // Step 1: Start voice session with direct audio (local mic/speaker)
+        // Step 1: Start voice session with DEFAULT_PERSONA + context from OpenClaw memory/soul
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
           try {
-            let instructions: string | undefined;
-            const workspacePrompt = services.context.getWorkspacePrompt();
-            if (workspacePrompt) {
-              instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
+            const { buildVoiceInstructions } = await import("./voice-persona");
+            // Build full persona: DEFAULT_PERSONA (no brief = general assistant mode)
+            let instructions = buildVoiceInstructions();
+            // Append OpenClaw soul/persona if available
+            const soul = services.contextSync?.getSoul();
+            if (soul) {
+              instructions += `\n\n═══ PERSONALITY & VALUES (from OpenClaw soul) ═══\n${soul}`;
             }
+            // Append user profile + projects from OpenClaw MEMORY.md
             const syncBrief = services.contextSync?.getBrief().voice;
             if (syncBrief) {
-              instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
+              instructions += `\n\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${syncBrief}`;
             }
             await services.realtime.start(instructions);
             voiceStarted = true;
-            console.log("[TalkLocally] Voice AI started (direct audio)");
+            console.log("[TalkLocally] Voice AI started with DEFAULT_PERSONA + soul + memory context");
           } catch (e: any) {
             console.warn("[TalkLocally] Voice start failed:", e.message);
           }
