@@ -900,7 +900,12 @@ export class PlaywrightCLIClient {
     return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
 
-  /** Ensure Chrome profile preferences block notification prompts */
+  /**
+   * Ensure Chrome profile preferences:
+   * 1. Block notification prompts (can't be dismissed via playwright-cli)
+   * 2. Pre-authorize microphone + camera for meet.google.com
+   *    (without this, Meet shows mic as "on" in UI but BlackHole gets no audio)
+   */
   private ensureChromePreferences() {
     const prefsPath = resolve(this.profileDir, "Default", "Preferences");
     try {
@@ -912,16 +917,59 @@ export class PlaywrightCLIClient {
         prefs = JSON.parse(readFileSync(prefsPath, "utf-8"));
       }
 
-      // Block notification permission prompts (Chrome native dialog can't be clicked via playwright-cli)
+      let changed = false;
+
+      // ── 1. Block notification prompts ──
       if (!prefs.profile) prefs.profile = {};
       if (!prefs.profile.default_content_setting_values) prefs.profile.default_content_setting_values = {};
 
-      const changed = prefs.profile.default_content_setting_values.notifications !== 2;
-      prefs.profile.default_content_setting_values.notifications = 2;
+      if (prefs.profile.default_content_setting_values.notifications !== 2) {
+        prefs.profile.default_content_setting_values.notifications = 2;
+        changed = true;
+      }
+
+      // ── 2. Pre-authorize mic + camera for Meet domains ──
+      // Chrome content_settings: setting 1 = Allow, 2 = Block
+      if (!prefs.profile.content_settings) prefs.profile.content_settings = {};
+      if (!prefs.profile.content_settings.exceptions) prefs.profile.content_settings.exceptions = {};
+
+      const meetDomains = [
+        "https://meet.google.com,*",
+        "https://[*.]meet.google.com,*",
+      ];
+
+      const permEntry = {
+        expiration: "0",
+        last_modified: String(Date.now()),
+        model: 0,
+        setting: 1, // 1 = Allow
+      };
+
+      // Microphone permission
+      if (!prefs.profile.content_settings.exceptions.media_stream_mic) {
+        prefs.profile.content_settings.exceptions.media_stream_mic = {};
+      }
+      for (const domain of meetDomains) {
+        if (prefs.profile.content_settings.exceptions.media_stream_mic[domain]?.setting !== 1) {
+          prefs.profile.content_settings.exceptions.media_stream_mic[domain] = { ...permEntry };
+          changed = true;
+        }
+      }
+
+      // Camera permission
+      if (!prefs.profile.content_settings.exceptions.media_stream_camera) {
+        prefs.profile.content_settings.exceptions.media_stream_camera = {};
+      }
+      for (const domain of meetDomains) {
+        if (prefs.profile.content_settings.exceptions.media_stream_camera[domain]?.setting !== 1) {
+          prefs.profile.content_settings.exceptions.media_stream_camera[domain] = { ...permEntry };
+          changed = true;
+        }
+      }
 
       if (changed) {
         writeFileSync(prefsPath, JSON.stringify(prefs));
-        console.log("[PlaywrightCLI] Set Chrome preference: notifications=block");
+        console.log("[PlaywrightCLI] Chrome preferences updated: notifications=block, meet.google.com mic+camera=allow");
       }
     } catch (e: any) {
       console.warn(`[PlaywrightCLI] Could not set Chrome preferences: ${e.message}`);
