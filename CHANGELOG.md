@@ -3,6 +3,15 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.9] - 2026-03-19
+
+### Fixed
+- **Audio bridge stability — sidecar reconnect loop** — removed config guard clause (`audio_mode != new_mode`) that prevented audio restart on duplicate config; increased reconnect backoff from 3s to 5s; bridge sends config once on reconnect instead of 3-attempt verify loop
+- **Root cause:** Bridge replaced "stale" connections → sidecar cleanup killed audio → rapid reconnect → replaced again → infinite loop with 0 audio_chunks
+
+### Added
+- **14 unit tests** for audio bridge stability (config handler, reconnect backoff, audio chain invariants)
+
 ## [2.5.0] - 2026-03-18
 
 ### Added
