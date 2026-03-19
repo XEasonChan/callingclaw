@@ -1204,10 +1204,12 @@ function updateStatusBar() {
   engBtn.style.display = S.daemon ? 'none' : '';
   engBtn.textContent = S.daemon ? '' : '启动引擎';
   if (S.status) {
-    const v = S.status.voice?.connected || S.status.realtime?.connected;
+    // API returns strings ("connected"/"disconnected") or objects ({connected: bool}) — handle both
+    const isConn = v => v === 'connected' || v === true || v?.connected === true;
+    const v = isConn(S.status.voice) || isConn(S.status.realtime);
     document.getElementById('st-voice').className = 'st-dot ' + (v ? 'green' : '');
-    document.getElementById('st-oc').className = 'st-dot ' + (S.status.openclaw?.connected ? 'green' : '');
-    document.getElementById('st-audio').className = 'st-dot ' + ((S.status.sidecar?.connected || S.status.audio?.bridgeActive) ? 'green' : '');
+    document.getElementById('st-oc').className = 'st-dot ' + (isConn(S.status.openclaw) ? 'green' : '');
+    document.getElementById('st-audio').className = 'st-dot ' + (isConn(S.status.bridge) || isConn(S.status.sidecar) || S.status.audio?.bridgeActive ? 'green' : '');
   } else if (!S.daemon) {
     ['st-voice','st-oc','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
   }
