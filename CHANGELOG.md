@@ -3,6 +3,18 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.17] - 2026-03-20
+
+### Fixed
+- **Meeting prep file 404** — `prepareMeeting()` generated a new meetingId internally instead of using the session's meetingId, causing prep files to save as `cc_xxx_prep.md` while the frontend looked for `cc_yyy_prep.md`. Now threads meetingId through the entire chain: config_server → voice-persona → meeting-prep → savePrepBrief/startLiveLog
+- **OpenClaw response parsing** — `extractMessageText()` now handles more response formats: `output_text`, `output`, `summary`, `parts[]`, nested `messages[]`, and plain strings
+- **Context recall fallback** — `recall_context` tool now validates OpenClaw answers and falls back to local memory when OpenClaw returns errors or `(no response)`
+- **Post-meeting delivery** — fixed to use `OC004_PROMPT(req)` instead of raw instruction string
+
+### Changed
+- Voice routes refactored: unified `startVoiceSession()` helper, new `/api/voice/session/start`, `/api/voice/session/stop`, `/api/voice/session/status` endpoints for transport-agnostic voice control
+- Meeting routes now generate and return `meetingId` in join/prepare responses for frontend session tracking
+
 ## [2.4.16] - 2026-03-20
 
 ### Fixed
