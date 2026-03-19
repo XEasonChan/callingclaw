@@ -230,13 +230,43 @@ export class OpenClawBridge {
 
   private extractMessageText(msg: any): string {
     if (!msg) return "";
+    if (typeof msg === "string") return msg;
     if (typeof msg.text === "string") return msg.text;
     if (typeof msg.content === "string") return msg.content;
+    if (typeof msg.output_text === "string") return msg.output_text;
+    if (typeof msg.output === "string") return msg.output;
+    if (typeof msg.summary === "string") return msg.summary;
+    if (Array.isArray(msg.parts)) {
+      const text = msg.parts
+        .map((p: any) => this.extractMessageText(p))
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      if (text) return text;
+    }
     if (Array.isArray(msg.content)) {
-      return msg.content
-        .filter((p: any) => p?.type === "text" && typeof p.text === "string")
-        .map((p: any) => p.text)
+      const text = msg.content
+        .map((p: any) => {
+          if (!p) return "";
+          if (typeof p === "string") return p;
+          if (typeof p.text === "string") return p.text;
+          if (typeof p.content === "string") return p.content;
+          if (typeof p.output_text === "string") return p.output_text;
+          if (p.type === "text" && typeof p.value === "string") return p.value;
+          if (typeof p.text?.value === "string") return p.text.value;
+          return "";
+        })
+        .filter(Boolean)
         .join("\n");
+      if (text) return text;
+    }
+    if (Array.isArray(msg.messages)) {
+      const text = msg.messages
+        .map((m: any) => this.extractMessageText(m))
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      if (text) return text;
     }
     return "";
   }
