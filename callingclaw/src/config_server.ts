@@ -816,10 +816,31 @@ export function startConfigServer(services: Services) {
       // ── Calendar API ──
       // ══════════════════════════════════════════════════════════════
 
-      // GET /api/calendar/events — List upcoming events
+      // GET /api/calendar/events — List upcoming events with prep brief enrichment
       if (url.pathname === "/api/calendar/events" && req.method === "GET") {
+        const connected = services.calendar.connected;
         const events = await services.calendar.listUpcomingEvents();
-        return Response.json({ events }, { headers });
+
+        // Enrich events with prep brief status from sessions.json
+        let enriched = events;
+        try {
+          const { readSessions } = await import("./modules/shared-documents");
+          const sessions = readSessions().sessions || [];
+          enriched = events.map((e: any) => {
+            const titleLower = (e.summary || "").toLowerCase();
+            let _prepBrief: string | null = null;
+            for (const s of sessions) {
+              const sTopic = (s.topic || "").toLowerCase();
+              if (sTopic && (titleLower.includes(sTopic) || sTopic.includes(titleLower))) {
+                _prepBrief = s.files?.prep || null;
+                break;
+              }
+            }
+            return { ...e, _prepBrief };
+          });
+        } catch {}
+
+        return Response.json({ events: enriched, connected }, { headers });
       }
 
       // POST /api/calendar/create — Create calendar event
@@ -1284,7 +1305,9 @@ STEP-BY-STEP FLOW:
               ``,
               `## Step 2: 创建日历事件`,
               `- 从话题推断会议时间（如"今晚八点"→20:00），没提到时间就用下一个半小时整点`,
-              `- 用 Google Calendar tool 创建事件（带 Meet 链接），邀请用户邮箱`,
+              `- 必须且只能通过 /callingclaw 命令创建日历事件：`,
+              `  执行: /callingclaw calendar create {"summary":"会议标题","start":"ISO时间","end":"ISO时间"}`,
+              `- ⚠️ 不要使用你自己的 Google Calendar MCP tool，只用 /callingclaw 命令！否则会创建重复事件`,
               ``,
               `## Step 3: 深度调研`,
               `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度会前调研。`,

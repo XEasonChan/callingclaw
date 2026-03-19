@@ -652,7 +652,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <svg viewBox="0 0 20 20" fill="none"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
     </div>
     <span class="titlebar-name">CallingClaw</span>
-    <span class="titlebar-ver" id="app-ver">v2.4.1</span>
+    <span class="titlebar-ver" id="app-ver"></span>
   </div>
   <div class="titlebar-right">
     <button class="tb-btn" id="btn-overlay" title="会议浮窗">
@@ -1126,9 +1126,30 @@ function meetingStatus(event) {
 
 // Render dynamic meeting list only (does NOT touch greeting or input)
 function renderMeetings() {
-  // Don't overwrite while any prep card is showing (has dynamic state)
-  if (document.querySelector('[id^="prep-card-"]')) return;
+  // Preserve any active prep cards — they live inside meeting-list
+  const existingPrepCards = document.querySelectorAll('[id^="prep-card-"]');
+  if (existingPrepCards.length > 0) {
+    // Prep cards have dynamic state (progress, agent activity) — don't destroy them.
+    // Instead, only update the sections AFTER the prep cards.
+    const el = document.getElementById('meeting-list');
+    if (!el) return;
+    // Remove only non-prep-card children (meeting rows, section titles, empty messages)
+    const toRemove: Element[] = [];
+    for (const child of el.children) {
+      if (!child.id?.startsWith('prep-card-') && !child.id?.endsWith('-wrap')) toRemove.push(child);
+    }
+    toRemove.forEach(c => c.remove());
+    // Append calendar + notes sections after prep cards
+    const frag = document.createElement('div');
+    frag.innerHTML = buildMeetingListHTML();
+    while (frag.firstChild) el.appendChild(frag.firstChild);
+    return;
+  }
   const el = document.getElementById('meeting-list');
+  el.innerHTML = buildMeetingListHTML();
+}
+
+function buildMeetingListHTML() {
   const now = Date.now();
   const activeMeeting = S.status?.meeting?.active;
   let html = '';
@@ -1174,7 +1195,11 @@ function renderMeetings() {
     }
     html += '</div>';
   } else if (!activeMeeting) {
-    html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
+    if (!S.calendarConnected) {
+      html += '<div class="empty fade-in"><p style="color:var(--muted);">⚠️ Google Calendar disconnected — check OAuth token in Settings</p></div>';
+    } else {
+      html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
+    }
   }
 
   // Past meetings (from notes)
@@ -1192,7 +1217,7 @@ function renderMeetings() {
     html += '</div>';
   }
 
-  el.innerHTML = html;
+  return html;
 }
 
 // Actions
