@@ -810,6 +810,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="audio-bridge.js"></script>
 <script>
 const API = 'http://localhost:4000';
 const S = {
@@ -819,6 +820,7 @@ const S = {
   manifest: null, manifestTs: 0, // cached manifest with TTL
 };
 let localTalkTimer = null, localTalkTopic = '';
+const browserAudio = new BrowserAudio();
 let lastEventTs = 0, reconnectDelay = 1000;
 
 const IC = {
@@ -1601,6 +1603,8 @@ async function joinMeeting(url) {
       mfData.meetUrl = url;
       S.activeMeetingId = data.meetingId;
       openMeetingPanel(data.meetingId, 'remote');
+      // Start audio bridge in meet_bridge mode (BlackHole routing)
+      startAudioBridge('meet_bridge');
     }
   } catch (e) {}
   setTimeout(refreshAll, 3000);
@@ -1613,7 +1617,11 @@ async function leaveMeeting() {
 
 // Talk Locally — full meeting intelligence stack
 async function startLocalTalk(topic) {
+  if (browserAudio.isActive || browserAudio.isStarting) return; // double-start guard
   localTalkTopic = topic || 'Local Conversation';
+
+  // 1. Tell backend to start meeting lifecycle (transcript, vision, auditor, etc.)
+  var meetingId = 'local_' + Date.now();
   try {
     var r = await fetch(API + '/api/meeting/talk-locally', {
       method: 'POST',
@@ -1621,36 +1629,87 @@ async function startLocalTalk(topic) {
       body: JSON.stringify({ topic: localTalkTopic }),
     });
     var data = await r.json();
-    var meetingId = data.meetingId || 'local_' + Date.now();
-    var mfData = getMeetingData(meetingId);
-    mfData.topic = localTalkTopic;
-    mfData.status = 'live';
-    S.activeMeetingId = meetingId;
-    // Open tabbed meeting panel
-    openMeetingPanel(meetingId, 'local');
+    meetingId = data.meetingId || meetingId;
     if (data.prepBrief) {
       addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
     }
   } catch (e) {
-    var fallbackId = 'local_' + Date.now();
-    var mfFallback = getMeetingData(fallbackId);
-    mfFallback.topic = localTalkTopic;
-    mfFallback.status = 'live';
-    openMeetingPanel(fallbackId, 'local');
+    console.warn('[TalkLocally] Backend call failed, continuing with browser audio:', e);
   }
-  // Poll screenshot for the panel
-  localTalkTimer = setInterval(async () => {
-    try {
-      const r = await fetch(API + '/api/bridge/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'screenshot' }) });
-      const data = await r.json();
-      const el = document.getElementById('sp-screenshot');
-      if (el && data?.image) { el.innerHTML = '<img src="data:image/png;base64,' + data.image + '">'; }
-    } catch {}
-  }, 2000);
+  // Set up UI
+  var mfData = getMeetingData(meetingId);
+  mfData.topic = localTalkTopic;
+  mfData.status = 'live';
+  S.activeMeetingId = meetingId;
+  openMeetingPanel(meetingId, 'local');
+
+  // Start Electron-native audio bridge (replaces Python sidecar)
+  startAudioBridge('direct');
+}
+
+// ── Electron Audio Bridge Integration ──
+var _audioBridgeWs = null;
+
+function startAudioBridge(mode) {
+  if (typeof ElectronAudioBridge === 'undefined') {
+    console.warn('[AudioBridge] audio-bridge.js not loaded');
+    return;
+  }
+  // Connect WS to Bun for audio relay
+  try {
+    _audioBridgeWs = new WebSocket('ws://localhost:4000/ws/audio-bridge');
+    _audioBridgeWs.onopen = function() {
+      console.log('[AudioBridge] WS connected, starting audio capture...');
+      ElectronAudioBridge.start(mode, function(base64Pcm) {
+        if (_audioBridgeWs && _audioBridgeWs.readyState === WebSocket.OPEN) {
+          _audioBridgeWs.send(JSON.stringify({ type: 'audio_chunk', payload: { audio: base64Pcm, format: 'pcm16', rate: 24000 } }));
+        }
+      }).then(function(result) {
+        addMpActivity('done', 'Audio bridge: ' + result.mode + ' mode');
+        var dot = document.getElementById('st-voice');
+        if (dot) dot.className = 'st-dot green';
+      }).catch(function(err) {
+        addMpActivity('error', 'Audio bridge failed: ' + err.message);
+        console.error('[AudioBridge] Start failed:', err);
+      });
+    };
+    _audioBridgeWs.onmessage = function(e) {
+      try {
+        var msg = JSON.parse(e.data);
+        if (msg.type === 'audio_playback' && msg.payload && msg.payload.audio) {
+          ElectronAudioBridge.playAudio(msg.payload.audio);
+        }
+      } catch (err) {}
+    };
+    _audioBridgeWs.onclose = function() {
+      console.log('[AudioBridge] WS disconnected');
+      var dot = document.getElementById('st-voice');
+      if (dot) dot.className = 'st-dot';
+    };
+  } catch (err) {
+    console.error('[AudioBridge] WS connect failed:', err);
+  }
+}
+
+function stopAudioBridge() {
+  if (typeof ElectronAudioBridge !== 'undefined') {
+    ElectronAudioBridge.stop();
+  }
+  if (_audioBridgeWs) {
+    _audioBridgeWs.close();
+    _audioBridgeWs = null;
+  }
+  var dot = document.getElementById('st-voice');
+  if (dot) dot.className = 'st-dot';
 }
 
 async function stopLocalTalk() {
+  // 1. Stop browser audio (mic + speaker + WebSocket)
+  browserAudio.stop();
+
+  // 2. Stop screenshot polling
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
+  stopAudioBridge();
   try {
     var r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
     var data = await r.json();
@@ -1658,10 +1717,10 @@ async function stopLocalTalk() {
       addMpActivity('done', '会议记录已保存: ' + data.filepath);
     }
   } catch (e) {}
-  // Update data model
+
+  // 4. Update data model
   if (S.activeMeetingId && S.meetingFiles[S.activeMeetingId]) {
     S.meetingFiles[S.activeMeetingId].status = 'ended';
-    // Try loading summary after stop
     loadMeetingFile(S.activeMeetingId, 'summary').then(function(content) {
       if (content) renderMeetings();
     });
@@ -1669,6 +1728,7 @@ async function stopLocalTalk() {
   document.getElementById('sp-stop-btn').style.display = 'none';
   S.meetingMode = null;
   S.activeMeetingId = null;
+  updateStatusBar();
 }
 
 async function openPrepBrief(topic) {
