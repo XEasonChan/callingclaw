@@ -643,6 +643,45 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .mp-transcript-text { color: var(--text); }
 .mp-transcript-action { color: var(--green); font-size: 12px; font-style: italic; padding: 3px 8px; background: var(--green-soft); border-radius: 6px; margin-top: 3px; }
 .mp-transcript-time { font-size: 10px; color: var(--text3); }
+
+/* ── Side Panel Tabs ───────────────────────────────── */
+.sp-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  padding: 0 20px; flex-shrink: 0; background: var(--white);
+}
+.sp-tab {
+  padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--text2);
+  border: none; background: none; cursor: pointer; font-family: var(--font);
+  border-bottom: 2px solid transparent; transition: all var(--ease);
+  white-space: nowrap;
+}
+.sp-tab:hover { color: var(--text); }
+.sp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sp-tab-content { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+.sp-tab-content.active { display: flex; flex-direction: column; }
+.sp-tab-badge {
+  font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: var(--pill);
+  margin-left: 4px; vertical-align: middle;
+}
+.sp-tab-badge.live { background: var(--accent); color: #fff; }
+.sp-tab-badge.ready { background: var(--green-soft); color: #15803D; }
+.sp-tab-badge.pending { background: var(--surface); color: var(--text3); }
+
+/* ── Meeting File Attachments ──────────────────────── */
+.meet-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.meet-file {
+  font-size: 12px; color: var(--text2); padding: 4px 10px;
+  background: var(--surface); border-radius: var(--radius-xs);
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; transition: all var(--ease); white-space: nowrap;
+}
+.meet-file:hover { background: var(--border); }
+.meet-file.done { color: var(--green); background: var(--green-soft); }
+.meet-file.loading {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%);
+  background-size: 200% 100%; animation: shimmer 1.5s infinite;
+}
+.meet-file-icon { font-size: 11px; }
 </style>
 </head>
 <body>
@@ -773,7 +812,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script>
 const API = 'http://localhost:4000';
-const S = { daemon: false, meetings: [], notes: [], tasks: [], status: null, prepBrief: null, wsEvents: null, activeMeetingId: null, meetingMode: null };
+const S = {
+  daemon: false, meetings: [], notes: [], tasks: [], status: null, prepBrief: null,
+  wsEvents: null, activeMeetingId: null, meetingMode: null,
+  meetingFiles: {},   // { [meetingId]: { topic, status, prep: { status, content }, summary: { status, content }, agentFeed: [], meetUrl, calendarEventId } }
+  manifest: null, manifestTs: 0, // cached manifest with TTL
+};
 let localTalkTimer = null, localTalkTopic = '';
 let lastEventTs = 0, reconnectDelay = 1000;
 
@@ -815,6 +859,52 @@ function renderMd(src) {
   return esc(src || '').replace(/\n/g, '<br>');
 }
 
+// ── Meeting Data Model ──────────────────────────────
+function getMeetingData(meetingId) {
+  if (!meetingId) meetingId = 'tmp_' + Date.now();
+  if (!S.meetingFiles[meetingId]) {
+    S.meetingFiles[meetingId] = {
+      meetingId: meetingId,
+      topic: '', status: 'preparing', // preparing | live | ended
+      prep: { status: 'none', content: null },    // none | loading | done
+      summary: { status: 'none', content: null },  // none | loading | done
+      agentFeed: [], meetUrl: null, calendarEventId: null, startTime: null, endTime: null,
+    };
+  }
+  return S.meetingFiles[meetingId];
+}
+
+async function loadMeetingFile(meetingId, type) {
+  if (!meetingId) return null;
+  var data = getMeetingData(meetingId);
+  var fileObj = type === 'prep' ? data.prep : data.summary;
+  // Return cached content if already loaded
+  if (fileObj.status === 'done' && fileObj.content) return fileObj.content;
+  fileObj.status = 'loading';
+  try {
+    var suffix = type === 'prep' ? '_prep.md' : '_summary.md';
+    var res = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + suffix));
+    if (res && res.content) {
+      fileObj.status = 'done';
+      fileObj.content = res.content;
+      return res.content;
+    }
+  } catch (e) {}
+  // If not found by meetingId, don't reset to none — leave as loading
+  if (fileObj.status === 'loading') fileObj.status = 'none';
+  return null;
+}
+
+async function fetchManifestCached() {
+  var now = Date.now();
+  if (S.manifest && (now - S.manifestTs) < 30000) return S.manifest;
+  try {
+    var data = await fetchJSON(API + '/api/shared/manifest');
+    if (data) { S.manifest = data; S.manifestTs = now; }
+    return data;
+  } catch (e) { return S.manifest; }
+}
+
 // Side panel — generic markdown display
 function openPanel(title, content) {
   document.getElementById('sp-title').textContent = title;
@@ -830,38 +920,62 @@ function closePanel() {
   stopLocalTalk();
 }
 
-// ── Unified Meeting Panel (Talk Locally + Remote Meeting) ──
+// ── Tabbed Meeting Panel (Talk Locally + Remote Meeting) ──
 function openMeetingPanel(meetingId, mode) {
   S.activeMeetingId = meetingId;
   S.meetingMode = mode; // 'local' or 'remote'
-  const title = mode === 'local' ? '本地对话: ' + localTalkTopic : '会议';
+  var data = getMeetingData(meetingId);
+  var title = mode === 'local' ? '本地对话: ' + (data.topic || localTalkTopic) : (data.topic || '会议');
   document.getElementById('sp-title').textContent = title;
   document.getElementById('sp-stop-btn').style.display = '';
+  // Build tabbed layout
   document.getElementById('sp-body').innerHTML = [
-    // Prep section
-    '<div class="mp-prep" id="mp-prep">',
-    '  <div class="mp-section-header" onclick="toggleMpSection(\'prep\')"><span>会议准备</span><span class="mp-chevron" id="mp-prep-chevron">▾</span></div>',
-    '  <div class="mp-prep-body" id="mp-prep-body">',
-    '    <div class="mp-prep-topic" id="mp-prep-topic">加载中...</div>',
-    '    <div class="mp-prep-goal" id="mp-prep-goal"></div>',
-    '    <ul class="mp-prep-points" id="mp-prep-points"></ul>',
-    '    <div class="md" id="mp-prep-md" style="display:none"></div>',
+    // Tab bar
+    '<div class="sp-tabs" id="sp-tabs">',
+    '  <button class="sp-tab active" data-tab="feed" onclick="switchPanelTab(\'feed\')">实时动态<span class="sp-tab-badge live" id="sp-tab-feed-badge"></span></button>',
+    '  <button class="sp-tab" data-tab="prep" onclick="switchPanelTab(\'prep\')">会前调研' + (data.prep.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
+    '  <button class="sp-tab" data-tab="summary" onclick="switchPanelTab(\'summary\')">会议总结' + (data.summary.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '<span class="sp-tab-badge pending">…</span>') + '</button>',
+    '</div>',
+    // Tab: Live Feed
+    '<div class="sp-tab-content active" id="sp-tab-feed">',
+    '  <div class="mp-activity">',
+    '    <div class="mp-section-header" onclick="toggleMpSection(\'activity\')"><span>AI 活动</span><span class="mp-chevron" id="mp-activity-chevron">▾</span></div>',
+    '    <div class="mp-activity-body" id="mp-activity-body"></div>',
+    '  </div>',
+    '  <div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>实时记录</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
+    '  <div class="mp-transcript" id="mp-transcript"></div>',
+    mode === 'local' ? '  <div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
+    '</div>',
+    // Tab: Prep Doc
+    '<div class="sp-tab-content" id="sp-tab-prep">',
+    '  <div style="padding:20px;" class="md" id="sp-prep-content">加载中...</div>',
+    '</div>',
+    // Tab: Summary
+    '<div class="sp-tab-content" id="sp-tab-summary">',
+    '  <div style="padding:20px;" class="md" id="sp-summary-content">',
+    '    <div style="text-align:center;color:var(--text3);padding:40px 0;">会议进行中，总结将在结束后生成</div>',
     '  </div>',
     '</div>',
-    // Activity section
-    '<div class="mp-activity">',
-    '  <div class="mp-section-header" onclick="toggleMpSection(\'activity\')"><span>AI 活动</span><span class="mp-chevron" id="mp-activity-chevron">▾</span></div>',
-    '  <div class="mp-activity-body" id="mp-activity-body"></div>',
-    '</div>',
-    // Transcript section
-    '<div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>实时记录</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
-    '<div class="mp-transcript" id="mp-transcript"></div>',
-    // Screenshot section (local mode only)
-    mode === 'local' ? '<div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
   ].join('\n');
   document.getElementById('side-panel').classList.add('open');
-  // Load prep brief from shared files
-  loadPrepBrief(meetingId);
+  // Load prep content into Prep tab
+  loadMeetingFile(meetingId, 'prep').then(function(content) {
+    var el = document.getElementById('sp-prep-content');
+    if (el && content) el.innerHTML = renderMd(content);
+    else if (el) el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px 0;">尚未生成会前调研</div>';
+  });
+  // Load summary if already available
+  if (data.summary.status === 'done' && data.summary.content) {
+    var sumEl = document.getElementById('sp-summary-content');
+    if (sumEl) sumEl.innerHTML = renderMd(data.summary.content);
+  }
+}
+
+function switchPanelTab(tabName) {
+  var tabs = document.querySelectorAll('#sp-tabs .sp-tab');
+  var contents = document.querySelectorAll('.sp-tab-content');
+  tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tabName); });
+  contents.forEach(function(c) { c.classList.toggle('active', c.id === 'sp-tab-' + tabName); });
 }
 
 function toggleMpSection(id) {
@@ -875,45 +989,20 @@ function toggleMpSection(id) {
 
 async function loadPrepBrief(meetingId) {
   if (!meetingId) return;
-  try {
-    // Try loading the _prep.md file by meetingId
-    const data = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + '_prep.md'));
-    if (data && data.content) {
-      const mdEl = document.getElementById('mp-prep-md');
-      const topicEl = document.getElementById('mp-prep-topic');
-      const goalEl = document.getElementById('mp-prep-goal');
-      const pointsEl = document.getElementById('mp-prep-points');
-      if (mdEl) { mdEl.innerHTML = renderMd(data.content); mdEl.style.display = ''; }
-      if (topicEl) topicEl.style.display = 'none';
-      if (goalEl) goalEl.style.display = 'none';
-      if (pointsEl) pointsEl.style.display = 'none';
-      document.getElementById('mp-prep')?.classList.add('show');
-      return;
-    }
-  } catch {}
-  // Fallback: try the prep-brief API
-  try {
-    const apiData = await fetchJSON(API + '/api/meeting/prep-brief');
-    if (apiData?.prepBrief?.topic) {
-      showMpPrepBrief(apiData.prepBrief);
-      return;
-    }
-  } catch {}
-  // No prep available — hide section
-  const topicEl = document.getElementById('mp-prep-topic');
-  if (topicEl) topicEl.textContent = '尚未生成会前调研';
+  // Use unified loadMeetingFile — updates data model automatically
+  var content = await loadMeetingFile(meetingId, 'prep');
+  // Update the Prep tab content if panel is open
+  var el = document.getElementById('sp-prep-content');
+  if (el && content) el.innerHTML = renderMd(content);
+  else if (el) el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px 0;">尚未生成会前调研</div>';
+  // Update prep tab badge
+  var prepTab = document.querySelector('#sp-tabs .sp-tab[data-tab="prep"]');
+  if (prepTab && content) {
+    prepTab.innerHTML = '会前调研<span class="sp-tab-badge ready">✓</span>';
+  }
 }
 
-function showMpPrepBrief(brief) {
-  document.getElementById('mp-prep-topic').textContent = brief.topic || '';
-  document.getElementById('mp-prep-goal').textContent = brief.goal ? '目标: ' + brief.goal : '';
-  const pointsEl = document.getElementById('mp-prep-points');
-  if (pointsEl) {
-    pointsEl.innerHTML = '';
-    (brief.keyPoints || []).forEach(function(p) { const li = document.createElement('li'); li.textContent = p; pointsEl.appendChild(li); });
-  }
-  document.getElementById('mp-prep')?.classList.add('show');
-}
+// showMpPrepBrief removed — prep content now lives in the Prep tab of the tabbed panel
 
 // ── Unified Meeting Event Handler (ported from overlay.html) ──
 function handleMeetingEvent(event) {
@@ -930,10 +1019,32 @@ function handleMeetingEvent(event) {
       break;
     case 'meeting.ended':
       addMpActivity('done', '会议已结束');
+      // Update data model
+      if (S.activeMeetingId && S.meetingFiles[S.activeMeetingId]) {
+        S.meetingFiles[S.activeMeetingId].status = 'ended';
+      }
+      // Try loading summary (may not be ready yet — will update via meeting.summary_ready)
+      if (S.activeMeetingId) {
+        loadMeetingFile(S.activeMeetingId, 'summary').then(function(content) {
+          if (content) {
+            var sumTab = document.querySelector('#sp-tabs .sp-tab[data-tab="summary"]');
+            if (sumTab) sumTab.innerHTML = '会议总结<span class="sp-tab-badge ready">✓</span>';
+            var sumEl = document.getElementById('sp-summary-content');
+            if (sumEl) sumEl.innerHTML = renderMd(content);
+            renderMeetings();
+          }
+        });
+      }
       S.meetingMode = null;
       break;
     case 'meeting.agenda':
-      if (data.topic) showMpPrepBrief(data);
+      if (data.topic && S.activeMeetingId) {
+        var agData = getMeetingData(S.activeMeetingId);
+        agData.topic = data.topic;
+        // Update panel title
+        var spTitle = document.getElementById('sp-title');
+        if (spTitle) spTitle.textContent = data.topic;
+      }
       break;
     case 'voice.tool_call':
       addMpActivity('tool', data.tool || 'tool call');
@@ -1037,10 +1148,12 @@ async function refreshAll() {
   updateStatusBar();
   renderEngineBanner();
   if (!S.daemon) { document.getElementById('meeting-list').innerHTML = ''; return; }
-  const [status, evts, notes, tasks] = await Promise.all([
+  var [status, evts, notes, tasks] = await Promise.all([
     fetchJSON(API + '/api/status'), fetchJSON(API + '/api/calendar/events'),
     fetchJSON(API + '/api/meeting/notes'), fetchJSON(API + '/api/tasks'),
   ]);
+  // Fetch manifest (with 30s TTL cache) for past meeting grouping
+  fetchManifestCached();
   S.status = status;
   // Normalize calendar events — API returns flat start/end strings + meetLink,
   // but rendering code expects { start: { dateTime }, hangoutLink }
@@ -1053,28 +1166,24 @@ async function refreshAll() {
   }));
   S.notes = Array.isArray(notes) ? notes : (notes?.files || []);
   S.tasks = Array.isArray(tasks) ? tasks : (tasks?.tasks || []);
-  // Restore cached prep briefs for meetings
-  try {
-    const cached = JSON.parse(localStorage.getItem('cc_prep_cache') || '{}');
-    for (const m of S.meetings) {
-      if (cached[m.summary || ''] && !m._prepBrief) m._prepBrief = cached[m.summary];
+  // Sync manifest sessions into meetingFiles data model for past meetings
+  if (S.manifest && S.manifest.sessions) {
+    for (var si = 0; si < S.manifest.sessions.length; si++) {
+      var sess = S.manifest.sessions[si];
+      if (sess.meetingId && !S.meetingFiles[sess.meetingId]) {
+        var sessData = getMeetingData(sess.meetingId);
+        sessData.topic = sess.topic || '';
+        sessData.status = 'ended';
+        sessData.meetUrl = sess.meetUrl || null;
+        sessData.startTime = sess.date || sess.startTime || null;
+      }
     }
-  } catch {}
+  }
   updateStatusBar();
   renderMeetings();
 }
 
-// Save prep brief to localStorage cache (keyed by meeting title)
-function cachePrepBrief(title, brief) {
-  try {
-    const cached = JSON.parse(localStorage.getItem('cc_prep_cache') || '{}');
-    cached[title] = brief;
-    // Keep only last 20 entries
-    const keys = Object.keys(cached);
-    if (keys.length > 20) delete cached[keys[0]];
-    localStorage.setItem('cc_prep_cache', JSON.stringify(cached));
-  } catch {}
-}
+// Note: cachePrepBrief removed — data now lives in S.meetingFiles data model
 
 function renderEngineBanner() {
   const slot = document.getElementById('engine-banner-slot');
@@ -1126,26 +1235,34 @@ function meetingStatus(event) {
 
 // Render dynamic meeting list only (does NOT touch greeting or input)
 function renderMeetings() {
-  // Preserve any active prep cards — they live inside meeting-list
-  const existingPrepCards = document.querySelectorAll('[id^="prep-card-"]');
-  if (existingPrepCards.length > 0) {
-    // Prep cards have dynamic state (progress, agent activity) — don't destroy them.
-    // Instead, only update the sections AFTER the prep cards.
-    const el = document.getElementById('meeting-list');
-    if (!el) return;
-    // Remove only non-prep-card children (meeting rows, section titles, empty messages)
-    const toRemove = [];
-    for (const child of el.children) {
-      if (!child.id?.startsWith('prep-card-') && !child.id?.endsWith('-wrap')) toRemove.push(child);
+  // Preserve any active prep cards (preparing meetings with live agent feed)
+  var el = document.getElementById('meeting-list');
+  if (!el) return;
+  var prepWraps = el.querySelectorAll('[id$="-wrap"]');
+  if (prepWraps.length > 0) {
+    // Check if any wraps belong to currently-preparing meetings
+    var hasPrepInProgress = false;
+    for (var wi = 0; wi < prepWraps.length; wi++) {
+      var wid = prepWraps[wi].id.replace('-wrap', '');
+      if (S.meetingFiles[wid] && S.meetingFiles[wid].prep.status === 'loading') {
+        hasPrepInProgress = true;
+        break;
+      }
     }
-    toRemove.forEach(c => c.remove());
-    // Append calendar + notes sections after prep cards
-    const frag = document.createElement('div');
-    frag.innerHTML = buildMeetingListHTML();
-    while (frag.firstChild) el.appendChild(frag.firstChild);
-    return;
+    if (hasPrepInProgress) {
+      // Remove only non-wrap children, then append fresh meeting list
+      var toRemove = [];
+      for (var ci = 0; ci < el.children.length; ci++) {
+        var child = el.children[ci];
+        if (!child.id || !child.id.endsWith('-wrap')) toRemove.push(child);
+      }
+      toRemove.forEach(function(c) { c.remove(); });
+      var frag = document.createElement('div');
+      frag.innerHTML = buildMeetingListHTML();
+      while (frag.firstChild) el.appendChild(frag.firstChild);
+      return;
+    }
   }
-  const el = document.getElementById('meeting-list');
   el.innerHTML = buildMeetingListHTML();
 }
 
@@ -1167,25 +1284,24 @@ function buildMeetingListHTML() {
   }
 
   // Upcoming meetings
-  const upcoming = S.meetings.filter(e => new Date(e.start?.dateTime || e.start?.date) > now - 3600000);
+  var upcoming = S.meetings.filter(function(e) { return new Date(e.start?.dateTime || e.start?.date) > now - 3600000; });
   if (upcoming.length > 0) {
     html += '<div class="meet-section-title">Coming up</div><div class="meet-list">';
-    for (let i = 0; i < Math.min(upcoming.length, 8); i++) { const e = upcoming[i];
-      const start = e.start?.dateTime || e.start?.date;
-      const end = e.end?.dateTime || e.end?.date;
-      const dp = fmtDateParts(start);
-      const st = meetingStatus(e);
-      const hasLink = !!e.hangoutLink;
-      const eid = 'cal_' + (e.id || i);
+    for (var i = 0; i < Math.min(upcoming.length, 8); i++) { var e = upcoming[i];
+      var start = e.start?.dateTime || e.start?.date;
+      var end = e.end?.dateTime || e.end?.date;
+      var dp = fmtDateParts(start);
+      var st = meetingStatus(e);
+      var hasLink = !!e.hangoutLink;
+      var eid = 'cal_' + (e.id || i);
+      // Find associated meetingFiles data (by topic or meetUrl match)
+      var mfData = findMeetingDataForEvent(e);
       html += '<div class="meet-row clickable" onclick="openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\')" data-eid="' + eid + '">';
       html += '<div class="meet-date"><div class="meet-date-num">' + dp.day + '</div><div class="meet-date-sub">' + dp.month + ' ' + dp.weekday + '</div></div>';
-      const hasPrepBrief = !!(e._prepBrief);
       html += '<div class="meet-info"><div class="meet-title">' + esc(e.summary || '无标题') + '</div>';
       html += '<div class="meet-time">' + fmtTime(start) + (end ? ' - ' + fmtTime(end) : '') + '</div>';
-      // Show prep brief as attachment if available
-      if (hasPrepBrief) {
-        html += '<div class="prep-attach done" onclick="event.stopPropagation();openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\')">✅ Meeting Prep — 点击查看</div>';
-      }
+      // File attachments — always visible
+      html += renderMeetingFileAttachments(mfData, e.summary, e.hangoutLink);
       html += '</div>';
       if (st && st.cls !== 'ended') html += '<span class="meet-badge ' + st.cls + '">' + st.label + '</span>';
       html += '<div class="meet-actions" onclick="event.stopPropagation()">';
@@ -1196,18 +1312,101 @@ function buildMeetingListHTML() {
     html += '</div>';
   } else if (!activeMeeting) {
     if (!S.calendarConnected) {
-      html += '<div class="empty fade-in"><p style="color:var(--muted);">⚠️ Google Calendar disconnected — check OAuth token in Settings</p></div>';
+      html += '<div class="empty fade-in"><p style="color:var(--muted);">Google Calendar disconnected — check OAuth token in Settings</p></div>';
     } else {
       html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
     }
   }
 
-  // Past meetings (from notes)
-  if (S.notes.length > 0) {
+  // Past meetings — grouped by session from manifest
+  html += renderPastMeetingsHTML();
+
+  return html;
+}
+
+// Find meetingFiles data matching a calendar event (by topic or meetUrl)
+function findMeetingDataForEvent(calEvent) {
+  for (var id in S.meetingFiles) {
+    var d = S.meetingFiles[id];
+    if (d.topic === calEvent.summary || (d.meetUrl && d.meetUrl === calEvent.hangoutLink)) return d;
+  }
+  return null;
+}
+
+// Render file attachment badges for a meeting card
+function renderMeetingFileAttachments(mfData, topic, meetUrl) {
+  var html = '<div class="meet-files" onclick="event.stopPropagation()">';
+  if (mfData) {
+    var mid = mfData.meetingId;
+    if (mfData.prep.status === 'loading') {
+      html += '<span class="meet-file loading"><span class="meet-file-icon">📋</span> Meeting Prep...</span>';
+    } else if (mfData.prep.status === 'done') {
+      html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'prep\')"><span class="meet-file-icon">📋</span> Meeting Prep</span>';
+    }
+    if (mfData.summary.status === 'done') {
+      html += '<span class="meet-file done" onclick="openMeetingFileInPanel(\'' + esc(mid) + '\', \'summary\')"><span class="meet-file-icon">📝</span> Meeting Summary</span>';
+    }
+  }
+  html += '</div>';
+  // Don't render empty container if no files
+  if (!mfData || (mfData.prep.status === 'none' && mfData.summary.status === 'none')) return '';
+  return html;
+}
+
+// Open a specific meeting file in the side panel
+function openMeetingFileInPanel(meetingId, type) {
+  var data = S.meetingFiles[meetingId];
+  if (!data) return;
+  var title = type === 'prep' ? '📋 会前调研: ' + (data.topic || '') : '📝 会议总结: ' + (data.topic || '');
+  var fileObj = type === 'prep' ? data.prep : data.summary;
+  if (fileObj.content) {
+    // If meeting is active, open tabbed panel and switch to the right tab
+    if (S.meetingMode && S.activeMeetingId === meetingId) {
+      switchPanelTab(type === 'prep' ? 'prep' : 'summary');
+      return;
+    }
+    openPanel(title, fileObj.content);
+  } else {
+    // Load then show
+    openPanel(title, '加载中...');
+    loadMeetingFile(meetingId, type).then(function(content) {
+      if (content) openPanel(title, content);
+      else openPanel(title, '暂无内容');
+    });
+  }
+}
+
+// Render past meetings from manifest sessions
+function renderPastMeetingsHTML() {
+  var manifest = S.manifest;
+  var html = '';
+  // Combine manifest sessions with note files
+  var sessions = (manifest && manifest.sessions) ? manifest.sessions : [];
+  // Also include any S.meetingFiles entries with status 'ended'
+  var endedIds = {};
+  for (var id in S.meetingFiles) {
+    if (S.meetingFiles[id].status === 'ended') endedIds[id] = true;
+  }
+  // Merge: manifest sessions + ended meetingFiles
+  var pastItems = [];
+  for (var si = 0; si < sessions.length; si++) {
+    var sess = sessions[si];
+    pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sess.date || sess.startTime });
+    if (sess.meetingId) endedIds[sess.meetingId] = false; // Don't duplicate
+  }
+  for (var eid in endedIds) {
+    if (endedIds[eid]) {
+      var d = S.meetingFiles[eid];
+      pastItems.push({ meetingId: eid, topic: d.topic, meetUrl: d.meetUrl, date: d.startTime });
+    }
+  }
+  // Fallback: if no manifest sessions but we have notes, show notes as flat list
+  if (pastItems.length === 0 && S.notes.length > 0) {
     html += '<div class="meet-section-title">Past meetings</div><div class="meet-list">';
-    for (const f of S.notes.slice(0, 8)) {
-      const name = typeof f === 'string' ? f : f.name || f.filename || '';
-      const p = parseNoteFilename(name);
+    for (var ni = 0; ni < Math.min(S.notes.length, 8); ni++) {
+      var f = S.notes[ni];
+      var name = typeof f === 'string' ? f : f.name || f.filename || '';
+      var p = parseNoteFilename(name);
       html += '<div class="note-row" onclick="openNote(\'' + esc(name) + '\')">';
       html += '<div class="note-icon">' + IC.doc + '</div>';
       html += '<div class="note-info"><div class="note-title">' + esc(p.title) + '</div></div>';
@@ -1215,132 +1414,193 @@ function buildMeetingListHTML() {
       html += '</div>';
     }
     html += '</div>';
+    return html;
   }
-
+  if (pastItems.length === 0) return '';
+  html += '<div class="meet-section-title">Past meetings</div><div class="meet-list">';
+  for (var pi = 0; pi < Math.min(pastItems.length, 8); pi++) {
+    var item = pastItems[pi];
+    var mid = item.meetingId || '';
+    // Ensure meetingFiles entry exists for this session
+    if (mid && !S.meetingFiles[mid]) {
+      var mfd = getMeetingData(mid);
+      mfd.topic = item.topic || '';
+      mfd.status = 'ended';
+      mfd.meetUrl = item.meetUrl || null;
+      mfd.startTime = item.date || null;
+    }
+    var mfData = mid ? S.meetingFiles[mid] : null;
+    var dateParts = item.date ? fmtDateParts(item.date) : null;
+    html += '<div class="meet-row clickable" onclick="openPastMeetingPanel(\'' + esc(mid) + '\')">';
+    if (dateParts) {
+      html += '<div class="meet-date"><div class="meet-date-num">' + dateParts.day + '</div><div class="meet-date-sub">' + dateParts.month + ' ' + dateParts.weekday + '</div></div>';
+    } else {
+      html += '<div class="meet-date"><div class="meet-date-num" style="color:var(--text3)">—</div></div>';
+    }
+    html += '<div class="meet-info"><div class="meet-title">' + esc(item.topic || '会议') + '</div>';
+    if (item.date) html += '<div class="meet-time">' + fmtTime(item.date) + '</div>';
+    // File attachments for past meetings
+    html += renderMeetingFileAttachments(mfData, item.topic, item.meetUrl);
+    html += '</div>';
+    html += '<span class="meet-badge" style="background:var(--surface);color:var(--text3);">已结束</span>';
+    html += '</div>';
+  }
+  html += '</div>';
   return html;
+}
+
+// Open a past meeting in the side panel (show prep + summary)
+async function openPastMeetingPanel(meetingId) {
+  if (!meetingId) return;
+  var data = getMeetingData(meetingId);
+  var title = data.topic || '会议';
+  // Load both files
+  var prepContent = await loadMeetingFile(meetingId, 'prep');
+  var summaryContent = await loadMeetingFile(meetingId, 'summary');
+  var md = '# ' + esc(title) + '\n\n';
+  if (prepContent) {
+    md += '## 📋 会前调研\n\n' + prepContent + '\n\n';
+  }
+  if (summaryContent) {
+    md += '## 📝 会议总结\n\n' + summaryContent + '\n\n';
+  }
+  if (!prepContent && !summaryContent) {
+    md += '> 暂无会议文件。\n';
+  }
+  openPanel(title, md);
+  // Re-render cards to show updated file badges
+  renderMeetings();
 }
 
 // Actions
 async function submitTopic() {
-  const inp = document.getElementById('topic-input'), topic = inp.value.trim();
+  var inp = document.getElementById('topic-input'), topic = inp.value.trim();
   if (!topic) return;
   inp.value = '';
-  const listEl = document.getElementById('meeting-list');
-  // Show card immediately with topic (no shimmer on the card itself)
-  const cardId = 'prep-card-' + Date.now();
-  const cardHtml = '<div class="meet-list" id="' + cardId + '-wrap">'
-    + '<div class="meet-row clickable" id="' + cardId + '" onclick="openPrepPanel(\'' + cardId + '\')">'
+  var listEl = document.getElementById('meeting-list');
+  // Create a temporary meetingId; will be replaced when backend responds
+  var tempId = 'prep_' + Date.now();
+  var mfData = getMeetingData(tempId);
+  mfData.topic = topic;
+  mfData.status = 'preparing';
+  mfData.prep.status = 'loading';
+  mfData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 已提交话题，等待 OpenClaw 处理...');
+  // Show card immediately
+  var cardHtml = '<div class="meet-list" id="' + tempId + '-wrap">'
+    + '<div class="meet-row clickable" id="' + tempId + '" onclick="openPrepPanel(\'' + tempId + '\')">'
     + '<div class="meet-date"><div class="meet-date-num" style="color:var(--text3)">--</div><div class="meet-date-sub"></div></div>'
     + '<div class="meet-info"><div class="meet-title">' + esc(topic) + '</div>'
     + '<div class="meet-time" style="color:var(--text3)">正在创建日历和会议链接...</div>'
-    + '<div class="prep-attach shimmer" id="' + cardId + '-prep" onclick="event.stopPropagation();openPrepPanel(\'' + cardId + '\')">'
-    + '📋 Meeting Prep — OpenClaw is researching...</div>'
-    + '</div></div></div>';
+    + '<div class="meet-files" onclick="event.stopPropagation()">'
+    + '<span class="meet-file loading" id="' + tempId + '-prep"><span class="meet-file-icon">📋</span> Meeting Prep...</span>'
+    + '</div>'
+    + '</div>'
+    + '<div class="meet-actions" onclick="event.stopPropagation()">'
+    + '<span class="meet-action local" onclick="startLocalTalk(\'' + esc(topic) + '\')">Talk Locally</span>'
+    + '</div>'
+    + '</div></div>';
   listEl.insertAdjacentHTML('afterbegin', cardHtml);
-  // Store prep panel state for this card
-  window['_prepCards'] = window['_prepCards'] || {};
-  window['_prepCards'][cardId] = { topic, agentFeed: ['[' + new Date().toLocaleTimeString('zh-CN') + '] 已提交话题，等待 OpenClaw 处理...'], prepBrief: null };
-  // Immediately open side panel with live log (Pneuma-style)
-  openPrepPanel(cardId);
-  // Add Talk Locally button immediately
-  const card0 = document.getElementById(cardId);
-  if (card0) {
-    const act = document.createElement('div');
-    act.className = 'meet-actions';
-    act.setAttribute('onclick', 'event.stopPropagation()');
-    act.innerHTML = '<span class="meet-link accent" onclick="startLocalTalk(\'' + esc(topic) + '\')">Talk Locally</span>';
-    card0.appendChild(act);
-  }
+  // Open side panel with agent activity feed
+  openPrepPanel(tempId);
   try {
-    // Delegate to OpenClaw — it handles title, time, calendar, research autonomously
-    // Falls back to direct prepare if OpenClaw unavailable
-    let r = await fetch(API + '/api/meeting/delegate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
-    let data = await r.json();
+    var r = await fetch(API + '/api/meeting/delegate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: topic }) });
+    var data = await r.json();
     if (data.error) {
-      // OpenClaw unavailable — fallback to direct prepare
-      const pc0 = window['_prepCards'][cardId];
-      if (pc0) pc0.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] OpenClaw 不可用，使用直接创建...');
-      r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic }) });
+      mfData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] OpenClaw 不可用，使用直接创建...');
+      r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: topic }) });
       data = await r.json();
     }
-    const pc = window['_prepCards'][cardId];
-    if (pc) {
-      pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw 已接管，自主处理中...' : '后端直接处理中...'));
-      if (data.meetingId) pc.meetingId = data.meetingId; // Store meetingId from delegate response
+    mfData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw 已接管，自主处理中...' : '后端直接处理中...'));
+    if (data.meetingId) {
+      // Migrate temp entry to real meetingId
+      var realId = data.meetingId;
+      S.meetingFiles[realId] = mfData;
+      mfData.meetingId = realId;
+      if (tempId !== realId) delete S.meetingFiles[tempId];
+      // Update DOM ids
+      var wrapEl = document.getElementById(tempId + '-wrap');
+      if (wrapEl) wrapEl.id = realId + '-wrap';
+      var cardEl = document.getElementById(tempId);
+      if (cardEl) { cardEl.id = realId; cardEl.setAttribute('onclick', "openPrepPanel('" + realId + "')"); }
+      var prepBadge = document.getElementById(tempId + '-prep');
+      if (prepBadge) prepBadge.id = realId + '-prep';
     }
-    if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cardId);
-    // All subsequent updates come via WebSocket events
+    if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(mfData.meetingId);
   } catch(e) {
     console.error('[Prep]', e);
-    const wrap = document.getElementById(cardId + '-wrap'); if (wrap) wrap.remove();
+    var wrap = document.getElementById(tempId + '-wrap'); if (wrap) wrap.remove();
+    delete S.meetingFiles[tempId];
   }
 }
 
 // Open prep panel showing agent feed + brief (or loading state)
-function openPrepPanel(cardId) {
-  const pc = window['_prepCards']?.[cardId];
-  if (!pc) { openPanel('会前调研', '暂无准备资料。'); return; }
-  // If OpenClaw already wrote the markdown, render it directly
-  if (pc.mdContent) {
-    openPanel('📋 ' + (pc.title || pc.topic), pc.mdContent);
+function openPrepPanel(meetingId) {
+  var data = S.meetingFiles[meetingId];
+  if (!data) { openPanel('会前调研', '暂无准备资料。'); return; }
+  // If prep is done and content is available, render it directly
+  if (data.prep.status === 'done' && data.prep.content) {
+    openPanel('📋 ' + (data.topic || ''), data.prep.content);
     return;
   }
-  // If we have a meetingId, try loading from shared file
-  if (pc.meetingId) {
-    loadPrepBrief(pc.meetingId);
-  }
-  let md = '# ' + esc(pc.title || pc.topic) + '\n\n';
+  // Show agent activity feed while researching
+  var md = '# ' + esc(data.topic || '') + '\n\n';
   md += '> OpenClaw 正在深度调研中...\n\n';
   md += '## Agent Activity\n\n';
-  md += pc.agentFeed.map(function(f) { return '- ' + f; }).join('\n');
+  md += data.agentFeed.map(function(f) { return '- ' + f; }).join('\n');
   md += '\n\n*调研完成后将自动更新*';
-  openPanel('📋 ' + (pc.title || pc.topic), md);
+  openPanel('📋 ' + (data.topic || ''), md);
 }
 
 function submitTopicFor(topic) { document.getElementById('topic-input').value = topic; submitTopic(); }
 
 async function openCalendarMeetingPanel(topic, meetUrl) {
-  // Show loading state
   openPanel(topic || '会议详情', '正在加载会议信息...');
-  // Look up meetingId from sessions.json via manifest API
-  let meetingId = null;
-  try {
-    const manifest = await fetchJSON(API + '/api/shared/manifest');
-    if (manifest?.sessions) {
-      // Find session matching this topic or calendar event
-      const session = manifest.sessions.find(function(s) { return s.topic === topic || s.meetUrl === meetUrl; });
-      if (session) meetingId = session.meetingId;
-    }
-  } catch {}
-  // Try loading prep.md by meetingId
-  let md = '';
+  // Find meetingId from manifest
+  var meetingId = null;
+  var manifest = await fetchManifestCached();
+  if (manifest && manifest.sessions) {
+    var session = manifest.sessions.find(function(s) { return s.topic === topic || s.meetUrl === meetUrl; });
+    if (session) meetingId = session.meetingId;
+  }
+  // Load files via data model
   if (meetingId) {
-    try {
-      const data = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + '_prep.md'));
-      if (data?.content) md = data.content;
-    } catch {}
+    var data = getMeetingData(meetingId);
+    data.topic = data.topic || topic;
+    data.meetUrl = data.meetUrl || meetUrl;
+    var prepContent = await loadMeetingFile(meetingId, 'prep');
+    var summaryContent = await loadMeetingFile(meetingId, 'summary');
+    var md = '';
+    if (prepContent) {
+      md += prepContent + '\n\n';
+    } else {
+      md += '# ' + esc(topic || '会议') + '\n\n> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
+    }
+    if (summaryContent) {
+      md += '---\n## 📝 会议总结\n\n' + summaryContent + '\n\n';
+    }
+    if (meetUrl) md += '\n---\n**会议链接:** ' + meetUrl + '\n';
+    openPanel(topic || '会议详情', md);
+    renderMeetings(); // Re-render to update file badges
+  } else {
+    var md2 = '# ' + esc(topic || '会议') + '\n\n> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
+    if (meetUrl) md2 += '\n---\n**会议链接:** ' + meetUrl + '\n';
+    openPanel(topic || '会议详情', md2);
   }
-  if (!md) {
-    md = '# ' + (topic || '会议') + '\n\n> 尚未生成会前调研。点击下方按钮开始准备。\n\n';
-  }
-  if (meetUrl) md += '\n---\n**会议链接:** ' + meetUrl + '\n';
-  md += '\n---\n';
-  md += '**操作:** ';
-  if (meetUrl) md += '[加入会议](' + meetUrl + ') | ';
-  md += '[开始本地对话](#local:' + encodeURIComponent(topic) + ')\n';
-  openPanel(topic || '会议详情', md);
 }
 
 async function joinMeeting(url) {
   if (!url) return;
   try {
-    const r = await fetch(API + '/api/meeting/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-    const data = await r.json();
+    var r = await fetch(API + '/api/meeting/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url }) });
+    var data = await r.json();
     if (data.meetingId) {
+      var mfData = getMeetingData(data.meetingId);
+      mfData.status = 'live';
+      mfData.meetUrl = url;
       S.activeMeetingId = data.meetingId;
       openMeetingPanel(data.meetingId, 'remote');
     }
-  } catch {}
+  } catch (e) {}
   setTimeout(refreshAll, 3000);
 }
 
@@ -1349,27 +1609,32 @@ async function leaveMeeting() {
   setTimeout(refreshAll, 2000);
 }
 
-// Talk Locally — full meeting intelligence stack (voice + transcript + auditor + vision + DOM context)
-// Talk Locally — unified meeting panel with full meeting intelligence stack
+// Talk Locally — full meeting intelligence stack
 async function startLocalTalk(topic) {
   localTalkTopic = topic || 'Local Conversation';
   try {
-    const r = await fetch(API + '/api/meeting/talk-locally', {
+    var r = await fetch(API + '/api/meeting/talk-locally', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic: localTalkTopic }),
     });
-    const data = await r.json();
-    const meetingId = data.meetingId || null;
+    var data = await r.json();
+    var meetingId = data.meetingId || 'local_' + Date.now();
+    var mfData = getMeetingData(meetingId);
+    mfData.topic = localTalkTopic;
+    mfData.status = 'live';
     S.activeMeetingId = meetingId;
-    // Open unified meeting panel
+    // Open tabbed meeting panel
     openMeetingPanel(meetingId, 'local');
     if (data.prepBrief) {
       addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
     }
-  } catch {
-    // Fallback: open panel without meetingId
-    openMeetingPanel(null, 'local');
+  } catch (e) {
+    var fallbackId = 'local_' + Date.now();
+    var mfFallback = getMeetingData(fallbackId);
+    mfFallback.topic = localTalkTopic;
+    mfFallback.status = 'live';
+    openMeetingPanel(fallbackId, 'local');
   }
   // Poll screenshot for the panel
   localTalkTimer = setInterval(async () => {
@@ -1385,12 +1650,20 @@ async function startLocalTalk(topic) {
 async function stopLocalTalk() {
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
   try {
-    const r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
-    const data = await r.json();
-    if (data?.filepath) {
+    var r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
+    var data = await r.json();
+    if (data && data.filepath) {
       addMpActivity('done', '会议记录已保存: ' + data.filepath);
     }
-  } catch {}
+  } catch (e) {}
+  // Update data model
+  if (S.activeMeetingId && S.meetingFiles[S.activeMeetingId]) {
+    S.meetingFiles[S.activeMeetingId].status = 'ended';
+    // Try loading summary after stop
+    loadMeetingFile(S.activeMeetingId, 'summary').then(function(content) {
+      if (content) renderMeetings();
+    });
+  }
   document.getElementById('sp-stop-btn').style.display = 'none';
   S.meetingMode = null;
   S.activeMeetingId = null;
@@ -1398,20 +1671,16 @@ async function stopLocalTalk() {
 
 async function openPrepBrief(topic) {
   openPanel('会前调研: ' + topic, '加载中...');
-  // Try to find meetingId from sessions
-  let meetingId = null;
-  try {
-    const manifest = await fetchJSON(API + '/api/shared/manifest');
-    if (manifest?.sessions) {
-      const session = manifest.sessions.find(function(s) { return s.topic === topic; });
-      if (session) meetingId = session.meetingId;
-    }
-  } catch {}
+  // Find meetingId from manifest
+  var manifest = await fetchManifestCached();
+  var meetingId = null;
+  if (manifest && manifest.sessions) {
+    var session = manifest.sessions.find(function(s) { return s.topic === topic; });
+    if (session) meetingId = session.meetingId;
+  }
   if (meetingId) {
-    try {
-      const data = await fetchJSON(API + '/api/shared/file?path=' + encodeURIComponent(meetingId + '_prep.md'));
-      if (data?.content) { openPanel('会前调研: ' + topic, data.content); return; }
-    } catch {}
+    var content = await loadMeetingFile(meetingId, 'prep');
+    if (content) { openPanel('会前调研: ' + topic, content); return; }
   }
   openPanel('会前调研: ' + topic, '暂无准备资料。请先使用「准备会议」功能。');
 }
@@ -1477,71 +1746,129 @@ function routeWsEvent(msg) {
     handleMeetingEvent({ type: eventType, data: msg.data || {} , timestamp: msg.timestamp });
   }
 
-  // ── Prep pipeline events (update prep cards in meeting list) ──
+  // ── Prep pipeline events (update meetingFiles data model) ──
   if (eventType === 'meeting.prep_progress' && msg.data) {
-    const cards = window['_prepCards'] || {};
-    for (const [cid, pc] of Object.entries(cards)) {
-      if (pc.prepBrief) continue;
-      const message = msg.data.message || msg.data.step || '';
-      pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + message);
-      // Store meetingId from prep progress
-      if (msg.data.meetingId && !pc.meetingId) pc.meetingId = msg.data.meetingId;
-      const card = document.getElementById(cid);
+    // Find the preparing meeting in S.meetingFiles
+    var progressMid = msg.data.meetingId || null;
+    var targets = [];
+    for (var pid in S.meetingFiles) {
+      var pd = S.meetingFiles[pid];
+      if (pd.prep.status !== 'done') targets.push(pd);
+    }
+    // If we got a meetingId, migrate temp entry if needed
+    if (progressMid) {
+      for (var ti = 0; ti < targets.length; ti++) {
+        var td = targets[ti];
+        if (td.meetingId !== progressMid && td.meetingId.startsWith('prep_')) {
+          var oldId = td.meetingId;
+          S.meetingFiles[progressMid] = td;
+          td.meetingId = progressMid;
+          delete S.meetingFiles[oldId];
+          // Update DOM ids
+          var ow = document.getElementById(oldId + '-wrap'); if (ow) ow.id = progressMid + '-wrap';
+          var oc = document.getElementById(oldId); if (oc) { oc.id = progressMid; oc.setAttribute('onclick', "openPrepPanel('" + progressMid + "')"); }
+          var op = document.getElementById(oldId + '-prep'); if (op) op.id = progressMid + '-prep';
+          break;
+        }
+      }
+    }
+    for (var pi2 = 0; pi2 < targets.length; pi2++) {
+      var pData = targets[pi2];
+      var message = msg.data.message || msg.data.step || '';
+      pData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + message);
+      var card = document.getElementById(pData.meetingId);
       if (card) {
-        if (msg.data.title) { const t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pc.title = msg.data.title; }
-        if (msg.data.startTime) { const t = card.querySelector('.meet-time'); if (t) t.textContent = new Date(msg.data.startTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + message; }
+        if (msg.data.title) { var t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pData.topic = msg.data.title; }
+        if (msg.data.startTime) { var mt = card.querySelector('.meet-time'); if (mt) mt.textContent = new Date(msg.data.startTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + message; pData.startTime = msg.data.startTime; }
         if (msg.data.meetUrl) {
-          pc.meetUrl = msg.data.meetUrl;
-          const actions = card.querySelector('.meet-actions');
-          if (actions && !actions.querySelector('.green')) {
-            actions.insertAdjacentHTML('beforeend', '<span class="meet-link green" onclick="event.stopPropagation();joinMeeting(\'' + esc(msg.data.meetUrl) + '\')">Join Meeting</span>');
+          pData.meetUrl = msg.data.meetUrl;
+          var actions = card.querySelector('.meet-actions');
+          if (actions && !actions.querySelector('.join')) {
+            actions.insertAdjacentHTML('beforeend', '<span class="meet-action join" onclick="event.stopPropagation();joinMeeting(\'' + esc(msg.data.meetUrl) + '\')">Join Meeting</span>');
           }
         }
-        if (msg.data.calendarEventId && !pc.calendarEventId) {
-          pc.calendarEventId = msg.data.calendarEventId;
-          S.meetings.unshift({ id: msg.data.calendarEventId, summary: pc.title || pc.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
+        if (msg.data.calendarEventId && !pData.calendarEventId) {
+          pData.calendarEventId = msg.data.calendarEventId;
+          S.meetings.unshift({ id: msg.data.calendarEventId, summary: pData.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
         }
       }
-      if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cid);
+      if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(pData.meetingId);
     }
   }
 
-  // Feed OpenClaw activity into prep cards
+  // Feed OpenClaw activity into preparing meetings
   if ((eventType === 'openclaw.delta' || eventType === 'openclaw.done') && !S.meetingMode) {
-    const cards = window['_prepCards'] || {};
-    for (const [cid, pc] of Object.entries(cards)) {
-      if (!pc.prepBrief && pc.agentFeed) {
-        const text = msg.data?.text || msg.data?.delta || '';
-        if (text) pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (text.length > 60 ? text.slice(0,60) + '...' : text));
-        if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(cid);
+    for (var ocId in S.meetingFiles) {
+      var ocData = S.meetingFiles[ocId];
+      if (ocData.prep.status !== 'done' && ocData.agentFeed) {
+        var ocText = msg.data?.text || msg.data?.delta || '';
+        if (ocText) ocData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (ocText.length > 60 ? ocText.slice(0,60) + '...' : ocText));
+        if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(ocId);
       }
     }
   }
 
-  // Handle prep research completion
+  // Handle prep research completion — update data model, keep card
   if (eventType === 'meeting.prep_ready' && msg.data) {
-    const mdContent = msg.data.mdContent || '';
-    const topic = msg.data.topic || '';
-    const filePath = msg.data.filePath || '';
-    const cards = window['_prepCards'] || {};
-    for (const [cid, pc] of Object.entries(cards)) {
-      if (!pc.prepDone) {
-        pc.prepDone = true;
-        pc.mdContent = mdContent;
-        pc.filePath = filePath;
-        if (msg.data.meetingId) pc.meetingId = msg.data.meetingId;
-        pc.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 调研完成');
-        // Cache by meetingId if available, fallback to title
-        cachePrepBrief(pc.meetingId || pc.title || pc.topic, { mdContent, filePath });
-        const prepEl = document.getElementById(cid + '-prep');
-        if (prepEl) { prepEl.classList.remove('shimmer'); prepEl.classList.add('done'); prepEl.textContent = 'Meeting Prep — 调研完成，点击查看'; }
-        if (mdContent) openPanel('📋 ' + (pc.title || topic), mdContent);
-        setTimeout(() => { const wrap = document.getElementById(cid + '-wrap'); if (wrap) wrap.remove(); renderMeetings(); }, 500);
-        break;
+    var prMdContent = msg.data.mdContent || '';
+    var prTopic = msg.data.topic || '';
+    var prMeetingId = msg.data.meetingId || null;
+    // Find the target in meetingFiles
+    var prTarget = null;
+    if (prMeetingId && S.meetingFiles[prMeetingId]) {
+      prTarget = S.meetingFiles[prMeetingId];
+    } else {
+      // Find first preparing entry
+      for (var prId in S.meetingFiles) {
+        if (S.meetingFiles[prId].prep.status !== 'done') { prTarget = S.meetingFiles[prId]; break; }
       }
     }
-    if (!Object.values(cards).some(function(pc) { return pc.prepDone; })) {
-      if (mdContent) openPanel('📋 ' + topic, mdContent);
+    if (prTarget) {
+      prTarget.prep.status = 'done';
+      prTarget.prep.content = prMdContent;
+      if (prMeetingId && prTarget.meetingId !== prMeetingId) {
+        // Migrate to real meetingId
+        S.meetingFiles[prMeetingId] = prTarget;
+        delete S.meetingFiles[prTarget.meetingId];
+        prTarget.meetingId = prMeetingId;
+      }
+      prTarget.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 调研完成');
+      // Update file badge in-place (NOT removing the card!)
+      var prepBadge = document.getElementById(prTarget.meetingId + '-prep');
+      if (prepBadge) {
+        prepBadge.classList.remove('loading');
+        prepBadge.classList.add('done');
+        prepBadge.innerHTML = '<span class="meet-file-icon">📋</span> Meeting Prep';
+        prepBadge.setAttribute('onclick', "event.stopPropagation();openMeetingFileInPanel('" + esc(prTarget.meetingId) + "','prep')");
+      }
+      // Show the prep content in panel
+      if (prMdContent) openPanel('📋 ' + (prTarget.topic || prTopic), prMdContent);
+      // Update prep tab badge if tabbed panel is open
+      var prTab = document.querySelector('#sp-tabs .sp-tab[data-tab="prep"]');
+      if (prTab) prTab.innerHTML = '会前调研<span class="sp-tab-badge ready">✓</span>';
+      var prContent = document.getElementById('sp-prep-content');
+      if (prContent && prMdContent) prContent.innerHTML = renderMd(prMdContent);
+    } else {
+      // No target found — just show it
+      if (prMdContent) openPanel('📋 ' + prTopic, prMdContent);
+    }
+  }
+
+  // Handle meeting summary ready (future backend event)
+  if (eventType === 'meeting.summary_ready' && msg.data) {
+    var smMeetingId = msg.data.meetingId;
+    var smContent = msg.data.mdContent || '';
+    if (smMeetingId && S.meetingFiles[smMeetingId]) {
+      var smData = S.meetingFiles[smMeetingId];
+      smData.summary.status = 'done';
+      smData.summary.content = smContent;
+      // Update summary tab if panel is open
+      var smTab = document.querySelector('#sp-tabs .sp-tab[data-tab="summary"]');
+      if (smTab) smTab.innerHTML = '会议总结<span class="sp-tab-badge ready">✓</span>';
+      var smEl = document.getElementById('sp-summary-content');
+      if (smEl && smContent) smEl.innerHTML = renderMd(smContent);
+      // Re-render meeting cards to show summary badge
+      renderMeetings();
     }
   }
 }

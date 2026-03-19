@@ -3,6 +3,28 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.11] - 2026-03-19
+
+### Added
+- **Meeting files data model** — `S.meetingFiles` centralized state replacing `window._prepCards`, tracking prep/summary content per meeting with status lifecycle
+- **Tabbed side panel** — during active meetings, side panel shows [Live Feed] [Prep Doc] [Summary] tabs with independent content areas and status badges
+- **File attachments on meeting cards** — persistent prep and summary badges that survive meeting start/end lifecycle (previously destroyed on prep completion)
+- **Past meetings grouping** — manifest-based session grouping with prep + summary file attachments per meeting (replaces flat note file list)
+- **`meeting.summary_ready` handler** — ready to receive future backend event for post-meeting summary notification
+- **Manifest TTL cache** — `fetchManifestCached()` with 30s TTL for past meeting data
+- **Config panel** — voice provider selector + automation benchmark + chat locally (prior commit)
+- **TODOS.md** — cross-team dependency tracking for backend events
+
+### Fixed
+- **P1: Meeting prep cards destroyed on completion** — `meeting.prep_ready` no longer calls `wrap.remove()`; updates badge in-place from shimmer to green
+- **Meeting actions conflated with files** — starting Talk Locally or Join Meeting no longer removes file entries from cards
+- **Desktop icon** — proper macOS squircle mask (180px radius), 80% artwork padding per Apple HIG, alpha channel for transparent corners, regenerated .icns
+
+### Changed
+- `loadMeetingFile()` consolidates 4 duplicate fetch paths into one data-model-driven function
+- `openMeetingPanel()` refactored from single-content to tabbed layout
+- Past meetings section uses `/api/shared/manifest` sessions instead of flat note files
+
 ## [2.4.10] - 2026-03-19
 
 ### Fixed
