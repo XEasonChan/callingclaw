@@ -296,8 +296,9 @@ export async function prepareMeeting(
   topic: string,
   userContext?: string,
   attendees?: CalendarAttendee[],
+  meetingId?: string,
 ): Promise<{ brief: MeetingPrepBrief; instructions: string }> {
-  const brief = await prepSkill.generate(topic, userContext, attendees);
+  const brief = await prepSkill.generate(topic, userContext, attendees, meetingId);
   const instructions = buildVoiceInstructions(brief);
   return { brief, instructions };
 }

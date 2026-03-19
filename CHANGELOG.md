@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [2.4.17] - 2026-03-20
 
 ### Fixed
+- **Meeting prep file 404** — `prepareMeeting()` generated a new meetingId internally instead of using the session's meetingId, causing prep files to save as `cc_xxx_prep.md` while the frontend looked for `cc_yyy_prep.md`. Now threads meetingId through the entire chain: config_server → voice-persona → meeting-prep → savePrepBrief/startLiveLog
+- **OpenClaw response parsing** — `extractMessageText()` now handles more response formats: `output_text`, `output`, `summary`, `parts[]`, nested `messages[]`, and plain strings
+- **Context recall fallback** — `recall_context` tool now validates OpenClaw answers and falls back to local memory when OpenClaw returns errors or `(no response)`
+- **Post-meeting delivery** — fixed to use `OC004_PROMPT(req)` instead of raw instruction string
 - **Duplicate meeting cards** — prep card and calendar event for the same meeting no longer both appear; Coming Up list skips events that match an active prep card by topic or calendarEventId
 - **AudioBridge: suspended AudioContext** — resume AudioContext created outside user gesture (e.g. inside WS onopen callback); auto-resume on playAudio if tab was backgrounded
 - **AudioBridge: mic failure no longer kills playback** — capture error is soft; AI audio output continues even if mic permission is denied
@@ -13,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - **Auto-start daemon** — CallingClaw daemon starts automatically on app launch (no more "启动引擎" banner on every open)
+
+### Changed
+- Voice routes refactored: unified `startVoiceSession()` helper, new `/api/voice/session/start`, `/api/voice/session/stop`, `/api/voice/session/status` endpoints for transport-agnostic voice control
+- Meeting routes now generate and return `meetingId` in join/prepare responses for frontend session tracking
 
 ## [2.4.16] - 2026-03-20
 

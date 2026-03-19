@@ -18,6 +18,17 @@ export interface AIToolDeps {
 export function aiTools(deps: AIToolDeps): ToolModule {
   const { contextSync, contextRetriever, openclawBridge, eventBus } = deps;
 
+  const isUsableOpenClawAnswer = (answer: string) => {
+    const normalized = answer.trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized === "(no response)") return false;
+    if (normalized.includes("openclaw error:")) return false;
+    if (normalized.includes("openclaw disconnected:")) return false;
+    if (normalized.includes("openclaw task timed out")) return false;
+    if (normalized.includes("openclaw is not running")) return false;
+    return true;
+  };
+
   return {
     definitions: [
       // ── Context Recall (System 2 Memory Access) ──
@@ -90,8 +101,14 @@ export function aiTools(deps: AIToolDeps): ToolModule {
           };
           const raw = await openclawBridge.sendTask(OC002_PROMPT(req));
           const { answer } = parseOC002(raw);
-
-          return `[OpenClaw recall]\n${answer}`;
+          if (isUsableOpenClawAnswer(answer)) {
+            return `[OpenClaw recall]\n${answer}`;
+          }
+          if (localResult) {
+            console.warn(`[RecallContext] OpenClaw returned no usable answer, falling back to local memory for "${query.slice(0, 80)}"`);
+            return `[Memory recall]\n${localResult}`;
+          }
+          return "I couldn't retrieve reliable context for that just now. Please try rephrasing the question or give me one more keyword to search.";
         }
         default:
           return `Unknown AI tool: ${name}`;

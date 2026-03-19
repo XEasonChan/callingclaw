@@ -1163,7 +1163,7 @@ export function startConfigServer(services: Services) {
         let prepBrief: any = null;
         if (services.meetingPrepSkill && services.openclawBridge?.connected) {
           try {
-            const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees);
+            const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
               services.realtime.updateInstructions(prepResult.instructions);
@@ -1659,10 +1659,13 @@ STEP-BY-STEP FLOW:
         // Each step emits progress events → Desktop shows real-time log in side panel.
 
         const prepId = `prep_${Date.now()}`;
+        const { generateMeetingId: genPrepId } = await import("./modules/shared-documents");
+        const prepMeetingId = genPrepId();
 
         // Return immediately with just the topic
         const agenda = {
           prepId,
+          meetingId: prepMeetingId,
           topic: body.topic,
           title: body.topic.length > 60 ? body.topic.slice(0, 57) + "..." : body.topic,
           meetUrl: body.url || null,
@@ -1765,7 +1768,7 @@ STEP-BY-STEP FLOW:
               if (services.meetingPrepSkill) {
                 emit("researching", { message: "OpenClaw 正在深度调研..." });
                 const prepResult = await prepareMeeting(
-                  services.meetingPrepSkill, body.topic, body.context, meetAttendees
+                  services.meetingPrepSkill, body.topic, body.context, meetAttendees, prepMeetingId
                 );
                 const prepBriefData = {
                   topic: prepResult.brief.topic || title,
@@ -1933,7 +1936,7 @@ STEP-BY-STEP FLOW:
         let prepBrief: any = null;
         if (services.meetingPrepSkill && services.openclawBridge?.connected) {
           try {
-            const prepResult = await prepareMeeting(services.meetingPrepSkill, topic);
+            const prepResult = await prepareMeeting(services.meetingPrepSkill, topic, undefined, undefined, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
               services.realtime.updateInstructions(prepResult.instructions);

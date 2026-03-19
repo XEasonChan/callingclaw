@@ -194,7 +194,7 @@ export class PostMeetingDelivery {
     };
 
     try {
-      await this.openclawBridge.sendTask(instruction);
+      await this.openclawBridge.sendTask(OC004_PROMPT(req));
       console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
 
       this.eventBus.emit("postmeeting.todos_sent", {
