@@ -10,7 +10,7 @@
 // All event names are normalized by RealtimeClient — VoiceModule
 // uses the same handlers regardless of provider.
 
-import { RealtimeClient, type RealtimeTool, type VoiceProviderName } from "../ai_gateway/realtime_client";
+import { RealtimeClient, type RealtimeTool, type VoiceProviderName, type ContextItem } from "../ai_gateway/realtime_client";
 import type { SharedContext } from "./shared-context";
 import { CONFIG } from "../config";
 
@@ -216,6 +216,35 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   /** Restore all tools to the session (call when meeting ends) */
   restoreAllTools(): boolean {
     return this.setActiveTools([...this._allTools]);
+  }
+
+  // ── Incremental Context Injection ─────────────────────────────────
+
+  /**
+   * Inject context into the live voice session as a system message.
+   * Does NOT interrupt the current response or trigger a new one.
+   * Uses conversation.item.create instead of session.update to avoid audio breaks.
+   *
+   * @param text - Context text (e.g., "[CONTEXT] PRD目标是..." or "[DONE] 已打开文件")
+   * @returns The item ID if sent, false if not connected
+   */
+  injectContext(text: string): string | false {
+    if (!this.client.connected) return false;
+    return this.client.injectContext(text);
+  }
+
+  /**
+   * Remove a previously injected context item by ID.
+   * @returns true if the delete was sent
+   */
+  removeContext(itemId: string): boolean {
+    if (!this.client.connected) return false;
+    return this.client.removeContext(itemId);
+  }
+
+  /** Get the current context injection queue (for debugging/status) */
+  getContextQueue(): readonly ContextItem[] {
+    return this.client.getContextQueue();
   }
 
   /** Dynamically change the voice on the live session */

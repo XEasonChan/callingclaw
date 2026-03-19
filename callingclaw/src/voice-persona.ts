@@ -16,12 +16,13 @@
 //
 //   1. PRE-MEETING:  MeetingPrepSkill.generate() → brief
 //                    buildVoiceInstructions(brief) → system prompt
-//                    VoiceModule.start(instructions)
+//                    VoiceModule.start(instructions)  [session.update, set ONCE]
 //
 //   2. DURING MEETING: OpenClaw adds live notes → MeetingPrepSkill.addLiveNote()
-//                      pushContextUpdate(voiceModule, prepSkill) → session.update
+//                      pushContextUpdate() → conversation.item.create (INCREMENTAL)
 //                      Computer Use completes task → recordTaskCompletion()
-//                      → pushContextUpdate() → Voice AI knows what happened
+//                      → pushContextUpdate() → Voice AI sees it on next turn
+//                      NOTE: No more session.update during meetings — avoids audio breaks
 //
 //   3. POST-MEETING:  Voice transcript → OpenClaw processes
 //                     Meeting notes saved to OpenClaw memory
@@ -180,34 +181,46 @@ export function buildVoiceInstructions(brief?: MeetingPrepBrief | null): string 
     );
   }
 
-  // Live notes (dynamic updates during meeting)
-  if (brief.liveNotes.length > 0) {
-    briefParts.push(`\n### Live Updates`);
-    brief.liveNotes.forEach((n) => briefParts.push(`- ${n}`));
-  }
+  // Live notes are NO LONGER included in the static instructions.
+  // They are injected incrementally via conversation.item.create
+  // by pushContextUpdate(). This avoids session.update during meetings
+  // which causes audio breaks when the model is mid-response.
 
   return `${MEETING_PERSONA}\n\n` +
     `═══════════════════════════════════════\n` +
     `MEETING PREP BRIEF (from OpenClaw)\n` +
     `═══════════════════════════════════════\n\n` +
-    briefParts.join("\n");
+    briefParts.join("\n") +
+    `\n\n### Live Updates\n` +
+    `Context updates will appear as system messages in the conversation.\n` +
+    `Use them naturally when relevant — do not repeat them verbatim.`;
 }
 
 // ══════════════════════════════════════════════════════════════
-// 4. DYNAMIC CONTEXT PUSH (during meeting)
+// 4. DYNAMIC CONTEXT PUSH (during meeting) — INCREMENTAL
 // ══════════════════════════════════════════════════════════════
 
+// Track the last injected liveNote index to avoid re-injecting old notes
+let _lastInjectedNoteIndex = -1;
+
+/** Reset the injection tracker (call when a new meeting starts) */
+export function resetContextInjectionState() {
+  _lastInjectedNoteIndex = -1;
+}
+
 /**
- * Push updated context to the live Voice session.
+ * Push the latest context to the live Voice session — incrementally.
+ *
+ * Instead of rebuilding the entire system prompt (session.update),
+ * this injects only NEW liveNotes as conversation items (conversation.item.create).
+ * This avoids interrupting in-progress responses and audio breaks.
+ *
  * Call this when:
- *   - OpenClaw adds a live note (new context arrived)
- *   - Computer Use completes a task (Voice needs to know)
- *   - User pins a new file or URL mid-meeting
+ *   - ContextRetriever finds new context → addLiveNote() → pushContextUpdate()
+ *   - TranscriptAuditor completes/suggests → addLiveNote() → pushContextUpdate()
+ *   - Computer Use completes a task → notifyTaskCompletion() → pushContextUpdate()
  *
- * Uses OpenAI Realtime's session.update to replace the system instructions
- * with an updated version that includes the new live notes.
- *
- * @returns true if the update was sent, false if Voice not connected
+ * @returns true if at least one new note was injected
  */
 export function pushContextUpdate(
   voiceModule: VoiceModule,
@@ -216,19 +229,38 @@ export function pushContextUpdate(
 ): boolean {
   const brief = prepSkill.currentBrief;
   if (!brief) return false;
+  if (!voiceModule.connected) return false;
 
-  const updatedInstructions = buildVoiceInstructions(brief);
-  const sent = voiceModule.updateInstructions(updatedInstructions);
+  const notes = brief.liveNotes;
+  if (notes.length === 0) return false;
 
-  if (sent) {
-    console.log(`[VoicePersona] Context pushed to Voice (${brief.liveNotes.length} live notes)`);
+  // Only inject notes that haven't been injected yet
+  const startIdx = _lastInjectedNoteIndex + 1;
+  if (startIdx >= notes.length) return false; // No new notes
+
+  let injected = 0;
+  for (let i = startIdx; i < notes.length; i++) {
+    const note = notes[i]!;
+    const itemId = voiceModule.injectContext(note);
+    if (itemId) {
+      injected++;
+      console.log(`[VoicePersona] Injected context #${i}: ${note.slice(0, 80)}...`);
+    }
+  }
+
+  _lastInjectedNoteIndex = notes.length - 1;
+
+  if (injected > 0) {
     eventBus?.emit("meeting.context_pushed", {
       topic: brief.topic,
-      liveNotesCount: brief.liveNotes.length,
+      liveNotesCount: notes.length,
+      injectedCount: injected,
+      method: "incremental",
       timestamp: Date.now(),
     });
   }
-  return sent;
+
+  return injected > 0;
 }
 
 /**
