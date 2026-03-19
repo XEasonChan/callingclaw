@@ -363,6 +363,72 @@ function setupIPC() {
     return { ok: true, path: skillPath };
   });
 
+  // ── Automation (replaces Python PyAutoGUI) ────────────────────
+  ipcMain.handle('automation:run', async (_, action) => {
+    const { execFile } = require('child_process');
+    const type = action.type;
+    let script = '';
+
+    if (type === 'click' && action.x != null && action.y != null) {
+      script = `do shell script "cliclick c:${Math.round(action.x)},${Math.round(action.y)}"`;
+    } else if (type === 'type' && action.text) {
+      // Use AppleScript keystroke for typing
+      const escaped = action.text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      script = `tell application "System Events" to keystroke "${escaped}"`;
+    } else if (type === 'key' && action.key) {
+      // Map common keys to AppleScript key codes
+      const keyMap = { enter: 36, tab: 48, escape: 53, space: 49, delete: 51, up: 126, down: 125, left: 123, right: 124 };
+      const code = keyMap[action.key.toLowerCase()];
+      if (code) {
+        script = `tell application "System Events" to key code ${code}`;
+      } else {
+        script = `tell application "System Events" to keystroke "${action.key}"`;
+      }
+    } else if (type === 'hotkey' && action.keys) {
+      // e.g. {keys: ['command', 'c']}
+      const modifiers = [];
+      let char = '';
+      for (const k of action.keys) {
+        if (['command', 'shift', 'option', 'control'].includes(k.toLowerCase())) {
+          modifiers.push(k.toLowerCase() + ' down');
+        } else {
+          char = k;
+        }
+      }
+      const modStr = modifiers.length > 0 ? ' using {' + modifiers.join(', ') + '}' : '';
+      script = `tell application "System Events" to keystroke "${char}"${modStr}`;
+    } else {
+      return { ok: false, error: 'Unknown action type: ' + type };
+    }
+
+    if (!script) return { ok: false, error: 'Empty script' };
+
+    return new Promise((resolve) => {
+      execFile('osascript', ['-e', script], { timeout: 10000 }, (err, stdout, stderr) => {
+        if (err) {
+          resolve({ ok: false, error: err.message, stderr: stderr });
+        } else {
+          resolve({ ok: true, action: type, stdout: stdout.trim() });
+        }
+      });
+    });
+  });
+
+  // ── Audio Device Enumeration (for renderer to discover BlackHole) ──
+  ipcMain.handle('audio:listDevices', async () => {
+    const { execSync } = require('child_process');
+    try {
+      const output = execSync('system_profiler SPAudioDataType 2>/dev/null', { timeout: 5000 }).toString();
+      return {
+        hasBlackHole2ch: output.includes('BlackHole 2ch'),
+        hasBlackHole16ch: output.includes('BlackHole 16ch'),
+        raw: output,
+      };
+    } catch {
+      return { hasBlackHole2ch: false, hasBlackHole16ch: false, raw: '' };
+    }
+  });
+
   // App info
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),

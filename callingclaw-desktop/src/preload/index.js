@@ -57,6 +57,20 @@ contextBridge.exposeInMainWorld('callingclaw', {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   },
 
+  // ── Automation (replaces Python PyAutoGUI) ─────────────────
+  automation: {
+    run: (action) => ipcRenderer.invoke('automation:run', action),
+    click: (x, y) => ipcRenderer.invoke('automation:run', { type: 'click', x, y }),
+    type: (text) => ipcRenderer.invoke('automation:run', { type: 'type', text }),
+    key: (key) => ipcRenderer.invoke('automation:run', { type: 'key', key }),
+    hotkey: (keys) => ipcRenderer.invoke('automation:run', { type: 'hotkey', keys }),
+  },
+
+  // ── Audio ─────────────────────────────────────────────────
+  audio: {
+    listDevices: () => ipcRenderer.invoke('audio:listDevices'),
+  },
+
   // ── App Info ───────────────────────────────────────────────
   app: {
     info: () => ipcRenderer.invoke('app:info'),
