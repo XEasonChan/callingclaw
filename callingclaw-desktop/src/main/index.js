@@ -105,6 +105,7 @@ let overlayWindow = null;
 let tray = null;
 let daemon = null;
 let permissionChecker = null;
+let shutdownInProgress = false;
 
 // ── Main Window ────────────────────────────────────────────────
 
@@ -542,14 +543,17 @@ app.whenReady().then(async () => {
 
   // Forward daemon events to renderer
   daemon.on('started', () => {
+    console.log('[App] CallingClaw daemon started');
     mainWindow?.webContents.send('daemon-status', true);
     updateTrayMenu('running');
   });
-  daemon.on('stopped', () => {
+  daemon.on('stopped', (info) => {
+    console.log(`[App] CallingClaw daemon stopped (code=${info?.code ?? 'unknown'}, signal=${info?.signal ?? 'unknown'})`);
     mainWindow?.webContents.send('daemon-status', false);
     updateTrayMenu('idle');
   });
   daemon.on('error', (err) => {
+    console.error('[App] CallingClaw daemon error:', err);
     mainWindow?.webContents.send('daemon-error', err.message);
     updateTrayMenu('error');
   });
@@ -563,6 +567,13 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('daemon-status', true);
     }
   });
+
+  try {
+    console.log('[App] Auto-starting CallingClaw daemon...');
+    await daemon.start();
+  } catch (err) {
+    console.error('[App] Failed to auto-start CallingClaw daemon:', err);
+  }
 });
 
 app.on('activate', () => {
@@ -570,11 +581,25 @@ app.on('activate', () => {
   else createMainWindow();
 });
 
-app.on('before-quit', async () => {
+app.on('before-quit', (e) => {
+  if (shutdownInProgress) return;
+
   app.isQuitting = true;
-  if (daemon?.isRunning()) {
-    await daemon.stop();
-  }
+  if (!daemon?.isRunning()) return;
+
+  e.preventDefault();
+  shutdownInProgress = true;
+  console.log('[App] Quit requested, stopping CallingClaw daemon before exit...');
+
+  daemon.stop()
+    .catch((err) => {
+      console.error('[App] Failed to stop daemon during quit:', err);
+    })
+    .finally(() => {
+      console.log('[App] Daemon shutdown flow finished, quitting app');
+      shutdownInProgress = false;
+      app.quit();
+    });
 });
 
 app.on('window-all-closed', () => {

@@ -102,12 +102,16 @@ var ElectronAudioBridge = (function() {
 
       // ⚠️ CRITICAL ORDER: setSinkId BEFORE getUserMedia (Electron bug #40704)
       return _setupPlayback(outputDeviceId).then(function() {
-        return _setupCapture(inputDeviceId);
+        // Playback is ready — enable audio output immediately.
+        // Capture failure (no mic permission) must NOT kill playback.
+        _running = true;
+        return _setupCapture(inputDeviceId).catch(function(captureErr) {
+          console.warn('[AudioBridge] Mic capture failed (playback still active):', captureErr.message);
+        });
       });
     }).then(function() {
-      _running = true;
       _starting = false;
-      console.log('[AudioBridge] Started in ' + _mode + ' mode');
+      console.log('[AudioBridge] Started in ' + _mode + ' mode (AudioContext: ' + (_audioCtx ? _audioCtx.state : 'null') + ')');
       return { ok: true, mode: _mode };
     }).catch(function(err) {
       _starting = false;
@@ -120,16 +124,28 @@ var ElectronAudioBridge = (function() {
   function _setupPlayback(outputDeviceId) {
     _audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
 
+    // ⚠️ FIX: AudioContext may start suspended if created outside a user gesture
+    // (e.g., inside WS onopen callback). Explicitly resume it.
+    var resumePromise = _audioCtx.state !== 'running'
+      ? _audioCtx.resume().then(function() {
+          console.log('[AudioBridge] AudioContext resumed (was ' + _audioCtx.state + ')');
+        }).catch(function(e) {
+          console.warn('[AudioBridge] AudioContext resume failed:', e.message);
+        })
+      : Promise.resolve();
+
     // Set output device if specified
     var sinkPromise;
     if (outputDeviceId && _audioCtx.setSinkId) {
-      sinkPromise = _audioCtx.setSinkId(outputDeviceId).then(function() {
+      sinkPromise = resumePromise.then(function() {
+        return _audioCtx.setSinkId(outputDeviceId);
+      }).then(function() {
         console.log('[AudioBridge] Output device set to: ' + outputDeviceId);
       }).catch(function(e) {
         console.warn('[AudioBridge] setSinkId failed, using default output:', e.message);
       });
     } else {
-      sinkPromise = Promise.resolve();
+      sinkPromise = resumePromise;
     }
 
     return sinkPromise.then(function() {
@@ -147,6 +163,7 @@ var ElectronAudioBridge = (function() {
         }
       };
       _playbackProcessor.connect(_audioCtx.destination);
+      console.log('[AudioBridge] Playback ready (AudioContext state: ' + _audioCtx.state + ')');
     });
   }
 
@@ -198,6 +215,10 @@ var ElectronAudioBridge = (function() {
 
   function playAudio(base64Pcm) {
     if (!_running || !_playbackProcessor) return;
+    // Safety: resume AudioContext if it became suspended (e.g., tab backgrounded)
+    if (_audioCtx && _audioCtx.state === 'suspended') {
+      _audioCtx.resume().catch(function() {});
+    }
     try {
       var binary = atob(base64Pcm);
       var bytes = new Uint8Array(binary.length);
@@ -251,6 +272,7 @@ var ElectronAudioBridge = (function() {
       devices: _devices,
       playbackQueueSize: _playbackQueue.length,
       sampleRate: SAMPLE_RATE,
+      audioContextState: _audioCtx ? _audioCtx.state : null,
     };
   }
 

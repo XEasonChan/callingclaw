@@ -72,6 +72,7 @@ class DaemonSupervisor extends EventEmitter {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          AUDIO_SOURCE: 'electron',
           // Ensure Bun can find its own runtime
           PATH: `${path.dirname(bunPath)}:${process.env.PATH}`,
         },
