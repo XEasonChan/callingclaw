@@ -395,6 +395,9 @@ async function autoLeaveMeeting() {
     const filepath = await meeting.exportToMarkdown(summary);
     meeting.stopRecording();
 
+    // Notify Electron UI that summary file is ready
+    eventBus.emit("meeting.summary_ready", { filepath, title: summary.title, timestamp: Date.now() });
+
     // Create tasks from action items
     let createdTasks: any[] = [];
     if (summary.actionItems?.length > 0) {
@@ -653,16 +656,20 @@ startConfigServer({
   postMeetingDelivery,
 });
 
-// ── 8. Launch Python Sidecar ────────────────────────────────────
+// ── 8. Launch Python Sidecar (optional — disabled when AUDIO_SOURCE=electron) ──
 
 const pythonPath = `${import.meta.dir}/../python_sidecar/main.py`;
 const pythonFile = Bun.file(pythonPath);
+let sidecarProc: ReturnType<typeof Bun.spawn> | null = null;
 
-if (await pythonFile.exists()) {
+if (!CONFIG.pythonSidecar.enabled) {
+  console.log("[Init] Python sidecar DISABLED (AUDIO_SOURCE=electron)");
+  console.log("[Init] Audio via /ws/audio-bridge, automation via Electron IPC");
+} else if (await pythonFile.exists()) {
   console.log("[Init] Launching Python sidecar...");
   const pythonBin = process.env.PYTHON_PATH || "/opt/miniconda3/bin/python3";
   console.log(`[Init] Using Python: ${pythonBin}`);
-  const proc = Bun.spawn([pythonBin, pythonPath], {
+  sidecarProc = Bun.spawn([pythonBin, pythonPath], {
     stdout: "inherit",
     stderr: "inherit",
     env: {
@@ -670,42 +677,42 @@ if (await pythonFile.exists()) {
       BRIDGE_PORT: String(CONFIG.bridgePort),
     },
   });
-
-  process.on("SIGINT", async () => {
-    console.log("\n[Shutdown] Stopping CallingClaw...");
-
-    // Save meeting notes if recording
-    if (meeting.getNotes().isRecording) {
-      console.log("[Shutdown] Saving meeting notes...");
-      const summary = await meeting.generateSummary();
-      await meeting.exportToMarkdown(summary);
-      meeting.stopRecording();
-
-      // Create tasks from final summary
-      if (summary.actionItems && summary.actionItems.length > 0) {
-        taskStore.createFromMeetingItems(
-          summary.actionItems.map((a) => ({
-            task: a.task,
-            assignee: a.assignee,
-            deadline: a.deadline,
-          }))
-        );
-      }
-    }
-
-    transcriptAuditor.deactivate();
-    contextRetriever.deactivate();
-    proc.kill();
-    bridge.stop();
-    voice.stop();
-    playwrightCli.stop();
-    calendar.disconnect();
-    process.exit(0);
-  });
 } else {
   console.warn("[Init] Python sidecar not found at", pythonPath);
   console.warn("[Init] Running in API-only mode (no hardware control)");
 }
+
+process.on("SIGINT", async () => {
+  console.log("\n[Shutdown] Stopping CallingClaw...");
+
+  // Save meeting notes if recording
+  if (meeting.getNotes().isRecording) {
+    console.log("[Shutdown] Saving meeting notes...");
+    const summary = await meeting.generateSummary();
+    await meeting.exportToMarkdown(summary);
+    meeting.stopRecording();
+
+    // Create tasks from final summary
+    if (summary.actionItems && summary.actionItems.length > 0) {
+      taskStore.createFromMeetingItems(
+        summary.actionItems.map((a) => ({
+          task: a.task,
+          assignee: a.assignee,
+          deadline: a.deadline,
+        }))
+      );
+    }
+  }
+
+  transcriptAuditor.deactivate();
+  contextRetriever.deactivate();
+  if (sidecarProc) sidecarProc.kill();
+  bridge.stop();
+  voice.stop();
+  playwrightCli.stop();
+  calendar.disconnect();
+  process.exit(0);
+});
 
 console.log(`
 ╔══════════════════════════════════════════════════════╗

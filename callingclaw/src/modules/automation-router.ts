@@ -200,6 +200,14 @@ export class AutomationRouter {
       reason: intent.reason,
     });
 
+    // Emit command details for Electron's osascript automation handler
+    this.eventBus?.emit("automation.command", {
+      layer: intent.layer,
+      action: intent.action,
+      params: intent.params,
+      instruction: instruction.slice(0, 200),
+    });
+
     console.log(`[Router] ${intent.layer} → ${intent.action} (${Math.round(intent.confidence * 100)}%): "${instruction.slice(0, 60)}"`);
 
     try {

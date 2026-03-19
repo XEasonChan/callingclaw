@@ -339,6 +339,10 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           const summary = await meeting.generateSummary();
           const filepath = await meeting.exportToMarkdown(summary);
           meeting.stopRecording();
+
+          // Notify Electron UI that summary file is ready
+          eventBus.emit("meeting.summary_ready", { filepath, title: summary.title, timestamp: Date.now() });
+
           await meetJoiner.leaveMeeting();
 
           // Auto-create tasks from action items
@@ -405,6 +409,9 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         case "save_meeting_notes": {
           const summary = await meeting.generateSummary();
           const filepath = await meeting.exportToMarkdown(summary, args.filename);
+
+          // Notify Electron UI that summary file is ready
+          eventBus.emit("meeting.summary_ready", { filepath, title: summary.title, timestamp: Date.now() });
 
           // Auto-create tasks
           let createdTasks: any[] = [];

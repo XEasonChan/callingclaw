@@ -127,7 +127,13 @@ export const CONFIG = {
     cliPath: process.env.PEEKABOO_PATH || "peekaboo",
   },
 
-  // User identity — auto-added as attendee to every calendar event
+  // Python sidecar — set AUDIO_SOURCE=electron to disable sidecar launch
+  // When disabled, Electron handles audio via /ws/audio-bridge and automation via IPC osascript
+  pythonSidecar: {
+    enabled: (process.env.AUDIO_SOURCE || "sidecar") !== "electron",
+  },
+
+  // User identity
   userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };
 

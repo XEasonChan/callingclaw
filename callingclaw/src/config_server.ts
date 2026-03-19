@@ -78,17 +78,23 @@ const TOOL_LAYERS: Record<string, { label: string; tools: string[] }> = {
 export function startConfigServer(services: Services) {
   // ── Browser Voice Test clients ──
   const browserVoiceClients = new Set<any>();
+  // ── Electron Audio Bridge clients (replaces Python sidecar) ──
+  const audioBridgeClients = new Set<any>();
 
   const server = Bun.serve({
     port: CONFIG.port,
 
-    // ── WebSocket handler (multiplexed: EventBus + Voice Test) ──
+    // ── WebSocket handler (multiplexed: EventBus + Voice Test + Audio Bridge) ──
     websocket: {
       open(ws: any) {
         if (ws.data?.type === "voice-test") {
           browserVoiceClients.add(ws);
           ws.send(JSON.stringify({ type: "status", voiceConnected: services.realtime.connected }));
           console.log(`[VoiceTest] Browser client connected (${browserVoiceClients.size} total)`);
+        } else if (ws.data?.type === "audio-bridge") {
+          audioBridgeClients.add(ws);
+          ws.send(JSON.stringify({ type: "status", voiceConnected: services.realtime.connected }));
+          console.log(`[AudioBridge] Electron client connected (${audioBridgeClients.size} total)`);
         } else {
           services.eventBus.addSubscriber(ws);
         }
@@ -97,11 +103,25 @@ export function startConfigServer(services: Services) {
         if (ws.data?.type === "voice-test") {
           browserVoiceClients.delete(ws);
           console.log(`[VoiceTest] Browser client disconnected (${browserVoiceClients.size} remaining)`);
+        } else if (ws.data?.type === "audio-bridge") {
+          audioBridgeClients.delete(ws);
+          console.log(`[AudioBridge] Electron client disconnected (${audioBridgeClients.size} remaining)`);
         } else {
           services.eventBus.removeSubscriber(ws);
         }
       },
       message(ws: any, msg: any) {
+        // ── Audio Bridge: Electron mic → OpenAI Realtime, same protocol as Python bridge ──
+        if (ws.data?.type === "audio-bridge") {
+          try {
+            const raw = typeof msg === "string" ? msg : new TextDecoder().decode(msg as ArrayBuffer);
+            const data = JSON.parse(raw);
+            if (data.type === "audio_chunk" && data.payload?.audio) {
+              services.realtime.sendAudio(data.payload.audio);
+            }
+          } catch {}
+          return;
+        }
         if (ws.data?.type === "voice-test") {
           try {
             const raw = typeof msg === "string" ? msg : new TextDecoder().decode(msg as ArrayBuffer);
@@ -199,6 +219,15 @@ export function startConfigServer(services: Services) {
       // ── WebSocket upgrade for /ws/voice-test (browser mic/speaker) ──
       if (url.pathname === "/ws/voice-test") {
         const upgraded = server.upgrade(req, { data: { type: "voice-test" } });
+        if (!upgraded) {
+          return new Response("WebSocket upgrade failed", { status: 400 });
+        }
+        return undefined as any;
+      }
+
+      // ── WebSocket upgrade for /ws/audio-bridge (Electron AudioBridge, replaces Python sidecar) ──
+      if (url.pathname === "/ws/audio-bridge") {
+        const upgraded = server.upgrade(req, { data: { type: "audio-bridge" } });
         if (!upgraded) {
           return new Response("WebSocket upgrade failed", { status: 400 });
         }
@@ -2366,10 +2395,15 @@ STEP-BY-STEP FLOW:
     },
   });
 
-  // ── Forward AI audio output to browser voice test clients ──
+  // ── Forward AI audio output to browser voice test clients + Electron audio bridge ──
   services.realtime.onAudioOutput((base64Pcm) => {
     for (const ws of browserVoiceClients) {
       try { ws.send(JSON.stringify({ type: "audio", audio: base64Pcm })); } catch {}
+    }
+    // Same audio to Electron AudioBridge (uses Python bridge protocol: audio_playback)
+    const abMsg = JSON.stringify({ type: "audio_playback", payload: { audio: base64Pcm } });
+    for (const ws of audioBridgeClients) {
+      try { ws.send(abMsg); } catch {}
     }
   });
 
@@ -2384,5 +2418,6 @@ STEP-BY-STEP FLOW:
   console.log(`[Config] HTTP server on http://localhost:${CONFIG.port}`);
   console.log(`[Config] WebSocket events on ws://localhost:${CONFIG.port}/ws/events`);
   console.log(`[Config] Voice test WS on ws://localhost:${CONFIG.port}/ws/voice-test`);
+  console.log(`[Config] Audio bridge WS on ws://localhost:${CONFIG.port}/ws/audio-bridge`);
   return server;
 }
