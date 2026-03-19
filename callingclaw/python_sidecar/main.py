@@ -423,8 +423,8 @@ async def main():
         try:
             ws = await websockets.connect(BRIDGE_URL)
         except Exception as e:
-            print(f"[Sidecar] Connection failed: {e}, retrying in 3s...")
-            await asyncio.sleep(3)
+            print(f"[Sidecar] Connection failed: {e}, retrying in 5s...")
+            await asyncio.sleep(5)
             continue
 
         try:
@@ -463,12 +463,17 @@ async def main():
 
                         new_mode = payload.get("audio_mode")
 
-                        if new_mode in ("direct", "meet_bridge") and audio_mode != new_mode:
-                            if audio_mode in ("direct", "meet_bridge"):
+                        # Force restart audio on every config — no guard clause.
+                        # Bridge may re-send the same mode after reconnect; we must
+                        # always restart because the previous capture_loop was killed
+                        # during the reconnect cleanup (finally block).
+                        if new_mode in ("direct", "meet_bridge"):
+                            # Stop any running audio first
+                            if audio_bridge.running:
                                 audio_bridge.stop()
-                                if audio_capture_task:
-                                    audio_capture_task.cancel()
-                                    audio_capture_task = None
+                            if audio_capture_task and not audio_capture_task.done():
+                                audio_capture_task.cancel()
+                                audio_capture_task = None
 
                             audio_mode = new_mode
                             success = audio_bridge.start(ws.send, mode=new_mode)
@@ -476,7 +481,7 @@ async def main():
                                 audio_capture_task = asyncio.create_task(
                                     audio_bridge.capture_loop(ws)
                                 )
-                                print(f"[Sidecar] Audio mode switched to: {new_mode.upper()}")
+                                print(f"[Sidecar] Audio started: {new_mode.upper()}")
                                 await ws.send(json.dumps({
                                     "type": "status",
                                     "payload": {
@@ -525,9 +530,9 @@ async def main():
                     print(f"[Sidecar] Message handling error: {e}")
 
         except (websockets.ConnectionClosed, ConnectionError, OSError) as e:
-            print(f"[Sidecar] Disconnected: {e}, reconnecting in 3s...")
+            print(f"[Sidecar] Disconnected: {e}, reconnecting in 5s...")
         except Exception as e:
-            print(f"[Sidecar] Unexpected error: {e}, reconnecting in 3s...")
+            print(f"[Sidecar] Unexpected error: {e}, reconnecting in 5s...")
         finally:
             if audio_capture_task and not audio_capture_task.done():
                 audio_capture_task.cancel()
@@ -537,7 +542,10 @@ async def main():
             audio_mode = "default"
             try: await ws.close()
             except: pass
-            await asyncio.sleep(3)
+            # Wait 5s before reconnect — gives bridge time to fully clean up
+            # the old connection and avoids rapid reconnect loops where bridge
+            # replaces "stale" connections triggering another disconnect cycle.
+            await asyncio.sleep(5)
 
 
 if __name__ == "__main__":

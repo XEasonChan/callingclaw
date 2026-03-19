@@ -109,8 +109,22 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return await apiPost("/api/computer/run", { instruction: rest });
       }
 
-      case "calendar":
+      case "calendar": {
+        // /callingclaw calendar — list upcoming events
+        // /callingclaw calendar create <JSON> — create event with Meet link
+        const calSub = parts[1];
+        if (calSub === "create") {
+          const jsonStr = args.slice(args.indexOf("create") + "create".length).trim();
+          if (!jsonStr) return { success: false, error: 'Usage: /callingclaw calendar create {"summary":"title","start":"ISO","end":"ISO"}' };
+          try {
+            const eventData = JSON.parse(jsonStr);
+            return await apiPost("/api/calendar/create", eventData);
+          } catch (e: any) {
+            return { success: false, error: `Invalid JSON: ${e.message}` };
+          }
+        }
         return await apiGet("/api/calendar/events");
+      }
 
       case "user-email":
       case "email":

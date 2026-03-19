@@ -18,6 +18,7 @@
 import type { GoogleCalendarClient, CalendarEvent } from "../mcp_client/google_cal";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
+import { OC003_PROMPT, parseOC003, type OC003_Request } from "../openclaw-protocol";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { homedir } from "os";

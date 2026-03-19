@@ -38,12 +38,24 @@ export const CONFIG = {
   port: parseInt(process.env.PORT || "4000"),
   bridgePort: parseInt(process.env.BRIDGE_PORT || "4001"),
 
+  // Voice provider selection: "openai" | "grok" (A/B testing)
+  voiceProvider: (process.env.VOICE_PROVIDER || "openai") as "openai" | "grok",
+
   // OpenAI (Realtime voice + GPT-4o vision)
   openai: {
     apiKey: process.env.OPENAI_API_KEY || "",
     realtimeModel: "gpt-4o-realtime-preview-2024-12-17",
     realtimeUrl: "wss://api.openai.com/v1/realtime",
     voice: "marin",
+  },
+
+  // Grok (xAI Voice Agent — A/B test alternative)
+  // Pricing: $0.05/min vs OpenAI ~$0.30/min (6x cheaper)
+  // Limit: 30min per session (auto-reconnect handles this)
+  grok: {
+    apiKey: process.env.XAI_API_KEY || "",
+    realtimeUrl: "wss://api.x.ai/v1/realtime",
+    voice: "Ara",  // Warm tone; options: Eve, Ara, Rex, Sal, Leo
   },
 
   // Anthropic Computer Use (direct API — optional)

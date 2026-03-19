@@ -3,6 +3,45 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.9] - 2026-03-19
+
+### Fixed
+- **Audio bridge stability — sidecar reconnect loop** — removed config guard clause (`audio_mode != new_mode`) that prevented audio restart on duplicate config; increased reconnect backoff from 3s to 5s; bridge sends config once on reconnect instead of 3-attempt verify loop
+- **Root cause:** Bridge replaced "stale" connections → sidecar cleanup killed audio → rapid reconnect → replaced again → infinite loop with 0 audio_chunks
+
+### Added
+- **14 unit tests** for audio bridge stability (config handler, reconnect backoff, audio chain invariants)
+
+## [2.5.0] - 2026-03-18
+
+### Added
+- **Unified Meeting Panel** — Talk Locally and Remote Meeting now share the same 3-section sidebar layout: Meeting Prep + AI Activity + Live Transcript (+ screenshot for local mode)
+- **Real-time live log streaming** — `appendToLiveLog()` emits `meeting.live_entry` WebSocket events, frontend transcript section updates instantly
+- **meetingId-based document indexing** — all meeting flows (join, talk-locally, delegate) generate and return stable `meetingId`; frontend uses it to load `_prep.md` and `_live.md` from shared directory
+- **WebSocket reconnect resilience** — exponential backoff (1s→30s max) + `/api/events` history replay on reconnect to recover missed events
+- **marked.js** — full CommonMark markdown renderer replaces custom `renderMd()` (supports links, ordered lists, blockquotes, tables, images)
+- **Session manifest lookup** — `openCalendarMeetingPanel()` queries `/api/shared/manifest` (sessions.json) to find the correct `meetingId` for each calendar event
+
+### Changed
+- **Event routing unified** — `handleMeetingEvent()` routes all 12+ event types (transcript.entry, voice.tool_call, computer.task_done, openclaw.*, meeting.live_entry, meeting.vision) through a single handler
+- **Prep brief loading** — frontend loads `_prep.md` files directly via `/api/shared/file` instead of converting brief objects client-side
+
+### Fixed
+- **`readManifest` import error** — replaced with `readSessions` in config_server.ts (pre-existing bug)
+
+### Removed
+- **Duplicate `buildPrepMarkdown()`** — 3 copies (index.html × 2 + shared-documents.ts) reduced to 1 (server-side only)
+- **`openPrepBriefFull()`** — dead code removed, replaced by meetingId-based file loading
+- **Grok Voice Agent (A/B test)** — xAI Grok as alternative realtime voice provider at $0.05/min (6x cheaper than OpenAI's ~$0.30/min). Desktop UI dropdown for switching providers.
+- **Multi-provider RealtimeClient** — Provider config objects isolate URL, auth headers, session format, and event name mapping. Zero if/else branching in core code.
+- **Auto-reconnect with context replay** — Both OpenAI and Grok sessions auto-reconnect on disconnect (max 3 retries, linear backoff). Last 20 transcript entries replayed as context.
+- **`voice.reconnect_failed` event** — EventBus notification when reconnect retries exhausted.
+- **19 unit tests** — Provider config generation, event name mapping, selection logic, reconnect interface.
+
+### Changed
+- **`/api/voice/start`** now accepts `{ provider: "openai" | "grok" }` parameter.
+- **Desktop voice test panel** — Provider dropdown with automatic voice option switching (OpenAI voices ↔ Grok voices: Eve, Ara, Rex, Sal, Leo).
+- **`VOICE_PROVIDER` env var** — Default provider configurable via `.env` (defaults to `openai`).
 ## [2.4.6] - 2026-03-18
 
 ### Fixed
@@ -16,6 +55,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`calendar.auth_error` EventBus event** — real-time notification to Desktop UI and OpenClaw
 - **`calendar_skipped` prep step** — meeting creation pipeline emits explicit warning when calendar unavailable
 - **`calendarAuthError` in /api/status** — API now returns auth error details for programmatic consumers
+## [2.4.7] - 2026-03-18
+
+### Added
+- **Calendar auto-reconnect** — if Google Calendar connection fails at startup (expired token, network), retries every 5 minutes automatically
+- **Prep brief enrichment** — `/api/calendar/events` now returns `_prepBrief` field by matching events against `sessions.json` meeting prep data
+- **Calendar disconnect warning** — Desktop frontend shows "Google Calendar disconnected" instead of misleading "No upcoming meetings" when calendar is down
+- **OAuth token refresh script** — `bun scripts/refresh-google-token.ts` for one-click token renewal
+
+### Fixed
+- **Empty Chrome window keeps popping up after ending meeting** — `playwrightCli.stop()` now called in `meeting.ended` handler, setting `_explicitlyStopped` flag to prevent auto-start from spawning new browser windows
 
 ## [2.4.5] - 2026-03-18
 

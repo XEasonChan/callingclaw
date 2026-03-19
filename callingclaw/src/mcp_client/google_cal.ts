@@ -331,6 +331,26 @@ export class GoogleCalendarClient {
     }
   }
 
+  /**
+   * Patch an existing calendar event (partial update).
+   * Used to add meeting notes URL to event description after meeting ends.
+   */
+  async patchEvent(eventId: string, updates: { description?: string }): Promise<boolean> {
+    if (!this._connected || !eventId) return false;
+
+    try {
+      await this.calendarFetch(
+        `/calendars/primary/events/${encodeURIComponent(eventId)}`,
+        { method: "PATCH", body: JSON.stringify(updates) }
+      );
+      console.log(`[Calendar] Event ${eventId} patched`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Calendar] patchEvent failed: ${e.message}`);
+      return false;
+    }
+  }
+
   async findFreeSlots(duration: number = 30, withinHours: number = 24): Promise<string[]> {
     if (!this._connected) return [];
 
@@ -393,5 +413,38 @@ export class GoogleCalendarClient {
   disconnect() {
     this._connected = false;
     this.accessToken = "";
+  }
+
+  /**
+   * Start a background reconnection loop.
+   * If calendar is disconnected, retries connect() every intervalMs.
+   * Stops once connected. Safe to call multiple times (no-ops if already running).
+   */
+  private _reconnectTimer: ReturnType<typeof setInterval> | null = null;
+  startAutoReconnect(intervalMs = 5 * 60_000) {
+    if (this._reconnectTimer) return;
+    this._reconnectTimer = setInterval(async () => {
+      if (this._connected) {
+        // Already connected, stop retrying
+        if (this._reconnectTimer) {
+          clearInterval(this._reconnectTimer);
+          this._reconnectTimer = null;
+        }
+        return;
+      }
+      console.log("[Calendar] Auto-reconnect attempt...");
+      try {
+        await this.connect();
+        if (this._connected) {
+          console.log("[Calendar] Auto-reconnect succeeded");
+          if (this._reconnectTimer) {
+            clearInterval(this._reconnectTimer);
+            this._reconnectTimer = null;
+          }
+        }
+      } catch (e: any) {
+        console.warn("[Calendar] Auto-reconnect failed:", e.message);
+      }
+    }, intervalMs);
   }
 }
