@@ -55,14 +55,17 @@ export class PythonBridge {
           self._lastPong = Date.now();
           self._startPing();
 
-          // Re-send last config on reconnect (sidecar resets to "default" mode)
+          // Re-send last config on reconnect (sidecar resets to "default" mode).
+          // Send once without verify loop — sidecar now force-restarts audio on
+          // every config message, so a single send is sufficient. This avoids the
+          // old pattern where 3-attempt verify would flood the sidecar with configs
+          // during rapid reconnect cycles.
           if (self._lastConfigPayload) {
             console.log("[Bridge] Re-sending cached config to reconnected sidecar...");
             setTimeout(() => {
-              self.sendConfigAndVerify(self._lastConfigPayload, { timeoutMs: 3000, retries: 3 })
-                .then(ok => console.log(`[Bridge] Config replay on reconnect: ${ok ? "✅" : "❌"}`))
-                .catch(() => console.warn("[Bridge] Config replay failed"));
-            }, 500); // Small delay to let sidecar finish init
+              const sent = self.send("config", self._lastConfigPayload);
+              console.log(`[Bridge] Config replay on reconnect: ${sent ? "sent" : "failed to send"}`);
+            }, 500);
           }
         },
         message(ws, raw) {
