@@ -3,6 +3,21 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.16] - 2026-03-20
+
+### Fixed
+- **Talk Locally audio race condition** — `closePanel()` unconditionally called `stopLocalTalk()`, killing audio during any panel navigation. Now only stops when `meetingMode === 'local'`. Also fixed double-stop in `stopLocalTalk()` and added `_starting` guard in audio-bridge.js
+- **MeetingScheduler duplicate crons** — persistent `_everScheduled` Set survives process restarts, prevents re-registering same meeting with OpenClaw (was sending 20+ identical auto-join messages)
+- **Meeting title/time extraction** — replaced slow OpenClaw sendTask calls with fast Haiku LLM via OpenRouter (~200ms). "明早10点讨论官网改版" now correctly extracts title + datetime
+- **Meeting prep panel not found** — `openCalendarMeetingPanel()` now matches by meetUrl → topic → substring instead of exact topic only
+- **Settings permission crash** — null guard for undefined permission checks
+- **Markdown display** — meeting link at top, prep content below, no repeated title
+- **`/api/meeting/prepare` endpoint** — also replaced OpenClaw sendTask with Haiku for title/time (was duplicate of delegate endpoint fix)
+
+### Changed
+- Voice system now follows 3-step separation: meeting lifecycle → voice session → audio transport
+- AI transcript deltas flow through to Live Feed (audio playback pending next session debug)
+
 ## [2.4.15] - 2026-03-20
 
 ### Added
