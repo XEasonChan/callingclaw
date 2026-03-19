@@ -3,6 +3,12 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.12] - 2026-03-19
+
+### Fixed
+- **Talk Locally had no persona** — voice started with generic stub instead of DEFAULT_PERSONA. Now loads full persona + OpenClaw soul (SOUL.md, USER.md) + MEMORY.md brief for user profile, projects, and personality
+- **Status bar schema mismatch** — OpenClaw/audio dots always showed gray because UI expected `{connected: bool}` but API returned `"connected"` string. Added `isConn()` helper for both formats
+
 ## [2.4.11] - 2026-03-19
 
 ### Added
