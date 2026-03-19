@@ -1,5 +1,143 @@
 [
   {
+    "id": "task_mmxvikut_g5jj",
+    "task": "Prepare a presentation highlighting Electron desktop flow and recent fixes.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "By end of the month",
+    "createdAt": 1773949140245,
+    "updatedAt": 1773949140245
+  },
+  {
+    "id": "task_mmxvikur_hzay",
+    "task": "Resolve the PyAudio sidecar crash issue by implementing a serialization lock or queue.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Technical Team",
+    "deadline": "Before next development sprint",
+    "createdAt": 1773949140243,
+    "updatedAt": 1773949140243
+  },
+  {
+    "id": "task_mmxviju9_9ig3",
+    "task": "Prepare a presentation highlighting the Electron transition, resolved audio issues, and upcoming cloud GTM strategy.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "talk_mmxvdxra_mk0b",
+    "createdAt": 1773949138929,
+    "updatedAt": 1773949138929
+  },
+  {
+    "id": "task_mmxviju6_nmag",
+    "task": "Resolve PyAudio sidecar crash with a serialization lock or queue.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Development Team",
+    "deadline": "2023-11-15",
+    "sourceMeetingId": "talk_mmxvdxra_mk0b",
+    "createdAt": 1773949138926,
+    "updatedAt": 1773949138926
+  },
+  {
+    "id": "task_mmxth0ng_mtvi",
+    "task": "Update the project timeline based on current assessments.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Alex",
+    "deadline": "2023-10-18",
+    "createdAt": 1773945708172,
+    "updatedAt": 1773945708172
+  },
+  {
+    "id": "task_mmxth0nc_i8vk",
+    "task": "Review and provide feedback on the draft proposal.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Morgan",
+    "deadline": "2023-10-17",
+    "createdAt": 1773945708168,
+    "updatedAt": 1773945708168
+  },
+  {
+    "id": "task_mmxth0na_eeli",
+    "task": "Complete the project phase documentation.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Jamie",
+    "deadline": "2023-10-15",
+    "createdAt": 1773945708166,
+    "updatedAt": 1773945708166
+  },
+  {
+    "id": "task_mmxtgxkt_duo2",
+    "task": "Schedule a follow-up meeting to discuss progress",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Assistant",
+    "deadline": "2023-11-07",
+    "sourceMeetingId": "talk_mmxtfxcw_o9kh",
+    "createdAt": 1773945704189,
+    "updatedAt": 1773945704189
+  },
+  {
+    "id": "task_mmxtgxks_febk",
+    "task": "Review project standards and quality expectations",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Project Manager",
+    "deadline": "2023-11-01",
+    "sourceMeetingId": "talk_mmxtfxcw_o9kh",
+    "createdAt": 1773945704188,
+    "updatedAt": 1773945704188
+  },
+  {
+    "id": "task_mmxtgxks_35l8",
+    "task": "Develop a timeline for deliverables",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Team Lead",
+    "deadline": "2023-11-05",
+    "sourceMeetingId": "talk_mmxtfxcw_o9kh",
+    "createdAt": 1773945704188,
+    "updatedAt": 1773945704188
+  },
+  {
+    "id": "task_mmxt5vlb_3ya9",
+    "task": "Review current project timelines and adjust if necessary.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Jordan",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "talk_mmxt37n4_3yv1",
+    "createdAt": 1773945188399,
+    "updatedAt": 1773945188399
+  },
+  {
+    "id": "task_mmxt5vlb_arqc",
+    "task": "Ensure all team members are aware of quality standards.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Taylor",
+    "deadline": "2023-11-08",
+    "sourceMeetingId": "talk_mmxt37n4_3yv1",
+    "createdAt": 1773945188399,
+    "updatedAt": 1773945188399
+  },
+  {
+    "id": "task_mmxt5vlb_24qd",
+    "task": "Prepare a report on the project's current status addressing any deviations.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Morgan",
+    "deadline": "2023-11-13",
+    "sourceMeetingId": "talk_mmxt37n4_3yv1",
+    "createdAt": 1773945188399,
+    "updatedAt": 1773945188399
+  },
+  {
     "id": "task_mmx6mffu_ctkv",
     "task": "Research and present the new tool for team productivity.",
     "status": "pending",

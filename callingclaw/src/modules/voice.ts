@@ -286,4 +286,15 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
       handler(event.delta);
     });
   }
+
+  /**
+   * Register handler for user speech interruption.
+   * Called when VAD detects user started speaking — cancel AI response + stop playback.
+   */
+  onSpeechStarted(handler: () => void) {
+    this.client.on("input_audio_buffer.speech_started", () => {
+      this.client.sendEvent("response.cancel", {});
+      handler();
+    });
+  }
 }

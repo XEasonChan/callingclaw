@@ -164,22 +164,20 @@
     <!-- Left: Controls -->
     <div class="panel-left">
       <div class="controls">
+        <!-- Provider select -->
+        <div class="control-group">
+          <div class="control-label">Provider</div>
+          <select id="provider-select">
+            <option value="openai">OpenAI</option>
+            <option value="grok">Grok (xAI)</option>
+          </select>
+        </div>
+
         <!-- Voice select -->
         <div class="control-group">
           <div class="control-label">Voice</div>
           <select id="voice-select">
-            <option value="alloy">Alloy</option>
-            <option value="ash">Ash</option>
-            <option value="ballad">Ballad</option>
-            <option value="coral">Coral</option>
-            <option value="echo">Echo</option>
-            <option value="fable">Fable</option>
-            <option value="marin" selected>Marin</option>
-            <option value="nova">Nova</option>
-            <option value="onyx">Onyx</option>
-            <option value="sage">Sage</option>
-            <option value="shimmer">Shimmer</option>
-            <option value="verse">Verse</option>
+            <!-- Populated dynamically by rebuildVoiceList() -->
           </select>
         </div>
 
@@ -196,9 +194,12 @@
           </div>
         </div>
 
-        <!-- Mic level -->
+        <!-- Mic device select -->
         <div class="control-group">
           <div class="control-label">Microphone</div>
+          <select id="mic-select" style="margin-bottom: 6px;">
+            <option value="">System Default</option>
+          </select>
           <div class="mic-bar-container">
             <div class="mic-bar" id="mic-bar"></div>
           </div>
@@ -260,6 +261,78 @@
     let playbackNode = null;
     let isPlaying = false;
     let sessionActive = false;
+    let captureCtx = null; // Separate AudioContext for mic capture (native rate)
+
+    // ── Voice lists per provider ──
+    const VOICES = {
+      openai: [
+        { value: 'alloy', label: 'Alloy' }, { value: 'ash', label: 'Ash' },
+        { value: 'ballad', label: 'Ballad' }, { value: 'coral', label: 'Coral' },
+        { value: 'echo', label: 'Echo' }, { value: 'fable', label: 'Fable' },
+        { value: 'marin', label: 'Marin' }, { value: 'nova', label: 'Nova' },
+        { value: 'onyx', label: 'Onyx' }, { value: 'sage', label: 'Sage' },
+        { value: 'shimmer', label: 'Shimmer' }, { value: 'verse', label: 'Verse' },
+      ],
+      grok: [
+        { value: 'Eve', label: 'Eve' }, { value: 'Ara', label: 'Ara' },
+        { value: 'Rex', label: 'Rex' }, { value: 'Sal', label: 'Sal' },
+        { value: 'Leo', label: 'Leo' },
+      ],
+    };
+    const DEFAULT_VOICE = { openai: 'marin', grok: 'Eve' };
+
+    function rebuildVoiceList(provider) {
+      const select = document.getElementById('voice-select');
+      select.innerHTML = '';
+      const voices = VOICES[provider] || VOICES.openai;
+      const def = DEFAULT_VOICE[provider] || voices[0].value;
+      voices.forEach(function(v) {
+        const opt = document.createElement('option');
+        opt.value = v.value; opt.textContent = v.label;
+        if (v.value === def) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    // ── Mic device enumeration ──
+    async function enumerateMics() {
+      try {
+        // Need a temp getUserMedia to get labeled devices
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach(t => t.stop());
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        const select = document.getElementById('mic-select');
+        select.innerHTML = '<option value="">System Default</option>';
+        mics.forEach(function(d) {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || ('Mic ' + d.deviceId.slice(0, 8));
+          // Auto-select real mic (skip BlackHole/virtual)
+          if (d.label && !d.label.includes('BlackHole') && !d.label.includes('Virtual') && select.value === '') {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+      } catch (e) { console.warn('[VoiceTest] Mic enumeration failed:', e); }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var providerSelect = document.getElementById('provider-select');
+      // Set initial provider from server VOICE_PROVIDER config
+      fetch(API + '/api/status').then(function(r) { return r.json(); }).then(function(d) {
+        // Use configured voiceProvider or session provider
+        var prov = (d.voiceSession && d.voiceSession.provider) || null;
+        if (prov) providerSelect.value = prov;
+        rebuildVoiceList(providerSelect.value);
+      }).catch(function() { rebuildVoiceList(providerSelect.value); });
+      rebuildVoiceList(providerSelect.value);
+      providerSelect.addEventListener('change', function() {
+        rebuildVoiceList(this.value);
+      });
+      // Enumerate mic devices
+      enumerateMics();
+    });
 
     // ── Load config ──
     (async () => {
@@ -322,83 +395,164 @@
       btnStart.textContent = 'Connecting...';
 
       try {
-        // 1. Get mic permission
-        micStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
-        });
+        // 1. Get mic permission (use selected device if specified)
+        const micDeviceId = document.getElementById('mic-select').value;
+        const audioConstraints = { echoCancellation: true, noiseSuppression: true, channelCount: 1 };
+        if (micDeviceId) audioConstraints.deviceId = { exact: micDeviceId };
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
-        // 2. Set up AudioContext at 24kHz (OpenAI Realtime native rate)
-        audioCtx = new AudioContext({ sampleRate: 24000 });
-        if (audioCtx.sampleRate !== 24000) {
-          console.warn(`[VoiceTest] AudioContext sampleRate is ${audioCtx.sampleRate}, expected 24000. Audio will be resampled.`);
-        }
+        // 2. Set up TWO AudioContexts:
+        //    - captureCtx: at hardware native rate (48kHz) for mic capture via AudioWorklet
+        //      Forcing 24kHz causes MediaStreamSource to output silence in Edge/Safari.
+        //    - audioCtx: at 24kHz for AI audio playback (matches Grok/OpenAI output)
+        captureCtx = new AudioContext(); // native rate (usually 48kHz)
+        audioCtx = new AudioContext({ sampleRate: 24000 }); // playback only
+        if (captureCtx.state === 'suspended') await captureCtx.resume();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        console.log(`[VoiceTest] Capture: ${captureCtx.sampleRate}Hz (AudioWorklet), Playback: ${audioCtx.sampleRate}Hz`);
 
-        // 3. Set up mic capture
-        micSource = audioCtx.createMediaStreamSource(micStream);
-        micAnalyser = audioCtx.createAnalyser();
+        // 3. Set up mic capture via AudioWorklet (modern API, runs on audio thread)
+        await captureCtx.audioWorklet.addModule('/pcm-processor-worklet.js');
+        micSource = captureCtx.createMediaStreamSource(micStream);
+        micAnalyser = captureCtx.createAnalyser();
         micAnalyser.fftSize = 256;
         micSource.connect(micAnalyser);
 
-        // ScriptProcessor for PCM16 capture
-        micProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
-        micSource.connect(micProcessor);
-        micProcessor.connect(audioCtx.destination); // Required for processing to work
+        const workletNode = new AudioWorkletNode(captureCtx, 'pcm-processor');
+        micSource.connect(workletNode);
+        micProcessor = workletNode; // store ref for cleanup
 
-        micProcessor.onaudioprocess = (e) => {
-          if (!sessionActive || !ws || ws.readyState !== WebSocket.OPEN) return;
-          const input = e.inputBuffer.getChannelData(0);
-          // Float32 → Int16 (PCM16)
-          const pcm16 = new Int16Array(input.length);
-          for (let i = 0; i < input.length; i++) {
-            const s = Math.max(-1, Math.min(1, input[i]));
-            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        const captureRate = captureCtx.sampleRate;
+        const TARGET_RATE = 24000;
+
+        // Chunked base64 encoder (avoids stack overflow on large buffers)
+        function audioToBase64(int16Array) {
+          const bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
+          const CHUNK = 0x2000;
+          const parts = [];
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK)));
           }
-          // Int16Array → base64
-          const bytes = new Uint8Array(pcm16.buffer);
-          let binary = '';
-          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-          const b64 = btoa(binary);
-          ws.send(JSON.stringify({ type: 'audio', audio: b64 }));
+          return btoa(parts.join(''));
+        }
+
+        // Buffer mic audio until session is ready (captures first 200-700ms of speech)
+        let micBuffer = [];
+        let micSessionReady = false;
+
+        workletNode.port.onmessage = (e) => {
+          let int16Data = e.data; // Int16Array at captureRate
+
+          // Downsample from native rate to 24kHz if needed
+          if (captureRate !== TARGET_RATE && captureRate > TARGET_RATE) {
+            const ratio = captureRate / TARGET_RATE;
+            const newLen = Math.round(int16Data.length / ratio);
+            const resampled = new Int16Array(newLen);
+            for (let i = 0; i < newLen; i++) {
+              resampled[i] = int16Data[Math.round(i * ratio)] || 0;
+            }
+            int16Data = resampled;
+          }
+
+          if (micSessionReady && sessionActive && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(int16Data) }));
+          } else if (!micSessionReady) {
+            micBuffer.push(int16Data);
+            if (micBuffer.length > 240) micBuffer.shift(); // safety cap ~10s
+          }
         };
 
-        // 4. Set up playback node (ScriptProcessor for output)
-        playbackNode = audioCtx.createScriptProcessor(4096, 1, 1);
-        playbackNode.onaudioprocess = (e) => {
-          const output = e.outputBuffer.getChannelData(0);
-          if (playbackQueue.length > 0) {
-            const chunk = playbackQueue.shift();
-            const len = Math.min(chunk.length, output.length);
-            for (let i = 0; i < len; i++) output[i] = chunk[i];
-            for (let i = len; i < output.length; i++) output[i] = 0;
-            if (!isPlaying) {
-              isPlaying = true;
-              document.getElementById('voice-viz').classList.add('speaking');
-            }
-          } else {
-            for (let i = 0; i < output.length; i++) output[i] = 0;
-            if (isPlaying) {
-              isPlaying = false;
-              document.getElementById('voice-viz').classList.remove('speaking');
+        // Flush mic buffer when session becomes ready
+        window._onSessionReady = function() {
+          micSessionReady = true;
+          for (const chunk of micBuffer) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(chunk) }));
             }
           }
+          micBuffer = [];
+          console.log(`[VoiceTest] Mic buffer flushed, live streaming at ${TARGET_RATE}Hz`);
         };
-        playbackNode.connect(audioCtx.destination);
+
+        // 4. Scheduled BufferSource playback (no ScriptProcessor — eliminates pops/clicks)
+        // Each incoming audio chunk is scheduled at an exact time on the audio thread.
+        // Unlike ScriptProcessor, there are no chunk boundary discontinuities.
+        let _nextPlayTime = 0;
+        const _queuedSources = [];
+        playbackNode = { _scheduledCount: 0 }; // dummy ref for cleanup
+
+        window._scheduleAudioChunk = function(float32) {
+          if (!audioCtx || audioCtx.state === 'closed') return;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+
+          const buffer = audioCtx.createBuffer(1, float32.length, 24000);
+          buffer.copyToChannel(float32, 0);
+
+          const source = audioCtx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioCtx.destination);
+
+          const now = audioCtx.currentTime;
+          // 150ms initial buffer absorbs the burst of chunks at response start
+          if (_nextPlayTime < now) _nextPlayTime = now + 0.15;
+
+          source.start(_nextPlayTime);
+          _nextPlayTime += float32.length / 24000;
+
+          // Track for interruption
+          _queuedSources.push(source);
+          source.onended = () => {
+            const idx = _queuedSources.indexOf(source);
+            if (idx !== -1) _queuedSources.splice(idx, 1);
+          };
+
+          if (!isPlaying) {
+            isPlaying = true;
+            document.getElementById('voice-viz').classList.add('speaking');
+          }
+          clearTimeout(window._speechEndTimer);
+          window._speechEndTimer = setTimeout(() => {
+            isPlaying = false;
+            document.getElementById('voice-viz').classList.remove('speaking');
+          }, 500);
+        };
+
+        // Interruption: stop all queued audio sources + reset timeline
+        window._interruptPlayback = function() {
+          for (const src of _queuedSources) { try { src.stop(); } catch {} }
+          _queuedSources.length = 0;
+          _nextPlayTime = 0;
+          isPlaying = false;
+          document.getElementById('voice-viz').classList.remove('speaking');
+          clearTimeout(window._speechEndTimer);
+        };
 
         // 5. Connect WebSocket
         ws = new WebSocket(WS_URL);
         ws.onopen = () => {
           updateBadge('ws-badge', 'WS: Connected', true);
 
-          // Change voice first
+          // Read provider + voice selection
+          const provider = document.getElementById('provider-select').value;
           const voice = document.getElementById('voice-select').value;
-          fetch(`${API}/api/config`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ openai_voice: voice })
-          }).catch(() => {});
 
-          // Send start command with instructions
+          // Push voice config (provider-aware)
+          if (provider === 'openai') {
+            fetch(`${API}/api/config`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ openai_voice: voice })
+            }).catch(() => {});
+          }
+          // For Grok, voice is sent via the start command (server reads it from session config)
+
+          // Send start command with instructions + provider + voice
           const instructions = document.getElementById('instructions').value.trim();
-          ws.send(JSON.stringify({ type: 'start', instructions: instructions || undefined }));
+          ws.send(JSON.stringify({
+            type: 'start',
+            instructions: instructions || undefined,
+            provider: provider,
+            voice: voice,
+          }));
         };
 
         ws.onmessage = (event) => {
@@ -414,9 +568,13 @@
               for (let i = 0; i < pcm16.length; i++) {
                 float32[i] = pcm16[i] / (pcm16[i] < 0 ? 0x8000 : 0x7FFF);
               }
-              playbackQueue.push(float32);
-              // Limit queue to prevent memory bloat (max ~2s of audio at 24kHz)
-              while (playbackQueue.length > 12) playbackQueue.shift();
+              // Schedule for seamless playback (BufferSource, no ScriptProcessor pops)
+              if (window._scheduleAudioChunk) {
+                window._scheduleAudioChunk(float32);
+              }
+            } else if (msg.type === 'interrupt') {
+              // User started speaking — stop AI audio playback immediately
+              if (window._interruptPlayback) window._interruptPlayback();
             } else if (msg.type === 'transcript') {
               addTranscript(msg.role, msg.text, msg.ts);
             } else if (msg.type === 'status') {
@@ -428,6 +586,8 @@
                 startMicLevel();
                 enableLayerToggles(true);
                 if (enabledLayers.size > 0) applyLayers();
+                // Flush buffered mic audio now that session is ready
+                if (window._onSessionReady) window._onSessionReady();
               }
             } else if (msg.type === 'layers_info') {
               renderLayers(msg.layers);
@@ -474,7 +634,9 @@
       if (micAnalyser) { micAnalyser.disconnect(); micAnalyser = null; }
       if (playbackNode) { playbackNode.disconnect(); playbackNode = null; }
       if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      if (window._interruptPlayback) window._interruptPlayback();
       if (audioCtx) { audioCtx.close(); audioCtx = null; }
+      if (captureCtx) { captureCtx.close().catch(() => {}); captureCtx = null; }
       playbackQueue = [];
       isPlaying = false;
 

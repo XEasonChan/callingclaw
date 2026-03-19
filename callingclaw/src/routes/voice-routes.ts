@@ -21,15 +21,9 @@ export function voiceRoutes(services: Services): RouteHandler {
       throw new Error("OpenAI API key not configured");
     }
 
+    // Keep instructions lean — don't dump full memory/workspace into the system prompt.
+    // Context is available on-demand via recall_context tool.
     let instructions = body.instructions || undefined;
-    const workspacePrompt = services.context.getWorkspacePrompt();
-    if (workspacePrompt) {
-      instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
-    }
-    const syncBrief = services.contextSync?.getBrief().voice;
-    if (syncBrief) {
-      instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
-    }
 
     await services.realtime.start(instructions, provider);
 

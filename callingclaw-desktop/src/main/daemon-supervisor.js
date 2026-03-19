@@ -56,6 +56,10 @@ class DaemonSupervisor extends EventEmitter {
   async start() {
     if (this.isRunning()) {
       this.emit('log', '[Supervisor] Daemon already running');
+      if (!this._healthTimer) {
+        this._startHealthCheck();
+      }
+      this.emit('started');
       return;
     }
 

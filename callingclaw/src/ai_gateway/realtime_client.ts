@@ -107,12 +107,19 @@ export const GROK_PROVIDER: RealtimeProviderConfig = {
           input: { format: { type: "audio/pcm", rate: 24000 } },
           output: { format: { type: "audio/pcm", rate: 24000 } },
         },
-        tools: tools.map((t) => ({
-          type: "function",
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })),
+        input_audio_transcription: { model: "grok-2-audio" },
+        tools: [
+          // Grok native tools (free, no token cost)
+          { type: "web_search" },
+          { type: "x_search" },
+          // CallingClaw function tools
+          ...tools.map((t) => ({
+            type: "function",
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          })),
+        ],
         turn_detection: { type: "server_vad", ...vad },
       },
     };
@@ -286,7 +293,7 @@ export class RealtimeClient {
       };
 
       this.ws.onclose = (event: CloseEvent) => {
-        console.log(`[Realtime] Disconnected from ${provider.name} (code: ${event.code}, reason: ${event.reason || "none"})`);
+        console.log(`[Realtime] Disconnected from ${provider.name} (code: ${event.code}, reason: ${event.reason || "none"}, wasClean: ${event.wasClean})`);
         this._connected = false;
 
         // Auto-reconnect if not intentional
@@ -354,7 +361,11 @@ export class RealtimeClient {
 
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    this.ws.send(JSON.stringify({ type, ...data }));
+    const payload = JSON.stringify({ type, ...data });
+    if (type !== "input_audio_buffer.append") {
+      console.log(`[Realtime] >>> ${type} (${payload.length} bytes)`);
+    }
+    this.ws.send(payload);
     return true;
   }
 

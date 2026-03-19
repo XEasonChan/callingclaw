@@ -538,9 +538,6 @@ app.whenReady().then(async () => {
   createTray();
   createMainWindow();
 
-  // Start health check immediately to detect externally-started daemon
-  daemon._startHealthCheck();
-
   // Forward daemon events to renderer
   daemon.on('started', () => {
     console.log('[App] CallingClaw daemon started');
@@ -565,8 +562,12 @@ app.whenReady().then(async () => {
     // This handles the case where daemon was started externally
     if (daemon.isRunning()) {
       mainWindow?.webContents.send('daemon-status', true);
+      updateTrayMenu('running');
     }
   });
+
+  // Start health check immediately to detect externally-started daemon
+  daemon._startHealthCheck();
 
   try {
     console.log('[App] Auto-starting CallingClaw daemon...');

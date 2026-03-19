@@ -3,6 +3,28 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.19] - 2026-03-20
+
+### Fixed
+- **Audio playback pops/clicks** — replaced ScriptProcessor queue playback with scheduled `AudioBufferSourceNode` for sample-accurate gapless audio (both Desktop and voice-test)
+- **Mic capture silence in Edge/Safari** — split into dual AudioContext (native rate capture + 24kHz playback) with proper downsampling; fixed BlackHole default mic issue
+- **79% audio data loss with Grok** — Grok sends 13K-32K samples per delta vs OpenAI's ~2K-4K; now handled correctly by BufferSource scheduling
+- **Voice session disconnect on provider switch** — guarded `setVoice()` to not send OpenAI voice names to Grok sessions
+
+### Added
+- **Grok provider support in voice-test.html** — provider selector (OpenAI/Grok), dynamic voice list (Eve/Ara/Rex/Sal/Leo)
+- **Microphone device selector** — dropdown lists all audio input devices, auto-skips BlackHole/Virtual devices
+- **`input_audio_transcription: { model: "grok-2-audio" }`** — enables user speech transcription with Grok
+- **`web_search` + `x_search` native Grok tools** — free built-in web search, no token cost
+- **Speech interruption** — `speech_started` event cancels AI response + stops playback when user speaks
+- **AudioWorklet mic capture** — replaces deprecated ScriptProcessor for both Desktop (Blob URL) and browser; runs on audio thread, no main-thread blocking
+- **Mic audio buffering** — captures first 200-700ms of speech before session is ready, flushes on connect
+- **Talk Locally voice status indicator** — pulsing dot: yellow (connecting) → green (connected) → red (failed)
+
+### Changed
+- System instructions reduced from ~1650 tokens to ~100 tokens (removed full OpenClaw memory dump, context available on-demand via recall_context tool)
+- Desktop audio-bridge.js fully rewritten: AudioWorklet capture + BufferSource playback + interruption support
+
 ## [2.4.18] - 2026-03-20
 
 ### Fixed

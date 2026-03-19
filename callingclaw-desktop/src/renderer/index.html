@@ -682,6 +682,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background-size: 200% 100%; animation: shimmer 1.5s infinite;
 }
 .meet-file-icon { font-size: 11px; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes speaking-pulse { 0%,100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.3); opacity: 1; } }
 </style>
 </head>
 <body>
@@ -725,6 +727,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <div class="sp-header">
         <h3 id="sp-title">--</h3>
         <div style="display:flex;align-items:center;gap:6px;">
+          <span id="sp-voice-status" style="display:none;font-size:11px;color:var(--green);display:flex;align-items:center;gap:4px;"><span id="sp-voice-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s ease-in-out infinite;"></span><span id="sp-voice-label">语音已连接</span></span>
           <button class="btn btn-sm btn-danger" id="sp-stop-btn" style="display:none" onclick="stopLocalTalk()">停止</button>
           <button class="sp-close" onclick="closePanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
@@ -1715,6 +1718,13 @@ async function startLocalTalk(topic) {
   mfData.status = 'live';
   S.activeMeetingId = meetingId;
   openMeetingPanel(meetingId, 'local');
+  // Show voice status indicator
+  var voiceStatus = document.getElementById('sp-voice-status');
+  var voiceLabel = document.getElementById('sp-voice-label');
+  var voiceDot = document.getElementById('sp-voice-dot');
+  if (voiceStatus) { voiceStatus.style.display = 'flex'; }
+  if (voiceLabel) { voiceLabel.textContent = '连接中...'; }
+  if (voiceDot) { voiceDot.style.background = 'var(--yellow)'; }
   addMpActivity('done', 'Talk locally lifecycle ready');
   if (data && data.prepBrief) {
     addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
@@ -1736,9 +1746,14 @@ async function startLocalTalk(topic) {
     if (!sr.ok || session.error) {
       throw new Error(session.error || 'Voice session start failed');
     }
-    addMpActivity('done', 'Voice session ready (' + (session.transport || 'direct') + ')');
+    addMpActivity('done', 'Voice session ready (' + (session.provider || 'openai') + ', ' + (session.transport || 'direct') + ')');
+    // Update voice status to connected
+    if (voiceLabel) voiceLabel.textContent = '语音已连接';
+    if (voiceDot) voiceDot.style.background = 'var(--green)';
   } catch (e) {
     addMpActivity('error', 'Voice session failed: ' + e.message);
+    if (voiceLabel) voiceLabel.textContent = '连接失败';
+    if (voiceDot) voiceDot.style.background = 'var(--accent)';
     try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
     return;
   } finally {
@@ -1780,6 +1795,9 @@ function startAudioBridge(mode) {
         var msg = JSON.parse(e.data);
         if (msg.type === 'audio_playback' && msg.payload && msg.payload.audio) {
           ElectronAudioBridge.playAudio(msg.payload.audio);
+        } else if (msg.type === 'interrupt') {
+          // User started speaking — stop AI audio immediately
+          ElectronAudioBridge.interruptPlayback();
         }
       } catch (err) {}
     };
@@ -1806,6 +1824,9 @@ function stopAudioBridge() {
 }
 
 async function stopLocalTalk() {
+  // Hide voice status
+  var voiceStatus = document.getElementById('sp-voice-status');
+  if (voiceStatus) voiceStatus.style.display = 'none';
   // 1. Stop audio transport (only once — stopAudioBridge handles ElectronAudioBridge.stop + WS close)
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
   stopAudioBridge();

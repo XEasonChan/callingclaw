@@ -55,7 +55,7 @@ export const CONFIG = {
   grok: {
     apiKey: process.env.XAI_API_KEY || "",
     realtimeUrl: "wss://api.x.ai/v1/realtime",
-    voice: "Ara",  // Warm tone; options: Eve, Ara, Rex, Sal, Leo
+    voice: "Eve",  // options: Eve, Ara, Rex, Sal, Leo
   },
 
   // Anthropic Computer Use (direct API — optional)

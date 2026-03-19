@@ -97,17 +97,9 @@ export function startConfigServer(services: Services) {
     startedAt: null,
   };
 
+  // Keep instructions lean — context available on-demand via recall_context tool.
   const buildSessionInstructions = (baseInstructions?: string) => {
-    let instructions = baseInstructions || undefined;
-    const workspacePrompt = services.context.getWorkspacePrompt();
-    if (workspacePrompt) {
-      instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
-    }
-    const syncBrief = services.contextSync?.getBrief().voice;
-    if (syncBrief) {
-      instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
-    }
-    return instructions;
+    return baseInstructions || undefined;
   };
 
   const markVoiceSession = (opts: {
@@ -239,13 +231,27 @@ export function startConfigServer(services: Services) {
             const raw = typeof msg === "string" ? msg : new TextDecoder().decode(msg as ArrayBuffer);
             const data = JSON.parse(raw);
             if (data.type === "audio" && data.audio) {
+              if (!globalThis._vtAudioCount) globalThis._vtAudioCount = 0;
+              if (++globalThis._vtAudioCount % 50 === 1) {
+                console.log(`[VoiceTest] Mic audio chunk #${globalThis._vtAudioCount} (${data.audio.length} b64 chars)`);
+              }
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "start") {
-              // Start voice session from browser
+              // Start voice session from browser (supports provider + voice selection)
               const instructions = data.instructions || undefined;
-              services.realtime.start(instructions).then(() => {
-                ws.send(JSON.stringify({ type: "status", voiceConnected: true }));
-                services.eventBus.emit("voice.started", { audio_mode: "browser" });
+              const provider = data.provider || undefined; // "openai" | "grok"
+              const voice = data.voice || undefined;
+
+              // If Grok provider selected with a specific voice, update Grok config before start
+              if (provider === "grok" && voice) {
+                CONFIG.grok.voice = voice;
+              } else if (provider === "openai" && voice) {
+                CONFIG.openai.voice = voice;
+              }
+
+              services.realtime.start(instructions, provider).then(() => {
+                ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
+                services.eventBus.emit("voice.started", { audio_mode: "browser", provider });
               }).catch((e: any) => {
                 ws.send(JSON.stringify({ type: "error", message: e.message }));
               });
@@ -451,8 +457,9 @@ export function startConfigServer(services: Services) {
         if (body.audio) Object.assign(CONFIG.audio, body.audio);
         if (body.openai_voice) {
           CONFIG.openai.voice = body.openai_voice;
-          // Push to live session if connected
-          if (services.realtime.connected) {
+          // Push to live session if connected — but only if using OpenAI provider
+          // Sending OpenAI voice names (e.g. "marin") to Grok would be invalid
+          if (services.realtime.connected && services.realtime.provider === "openai") {
             services.realtime.setVoice(body.openai_voice);
           }
         }
@@ -1128,16 +1135,7 @@ export function startConfigServer(services: Services) {
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
           try {
-            let instructions = body.instructions || undefined;
-            const workspacePrompt = services.context.getWorkspacePrompt();
-            if (workspacePrompt) {
-              instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
-            }
-            // Inject ContextSync brief (was previously missing from /api/meeting/join)
-            const syncBrief = services.contextSync?.getBrief().voice;
-            if (syncBrief) {
-              instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
-            }
+            const instructions = body.instructions || undefined;
             await services.realtime.start(instructions);
             voiceStarted = true;
             console.log("[Meeting] Voice AI started for meeting");
@@ -1920,13 +1918,11 @@ STEP-BY-STEP FLOW:
         try {
           const { buildVoiceInstructions } = await import("./voice-persona");
           voiceInstructions = buildVoiceInstructions();
-          const soul = services.contextSync?.getSoul();
-          if (soul) {
-            voiceInstructions += `\n\n═══ PERSONALITY & VALUES (from OpenClaw soul) ═══\n${soul}`;
-          }
-          const syncBrief = services.contextSync?.getBrief().voice;
-          if (syncBrief) {
-            voiceInstructions += `\n\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${syncBrief}`;
+          // Keep instructions lean for Grok's smaller context window.
+          // User profile (name/timezone) is useful; full project details are not.
+          const userEmail = CONFIG.userEmail;
+          if (userEmail) {
+            voiceInstructions += `\n\nUser: ${userEmail}`;
           }
         } catch (e: any) {
           console.warn("[TalkLocally] Failed to build voice instructions:", e.message);
@@ -2050,10 +2046,7 @@ STEP-BY-STEP FLOW:
           services.meetingPrepSkill.clear();
         }
         if (services.realtime.connected) {
-          const defaultBrief = services.contextSync?.getBrief().voice;
-          const defaultInstructions = buildVoiceInstructions() +
-            (defaultBrief ? `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${defaultBrief}` : "");
-          services.realtime.updateInstructions(defaultInstructions);
+          services.realtime.updateInstructions(buildVoiceInstructions());
           console.log("[TalkLocally] Voice reverted to DEFAULT_PERSONA");
         }
 
@@ -2591,6 +2584,18 @@ STEP-BY-STEP FLOW:
     for (const ws of audioBridgeClients) {
       try { ws.send(abMsg); } catch {}
     }
+  });
+
+  // ── Interruption: user started speaking → stop playback on all clients ──
+  services.realtime.onSpeechStarted(() => {
+    const msg = JSON.stringify({ type: "interrupt" });
+    for (const ws of browserVoiceClients) {
+      try { ws.send(msg); } catch {}
+    }
+    for (const ws of audioBridgeClients) {
+      try { ws.send(msg); } catch {}
+    }
+    console.log("[Voice] Speech started — interrupted AI response");
   });
 
   // ── Forward transcript entries to browser voice test clients ──

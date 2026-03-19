@@ -117,16 +117,7 @@ export function meetingRoutes(services: Services): RouteHandler {
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
           try {
-            let instructions = body.instructions || undefined;
-            const workspacePrompt = services.context.getWorkspacePrompt();
-            if (workspacePrompt) {
-              instructions = (instructions || "") + `\n\nWorkspace context:\n${workspacePrompt}`;
-            }
-            // Inject ContextSync brief (was previously missing from /api/meeting/join)
-            const syncBrief = services.contextSync?.getBrief().voice;
-            if (syncBrief) {
-              instructions = (instructions || "") + `\n\nShared context (user profile, pinned files):\n${syncBrief}`;
-            }
+            const instructions = body.instructions || undefined;
             await services.realtime.start(instructions);
             voiceStarted = true;
             console.log("[Meeting] Voice AI started for meeting");

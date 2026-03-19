@@ -1,50 +1,77 @@
 // ═══════════════════════════════════════════════════════════════
-// AudioBridge — Electron-native audio capture/playback via Web Audio API
-// Replaces Python sidecar's PyAudio + BlackHole routing
+// AudioBridge v2 — Electron audio capture/playback via Web Audio API
 // ═══════════════════════════════════════════════════════════════
 //
-// Architecture:
+// Architecture (both modes share the same code):
 //
-//   Google Meet
-//     │ (system audio output → BlackHole 2ch)
-//     ▼
-//   getUserMedia({deviceId: BlackHole 2ch})
-//     │
-//     ▼
-//   AudioContext (24kHz) → ScriptProcessor → PCM16 → base64
-//     │
-//     ▼
-//   WebSocket → Bun :4000 → OpenAI Realtime
-//     │
-//     ▼ (AI response audio)
-//   base64 → PCM16 → ScriptProcessor → AudioContext
-//     │
-//     │ (setSinkId: BlackHole 16ch)
-//     ▼
-//   Google Meet mic input ← BlackHole 16ch
+//   Talk Locally (direct):
+//     Real mic → AudioWorklet → PCM16 24kHz → base64 → WS → Grok/OpenAI
+//     AI audio → base64 → PCM16 → BufferSource(scheduled) → Speaker
+//
+//   Meet Bridge:
+//     BlackHole 2ch → AudioWorklet → PCM16 24kHz → base64 → WS → Grok/OpenAI
+//     AI audio → base64 → PCM16 → BufferSource(scheduled) → BlackHole 16ch → Meet mic
+//
+// Key improvements over v1:
+//   - AudioWorklet (audio thread) replaces ScriptProcessor (main thread, deprecated)
+//   - Scheduled BufferSource playback eliminates chunk-boundary pops/clicks
+//   - Interruption support: interruptPlayback() stops all queued sources
+//   - Chunked base64 encoding avoids stack overflow on large buffers
+//   - Capture failure doesn't kill playback
 //
 // ⚠️  CRITICAL: setSinkId() MUST be called BEFORE getUserMedia()
 //     to avoid Electron bug #40704 (silent output failure)
-//
 
 var ElectronAudioBridge = (function() {
   'use strict';
 
   var SAMPLE_RATE = 24000;
-  var CHUNK_SIZE = 4096; // ~170ms at 24kHz
-  var MAX_PLAYBACK_QUEUE = 100; // ~17 seconds buffer
 
   // ── State ──
-  var _audioCtx = null;
+  var _audioCtx = null;       // Playback AudioContext (24kHz)
+  var _captureCtx = null;     // Capture AudioContext (native rate for AudioWorklet)
   var _captureStream = null;
   var _captureSource = null;
-  var _captureProcessor = null;
-  var _playbackProcessor = null;
-  var _playbackQueue = [];
+  var _workletNode = null;
   var _running = false;
-  var _mode = null; // 'direct' | 'meet_bridge'
-  var _onAudioChunk = null; // callback(base64Pcm)
-  var _devices = { input: null, output: null }; // selected device IDs
+  var _starting = false;
+  var _mode = null;            // 'direct' | 'meet_bridge'
+  var _onAudioChunk = null;    // callback(base64Pcm)
+  var _devices = { input: null, output: null };
+
+  // Scheduled playback state
+  var _nextPlayTime = 0;
+  var _queuedSources = [];
+
+  // ── AudioWorklet code (inlined as Blob URL to avoid file:// issues in Electron) ──
+  var WORKLET_CODE = [
+    'class PCMProcessor extends AudioWorkletProcessor {',
+    '  process(inputs) {',
+    '    var input = inputs[0] && inputs[0][0];',
+    '    if (input) {',
+    '      var int16 = new Int16Array(input.length);',
+    '      for (var i = 0; i < input.length; i++) {',
+    '        var s = Math.max(-1, Math.min(1, input[i]));',
+    '        int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;',
+    '      }',
+    '      this.port.postMessage(int16, [int16.buffer]);',
+    '    }',
+    '    return true;',
+    '  }',
+    '}',
+    "registerProcessor('pcm-processor', PCMProcessor);",
+  ].join('\n');
+
+  // ── Chunked base64 encoder (avoids stack overflow on large buffers) ──
+  function audioToBase64(int16Array) {
+    var bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
+    var CHUNK = 0x2000;
+    var parts = [];
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK)));
+    }
+    return btoa(parts.join(''));
+  }
 
   // ── Device Discovery ──
 
@@ -72,15 +99,14 @@ var ElectronAudioBridge = (function() {
 
   // ── Start Bridge ──
 
-  var _starting = false;
-
   function start(mode, onAudioChunk) {
-    if (_starting) { console.warn('[AudioBridge] start() already in progress, ignoring'); return Promise.resolve({ ok: false, reason: 'already_starting' }); }
+    if (_starting) { console.warn('[AudioBridge] start() already in progress'); return Promise.resolve({ ok: false, reason: 'already_starting' }); }
     if (_running) { stop(); }
     _starting = true;
     _mode = mode || 'direct';
     _onAudioChunk = onAudioChunk;
-    _playbackQueue = [];
+    _nextPlayTime = 0;
+    _queuedSources = [];
 
     return findBlackHoleDevices().then(function(bh) {
       var inputDeviceId = null;
@@ -93,7 +119,7 @@ var ElectronAudioBridge = (function() {
         } else {
           inputDeviceId = bh.captureId;
           outputDeviceId = bh.playbackId;
-          console.log('[AudioBridge] meet_bridge mode: capture=' + bh.capture.label + ', playback=' + bh.playback.label);
+          console.log('[AudioBridge] meet_bridge: capture=' + bh.capture.label + ', playback=' + bh.playback.label);
         }
       }
 
@@ -102,16 +128,16 @@ var ElectronAudioBridge = (function() {
 
       // ⚠️ CRITICAL ORDER: setSinkId BEFORE getUserMedia (Electron bug #40704)
       return _setupPlayback(outputDeviceId).then(function() {
-        // Playback is ready — enable audio output immediately.
-        // Capture failure (no mic permission) must NOT kill playback.
         _running = true;
-        return _setupCapture(inputDeviceId).catch(function(captureErr) {
-          console.warn('[AudioBridge] Mic capture failed (playback still active):', captureErr.message);
+        return _setupCapture(inputDeviceId).catch(function(err) {
+          console.warn('[AudioBridge] Capture failed (playback still active):', err.message);
         });
       });
     }).then(function() {
       _starting = false;
-      console.log('[AudioBridge] Started in ' + _mode + ' mode (AudioContext: ' + (_audioCtx ? _audioCtx.state : 'null') + ')');
+      console.log('[AudioBridge] Started in ' + _mode + ' mode (capture: ' +
+        (_captureCtx ? _captureCtx.sampleRate + 'Hz AudioWorklet' : 'N/A') +
+        ', playback: ' + (_audioCtx ? _audioCtx.sampleRate + 'Hz BufferSource' : 'N/A') + ')');
       return { ok: true, mode: _mode };
     }).catch(function(err) {
       _starting = false;
@@ -119,145 +145,161 @@ var ElectronAudioBridge = (function() {
     });
   }
 
-  // ── Setup Playback (output) — MUST be called first ──
+  // ── Setup Playback (BufferSource scheduled) — MUST be called first ──
 
   function _setupPlayback(outputDeviceId) {
     _audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
 
-    // ⚠️ FIX: AudioContext may start suspended if created outside a user gesture
-    // (e.g., inside WS onopen callback). Explicitly resume it.
+    // Resume if suspended (Electron autoplay policy)
     var resumePromise = _audioCtx.state !== 'running'
-      ? _audioCtx.resume().then(function() {
-          console.log('[AudioBridge] AudioContext resumed (was ' + _audioCtx.state + ')');
-        }).catch(function(e) {
-          console.warn('[AudioBridge] AudioContext resume failed:', e.message);
-        })
+      ? _audioCtx.resume().catch(function() {})
       : Promise.resolve();
 
-    // Set output device if specified
+    // Set output device (BlackHole 16ch for meet_bridge)
     var sinkPromise;
     if (outputDeviceId && _audioCtx.setSinkId) {
       sinkPromise = resumePromise.then(function() {
         return _audioCtx.setSinkId(outputDeviceId);
       }).then(function() {
-        console.log('[AudioBridge] Output device set to: ' + outputDeviceId);
+        console.log('[AudioBridge] Output device: ' + outputDeviceId);
       }).catch(function(e) {
-        console.warn('[AudioBridge] setSinkId failed, using default output:', e.message);
+        console.warn('[AudioBridge] setSinkId failed:', e.message);
       });
     } else {
       sinkPromise = resumePromise;
     }
 
     return sinkPromise.then(function() {
-      // Playback processor: drains queue → speaker
-      _playbackProcessor = _audioCtx.createScriptProcessor(CHUNK_SIZE, 1, 1);
-      _playbackProcessor.onaudioprocess = function(e) {
-        var output = e.outputBuffer.getChannelData(0);
-        if (_playbackQueue.length > 0) {
-          var chunk = _playbackQueue.shift();
-          var len = Math.min(chunk.length, output.length);
-          for (var i = 0; i < len; i++) output[i] = chunk[i];
-          for (var j = len; j < output.length; j++) output[j] = 0;
-        } else {
-          for (var k = 0; k < output.length; k++) output[k] = 0;
-        }
-      };
-      _playbackProcessor.connect(_audioCtx.destination);
-      console.log('[AudioBridge] Playback ready (AudioContext state: ' + _audioCtx.state + ')');
+      console.log('[AudioBridge] Playback ready (BufferSource, ' + _audioCtx.state + ')');
     });
   }
 
-  // ── Setup Capture (input) — called after playback ──
+  // ── Setup Capture (AudioWorklet via Blob URL) ──
 
   function _setupCapture(inputDeviceId) {
+    // Use native sample rate for capture (avoids silence in some browsers)
+    _captureCtx = new AudioContext();
+    var captureRate = _captureCtx.sampleRate;
+
     var constraints = {
       audio: {
-        sampleRate: SAMPLE_RATE,
         channelCount: 1,
-        echoCancellation: _mode === 'direct', // Only for direct mic, not BlackHole
+        echoCancellation: _mode === 'direct',
         noiseSuppression: _mode === 'direct',
+        autoGainControl: _mode === 'direct',
       }
     };
     if (inputDeviceId) {
       constraints.audio.deviceId = { exact: inputDeviceId };
     }
 
-    return navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+    // Load AudioWorklet from Blob URL (works with file:// in Electron)
+    var blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+    var workletUrl = URL.createObjectURL(blob);
+
+    return _captureCtx.resume().then(function() {
+      return _captureCtx.audioWorklet.addModule(workletUrl);
+    }).then(function() {
+      URL.revokeObjectURL(workletUrl);
+      return navigator.mediaDevices.getUserMedia(constraints);
+    }).then(function(stream) {
       _captureStream = stream;
-      _captureSource = _audioCtx.createMediaStreamSource(stream);
+      _captureSource = _captureCtx.createMediaStreamSource(stream);
 
-      // Capture processor: mic → PCM16 → base64 → callback
-      _captureProcessor = _audioCtx.createScriptProcessor(CHUNK_SIZE, 1, 1);
-      _captureSource.connect(_captureProcessor);
-      _captureProcessor.connect(_audioCtx.destination);
+      _workletNode = new AudioWorkletNode(_captureCtx, 'pcm-processor');
+      _captureSource.connect(_workletNode);
 
-      _captureProcessor.onaudioprocess = function(e) {
+      _workletNode.port.onmessage = function(e) {
         if (!_running || !_onAudioChunk) return;
-        var input = e.inputBuffer.getChannelData(0);
-        // Convert float32 → PCM16
-        var pcm16 = new Int16Array(input.length);
-        for (var i = 0; i < input.length; i++) {
-          var s = Math.max(-1, Math.min(1, input[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        var int16Data = e.data; // Int16Array at captureRate
+
+        // Downsample from native rate to 24kHz if needed
+        if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
+          var ratio = captureRate / SAMPLE_RATE;
+          var newLen = Math.round(int16Data.length / ratio);
+          var resampled = new Int16Array(newLen);
+          for (var i = 0; i < newLen; i++) {
+            resampled[i] = int16Data[Math.round(i * ratio)] || 0;
+          }
+          int16Data = resampled;
         }
-        // Encode to base64
-        var bytes = new Uint8Array(pcm16.buffer);
-        var binary = '';
-        for (var j = 0; j < bytes.length; j++) {
-          binary += String.fromCharCode(bytes[j]);
-        }
-        _onAudioChunk(btoa(binary));
+
+        _onAudioChunk(audioToBase64(int16Data));
       };
+
+      console.log('[AudioBridge] Capture ready (AudioWorklet, ' + captureRate + 'Hz → ' + SAMPLE_RATE + 'Hz)');
     });
   }
 
-  // ── Receive AI Audio (base64 PCM16 → playback queue) ──
+  // ── Receive AI Audio (BufferSource scheduled playback — no pops/clicks) ──
 
   function playAudio(base64Pcm) {
-    if (!_running || !_playbackProcessor) return;
-    // Safety: resume AudioContext if it became suspended (e.g., tab backgrounded)
-    if (_audioCtx && _audioCtx.state === 'suspended') {
-      _audioCtx.resume().catch(function() {});
-    }
+    if (!_running || !_audioCtx) return;
+    if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(function() {});
+
     try {
-      var binary = atob(base64Pcm);
-      var bytes = new Uint8Array(binary.length);
-      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      // Decode base64 → PCM16 → Float32
+      var raw = atob(base64Pcm);
+      var bytes = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
       var pcm16 = new Int16Array(bytes.buffer);
       var float32 = new Float32Array(pcm16.length);
       for (var j = 0; j < pcm16.length; j++) {
-        float32[j] = pcm16[j] / (pcm16[j] < 0 ? 0x8000 : 0x7FFF);
+        float32[j] = pcm16[j] / 32768;
       }
-      // Queue with overflow protection (drop oldest, keep latest — real-time audio)
-      if (_playbackQueue.length >= MAX_PLAYBACK_QUEUE) {
-        _playbackQueue.shift();
-      }
-      _playbackQueue.push(float32);
+
+      // Schedule on AudioContext timeline for gapless playback
+      var buffer = _audioCtx.createBuffer(1, float32.length, SAMPLE_RATE);
+      buffer.copyToChannel(float32, 0);
+
+      var source = _audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(_audioCtx.destination);
+
+      var now = _audioCtx.currentTime;
+      if (_nextPlayTime < now) _nextPlayTime = now + 0.15; // 150ms initial buffer
+
+      source.start(_nextPlayTime);
+      _nextPlayTime += float32.length / SAMPLE_RATE;
+
+      _queuedSources.push(source);
+      source.onended = function() {
+        var idx = _queuedSources.indexOf(source);
+        if (idx !== -1) _queuedSources.splice(idx, 1);
+      };
     } catch (e) {
-      console.warn('[AudioBridge] playAudio decode error:', e.message);
+      console.warn('[AudioBridge] playAudio error:', e.message);
     }
+  }
+
+  // ── Interrupt: stop all queued audio + reset timeline ──
+
+  function interruptPlayback() {
+    for (var i = 0; i < _queuedSources.length; i++) {
+      try { _queuedSources[i].stop(); } catch (e) {}
+    }
+    _queuedSources = [];
+    _nextPlayTime = 0;
   }
 
   // ── Stop ──
 
   function stop() {
-    if (!_running && !_starting) return; // Already stopped, don't double-stop
+    if (!_running && !_starting) return;
     _running = false;
     _starting = false;
     _onAudioChunk = null;
-    _playbackQueue = [];
 
-    if (_captureProcessor) { _captureProcessor.disconnect(); _captureProcessor = null; }
+    interruptPlayback();
+
+    if (_workletNode) { _workletNode.disconnect(); _workletNode = null; }
     if (_captureSource) { _captureSource.disconnect(); _captureSource = null; }
-    if (_playbackProcessor) { _playbackProcessor.disconnect(); _playbackProcessor = null; }
     if (_captureStream) {
       _captureStream.getTracks().forEach(function(t) { t.stop(); });
       _captureStream = null;
     }
-    if (_audioCtx) {
-      _audioCtx.close().catch(function() {});
-      _audioCtx = null;
-    }
+    if (_captureCtx) { _captureCtx.close().catch(function() {}); _captureCtx = null; }
+    if (_audioCtx) { _audioCtx.close().catch(function() {}); _audioCtx = null; }
     _mode = null;
     _devices = { input: null, output: null };
     console.log('[AudioBridge] Stopped');
@@ -270,9 +312,10 @@ var ElectronAudioBridge = (function() {
       running: _running,
       mode: _mode,
       devices: _devices,
-      playbackQueueSize: _playbackQueue.length,
+      queuedSources: _queuedSources.length,
       sampleRate: SAMPLE_RATE,
       audioContextState: _audioCtx ? _audioCtx.state : null,
+      captureContextState: _captureCtx ? _captureCtx.state : null,
     };
   }
 
@@ -281,6 +324,7 @@ var ElectronAudioBridge = (function() {
     start: start,
     stop: stop,
     playAudio: playAudio,
+    interruptPlayback: interruptPlayback,
     getStatus: getStatus,
     enumerateAudioDevices: enumerateAudioDevices,
     findBlackHoleDevices: findBlackHoleDevices,
