@@ -49,6 +49,11 @@ const meetJoiner = new MeetJoiner(bridge);
 const eventBus = new EventBus();
 const taskStore = new TaskStore(eventBus);
 
+// Meeting database (SQLite) — replaces sessions.json for metadata
+import { MeetingDB } from "./modules/meeting-db";
+const meetingDB = new MeetingDB();
+console.log(`[Init] MeetingDB: ${meetingDB.stats().totalMeetings} meetings, ${meetingDB.stats().totalFiles} files`);
+
 // Wire calendar auth error detection → EventBus + OpenClaw notification
 calendar.onAuthError = (error: string) => {
   console.warn(`[Calendar] Auth error detected: ${error}`);
@@ -654,6 +659,7 @@ startConfigServer({
   playwrightCli,
   meetingScheduler,
   postMeetingDelivery,
+  meetingDB,
 });
 
 // ── 8. Launch Python Sidecar (optional — disabled when AUDIO_SOURCE=electron) ──

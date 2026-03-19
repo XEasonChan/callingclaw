@@ -64,6 +64,7 @@ interface Services {
   playwrightCli?: PlaywrightCLIClient;
   meetingScheduler?: MeetingScheduler;
   postMeetingDelivery?: PostMeetingDelivery;
+  meetingDB?: import("./modules/meeting-db").MeetingDB;
 }
 
 // ── Tool Layer Definitions (for Voice Test toggles) ──
@@ -2105,8 +2106,12 @@ STEP-BY-STEP FLOW:
       // ── Shared Documents API (~/.callingclaw/shared/) ──
       // ══════════════════════════════════════════════════════════════
 
-      // GET /api/shared/manifest — Return the shared directory manifest
+      // GET /api/shared/manifest — Return meetings from SQLite DB
       if (url.pathname === "/api/shared/manifest" && req.method === "GET") {
+        if (services.meetingDB) {
+          return Response.json(services.meetingDB.getManifest(), { headers });
+        }
+        // Fallback to legacy sessions.json
         const { readSessions } = await import("./modules/shared-documents");
         return Response.json(readSessions(), { headers });
       }
