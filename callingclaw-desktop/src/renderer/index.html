@@ -810,6 +810,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="audio-utils.js"></script>
 <script>
 const API = 'http://localhost:4000';
 const S = {
@@ -819,6 +820,7 @@ const S = {
   manifest: null, manifestTs: 0, // cached manifest with TTL
 };
 let localTalkTimer = null, localTalkTopic = '';
+const browserAudio = new BrowserAudio();
 let lastEventTs = 0, reconnectDelay = 1000;
 
 const IC = {
@@ -1613,7 +1615,11 @@ async function leaveMeeting() {
 
 // Talk Locally — full meeting intelligence stack
 async function startLocalTalk(topic) {
+  if (browserAudio.isActive || browserAudio.isStarting) return; // double-start guard
   localTalkTopic = topic || 'Local Conversation';
+
+  // 1. Tell backend to start meeting lifecycle (transcript, vision, auditor, etc.)
+  var meetingId = 'local_' + Date.now();
   try {
     var r = await fetch(API + '/api/meeting/talk-locally', {
       method: 'POST',
@@ -1621,36 +1627,66 @@ async function startLocalTalk(topic) {
       body: JSON.stringify({ topic: localTalkTopic }),
     });
     var data = await r.json();
-    var meetingId = data.meetingId || 'local_' + Date.now();
-    var mfData = getMeetingData(meetingId);
-    mfData.topic = localTalkTopic;
-    mfData.status = 'live';
-    S.activeMeetingId = meetingId;
-    // Open tabbed meeting panel
-    openMeetingPanel(meetingId, 'local');
+    meetingId = data.meetingId || meetingId;
     if (data.prepBrief) {
       addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
     }
   } catch (e) {
-    var fallbackId = 'local_' + Date.now();
-    var mfFallback = getMeetingData(fallbackId);
-    mfFallback.topic = localTalkTopic;
-    mfFallback.status = 'live';
-    openMeetingPanel(fallbackId, 'local');
+    console.warn('[TalkLocally] Backend call failed, continuing with browser audio:', e);
   }
-  // Poll screenshot for the panel
+
+  // Set up UI
+  var mfData = getMeetingData(meetingId);
+  mfData.topic = localTalkTopic;
+  mfData.status = 'live';
+  S.activeMeetingId = meetingId;
+  openMeetingPanel(meetingId, 'local');
+
+  // 2. Start browser audio — mic + speaker + WebSocket to /ws/voice-test
+  try {
+    var wsUrl = API.replace('http', 'ws') + '/ws/voice-test';
+    var voiceInstructions = data?.voiceInstructions || undefined;
+    await browserAudio.start(wsUrl, {
+      instructions: voiceInstructions,
+      onTranscript: function(t) {
+        addMpActivity(t.role === 'user' ? 'info' : 'done', (t.role === 'user' ? '你: ' : 'AI: ') + t.text);
+      },
+      onStatus: function(s) {
+        if (s.voiceConnected) addMpActivity('done', '语音已连接');
+        updateStatusBar();
+      },
+      onError: function(msg) {
+        addMpActivity('error', msg);
+      },
+      onSpeaking: function(speaking) {
+        var dot = document.getElementById('st-voice');
+        if (dot) dot.className = 'st-dot ' + (speaking ? 'green pulse' : (browserAudio.isActive ? 'green' : ''));
+      },
+    });
+    addMpActivity('done', '浏览器音频已启动 — 可以开始对话');
+  } catch (e) {
+    addMpActivity('error', '音频启动失败: ' + e.message);
+  }
+
+  // 3. Poll screenshot for the panel (unchanged)
   localTalkTimer = setInterval(async () => {
     try {
-      const r = await fetch(API + '/api/bridge/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'screenshot' }) });
-      const data = await r.json();
-      const el = document.getElementById('sp-screenshot');
-      if (el && data?.image) { el.innerHTML = '<img src="data:image/png;base64,' + data.image + '">'; }
+      var sr = await fetch(API + '/api/bridge/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'screenshot' }) });
+      var sd = await sr.json();
+      var el = document.getElementById('sp-screenshot');
+      if (el && sd?.image) { el.innerHTML = '<img src="data:image/png;base64,' + sd.image + '">'; }
     } catch {}
   }, 2000);
 }
 
 async function stopLocalTalk() {
+  // 1. Stop browser audio (mic + speaker + WebSocket)
+  browserAudio.stop();
+
+  // 2. Stop screenshot polling
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
+
+  // 3. Tell backend to finalize meeting (summary, tasks, etc.)
   try {
     var r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
     var data = await r.json();
@@ -1658,10 +1694,10 @@ async function stopLocalTalk() {
       addMpActivity('done', '会议记录已保存: ' + data.filepath);
     }
   } catch (e) {}
-  // Update data model
+
+  // 4. Update data model
   if (S.activeMeetingId && S.meetingFiles[S.activeMeetingId]) {
     S.meetingFiles[S.activeMeetingId].status = 'ended';
-    // Try loading summary after stop
     loadMeetingFile(S.activeMeetingId, 'summary').then(function(content) {
       if (content) renderMeetings();
     });
@@ -1669,6 +1705,7 @@ async function stopLocalTalk() {
   document.getElementById('sp-stop-btn').style.display = 'none';
   S.meetingMode = null;
   S.activeMeetingId = null;
+  updateStatusBar();
 }
 
 async function openPrepBrief(topic) {

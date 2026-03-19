@@ -1697,42 +1697,27 @@ STEP-BY-STEP FLOW:
         const meetingId = generateMeetingId();
         upsertSession({ meetingId, topic, status: "active" });
 
-        // Step 1: Start voice session with DEFAULT_PERSONA + context from OpenClaw memory/soul
-        let voiceStarted = false;
-        if (!services.realtime.connected && CONFIG.openai.apiKey) {
-          try {
-            const { buildVoiceInstructions } = await import("./voice-persona");
-            // Build full persona: DEFAULT_PERSONA (no brief = general assistant mode)
-            let instructions = buildVoiceInstructions();
-            // Append OpenClaw soul/persona if available
-            const soul = services.contextSync?.getSoul();
-            if (soul) {
-              instructions += `\n\n═══ PERSONALITY & VALUES (from OpenClaw soul) ═══\n${soul}`;
-            }
-            // Append user profile + projects from OpenClaw MEMORY.md
-            const syncBrief = services.contextSync?.getBrief().voice;
-            if (syncBrief) {
-              instructions += `\n\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${syncBrief}`;
-            }
-            await services.realtime.start(instructions);
-            voiceStarted = true;
-            console.log("[TalkLocally] Voice AI started with DEFAULT_PERSONA + soul + memory context");
-          } catch (e: any) {
-            console.warn("[TalkLocally] Voice start failed:", e.message);
+        // Voice session is now started by the browser client via /ws/voice-test WebSocket.
+        // Browser sends {type:'start'} which triggers services.realtime.start() on the server.
+        // No Python sidecar needed — browser handles mic capture + speaker playback natively.
+        //
+        // The /ws/voice-test handler (line ~111) builds instructions from the 'start' message.
+        // To enrich with persona + soul + memory, we prepare the instructions here and pass
+        // them back to the client so it can include them in the WS start message.
+        let voiceInstructions: string | undefined;
+        try {
+          const { buildVoiceInstructions } = await import("./voice-persona");
+          voiceInstructions = buildVoiceInstructions();
+          const soul = services.contextSync?.getSoul();
+          if (soul) {
+            voiceInstructions += `\n\n═══ PERSONALITY & VALUES (from OpenClaw soul) ═══\n${soul}`;
           }
-        } else if (services.realtime.connected) {
-          voiceStarted = true;
-        }
-
-        // Configure direct audio + mouse-tracking screen capture
-        const audioOk = await services.bridge.sendConfigAndVerify(
-          { audio_mode: "direct", capture_mode: "mouse" },
-          { timeoutMs: 3000, retries: 3 }
-        );
-        if (audioOk) {
-          console.log("[TalkLocally] Audio confirmed: direct, screen follows mouse");
-        } else {
-          console.warn("[TalkLocally] Audio config not confirmed — continuing anyway");
+          const syncBrief = services.contextSync?.getBrief().voice;
+          if (syncBrief) {
+            voiceInstructions += `\n\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${syncBrief}`;
+          }
+        } catch (e: any) {
+          console.warn("[TalkLocally] Failed to build voice instructions:", e.message);
         }
 
         // Step 2: Generate meeting prep brief (best-effort)
@@ -1771,8 +1756,9 @@ STEP-BY-STEP FLOW:
           ok: true,
           meetingId,
           topic,
-          voice: voiceStarted ? "connected" : "failed",
-          audio_mode: "direct",
+          voice: "browser",
+          audio_mode: "browser",
+          voiceInstructions: voiceInstructions || undefined,
           prepBrief: prepBrief ? {
             topic: prepBrief.topic,
             keyPoints: prepBrief.keyPoints?.length || 0,
