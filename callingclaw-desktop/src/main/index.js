@@ -334,6 +334,7 @@ function setupIPC() {
   ipcMain.handle('skill:check', async () => {
     const { execSync } = require('child_process');
     const os = require('os');
+    const http = require('http');
     // Check if claude CLI exists
     let claudePath = null;
     try {
@@ -342,7 +343,20 @@ function setupIPC() {
     // Check if skill file exists
     const skillPath = path.join(os.homedir(), '.claude', 'commands', 'callingclaw.md');
     const skillInstalled = fs.existsSync(skillPath);
-    return { claudeInstalled: !!claudePath, claudePath, skillInstalled, skillPath };
+    // Check if OpenClaw Gateway is running on :18789
+    let openclawConnected = false;
+    try {
+      await new Promise((resolve, reject) => {
+        const req = http.get('http://localhost:18789', { timeout: 2000 }, (res) => {
+          openclawConnected = res.statusCode < 500;
+          res.resume();
+          resolve();
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(); });
+      });
+    } catch {}
+    return { claudeInstalled: !!claudePath, claudePath, skillInstalled, skillPath, openclawConnected };
   });
 
   ipcMain.handle('skill:install', async () => {
