@@ -3,7 +3,7 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [2.4.17] - 2026-03-20
+## [2.4.18] - 2026-03-20
 
 ### Fixed
 - **Meeting prep file 404** — `prepareMeeting()` generated a new meetingId internally instead of using the session's meetingId, causing prep files to save as `cc_xxx_prep.md` while the frontend looked for `cc_yyy_prep.md`. Now threads meetingId through the entire chain: config_server → voice-persona → meeting-prep → savePrepBrief/startLiveLog
