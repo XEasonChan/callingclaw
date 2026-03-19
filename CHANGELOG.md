@@ -3,6 +3,19 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.15] - 2026-03-20
+
+### Added
+- **SQLite meeting database** — `~/.callingclaw/callingclaw.db` replaces sessions.json. Auto-imports legacy notes/prep files with dates. 68 meetings, 53 files migrated
+- **Onboarding: OpenClaw Gateway detection** — Step 4 checks OpenClaw (:18789) instead of Claude Code, with configurable URL and "测试连接" button
+- **Settings: Google Calendar scan** — "扫描凭证" button auto-finds OAuth tokens from OpenClaw workspace
+
+### Fixed
+- **Past meetings had no dates** — sessions.json never stored startTime. SQLite migration parses dates from filenames (e.g. `2026-03-17_1705_*.md`)
+- **Meeting files 404** — loadMeetingFile used hardcoded path convention but legacy files have different names. Now reads actual paths from DB manifest
+- **"Google Calendar disconnected" always shown** — `S.calendarConnected` was never set from API response
+- **Onboarding detected Claude Code instead of OpenClaw** — Step 4 now probes OpenClaw Gateway
+
 ## [2.4.14] - 2026-03-19
 
 ### Fixed
