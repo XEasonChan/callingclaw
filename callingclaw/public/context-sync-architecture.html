@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CallingClaw — 增量 Context Sync 架构设计</title>
+<title>CallingClaw — AI Context Engineering 全景调研</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   :root {
@@ -87,6 +87,7 @@
   .badge-problem { background: rgba(239,68,68,0.15); color: var(--danger); }
   .badge-proposed { background: rgba(52,211,153,0.15); color: var(--accent3); }
   .badge-detail { background: rgba(167,139,250,0.15); color: var(--accent2); }
+  .badge-schema { background: rgba(245,158,11,0.15); color: var(--accent4); }
 
   h3 {
     font-size: 17px;
@@ -230,7 +231,7 @@
     margin: 8px 0;
     font-size: 13px;
   }
-  .metric-label { color: var(--text3); width: 140px; flex-shrink: 0; }
+  .metric-label { color: var(--text3); width: 180px; flex-shrink: 0; }
   .metric-bar {
     flex: 1;
     height: 8px;
@@ -244,7 +245,7 @@
     border-radius: 4px;
     transition: width 0.6s ease;
   }
-  .metric-value { color: var(--text2); width: 80px; text-align: right; font-family: monospace; }
+  .metric-value { color: var(--text2); width: 100px; text-align: right; font-family: monospace; }
 
   /* ── Alert ── */
   .alert {
@@ -272,61 +273,26 @@
     color: var(--accent3);
   }
 
-  /* ── Token Budget Viz ── */
-  .token-viz {
-    display: flex;
-    gap: 4px;
-    margin: 12px 0;
-    align-items: flex-end;
-    height: 120px;
-  }
-  .token-block {
-    flex: 1;
-    border-radius: 4px 4px 0 0;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    min-width: 40px;
-    transition: all 0.3s;
-  }
-  .token-block:hover { opacity: 0.85; }
-  .token-block .label {
-    position: absolute;
-    bottom: -24px;
-    font-size: 10px;
-    color: var(--text3);
-    white-space: nowrap;
-    text-align: center;
-  }
-  .token-block .value {
-    font-size: 11px;
-    color: white;
-    font-weight: 600;
-    padding: 4px;
-    text-align: center;
-  }
-
-  /* ── Interactive Controls ── */
-  .controls {
-    display: flex;
-    gap: 8px;
-    margin: 12px 0;
-    flex-wrap: wrap;
-  }
-  .btn {
-    padding: 8px 16px;
-    border-radius: 6px;
+  /* ── Schema Block ── */
+  .schema-block {
+    background: rgba(15, 17, 23, 0.8);
     border: 1px solid var(--border);
-    background: var(--card);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 12px 0;
+    overflow-x: auto;
+  }
+  .schema-block pre {
     color: var(--text2);
     font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
+    line-height: 1.7;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    margin: 0;
   }
-  .btn:hover { border-color: var(--accent); color: var(--accent); }
-  .btn.active { background: rgba(79,140,255,0.15); border-color: var(--accent); color: var(--accent); }
+  .schema-block .comment { color: var(--text3); }
+  .schema-block .keyword { color: var(--accent); }
+  .schema-block .type { color: var(--accent3); }
+  .schema-block .string { color: var(--accent4); }
 
   /* ── Responsive ── */
   @media (max-width: 640px) {
@@ -339,900 +305,1375 @@
 <body>
 
 <div class="header">
-  <h1>CallingClaw 增量 Context Sync 架构</h1>
-  <div class="subtitle">会议中三层思维系统的异步增量上下文同步方案</div>
-  <div class="version">CallingClaw v2.2.1 · feat/electron-shell · 2026-03-15</div>
+  <h1>CallingClaw AI Context Engineering</h1>
+  <div class="subtitle">全景调研 — AI 角色、Context 节点、同步机制、中间态 Schema</div>
+  <div class="version">CallingClaw v2.4.9 · main · 2026-03-19</div>
 </div>
 
 <nav class="nav">
-  <a href="#current" class="active">当前架构</a>
-  <a href="#problem">核心问题</a>
-  <a href="#proposal">增量方案</a>
-  <a href="#chunk">Chunk 策略</a>
-  <a href="#tasks">任务定义</a>
-  <a href="#background">后台 Tool Call</a>
-  <a href="#budget">Token 预算</a>
-  <a href="#timeline">时间线</a>
+  <a href="#overview" class="active">全景概览</a>
+  <a href="#roles">AI 角色</a>
+  <a href="#nodes">Context 节点</a>
+  <a href="#sync">同步机制</a>
+  <a href="#timing">同步时序</a>
+  <a href="#schemas">中间态 Schema</a>
+  <a href="#files">文件约定</a>
+  <a href="#dataflow">端到端数据流</a>
+  <a href="#api">Context API</a>
+  <a href="#gaps">已知 Gap</a>
+  <a href="#decisions">决策记录</a>
 </nav>
 
 <div class="container">
 
 <!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 1: Current Architecture -->
+<!-- SECTION 1: Overview -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-<section id="current">
-  <h2>当前架构 — 三条并行路径 <span class="badge badge-current">CURRENT v2.2.1</span></h2>
+<section id="overview">
+  <h2>全景概览 — 双系统认知架构 <span class="badge badge-current">ARCHITECTURE</span></h2>
 
-  <p>会议期间，context 通过三条并行路径从不同来源流入 Voice AI：</p>
+  <p>CallingClaw 采用<strong>双系统认知架构 (Dual-Process)</strong>，模仿人类的快思考 (System 1) 和慢思考 (System 2)。五类 AI 角色通过 EventBus + 文件系统 + WebSocket 三层同步机制协同工作。</p>
 
   <div class="mermaid-wrap">
-    <div class="title">Data Flow: Meeting Context Sync (Current)</div>
+    <div class="title">CallingClaw AI Context Architecture — Bird's Eye View</div>
     <div class="mermaid">
 flowchart TB
-  subgraph Input["输入源"]
-    U["🎤 User Speech<br/>(Whisper STT)"]
-    S["📷 Screen Capture<br/>(Python Sidecar)"]
-    O["🧠 OpenClaw<br/>(System 2)"]
+  subgraph Desktop["Electron Desktop Shell"]
+    DM["DaemonSupervisor<br/>健康检查 5s"]
+    IPC["IPC Bridge<br/>window.callingclaw.*"]
+    UI["Renderer UI"]
   end
 
-  subgraph SC["SharedContext (200 entries max)"]
-    T["transcript[]"]
-  end
-
-  U -->|"每句话"| T
-  S -->|"[Screen] 描述"| T
-
-  subgraph P1["路径 1: 即时 · Immediate"]
+  subgraph Backend["Bun Backend (:4000)"]
     direction TB
-    V1["Voice AI (OpenAI Realtime)<br/>延迟: ~300ms"]
-    V1 -->|"session.update<br/>全量替换 instructions"| RT["OpenAI Realtime<br/>Session"]
+    subgraph S1["System 1 — Fast Thinking"]
+      Voice["Voice AI<br/>(OpenAI Realtime)<br/>~300ms"]
+      Auditor["TranscriptAuditor<br/>(Haiku 4.5)<br/>~3.5s"]
+      Retriever["ContextRetriever<br/>(Haiku 4.5)<br/>event-driven"]
+      Vision["VisionModule<br/>(Gemini Flash)<br/>~3-5s"]
+    end
+    subgraph S2["System 2 — Deep Thinking"]
+      OC["OpenClaw Bridge<br/>(Claude Opus)<br/>5-30s"]
+      Prep["MeetingPrepSkill<br/>(OC-001 Protocol)"]
+      CU["Computer Use<br/>(Claude Sonnet)<br/>tool loop"]
+    end
+    subgraph Shared["Shared State"]
+      SC["SharedContext<br/>(in-memory)"]
+      CS["ContextSync<br/>(MEMORY.md bridge)"]
+      EB["EventBus<br/>(pub/sub + WS)"]
+      TS["TaskStore<br/>(tasks.json)"]
+      SD["SharedDocuments<br/>(~/.callingclaw/shared/)"]
+    end
   end
 
-  subgraph P2["路径 2: 中速 · Medium"]
-    direction TB
-    TA["TranscriptAuditor<br/>(Claude Haiku 4.5)"]
-    TA -->|"confidence ≥ 0.85<br/>→ AutomationRouter"| AR["自动执行"]
-    TA -->|"0.6-0.85<br/>→ liveNote [SUGGEST]"| LN["推送到 Voice"]
+  subgraph Sidecar["Python Sidecar (:4001)"]
+    Audio["Audio I/O<br/>(PyAudio + BlackHole)"]
+    Input["Mouse/Keyboard<br/>(pyautogui)"]
   end
 
-  subgraph P3["路径 3: 延迟 · Deferred"]
-    direction TB
-    VI["VisionModule<br/>(Gemini Flash)"]
-    VI -->|"每5条描述<br/>batch → OpenClaw"| OC["OpenClaw 处理<br/>→ MEMORY.md"]
-  end
+  DM -->|"spawn + health"| Backend
+  IPC <-->|"ipcRenderer.invoke"| DM
+  UI <-->|"window.callingclaw"| IPC
+  EB -->|"ws://4000/ws/events"| UI
 
-  T --> P1
-  T -->|"15 entries window<br/>2.5s debounce"| P2
-  S -->|"8s 间隔<br/>Jaccard >70% 去重"| P3
+  Voice <--> SC
+  Auditor --> SC
+  Retriever --> SC
+  Vision --> SC
+  OC <--> CS
+  Prep --> SD
+  CU --> SC
 
-  classDef input fill:#1e3a5f,stroke:#4f8cff,color:#e2e8f0
-  classDef sc fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
-  classDef p1 fill:#1a3324,stroke:#34d399,color:#e2e8f0
-  classDef p2 fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
-  classDef p3 fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+  Audio <-->|"WebSocket :4001"| Backend
+  Input <-->|"WebSocket :4001"| Backend
 
-  class U,S,O input
-  class T sc
-  class V1,RT p1
-  class TA,AR,LN p2
-  class VI,OC p3
+  classDef desktop fill:#1e293b,stroke:#4f8cff,color:#e2e8f0
+  classDef s1 fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef s2 fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+  classDef shared fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+  classDef sidecar fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+
+  class DM,IPC,UI desktop
+  class Voice,Auditor,Retriever,Vision s1
+  class OC,Prep,CU s2
+  class SC,CS,EB,TS,SD shared
+  class Audio,Input sidecar
     </div>
   </div>
+
+  <div class="alert alert-info">
+    <span>i</span>
+    <div><strong>核心设计原则</strong>：会议中只用 System 1 (快模型: Haiku/Gemini Flash, ~300ms-3s 延迟)。System 2 (Opus/Sonnet, 5-30s) 只在会前准备和会后总结时参与，避免阻塞实时对话。</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: AI Roles -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="roles">
+  <h2>AI 角色 — 五类关键节点 <span class="badge badge-detail">ROLES</span></h2>
 
   <div class="card-grid">
     <div class="card">
-      <div class="card-header"><span class="dot dot-green"></span>路径 1: 即时路径 (Voice)</div>
-      <ul>
-        <li>延迟: <code>~300ms</code></li>
-        <li>触发: 每次 <code>pushContextUpdate()</code></li>
-        <li>方式: <code>session.update</code> 全量替换 instructions</li>
-        <li>Token 预算: 系统 prompt ~2000-4000 chars</li>
-        <li>问题: <strong>全量替换，包括 liveNotes 越来越长</strong></li>
-      </ul>
+      <div class="card-header"><span class="dot dot-green"></span>Voice AI (System 1 — 即时)</div>
+      <table class="comp-table">
+        <tr><td style="width:100px;">Provider</td><td>OpenAI Realtime / Grok (A/B test)</td></tr>
+        <tr><td>Model</td><td><code>gpt-4o-realtime-preview</code></td></tr>
+        <tr><td>延迟</td><td><code>&lt;300ms</code> (streaming audio)</td></tr>
+        <tr><td>文件</td><td><code>src/modules/voice.ts</code></td></tr>
+        <tr><td>Persona</td><td><code>src/voice-persona.ts</code></td></tr>
+        <tr><td>职责</td><td>实时语音对话、转录生成、tool call 派发</td></tr>
+        <tr><td>Context 注入</td><td><code>buildVoiceInstructions()</code> → <code>session.update</code></td></tr>
+        <tr><td>Token 预算</td><td>system prompt ~2000-4000 chars</td></tr>
+      </table>
+      <p style="margin-top:8px;"><strong>Tools</strong>: <code>recall_context</code>, <code>take_note</code>, <code>join_meeting</code>, <code>ask_for_input</code>, + automation tools</p>
     </div>
+
     <div class="card">
-      <div class="card-header"><span class="dot dot-purple"></span>路径 2: 中速路径 (Haiku Auditor)</div>
-      <ul>
-        <li>延迟: <code>2.5s debounce + ~1s Haiku</code> = ~3.5s</li>
-        <li>触发: 用户说话 → 2.5s 去抖 → classifyIntent</li>
-        <li>输入窗口: 最近 <code>15 entries</code></li>
-        <li>输出: action + params + confidence</li>
-        <li>问题: <strong>15条窗口 = 固定大小，不分类</strong></li>
-      </ul>
+      <div class="card-header"><span class="dot dot-purple"></span>TranscriptAuditor (System 1 — 中速)</div>
+      <table class="comp-table">
+        <tr><td style="width:100px;">Model</td><td>Claude Haiku 4.5 (via OpenRouter)</td></tr>
+        <tr><td>延迟</td><td><code>2.5s debounce + ~1s Haiku</code> = ~3.5s</td></tr>
+        <tr><td>文件</td><td><code>src/modules/transcript-auditor.ts</code></td></tr>
+        <tr><td>职责</td><td>语音指令分类、自动化路由、置信度评估</td></tr>
+        <tr><td>输入窗口</td><td>最近 15 entries (~500-700 tokens)</td></tr>
+        <tr><td>输出</td><td><code>{ action, params, confidence }</code></td></tr>
+        <tr><td>执行</td><td>confidence &ge; 0.85 → AutomationRouter</td></tr>
+      </table>
+      <p style="margin-top:8px;"><strong>Automation 4-Layer Routing</strong>: Shortcuts → Playwright → Peekaboo → Computer Use</p>
     </div>
+
     <div class="card">
-      <div class="card-header"><span class="dot dot-yellow"></span>路径 3: 延迟路径 (Vision → OpenClaw)</div>
-      <ul>
-        <li>延迟: <code>8s capture + ~2s Gemini + batch</code> = ~40s</li>
-        <li>触发: 每 8 秒截屏 → Gemini Flash 分析</li>
-        <li>输出: 每 5 条描述 batch → OpenClaw</li>
-        <li>OpenClaw 写入 MEMORY.md</li>
-        <li>问题: <strong>batch 太大，无增量策略</strong></li>
-      </ul>
+      <div class="card-header"><span class="dot dot-green"></span>ContextRetriever (System 1 — 事件驱动)</div>
+      <table class="comp-table">
+        <tr><td style="width:100px;">Model</td><td>Haiku 4.5 / Gemini Flash</td></tr>
+        <tr><td>延迟</td><td>event-driven (~3s debounce + ~1-2s)</td></tr>
+        <tr><td>文件</td><td><code>src/modules/context-retriever.ts</code> (914 行)</td></tr>
+        <tr><td>职责</td><td>实时知识 Gap 检测 + 主动 context 检索</td></tr>
+        <tr><td>触发</td><td>~500 chars 累积 / 用户提问 / min 30s</td></tr>
+        <tr><td>缓存</td><td>Topic Cache: 316x 加速 (86% hit rate)</td></tr>
+      </table>
+      <p style="margin-top:8px;"><strong>Two-Layer</strong>: Layer 1 Topic Classification (~50 tok) → Layer 2 Need Inference (~100 tok, only on topic shift)</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>VisionModule (System 1 — 视觉)</div>
+      <table class="comp-table">
+        <tr><td style="width:100px;">Model</td><td>Gemini 3 Flash Preview (via OpenRouter)</td></tr>
+        <tr><td>延迟</td><td>1s capture + ~2s analysis = ~3s</td></tr>
+        <tr><td>文件</td><td><code>src/modules/vision.ts</code></td></tr>
+        <tr><td>职责</td><td>屏幕内容理解、URL/标题变化检测</td></tr>
+        <tr><td>去重</td><td>Jaccard similarity &gt; 0.7 (config 声明 SSIM 0.95 但未引用)</td></tr>
+        <tr><td>模式</td><td><code>"meeting"</code> / <code>"talk_locally"</code></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-purple"></span>OpenClaw Bridge (System 2 — 深度)</div>
+      <table class="comp-table">
+        <tr><td style="width:100px;">Gateway</td><td><code>ws://localhost:18789</code></td></tr>
+        <tr><td>Model</td><td>Claude Opus (via OpenClaw)</td></tr>
+        <tr><td>延迟</td><td>5-30s per task</td></tr>
+        <tr><td>文件</td><td><code>src/openclaw_bridge.ts</code></td></tr>
+        <tr><td>协议</td><td>OC-001 (meeting prep), OC-002 (deep search)</td></tr>
+        <tr><td>职责</td><td>会议准备、深度推理、MEMORY.md 管理</td></tr>
+        <tr><td>Memory</td><td><code>~/.openclaw/workspace/MEMORY.md</code></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-purple"></span>Computer Use Agent (System 2 — GUI)</div>
+      <table class="comp-table">
+        <tr><td style="width:100px;">Model</td><td>Claude Sonnet 4.6 (Anthropic beta)</td></tr>
+        <tr><td>Tool</td><td><code>computer_20250124</code></td></tr>
+        <tr><td>文件</td><td><code>src/ai_gateway/claude_agent.ts</code></td></tr>
+        <tr><td>职责</td><td>GUI 自动化 (screenshot → vision → action)</td></tr>
+        <tr><td>截图</td><td>1280x800px max (API requirement)</td></tr>
+        <tr><td>Max Steps</td><td>20 per task</td></tr>
+      </table>
     </div>
   </div>
 
-  <h3>session.update 的关键限制</h3>
-  <div class="alert alert-warn">
-    <span>⚠️</span>
-    <div>OpenAI Realtime 的 <code>session.update</code> 是<strong>全量替换</strong>（不是 patch）——每次 push 必须重建完整 instructions + tools。随着 liveNotes 累积，每次 push 的 token 开销线性增长。当前没有"只推增量"的能力。</div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 2: Problem -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<section id="problem">
-  <h2>核心问题 <span class="badge badge-problem">PROBLEM</span></h2>
-
-  <div class="card-grid">
-    <div class="card">
-      <div class="card-header"><span class="dot dot-red"></span>问题 1: Context 窗口 Chunk 太大</div>
-      <p>TranscriptAuditor 每次给 Haiku 发送 15 条 transcript entries（~500-700 input tokens），不区分内容类型。</p>
-      <ul>
-        <li>15 条中可能 10 条是闲聊，2 条是 automation 指令</li>
-        <li>Haiku 需要从噪声中找信号 → 浪费 tokens + 降低准确率</li>
-        <li>没有把 context 按"信息类型"拆分成小块</li>
-      </ul>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-red"></span>问题 2: 没有增量任务定义</div>
-      <p>当前所有任务只有一种"通用 audit"：判断用户是否在发指令。</p>
-      <ul>
-        <li>缺少：需求捕捉、决策记录、action item 提取、topic 切换检测</li>
-        <li>这些任务各自需要不同大小的 context chunk</li>
-        <li>应该<strong>定义不同的任务类型</strong>，而不是一个万能 audit</li>
-      </ul>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-red"></span>问题 3: System 2 无周期性检查点</div>
-      <p>OpenClaw (System 2) 目前只在会前/会后参与，会议中被动等 batch push。</p>
-      <ul>
-        <li>缺少 "每 N 条 / 每 M 秒" 的周期性 checkpoint</li>
-        <li>无法及时发现 topic 转换、需求变化</li>
-        <li>应该有<strong>固定间隔的 bit-sized 任务</strong>重新评估状态</li>
-      </ul>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-red"></span>问题 4: Background Tool Call 不够细粒度</div>
-      <p>Voice AI 的 tool call 是顺序阻塞的，TranscriptAuditor 有 5s cooldown。</p>
-      <ul>
-        <li>无法同时处理 "打开文件" + "记录需求" + "更新 brief"</li>
-        <li>需要将后台任务拆成<strong>独立的微任务队列</strong></li>
-        <li>让不同类型的任务有独立的执行通道</li>
-      </ul>
-    </div>
-  </div>
-
-  <h3>当前 vs 目标: Token 消耗趋势</h3>
-  <div class="card">
-    <div class="card-header">30 分钟会议的 token 消耗对比</div>
-    <div class="metric-row">
-      <span class="metric-label">当前: Haiku Audit</span>
-      <div class="metric-bar"><div class="fill" style="width:85%; background: var(--danger);"></div></div>
-      <span class="metric-value">~12K tok</span>
-    </div>
-    <div class="metric-row">
-      <span class="metric-label">当前: session.update</span>
-      <div class="metric-bar"><div class="fill" style="width:70%; background: var(--accent4);"></div></div>
-      <span class="metric-value">~8K tok</span>
-    </div>
-    <div class="metric-row">
-      <span class="metric-label">当前: Vision batch</span>
-      <div class="metric-bar"><div class="fill" style="width:40%; background: var(--accent2);"></div></div>
-      <span class="metric-value">~4K tok</span>
-    </div>
-    <div class="metric-row">
-      <span class="metric-label" style="color: var(--accent3);">目标: 增量 Audit</span>
-      <div class="metric-bar"><div class="fill" style="width:45%; background: var(--accent3);"></div></div>
-      <span class="metric-value">~6K tok</span>
-    </div>
-    <div class="metric-row">
-      <span class="metric-label" style="color: var(--accent3);">目标: Delta Push</span>
-      <div class="metric-bar"><div class="fill" style="width:25%; background: var(--accent3);"></div></div>
-      <span class="metric-value">~3K tok</span>
-    </div>
-    <p style="margin-top: 12px; font-size: 12px; color: var(--text3);">Token 估算基于 30 分钟会议、用户发言 ~60 次、屏幕变化 ~20 次</p>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 3: Proposed Architecture -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<section id="proposal">
-  <h2>增量 Context Sync 方案 <span class="badge badge-proposed">PROPOSED</span></h2>
-
-  <p>核心思路：把一个大的"通用 audit"拆成<strong>多个小的、有类型的 micro-task</strong>，每个任务只消耗它需要的 context chunk。引入<strong>周期性 checkpoint</strong>让 System 2 定期评估会议状态。</p>
-
+  <h3>AutomationRouter 4-Layer Fallback Chain</h3>
+  <p>CommandAudit micro-task 的可靠性依赖 AutomationRouter 的自动降级链。每层失败后自动尝试下一层:</p>
   <div class="mermaid-wrap">
-    <div class="title">Proposed: Incremental Context Sync Architecture</div>
-    <div class="mermaid">
-flowchart TB
-  subgraph Input["输入层"]
-    SP["🎤 User Speech"]
-    SC["📷 Screen Capture"]
-  end
-
-  subgraph Classifier["分类层 (新增)"]
-    direction TB
-    EC["EntryClassifier<br/>(本地规则引擎, ~0ms)"]
-    EC -->|"type: command"| Q1["🔧 CommandQueue"]
-    EC -->|"type: requirement"| Q2["📋 RequirementQueue"]
-    EC -->|"type: decision"| Q3["✅ DecisionQueue"]
-    EC -->|"type: topic_shift"| Q4["🔄 TopicQueue"]
-    EC -->|"type: chat"| Q5["💬 (丢弃/压缩)"]
-  end
-
-  subgraph MicroTasks["微任务层 (Haiku)"]
-    direction TB
-    MT1["CommandAudit<br/>~200 tok input<br/>2.5s debounce"]
-    MT2["RequirementExtract<br/>~300 tok input<br/>10s debounce"]
-    MT3["DecisionCapture<br/>~250 tok input<br/>15s debounce"]
-    MT4["TopicDetect<br/>~150 tok input<br/>20s debounce"]
-  end
-
-  subgraph Checkpoint["Checkpoint 层 (System 2)"]
-    direction TB
-    CP["PeriodicCheckpoint<br/>每 60s / 每 20 条<br/>(OpenClaw or Haiku)"]
-    CP --> SB["State Brief 更新"]
-    CP --> LP["liveNotes 压缩"]
-    CP --> NB["Next-topic 建议"]
-  end
-
-  subgraph Output["输出层"]
-    direction TB
-    DP["Delta Push<br/>(只推差异到 Voice)"]
-    AU["AutomationRouter<br/>(执行 commands)"]
-    MEM["MEMORY.md<br/>(持久化)"]
-  end
-
-  SP --> EC
-  SC -->|"[Screen] entry"| EC
-  Q1 --> MT1
-  Q2 --> MT2
-  Q3 --> MT3
-  Q4 --> MT4
-  MT1 -->|"auto-execute"| AU
-  MT2 -->|"[REQ] note"| DP
-  MT3 -->|"[DECISION] note"| DP
-  MT4 -->|"topic change"| DP
-  MT1 -->|"[DONE] note"| DP
-
-  DP -->|"session.update<br/>(增量 liveNotes)"| Voice["Voice AI"]
-  SB --> DP
-  LP --> DP
-  MT2 -->|"batch"| MEM
-  MT3 -->|"batch"| MEM
-
-  classDef input fill:#1e3a5f,stroke:#4f8cff,color:#e2e8f0
-  classDef classify fill:#2d2244,stroke:#a78bfa,color:#e2e8f0
-  classDef queue fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
-  classDef micro fill:#1d3340,stroke:#34d399,color:#e2e8f0
-  classDef check fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
-  classDef output fill:#1a3324,stroke:#34d399,color:#e2e8f0
-
-  class SP,SC input
-  class EC classify
-  class Q1,Q2,Q3,Q4,Q5 queue
-  class MT1,MT2,MT3,MT4 micro
-  class CP,SB,LP,NB check
-  class DP,AU,MEM,Voice output
-    </div>
-  </div>
-
-  <h3>架构变更总结</h3>
-  <table class="comp-table">
-    <tr>
-      <th>组件</th>
-      <th>当前 (v2.2.1)</th>
-      <th>增量方案 (Proposed)</th>
-      <th>变化</th>
-    </tr>
-    <tr>
-      <td>Transcript 分类</td>
-      <td>无 — 所有 entry 平等对待</td>
-      <td>EntryClassifier 本地规则引擎，按类型路由</td>
-      <td style="color: var(--accent3);">新增</td>
-    </tr>
-    <tr>
-      <td>Haiku 审计</td>
-      <td>1 个通用 audit (15 entries, ~600 tok)</td>
-      <td>4 个 micro-task (各 150-300 tok, 独立 debounce)</td>
-      <td style="color: var(--accent4);">重构</td>
-    </tr>
-    <tr>
-      <td>Debounce 策略</td>
-      <td>统一 2.5s</td>
-      <td>按类型: command 2.5s / requirement 10s / decision 15s / topic 20s</td>
-      <td style="color: var(--accent4);">细化</td>
-    </tr>
-    <tr>
-      <td>Context Push</td>
-      <td>全量 session.update (整个 instructions)</td>
-      <td>Delta Push: 只追加新 liveNotes + 周期压缩</td>
-      <td style="color: var(--accent4);">优化</td>
-    </tr>
-    <tr>
-      <td>周期检查</td>
-      <td>无 (仅 MEMORY.md 60s 刷新)</td>
-      <td>PeriodicCheckpoint: 60s/20条 → 状态评估 + 压缩</td>
-      <td style="color: var(--accent3);">新增</td>
-    </tr>
-    <tr>
-      <td>Chat 条目</td>
-      <td>全部进入 Haiku 窗口</td>
-      <td>分类后丢弃/压缩 (只保留摘要)</td>
-      <td style="color: var(--accent3);">新增</td>
-    </tr>
-    <tr>
-      <td>任务队列</td>
-      <td>无 (单线程 cooldown)</td>
-      <td>4 个独立队列，各自 cooldown</td>
-      <td style="color: var(--accent3);">新增</td>
-    </tr>
-  </table>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 4: Chunk Strategy -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<section id="chunk">
-  <h2>Chunk 分类策略 <span class="badge badge-detail">DETAIL</span></h2>
-
-  <p>关键创新：在进入 Haiku 之前，先用<strong>零成本的本地规则</strong>将 transcript entries 分类，只给每个 micro-task 发送它需要的 entries。</p>
-
-  <div class="mermaid-wrap">
-    <div class="title">EntryClassifier: 本地规则引擎 (零 LLM 调用)</div>
+    <div class="title">AutomationRouter Fallback Chain (automation-router.ts)</div>
     <div class="mermaid">
 flowchart LR
-  E["TranscriptEntry<br/>{role, text, ts}"]
+  S["Shortcuts<br/>(Zoom/Meet hotkeys)<br/>~50ms"] -->|"catch → fallback"| P["Playwright<br/>(CDP browser)<br/>~1-3s"]
+  P -->|"catch → fallback"| K["Peekaboo<br/>(macOS AX tree)<br/>~2-5s"]
+  K -->|"catch → fallback"| C["Computer Use<br/>(Claude vision)<br/>~5-15s"]
+  C -->|"null (no further)"| F["All layers failed"]
 
-  E --> R1{"包含命令关键词?<br/>帮我/打开/展示/切换/共享"}
-  R1 -->|Yes| CMD["type: command ⚡"]
-  R1 -->|No| R2{"包含需求关键词?<br/>要/需要/应该/必须/改成"}
-  R2 -->|Yes| REQ["type: requirement 📋"]
-  R2 -->|No| R3{"包含决策关键词?<br/>就这样/确定/同意/决定"}
-  R3 -->|Yes| DEC["type: decision ✅"]
-  R3 -->|No| R4{"与上一个 topic<br/>差异 > 阈值?"}
-  R4 -->|Yes| TOP["type: topic_shift 🔄"]
-  R4 -->|No| CHT["type: chat 💬"]
+  classDef fast fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef med fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+  classDef slow fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+  classDef fail fill:#3d1f1f,stroke:#ef4444,color:#e2e8f0
 
-  classDef cmd fill:#1a3324,stroke:#34d399,color:#e2e8f0
-  classDef req fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
-  classDef dec fill:#1e3a5f,stroke:#4f8cff,color:#e2e8f0
-  classDef top fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
-  classDef chat fill:#1a1d27,stroke:#64748b,color:#94a3b8
-
-  class CMD cmd
-  class REQ req
-  class DEC dec
-  class TOP top
-  class CHT chat
+  class S fast
+  class P med
+  class K slow
+  class C slow
+  class F fail
     </div>
   </div>
+  <table class="comp-table">
+    <tr><th>Layer</th><th>Fallback To</th><th>Trigger</th><th>Events</th></tr>
+    <tr><td><code>shortcuts</code></td><td>playwright</td><td>Any exception in executeLayer()</td><td><code>automation.fallback</code> {from, to, reason}</td></tr>
+    <tr><td><code>playwright</code></td><td>peekaboo</td><td>CDP disconnect, Chrome crash, element not found</td><td><code>automation.fallback</code></td></tr>
+    <tr><td><code>peekaboo</code></td><td>computer_use</td><td>Peekaboo CLI error, AX tree unavailable</td><td><code>automation.fallback</code></td></tr>
+    <tr><td><code>computer_use</code></td><td><strong>null</strong></td><td>No further fallback</td><td>Returns <code>{success: false, result: "All layers failed"}</code></td></tr>
+  </table>
 
-  <h3>分类规则 (TypeScript 伪代码)</h3>
-  <div class="card">
-<pre style="color: var(--text2); font-size: 13px; line-height: 1.7; overflow-x: auto;">
-<span style="color: var(--accent);">interface</span> ClassifiedEntry {
-  entry: TranscriptEntry;
-  type: <span style="color: var(--accent3);">"command"</span> | <span style="color: var(--accent2);">"requirement"</span> | <span style="color: var(--accent);">"decision"</span> | <span style="color: var(--accent4);">"topic_shift"</span> | <span style="color: var(--text3);">"chat"</span>;
-  confidence: number;      <span style="color: var(--text3);">// 规则匹配置信度 0-1</span>
-}
-
-<span style="color: var(--accent);">const</span> COMMAND_PATTERNS = [
-  <span style="color: var(--accent3);">/帮我(打开|展示|切换|看看|搜索|关闭)/</span>,
-  <span style="color: var(--accent3);">/我们(看看|打开|切到|展示一下)/</span>,
-  <span style="color: var(--accent3);">/开始(投屏|共享|录制)/</span>,
-  <span style="color: var(--accent3);">/停止(投屏|共享|录制)/</span>,
-  <span style="color: var(--accent3);">/(open|show|switch|navigate|scroll)\s/i</span>,
-];
-
-<span style="color: var(--accent);">const</span> REQUIREMENT_PATTERNS = [
-  <span style="color: var(--accent3);">/这个(要|需要|应该|必须)(改|加|删|换)/</span>,
-  <span style="color: var(--accent3);">/我们需要/</span>,
-  <span style="color: var(--accent3);">/(feature|requirement|需求|功能).*?(是|要)/</span>,
-  <span style="color: var(--accent3);">/deadline.*(是|在)/i</span>,
-];
-
-<span style="color: var(--accent);">const</span> DECISION_PATTERNS = [
-  <span style="color: var(--accent3);">/就(这样|这么)(吧|办|做|定)/</span>,
-  <span style="color: var(--accent3);">/(确定|同意|决定|approved|agreed)/</span>,
-  <span style="color: var(--accent3);">/那就用/</span>,
-];
-</pre>
-  </div>
-
-  <h3>每个 Micro-Task 的 Context Chunk 大小</h3>
+  <h3>角色间协作矩阵</h3>
   <table class="comp-table">
     <tr>
-      <th>Micro-Task</th>
-      <th>输入 Chunk</th>
-      <th>Input Tokens</th>
-      <th>Debounce</th>
-      <th>Cooldown</th>
-      <th>输出</th>
+      <th>From \ To</th>
+      <th>Voice AI</th>
+      <th>Auditor</th>
+      <th>Retriever</th>
+      <th>Vision</th>
+      <th>OpenClaw</th>
+      <th>Computer Use</th>
     </tr>
     <tr>
-      <td>CommandAudit</td>
-      <td>最近 3-5 条 command entries + meeting brief URLs/files</td>
-      <td>~200</td>
-      <td>2.5s</td>
-      <td>5s</td>
-      <td>action + params + confidence</td>
+      <td><strong>Voice AI</strong></td>
+      <td>-</td>
+      <td>transcript feed</td>
+      <td>recall_context</td>
+      <td>-</td>
+      <td>-</td>
+      <td>tool_request (via Auditor)</td>
     </tr>
     <tr>
-      <td>RequirementExtract</td>
-      <td>最近 5-8 条 requirement entries + topic context</td>
-      <td>~300</td>
-      <td>10s</td>
-      <td>15s</td>
-      <td>[REQ] structured requirement</td>
+      <td><strong>Auditor</strong></td>
+      <td>liveNote push</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>AutomationRouter dispatch</td>
     </tr>
     <tr>
-      <td>DecisionCapture</td>
-      <td>最近 3-5 条 decision entries + 相关 requirements</td>
-      <td>~250</td>
-      <td>15s</td>
-      <td>20s</td>
-      <td>[DECISION] what + who + context</td>
+      <td><strong>Retriever</strong></td>
+      <td>session.update inject</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>OC-002 (deep fallback)</td>
+      <td>-</td>
     </tr>
     <tr>
-      <td>TopicDetect</td>
-      <td>最近 2 条 + 当前 topic 摘要</td>
-      <td>~150</td>
-      <td>20s</td>
-      <td>30s</td>
-      <td>topic changed? new_topic string</td>
+      <td><strong>Vision</strong></td>
+      <td>screen description</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>batch 5 descriptions</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><strong>OpenClaw</strong></td>
+      <td>MeetingPrepBrief</td>
+      <td>-</td>
+      <td>MEMORY.md</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><strong>Computer Use</strong></td>
+      <td>notifyTaskCompletion</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: Context Nodes -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="nodes">
+  <h2>Context 节点 — 数据源全景 <span class="badge badge-schema">NODES</span></h2>
+
+  <p>系统中存在 <strong>10 类 context 数据源</strong>，分别由不同角色产生和消费。</p>
+
+  <table class="comp-table">
+    <tr>
+      <th>Context 节点</th>
+      <th>类型</th>
+      <th>格式</th>
+      <th>产生者</th>
+      <th>消费者</th>
+      <th>更新频率</th>
+      <th>持久化</th>
+    </tr>
+    <tr>
+      <td><strong>Transcript</strong></td>
+      <td>Streaming</td>
+      <td>In-memory array</td>
+      <td>Voice AI (Whisper STT)</td>
+      <td>Auditor, Retriever, Meeting</td>
+      <td>~3s (word tokens)</td>
+      <td>SharedContext (200 max)</td>
+    </tr>
+    <tr>
+      <td><strong>Screenshot</strong></td>
+      <td>Image</td>
+      <td>Base64 JPEG</td>
+      <td>CDP + screencapture CLI</td>
+      <td>Vision, Computer Use</td>
+      <td>1s (meeting) / 5s (local)</td>
+      <td>SharedContext.screen</td>
+    </tr>
+    <tr>
+      <td><strong>Screen Description</strong></td>
+      <td>Text</td>
+      <td>Markdown string</td>
+      <td>VisionModule (Gemini Flash)</td>
+      <td>Voice AI, OpenClaw (batch)</td>
+      <td>每 3-5 screenshots</td>
+      <td>SharedContext + live log</td>
+    </tr>
+    <tr>
+      <td><strong>Meeting Notes</strong></td>
+      <td>Structured</td>
+      <td>MeetingNote[]</td>
+      <td>MeetingModule + Auditor</td>
+      <td>Voice AI, PostMeeting</td>
+      <td>每 2 分钟 extraction</td>
+      <td>SharedContext + tasks.json</td>
+    </tr>
+    <tr>
+      <td><strong>Meeting Prep Brief</strong></td>
+      <td>Structured JSON</td>
+      <td>MeetingPrepBrief</td>
+      <td>OpenClaw (OC-001)</td>
+      <td>Voice AI system prompt</td>
+      <td>会前一次生成</td>
+      <td>~/.callingclaw/shared/{id}_prep.md</td>
+    </tr>
+    <tr>
+      <td><strong>OpenClaw Memory</strong></td>
+      <td>Markdown</td>
+      <td>Markdown file</td>
+      <td>OpenClaw (external)</td>
+      <td>ContextSync, Retriever</td>
+      <td>Startup + 60s polling</td>
+      <td>~/.openclaw/workspace/MEMORY.md</td>
+    </tr>
+    <tr>
+      <td><strong>Calendar Context</strong></td>
+      <td>JSON</td>
+      <td>CalendarEvent[]</td>
+      <td>GoogleCalendarClient</td>
+      <td>MeetJoiner, Scheduler</td>
+      <td>On join + periodic</td>
+      <td>In-memory</td>
+    </tr>
+    <tr>
+      <td><strong>Browser DOM</strong></td>
+      <td>JSON</td>
+      <td>Accessibility tree</td>
+      <td>Playwright CDP</td>
+      <td>Automation, Computer Use</td>
+      <td>10s intervals (meeting)</td>
+      <td>SharedContext.browserContext</td>
+    </tr>
+    <tr>
+      <td><strong>Live Log</strong></td>
+      <td>Markdown</td>
+      <td>Timestamped entries</td>
+      <td>Multiple (append-only)</td>
+      <td>Desktop UI, OpenClaw</td>
+      <td>Continuous</td>
+      <td>~/.callingclaw/shared/{id}_live.md</td>
+    </tr>
+    <tr>
+      <td><strong>Task Store</strong></td>
+      <td>JSON</td>
+      <td>Task[]</td>
+      <td>MeetingModule, PostMeeting</td>
+      <td>OpenClaw agents, UI</td>
+      <td>On create/update</td>
+      <td>callingclaw/data/tasks.json</td>
     </tr>
   </table>
 
-  <div class="alert alert-success">
-    <span>✅</span>
-    <div><strong>Token 节省估算</strong>：30 分钟会议，用户发言 ~60 次。当前: 60÷(2.5s debounce) ≈ ~20 次 Haiku 调用 × 600 tok = <strong>12,000 tok</strong>。增量方案: command ~10 次×200 + req ~5 次×300 + decision ~3 次×250 + topic ~2 次×150 = <strong>~4,550 tok</strong> (节省 62%)</div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 5: Task Definition -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<section id="tasks">
-  <h2>会议中任务定义 <span class="badge badge-detail">DETAIL</span></h2>
-
-  <p>将原来单一的 "TranscriptAuditor.runAudit()" 拆分成<strong>六类独立任务</strong>，每类有自己的触发条件、context 需求和输出格式。</p>
-
+  <h3>Context 生命周期 (以 Meeting 为例)</h3>
   <div class="mermaid-wrap">
-    <div class="title">Task Type Hierarchy</div>
-    <div class="mermaid">
-flowchart TB
-  subgraph Realtime["⚡ 实时任务 (< 5s)"]
-    T1["T1: CommandDispatch<br/>用户下达自动化指令<br/>debounce: 2.5s"]
-    T2["T2: QuickRecall<br/>用户问 context 问题<br/>debounce: 1s"]
-  end
-
-  subgraph NearRT["🔄 近实时任务 (5-15s)"]
-    T3["T3: RequirementCapture<br/>捕捉用户需求/期望<br/>debounce: 10s"]
-    T4["T4: DecisionRecord<br/>记录达成的决策<br/>debounce: 15s"]
-  end
-
-  subgraph Periodic["📊 周期任务 (30-60s)"]
-    T5["T5: TopicTracker<br/>检测话题切换<br/>interval: 20-30s"]
-    T6["T6: StateCheckpoint<br/>全局状态评估 + 压缩<br/>interval: 60s / 20 entries"]
-  end
-
-  T1 -->|"[DONE]"| Voice["Voice liveNotes"]
-  T2 -->|"context result"| Voice
-  T3 -->|"[REQ]"| Voice
-  T3 -->|"batch"| MEM["MEMORY.md"]
-  T4 -->|"[DECISION]"| Voice
-  T4 -->|"batch"| MEM
-  T5 -->|"topic update"| Voice
-  T6 -->|"compressed notes"| Voice
-  T6 -->|"checkpoint"| MEM
-
-  classDef rt fill:#1a3324,stroke:#34d399,color:#e2e8f0
-  classDef nrt fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
-  classDef per fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
-  classDef out fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
-
-  class T1,T2 rt
-  class T3,T4 nrt
-  class T5,T6 per
-  class Voice,MEM out
-    </div>
-  </div>
-
-  <div class="card-grid">
-    <div class="card">
-      <div class="card-header"><span class="dot dot-green"></span>T1: CommandDispatch (实时)</div>
-      <p><strong>触发</strong>: EntryClassifier 检测到 command 类型</p>
-      <p><strong>Context Chunk</strong>:</p>
-      <ul>
-        <li>最近 3-5 条 command entries</li>
-        <li>Meeting brief 的 filePaths[] + browserUrls[]</li>
-        <li>最近 5 条 [DONE] actions (去重参考)</li>
-      </ul>
-      <p><strong>Haiku 输出</strong>: <code>{ action, params, confidence }</code></p>
-      <p><strong>执行</strong>: confidence ≥ 0.85 → AutomationRouter</p>
-      <p><strong>回推</strong>: <code>[DONE] task: result</code> → Voice liveNotes</p>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-green"></span>T2: QuickRecall (实时)</div>
-      <p><strong>触发</strong>: Voice AI 的 <code>recall_context</code> tool call</p>
-      <p><strong>Context Chunk</strong>:</p>
-      <ul>
-        <li>query 关键词</li>
-        <li>ContextSync.searchMemory() 结果 (本地, ~0ms)</li>
-        <li>如果本地无结果 → 升级到 OpenClaw thorough</li>
-      </ul>
-      <p><strong>执行路径</strong>: 直接返回，不经过 Haiku</p>
-      <p><strong>回推</strong>: tool result → Voice AI 回答</p>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-purple"></span>T3: RequirementCapture (近实时)</div>
-      <p><strong>触发</strong>: 累积 3+ requirement entries 或 10s debounce</p>
-      <p><strong>Context Chunk</strong>:</p>
-      <ul>
-        <li>最近 5-8 条 requirement entries</li>
-        <li>当前 topic 摘要</li>
-        <li>已记录的 requirements (避免重复)</li>
-      </ul>
-      <p><strong>Haiku 输出</strong>: <code>{ requirements: [{text, priority, assignee?}] }</code></p>
-      <p><strong>回推</strong>: <code>[REQ] text</code> → Voice + batch → MEMORY.md</p>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-purple"></span>T4: DecisionRecord (近实时)</div>
-      <p><strong>触发</strong>: 检测到 decision entries 或 15s debounce</p>
-      <p><strong>Context Chunk</strong>:</p>
-      <ul>
-        <li>最近 3-5 条 decision entries</li>
-        <li>相关的 requirements (提供背景)</li>
-        <li>已记录的 decisions (避免重复)</li>
-      </ul>
-      <p><strong>Haiku 输出</strong>: <code>{ decision, rationale, relatedReqs[] }</code></p>
-      <p><strong>回推</strong>: <code>[DECISION] text</code> → Voice + batch → MEMORY.md</p>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-yellow"></span>T5: TopicTracker (周期)</div>
-      <p><strong>触发</strong>: 每 20-30 秒，或检测到明显话题切换</p>
-      <p><strong>Context Chunk</strong>:</p>
-      <ul>
-        <li>最近 2 条 entries</li>
-        <li>当前 topic + keyPoints (from brief)</li>
-        <li>极小输入: ~150 tokens</li>
-      </ul>
-      <p><strong>Haiku 输出</strong>: <code>{ changed: bool, newTopic?, keyPoints? }</code></p>
-      <p><strong>回推</strong>: 更新 brief.topic → Voice system prompt 更新</p>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="dot dot-yellow"></span>T6: StateCheckpoint (周期)</div>
-      <p><strong>触发</strong>: 每 60 秒或累积 20 条新 entries</p>
-      <p><strong>Context Chunk</strong>:</p>
-      <ul>
-        <li>当前全部 liveNotes</li>
-        <li>最近 10 条 entries 摘要</li>
-        <li>当前 requirements + decisions 列表</li>
-      </ul>
-      <p><strong>执行</strong>: Haiku or OpenClaw</p>
-      <ul>
-        <li>压缩 liveNotes (合并重复、移除过时)</li>
-        <li>生成状态摘要 (State Brief)</li>
-        <li>建议下一步讨论方向</li>
-      </ul>
-      <p><strong>回推</strong>: 压缩后的 liveNotes → session.update (减少 token)</p>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 6: Background Tool Calling -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<section id="background">
-  <h2>Background Tool Call 机制 <span class="badge badge-detail">DETAIL</span></h2>
-
-  <p>当前的 TranscriptAuditor 是单线程顺序执行（processing lock + cooldown）。增量方案引入<strong>微任务调度器</strong>，让不同类型的任务独立并行。</p>
-
-  <div class="mermaid-wrap">
-    <div class="title">MicroTaskScheduler: 独立并行执行</div>
+    <div class="title">Context Node Lifecycle During Meeting</div>
     <div class="mermaid">
 sequenceDiagram
-  participant U as User Speech
-  participant EC as EntryClassifier
-  participant CQ as CommandQueue
-  participant RQ as RequirementQueue
-  participant DQ as DecisionQueue
-  participant H as Haiku API
-  participant AR as AutomationRouter
-  participant V as Voice AI
+  participant Cal as Calendar
+  participant OC as OpenClaw
+  participant Voice as Voice AI
+  participant SC as SharedContext
+  participant Vis as Vision
+  participant Ret as Retriever
+  participant Aud as Auditor
+  participant SD as SharedDocs
+  participant Post as PostMeeting
 
-  Note over EC: t=0s 用户说 "帮我打开那个PRD"
-  U->>EC: {role:"user", text:"帮我打开那个PRD"}
-  EC->>CQ: type: command (规则匹配)
+  Note over Cal,Post: === PRE-MEETING ===
+  Cal->>OC: Event + attendees
+  OC->>SD: {id}_prep.md (MeetingPrepBrief)
+  SD->>Voice: inject brief → system prompt
 
-  Note over EC: t=3s 用户说 "这个认证要改成SSO"
-  U->>EC: {role:"user", text:"这个认证要改成SSO"}
-  EC->>RQ: type: requirement (规则匹配)
+  Note over Cal,Post: === MEETING ACTIVE ===
+  Voice->>SC: transcript entries (continuous)
+  Vis->>SC: screenshot + description (1-5s)
+  SC->>Aud: 15-entry window (2.5s debounce)
+  SC->>Ret: ~500 chars threshold (event-driven)
+  Aud-->>Voice: [DONE]/[SUGGEST] liveNote
+  Ret-->>Voice: session.update (retrieved context)
+  Vis-->>OC: batch 5 descriptions
+  Voice->>SD: {id}_live.md (append)
 
-  Note over CQ: t=2.5s CommandAudit debounce 触发
-  CQ->>H: classifyCommand(3 entries, brief.files)
-  H-->>CQ: {action:"open_file", path:"/PRD.md", conf:0.92}
-  CQ->>AR: execute("open /PRD.md")
-  AR-->>CQ: "opened in VS Code"
-  CQ->>V: pushDelta([DONE] open PRD: opened in VS Code)
-
-  Note over EC: t=8s 用户说 "就用OAuth2吧"
-  U->>EC: {role:"user", text:"就用OAuth2吧"}
-  EC->>DQ: type: decision (规则匹配)
-
-  Note over RQ: t=13s RequirementExtract debounce 触发
-  RQ->>H: extractRequirements(5 req entries)
-  H-->>RQ: {requirements: [{text:"认证改SSO", priority:"high"}]}
-  RQ->>V: pushDelta([REQ] 认证改SSO - high priority)
-
-  Note over DQ: t=23s DecisionCapture debounce 触发
-  DQ->>H: captureDecision(3 dec entries + reqs)
-  H-->>DQ: {decision:"使用 OAuth2 SSO", rationale:"..."}
-  DQ->>V: pushDelta([DECISION] 使用 OAuth2 SSO)
-    </div>
-  </div>
-
-  <h3>关键设计: Delta Push vs 全量 Push</h3>
-  <div class="card">
-    <div class="card-header">session.update 优化策略</div>
-    <p>由于 OpenAI Realtime 的 <code>session.update</code> 是全量替换，我们无法真正只推"增量"。但可以通过以下策略<strong>减少每次 push 的 token 量</strong>：</p>
-
-    <h3 style="margin-top:16px;">策略 A: liveNotes 压缩 (StateCheckpoint)</h3>
-    <ul>
-      <li>每 60 秒，T6 将 liveNotes 压缩：合并类似条目，移除已完成的 [DONE]，摘要化旧内容</li>
-      <li>效果：liveNotes 维持在 ~15 条以内，不会无限增长</li>
-    </ul>
-
-    <h3 style="margin-top:16px;">策略 B: 分层 liveNotes</h3>
-<pre style="color: var(--text2); font-size: 13px; line-height: 1.7; margin-top: 8px;">
-liveNotes = {
-  <span style="color: var(--accent3);">pinned</span>: [          <span style="color: var(--text3);">// 始终包含 (关键决策/需求)</span>
-    "[DECISION] 使用 OAuth2 SSO",
-    "[REQ] 认证必须在 Q3 前完成",
-  ],
-  <span style="color: var(--accent4);">recent</span>: [          <span style="color: var(--text3);">// 最近 5 条 (滚动窗口)</span>
-    "[DONE] opened PRD in VS Code",
-    "[SCREEN] 正在展示架构图",
-  ],
-  <span style="color: var(--text3);">archived</span>: "..."    <span style="color: var(--text3);">// 压缩摘要 (只在 checkpoint 更新)</span>
-}
-</pre>
-    <p style="margin-top: 12px;">这样每次 session.update 只需要 pinned + recent + archived_summary，而不是全部历史 liveNotes。</p>
-
-    <h3 style="margin-top:16px;">策略 C: Push 频率控制</h3>
-    <table class="comp-table" style="margin-top: 8px;">
-      <tr><th>事件类型</th><th>Push 策略</th><th>原因</th></tr>
-      <tr><td>[DONE] command</td><td>立即 push</td><td>用户等待确认</td></tr>
-      <tr><td>[REQ] requirement</td><td>批量 push (3 条或 15s)</td><td>不紧急，减少 push 频率</td></tr>
-      <tr><td>[DECISION] decision</td><td>批量 push (同上)</td><td>同上</td></tr>
-      <tr><td>Topic 切换</td><td>立即 push</td><td>Voice 需要知道当前在讨论什么</td></tr>
-      <tr><td>Checkpoint 压缩</td><td>立即 push</td><td>替换整个 liveNotes (减少 token)</td></tr>
-    </table>
-  </div>
-
-  <h3>并发安全设计</h3>
-  <div class="alert alert-info">
-    <span>ℹ️</span>
-    <div>
-      <strong>Bun 是单线程</strong>，所有微任务在同一个 event loop 中执行。并发安全通过以下方式保证：
-      <ul style="margin-top: 8px;">
-        <li>每个 Queue 有独立的 <code>_processing</code> lock（和当前 TranscriptAuditor 相同模式）</li>
-        <li>liveNotes 写入是顺序的（先 push 到 array → 再 session.update）</li>
-        <li>session.update 的 <code>updateInstructions()</code> 内部已经是 atomic 的</li>
-        <li>不同 Queue 可以同时各自 debounce，但 Haiku API 调用在 await 时自动 yield</li>
-      </ul>
+  Note over Cal,Post: === POST-MEETING ===
+  SC->>Post: full transcript + notes
+  Post->>SD: {id}_summary.md
+  Post->>Cal: patch event with notes link
+  Post-->>OC: tasks + action items
     </div>
   </div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 7: Token Budget -->
+<!-- SECTION 4: Sync Mechanisms -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-<section id="budget">
-  <h2>Token 预算对比 <span class="badge badge-detail">DETAIL</span></h2>
+<section id="sync">
+  <h2>同步机制 — 五层传输 <span class="badge badge-current">SYNC</span></h2>
 
-  <p>以 30 分钟会议为例（用户发言 ~60 次，屏幕变化 ~20 次），对比当前和增量方案的 token 消耗。</p>
-
-  <div class="card">
-    <div class="card-header">Haiku API Token 消耗对比</div>
-    <div id="tokenViz" style="display: flex; gap: 40px; margin: 20px 0;">
-      <!-- Current -->
-      <div style="flex:1;">
-        <div style="text-align: center; margin-bottom: 12px; font-size: 13px; color: var(--text3);">当前 (v2.2.1)</div>
-        <div class="token-viz" style="height: 160px;">
-          <div class="token-block" style="height: 100%; background: var(--danger);">
-            <span class="value">12K</span>
-            <span class="label">Audit<br/>20×600</span>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 32px; font-size: 15px; font-weight: 600; color: var(--danger);">~12,000 tokens</div>
-        <div style="text-align: center; font-size: 12px; color: var(--text3);">~$0.012 (Haiku)</div>
-      </div>
-
-      <!-- Proposed -->
-      <div style="flex:1;">
-        <div style="text-align: center; margin-bottom: 12px; font-size: 13px; color: var(--text3);">增量方案 (Proposed)</div>
-        <div class="token-viz" style="height: 160px;">
-          <div class="token-block" style="height: 33%; background: var(--accent3);">
-            <span class="value">2K</span>
-            <span class="label">Cmd<br/>10×200</span>
-          </div>
-          <div class="token-block" style="height: 25%; background: var(--accent2);">
-            <span class="value">1.5K</span>
-            <span class="label">Req<br/>5×300</span>
-          </div>
-          <div class="token-block" style="height: 12.5%; background: var(--accent);">
-            <span class="value">750</span>
-            <span class="label">Dec<br/>3×250</span>
-          </div>
-          <div class="token-block" style="height: 5%; background: var(--accent4);">
-            <span class="value">300</span>
-            <span class="label">Topic<br/>2×150</span>
-          </div>
-          <div class="token-block" style="height: 8.3%; background: var(--text3);">
-            <span class="value">500</span>
-            <span class="label">Check<br/>1×500</span>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 32px; font-size: 15px; font-weight: 600; color: var(--accent3);">~5,050 tokens</div>
-        <div style="text-align: center; font-size: 12px; color: var(--text3);">~$0.005 (Haiku) · 节省 58%</div>
-      </div>
-    </div>
-  </div>
-
-  <h3>session.update Token 消耗对比</h3>
-  <div class="card">
-    <div class="card-header">Voice AI System Prompt 大小趋势 (30分钟会议)</div>
-    <div style="margin: 16px 0;">
-      <div class="metric-row">
-        <span class="metric-label">t=0 (开始)</span>
-        <div class="metric-bar"><div class="fill" style="width:30%; background: var(--accent);"></div></div>
-        <span class="metric-value">~3K chars</span>
-      </div>
-      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">MEETING_PERSONA + brief (两方案相同)</div>
-
-      <div class="metric-row">
-        <span class="metric-label" style="color: var(--danger);">当前 t=15m</span>
-        <div class="metric-bar"><div class="fill" style="width:65%; background: var(--danger);"></div></div>
-        <span class="metric-value">~6.5K chars</span>
-      </div>
-      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">liveNotes 持续增长 (~35 条)</div>
-
-      <div class="metric-row">
-        <span class="metric-label" style="color: var(--accent3);">增量 t=15m</span>
-        <div class="metric-bar"><div class="fill" style="width:40%; background: var(--accent3);"></div></div>
-        <span class="metric-value">~4K chars</span>
-      </div>
-      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">pinned(5) + recent(5) + archived_summary</div>
-
-      <div class="metric-row">
-        <span class="metric-label" style="color: var(--danger);">当前 t=30m</span>
-        <div class="metric-bar"><div class="fill" style="width:95%; background: var(--danger);"></div></div>
-        <span class="metric-value">~9.5K chars</span>
-      </div>
-      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">liveNotes ~70 条，逼近 Voice 上下文限制</div>
-
-      <div class="metric-row">
-        <span class="metric-label" style="color: var(--accent3);">增量 t=30m</span>
-        <div class="metric-bar"><div class="fill" style="width:45%; background: var(--accent3);"></div></div>
-        <span class="metric-value">~4.5K chars</span>
-      </div>
-      <div style="font-size: 11px; color: var(--text3); margin-left: 152px; margin-bottom: 8px;">Checkpoint 压缩后保持稳定</div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- SECTION 8: Implementation Timeline -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<section id="timeline">
-  <h2>实现时间线 <span class="badge badge-proposed">ROADMAP</span></h2>
-
-  <div class="mermaid-wrap">
-    <div class="title">Implementation Phases</div>
-    <div class="mermaid">
-gantt
-  title CallingClaw 增量 Context Sync 实现计划
-  dateFormat YYYY-MM-DD
-  axisFormat %m-%d
-
-  section Phase 1: 基础设施
-    EntryClassifier (本地规则引擎)     :p1a, 2026-03-16, 2d
-    MicroTaskScheduler 框架            :p1b, 2026-03-16, 2d
-    分层 liveNotes 数据结构            :p1c, after p1a, 1d
-
-  section Phase 2: Micro-Tasks
-    CommandAudit (从 TranscriptAuditor 拆分) :p2a, after p1b, 2d
-    RequirementExtract                       :p2b, after p2a, 1d
-    DecisionCapture                          :p2c, after p2b, 1d
-    TopicTracker                             :p2d, after p2c, 1d
-
-  section Phase 3: Checkpoint + Push
-    StateCheckpoint (60s / 20条)       :p3a, after p2d, 2d
-    Delta Push 优化                    :p3b, after p3a, 1d
-    Push 频率控制                      :p3c, after p3b, 1d
-
-  section Phase 4: 测试 + 调优
-    集成测试 (模拟 30 分钟会议)        :p4a, after p3c, 2d
-    Token 统计 + 阈值调优              :p4b, after p4a, 2d
-    实际会议验证                       :p4c, after p4b, 3d
-    </div>
-  </div>
-
-  <h3>Phase 1: 基础设施 (估计文件变更)</h3>
-  <div class="card">
-    <table class="comp-table">
-      <tr><th>文件</th><th>变更类型</th><th>说明</th></tr>
-      <tr>
-        <td><code>src/modules/entry-classifier.ts</code></td>
-        <td style="color: var(--accent3);">新增</td>
-        <td>TranscriptEntry 分类器 (正则规则引擎)</td>
-      </tr>
-      <tr>
-        <td><code>src/modules/micro-task-scheduler.ts</code></td>
-        <td style="color: var(--accent3);">新增</td>
-        <td>微任务调度器 + Queue 管理</td>
-      </tr>
-      <tr>
-        <td><code>src/modules/transcript-auditor.ts</code></td>
-        <td style="color: var(--accent4);">重构</td>
-        <td>拆分为 CommandAudit micro-task + 保留 _admitEval 结构</td>
-      </tr>
-      <tr>
-        <td><code>src/voice-persona.ts</code></td>
-        <td style="color: var(--accent4);">修改</td>
-        <td>支持分层 liveNotes (pinned + recent + archived)</td>
-      </tr>
-      <tr>
-        <td><code>src/skills/meeting-prep.ts</code></td>
-        <td style="color: var(--accent4);">修改</td>
-        <td>MeetingPrepBrief.liveNotes → 分层结构</td>
-      </tr>
-      <tr>
-        <td><code>src/callingclaw.ts</code></td>
-        <td style="color: var(--accent4);">修改</td>
-        <td>接入 MicroTaskScheduler，替换 TranscriptAuditor 直接调用</td>
-      </tr>
-    </table>
-  </div>
-
-  <h3>向后兼容性</h3>
-  <div class="alert alert-info">
-    <span>ℹ️</span>
-    <div>
-      <strong>增量升级路径</strong>：新架构作为 TranscriptAuditor 的替换，对外接口不变：
-      <ul style="margin-top: 8px;">
-        <li><code>activate(voice)</code> / <code>deactivate()</code> 生命周期不变</li>
-        <li><code>AUDITOR_MANAGED_TOOLS</code> 不变 — 同样的 5 个工具在会议中移除</li>
-        <li>EventBus 事件保持兼容 (<code>auditor.intent</code>, <code>auditor.executing</code>, etc.)</li>
-        <li>新增事件: <code>auditor.requirement</code>, <code>auditor.decision</code>, <code>auditor.checkpoint</code></li>
-        <li>REST API 无变更 — 内部架构重构，对外透明</li>
-      </ul>
-    </div>
-  </div>
-
-  <h3>风险评估</h3>
   <div class="card-grid">
     <div class="card">
-      <div class="card-header"><span class="dot dot-yellow"></span>风险 1: 本地规则的误分类</div>
-      <p>EntryClassifier 用正则规则分类，可能把命令误判为需求，或者需求漏判。</p>
-      <p><strong>缓解</strong>: 规则保守 (宁可误判为 chat → 被 fallback 捕获)；Haiku 做最终判断；定期根据实际数据调优规则。</p>
+      <div class="card-header"><span class="dot dot-blue"></span>A. EventBus (核心 Pub/Sub)</div>
+      <p><strong>文件</strong>: <code>src/modules/event-bus.ts</code></p>
+      <p><strong>三路分发</strong>:</p>
+      <ul>
+        <li><strong>本地监听</strong>: <code>on(type, callback)</code> 进程内订阅</li>
+        <li><strong>WebSocket</strong>: <code>ws://4000/ws/events</code> 推送到 Desktop UI</li>
+        <li><strong>Webhooks</strong>: HTTP POST + HMAC 签名, glob 模式匹配</li>
+      </ul>
+      <p style="margin-top:8px;"><strong>History</strong>: 最近 200 事件 (可查询)</p>
+      <p><strong>Correlation</strong>: <code>startCorrelation("mtg")</code> → 全会议追踪</p>
+      <div class="schema-block">
+<pre><span class="keyword">interface</span> CallingClawEvent {
+  type: <span class="type">string</span>;              <span class="comment">// e.g. "meeting.started"</span>
+  timestamp: <span class="type">number</span>;
+  correlationId?: <span class="type">string</span>;   <span class="comment">// "mtg_1234567890ab_xyz"</span>
+  data: Record&lt;<span class="type">string</span>, <span class="type">any</span>&gt;;
+}</pre>
+      </div>
     </div>
+
     <div class="card">
-      <div class="card-header"><span class="dot dot-yellow"></span>风险 2: liveNotes 压缩丢信息</div>
-      <p>StateCheckpoint 压缩 liveNotes 时可能丢失重要信息。</p>
-      <p><strong>缓解</strong>: pinned 类型永不压缩；压缩前保存原始版本到 OpenClaw MEMORY.md；压缩规则可调。</p>
+      <div class="card-header"><span class="dot dot-green"></span>B. Voice Session Update (全量替换)</div>
+      <p><strong>方法</strong>: OpenAI Realtime <code>session.update()</code></p>
+      <p><strong>触发源</strong>:</p>
+      <ul>
+        <li>ContextSync refresh (每 60s)</li>
+        <li>MeetingPrepBrief injection (会议开始)</li>
+        <li>OpenClaw liveNotes (via callback)</li>
+        <li>Computer Use task completion</li>
+        <li>ContextRetriever results</li>
+      </ul>
+      <p><strong>入口</strong>: <code>voice-persona.ts::pushContextUpdate()</code></p>
+      <div class="alert alert-warn" style="margin-top:8px;">
+        <span>!</span>
+        <div><code>session.update</code> 是<strong>全量替换</strong> instructions + tools, 不是 patch。liveNotes 累积导致 token 线性增长。</div>
+      </div>
     </div>
+
     <div class="card">
-      <div class="card-header"><span class="dot dot-green"></span>风险 3: 多 Queue 竞争 Haiku API</div>
-      <p>多个微任务同时 debounce 到期，并发调用 Haiku。</p>
-      <p><strong>缓解</strong>: Bun 单线程 + await → 自然排队；不同 debounce 时间天然错开；可加全局 rate limiter。</p>
+      <div class="card-header"><span class="dot dot-yellow"></span>C. 文件系统同步 (SharedDocuments)</div>
+      <p><strong>文件</strong>: <code>src/modules/shared-documents.ts</code></p>
+      <p><strong>目录</strong>: <code>~/.callingclaw/shared/</code></p>
+      <ul>
+        <li><code>{meetingId}_prep.md</code> — OpenClaw 写入 (会前)</li>
+        <li><code>{meetingId}_live.md</code> — CallingClaw 追加 (会中)</li>
+        <li><code>{meetingId}_summary.md</code> — CallingClaw 写入 (会后)</li>
+        <li><code>{meetingId}_transcript.md</code> — 完整记录</li>
+        <li><code>sessions.json</code> — 会议索引 (最近 50 个)</li>
+      </ul>
+      <p style="margin-top:8px;"><strong>meetingId</strong> 格式: <code>cc_{timestamp}_{random}</code></p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-purple"></span>D. IPC Bridge (Electron ↔ Backend)</div>
+      <p><strong>文件</strong>: <code>callingclaw-desktop/src/preload/index.js</code></p>
+      <p><strong>暴露 API</strong>: <code>window.callingclaw.*</code></p>
+      <ul>
+        <li><code>daemon</code>: start, stop, restart, status, onStatus, onError, onLog</li>
+        <li><code>permissions</code>: check, request, openSettings</li>
+        <li><code>env</code>: check (Bun, Python, BlackHole, etc.)</li>
+        <li><code>overlay</code>: show, hide</li>
+        <li><code>skill</code>: check, install</li>
+        <li><code>shell</code>: openExternal</li>
+        <li><code>app</code>: info</li>
+      </ul>
+      <p style="margin-top:8px;">全部通过 <code>ipcRenderer.invoke()</code> (Promise-based)</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>E. Python Bridge (Audio + Input)</div>
+      <p><strong>文件</strong>: <code>src/bridge.ts</code></p>
+      <p><strong>传输</strong>: WebSocket on port 4001</p>
+      <div class="schema-block">
+<pre><span class="keyword">type</span> BridgeMessageType =
+  | <span class="string">"audio_chunk"</span>     <span class="comment">// PCM base64 from mic</span>
+  | <span class="string">"audio_playback"</span>  <span class="comment">// PCM base64 to speaker</span>
+  | <span class="string">"screenshot"</span>      <span class="comment">// Base64 PNG (legacy)</span>
+  | <span class="string">"action"</span>          <span class="comment">// PyAutoGUI command</span>
+  | <span class="string">"action_result"</span>   <span class="comment">// Result from action</span>
+  | <span class="string">"status"</span>          <span class="comment">// Heartbeat</span>
+  | <span class="string">"config"</span>          <span class="comment">// Config update</span>
+  | <span class="string">"ping"</span>;           <span class="comment">// Keepalive</span></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-blue"></span>F. ContextSync (Memory Bridge)</div>
+      <p><strong>文件</strong>: <code>src/modules/context-sync.ts</code></p>
+      <p><strong>职责</strong>: 桥接 OpenClaw Memory + Pinned Files + Notes</p>
+      <ul>
+        <li>Load <code>~/.openclaw/workspace/MEMORY.md</code> at startup</li>
+        <li>Poll every 60s for changes (<code>refreshIfChanged()</code>)</li>
+        <li>Pin/Unpin files to shared context (max 4KB each)</li>
+        <li>Generate tiered briefs:</li>
+      </ul>
+      <div style="margin-top:8px;">
+        <div class="metric-row">
+          <span class="metric-label">Voice Brief</span>
+          <div class="metric-bar"><div class="fill" style="width:33%; background: var(--accent3);"></div></div>
+          <span class="metric-value">~4,000 chars</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Computer Use Brief</span>
+          <div class="metric-bar"><div class="fill" style="width:66%; background: var(--accent2);"></div></div>
+          <span class="metric-value">~8,000 chars</span>
+        </div>
+      </div>
     </div>
   </div>
+
+  <h3>EventBus 事件清单</h3>
+  <table class="comp-table">
+    <tr><th>Event Type</th><th>Producer</th><th>Consumer(s)</th><th>Payload 概要</th></tr>
+    <tr><td><code>meeting.started</code></td><td>MeetJoiner</td><td>Vision, Auditor, Retriever, UI</td><td>meetUrl, topic, correlationId</td></tr>
+    <tr><td><code>meeting.ended</code></td><td>MeetJoiner</td><td>PostMeeting, UI</td><td>followUp, duration</td></tr>
+    <tr><td><code>meeting.live_note</code></td><td>OpenClaw callback</td><td>Voice AI, UI sidebar</td><td>note text, type</td></tr>
+    <tr><td><code>meeting.live_entry</code></td><td>SharedDocuments</td><td>UI sidebar</td><td>entry, filepath</td></tr>
+    <tr><td><code>meeting.action_item</code></td><td>MeetingModule</td><td>TaskStore, UI</td><td>text, assignee</td></tr>
+    <tr><td><code>meeting.vision</code></td><td>VisionModule</td><td>SharedContext, UI</td><td>description, url, title</td></tr>
+    <tr><td><code>retriever.activated</code></td><td>ContextRetriever</td><td>UI</td><td>-</td></tr>
+    <tr><td><code>retriever.topic</code></td><td>ContextRetriever</td><td>UI, Voice</td><td>topic, direction</td></tr>
+    <tr><td><code>retriever.analysis</code></td><td>ContextRetriever</td><td>UI</td><td>needsRetrieval, queries, reasoning</td></tr>
+    <tr><td><code>retriever.cache_hit</code></td><td>ContextRetriever</td><td>UI</td><td>query, resultCount</td></tr>
+    <tr><td><code>retriever.complete</code></td><td>ContextRetriever</td><td>Voice</td><td>contexts[]</td></tr>
+    <tr><td><code>screen.updated</code></td><td>VisionModule</td><td>SharedContext, UI</td><td>screenshot, description</td></tr>
+    <tr><td><code>voice.tool_request</code></td><td>Auditor intercept</td><td>AutomationRouter</td><td>action, params</td></tr>
+    <tr><td><code>task.created</code></td><td>TaskStore</td><td>UI, OpenClaw</td><td>Task object</td></tr>
+    <tr><td><code>task.updated</code></td><td>TaskStore</td><td>UI</td><td>Task object</td></tr>
+    <tr><td><code>computer.task_done</code></td><td>Computer Use</td><td>Voice</td><td>result, screenshot</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: Timing -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="timing">
+  <h2>同步时序 — 频率与延迟 <span class="badge badge-detail">TIMING</span></h2>
+
+  <h3>连续 / 事件驱动</h3>
+  <table class="comp-table">
+    <tr><th>组件</th><th>触发方式</th><th>频率</th><th>延迟</th><th>用途</th></tr>
+    <tr>
+      <td>Voice Realtime Stream</td>
+      <td>Audio frames</td>
+      <td><code>&lt;100ms</code></td>
+      <td>&lt;300ms</td>
+      <td>Live transcription</td>
+    </tr>
+    <tr>
+      <td>Screen Capture</td>
+      <td>Vision interval</td>
+      <td><code>1s</code> (meeting) / <code>5s</code> (local)</td>
+      <td>~50ms</td>
+      <td>Screenshot → Vision pipeline</td>
+    </tr>
+    <tr>
+      <td>Screen Description</td>
+      <td>Vision batch</td>
+      <td>每 3-5 screenshots (<code>~3-5s</code>)</td>
+      <td>~2s (Gemini call)</td>
+      <td>AI 理解屏幕内容</td>
+    </tr>
+    <tr>
+      <td>DOM Context</td>
+      <td>Playwright polling</td>
+      <td><code>10s</code></td>
+      <td>~100ms</td>
+      <td>Browser accessibility tree</td>
+    </tr>
+    <tr>
+      <td>EventBus broadcast</td>
+      <td>Event emission</td>
+      <td>Async fire-and-forget</td>
+      <td>&lt;1ms (local) / ~5ms (WS)</td>
+      <td>Cross-module notification</td>
+    </tr>
+  </table>
+
+  <h3>周期轮询</h3>
+  <table class="comp-table">
+    <tr><th>组件</th><th>间隔</th><th>用途</th></tr>
+    <tr><td>ContextSync.refreshIfChanged()</td><td><code>60s</code></td><td>检查 MEMORY.md 磁盘变更</td></tr>
+    <tr><td>DaemonSupervisor health check</td><td><code>5s</code></td><td>GET /api/status 存活检测</td></tr>
+    <tr><td>Meeting action item extraction</td><td><code>120s</code></td><td>从 transcript 提取 todo/decision</td></tr>
+    <tr><td>Python Bridge ping</td><td><code>heartbeat</code></td><td>Sidecar 连接存活检测</td></tr>
+  </table>
+
+  <h3>有条件触发 (Debounce / Threshold)</h3>
+  <table class="comp-table">
+    <tr><th>组件</th><th>触发条件</th><th>Debounce</th><th>Cooldown</th><th>用途</th></tr>
+    <tr>
+      <td>TranscriptAuditor</td>
+      <td>用户说话</td>
+      <td><code>2.5s</code></td>
+      <td><code>5s</code></td>
+      <td>指令分类</td>
+    </tr>
+    <tr>
+      <td>ContextRetriever Layer 1</td>
+      <td>~500 chars 累积 OR 用户提问</td>
+      <td><code>3s</code></td>
+      <td><code>30s</code></td>
+      <td>Topic 分类</td>
+    </tr>
+    <tr>
+      <td>ContextRetriever Layer 2</td>
+      <td>Topic 变化</td>
+      <td>跟随 Layer 1</td>
+      <td>同上</td>
+      <td>Need 推断 + 检索</td>
+    </tr>
+    <tr>
+      <td>Vision → Gemini</td>
+      <td>Screenshot diff &gt; threshold</td>
+      <td><code>3s</code> min interval</td>
+      <td>-</td>
+      <td>避免 API spam</td>
+    </tr>
+    <tr>
+      <td>Vision → OpenClaw batch</td>
+      <td>累积 5 条 screen descriptions</td>
+      <td>-</td>
+      <td>-</td>
+      <td>批量推送给 System 2</td>
+    </tr>
+  </table>
+
+  <h3>会议生命周期事件 (One-Time)</h3>
+  <div class="mermaid-wrap">
+    <div class="title">Meeting Lifecycle — One-Time Events</div>
+    <div class="mermaid">
+flowchart LR
+  A["join API call"] -->|"Playwright opens Meet"| B["meeting.started"]
+  B --> C1["activate Vision"]
+  B --> C2["activate Auditor"]
+  B --> C3["activate Retriever"]
+  B --> C4["start DOM capture"]
+  B --> C5["inject MeetingPrepBrief"]
+
+  D["leave API call"] -->|"flush + summarize"| E["meeting.ended"]
+  E --> F1["stop Vision"]
+  E --> F2["flush live log"]
+  E --> F3["generate summary"]
+  E --> F4["create tasks"]
+  E --> F5["Telegram delivery"]
+
+  classDef start fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef end fill:#3d1f1f,stroke:#ef4444,color:#e2e8f0
+  classDef action fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+
+  class A,B start
+  class D,E end
+  class C1,C2,C3,C4,C5,F1,F2,F3,F4,F5 action
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 6: Schemas -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="schemas">
+  <h2>中间态 Schema — 完整定义 <span class="badge badge-schema">SCHEMA</span></h2>
+
+  <h3>A. MeetingPrepBrief (会前 → 会中 核心载体)</h3>
+  <p>由 OpenClaw (OC-001 protocol) 生成，注入 Voice AI system prompt。</p>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> MeetingPrepBrief {
+  topic: <span class="type">string</span>;                           <span class="comment">// 会议主题</span>
+  goal: <span class="type">string</span>;                            <span class="comment">// 会议目标</span>
+  summary: <span class="type">string</span>;                         <span class="comment">// 2-3 段摘要</span>
+  keyPoints: <span class="type">string</span>[];                     <span class="comment">// 5-8 个要点</span>
+  architectureDecisions: Array&lt;{
+    decision: <span class="type">string</span>;
+    rationale: <span class="type">string</span>;
+  }&gt;;
+  expectedQuestions: Array&lt;{
+    question: <span class="type">string</span>;
+    suggestedAnswer: <span class="type">string</span>;
+  }&gt;;
+  filePaths: Array&lt;{
+    path: <span class="type">string</span>;
+    description: <span class="type">string</span>;
+    action?: <span class="string">"open"</span> | <span class="string">"scroll"</span> | <span class="string">"present"</span>;
+  }&gt;;
+  browserUrls: Array&lt;{
+    url: <span class="type">string</span>;
+    description: <span class="type">string</span>;
+    action?: <span class="string">"navigate"</span> | <span class="string">"demo"</span> | <span class="string">"show"</span>;
+  }&gt;;
+  attendees: CalendarAttendee[];
+  liveNotes: <span class="type">string</span>[];                    <span class="comment">// 会中由 OpenClaw 追加</span>
+}
+
+<span class="comment">// 文件: src/skills/meeting-prep.ts</span>
+<span class="comment">// 持久化: ~/.callingclaw/shared/{meetingId}_prep.md</span></pre>
+  </div>
+
+  <h3>B. SharedContext (会中 内存状态)</h3>
+  <p>所有 AI 角色共享的内存中心状态。</p>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> SharedContext {
+  transcript: TranscriptEntry[];         <span class="comment">// 最近 200 条 (rotating buffer)</span>
+  screen: ScreenState;                   <span class="comment">// 最新截屏 + 描述</span>
+  meetingNotes: MeetingNote[];           <span class="comment">// todo / decision / action_item / note</span>
+  workspace: WorkspaceContext | <span class="type">null</span>;    <span class="comment">// Git context from OpenClaw</span>
+  browserContext: BrowserContext | <span class="type">null</span>; <span class="comment">// DOM snapshot from Playwright</span>
+}
+
+<span class="keyword">interface</span> TranscriptEntry {
+  role: <span class="string">"user"</span> | <span class="string">"assistant"</span> | <span class="string">"system"</span> | <span class="string">"participant"</span>;
+  speaker?: <span class="type">string</span>;
+  text: <span class="type">string</span>;
+  ts: <span class="type">number</span>;
+}
+
+<span class="keyword">interface</span> ScreenState {
+  latestScreenshot: <span class="type">string</span> | <span class="type">null</span>;       <span class="comment">// base64 JPEG</span>
+  capturedAt: <span class="type">number</span>;
+  description?: <span class="type">string</span>;                  <span class="comment">// Gemini Flash 生成</span>
+  url?: <span class="type">string</span>;
+  title?: <span class="type">string</span>;
+}
+
+<span class="keyword">interface</span> MeetingNote {
+  type: <span class="string">"todo"</span> | <span class="string">"decision"</span> | <span class="string">"action_item"</span> | <span class="string">"note"</span>;
+  text: <span class="type">string</span>;
+  assignee?: <span class="type">string</span>;
+  ts: <span class="type">number</span>;
+}
+
+<span class="comment">// 文件: src/modules/shared-context.ts</span>
+<span class="comment">// 持久化: 纯内存, 会议结束后 flush 到 SharedDocuments</span></pre>
+  </div>
+
+  <h3>C. Task (任务系统)</h3>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> Task {
+  id: <span class="type">string</span>;                            <span class="comment">// "task_{ts}_{rand}"</span>
+  task: <span class="type">string</span>;                          <span class="comment">// 任务描述</span>
+  status: <span class="string">"pending"</span> | <span class="string">"in_progress"</span> | <span class="string">"done"</span> | <span class="string">"cancelled"</span>;
+  priority: <span class="string">"high"</span> | <span class="string">"medium"</span> | <span class="string">"low"</span>;
+  assignee?: <span class="type">string</span>;
+  deadline?: <span class="type">string</span>;                     <span class="comment">// ISO date or relative</span>
+  context?: <span class="type">string</span>;                      <span class="comment">// 来源 transcript 片段</span>
+  sourceMeetingId?: <span class="type">string</span>;              <span class="comment">// 关联会议 correlationId</span>
+  result?: <span class="type">string</span>;                       <span class="comment">// Agent 回报执行结果</span>
+  createdAt: <span class="type">number</span>;
+  updatedAt: <span class="type">number</span>;
+}
+
+<span class="comment">// 文件: src/modules/task-store.ts</span>
+<span class="comment">// 持久化: callingclaw/data/tasks.json</span></pre>
+  </div>
+
+  <h3>D. ContextRetriever Analysis (Gap 检测结果)</h3>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> GapAnalysis {
+  needsRetrieval: <span class="type">boolean</span>;
+  queries: <span class="type">string</span>[];                     <span class="comment">// Need-based, not noun-based</span>
+  reasoning: <span class="type">string</span>;                     <span class="comment">// Why this info is needed</span>
+}
+
+<span class="keyword">interface</span> RetrievedContext {
+  query: <span class="type">string</span>;
+  content: <span class="type">string</span>;
+  retrievedAt: <span class="type">number</span>;
+}
+<span class="comment">// 保持最近 10 个, 通过 pushContextUpdate() 注入 Voice</span>
+
+<span class="comment">// 文件: src/modules/context-retriever.ts</span>
+<span class="comment">// 事件: retriever.analysis (EventBus payload)</span></pre>
+  </div>
+
+  <h3>E. MeetingSession (会议索引)</h3>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> MeetingSession {
+  meetingId: <span class="type">string</span>;                     <span class="comment">// "cc_{ts}_{rand}"</span>
+  topic: <span class="type">string</span>;
+  meetUrl?: <span class="type">string</span>;
+  startTime?: <span class="type">string</span>;
+  endTime?: <span class="type">string</span>;
+  calendarEventId?: <span class="type">string</span>;
+  status: <span class="string">"preparing"</span> | <span class="string">"ready"</span> | <span class="string">"active"</span> | <span class="string">"ended"</span>;
+  files: {
+    prep?: <span class="type">string</span>;                       <span class="comment">// {id}_prep.md path</span>
+    live?: <span class="type">string</span>;                       <span class="comment">// {id}_live.md path</span>
+    summary?: <span class="type">string</span>;                    <span class="comment">// {id}_summary.md path</span>
+    transcript?: <span class="type">string</span>;                 <span class="comment">// {id}_transcript.md path</span>
+  };
+  createdAt: <span class="type">string</span>;
+  updatedAt: <span class="type">string</span>;
+}
+
+<span class="keyword">interface</span> SessionsIndex {
+  lastUpdated: <span class="type">string</span>;
+  sharedDir: <span class="type">string</span>;
+  sessions: MeetingSession[];            <span class="comment">// 最近 50 个</span>
+}
+
+<span class="comment">// 文件: src/modules/shared-documents.ts</span>
+<span class="comment">// 持久化: ~/.callingclaw/shared/sessions.json</span></pre>
+  </div>
+
+  <h3>F. MeetingDelivery (会后投递)</h3>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> MeetingDelivery {
+  filepath: <span class="type">string</span>;                     <span class="comment">// Markdown notes path</span>
+  summary: {
+    title: <span class="type">string</span>;
+    duration: <span class="type">number</span>;
+    participants: <span class="type">string</span>[];
+    keyPoints: <span class="type">string</span>[];
+    actionItems: <span class="type">string</span>[];
+    decisions: <span class="type">string</span>[];
+  };
+  tasks: Task[];                         <span class="comment">// 从 action items 生成</span>
+  pendingConfirmation: <span class="type">boolean</span>;
+  generatedAt: <span class="type">number</span>;
+}
+
+<span class="comment">// 文件: src/modules/post-meeting-delivery.ts</span>
+<span class="comment">// 投递: Telegram buttons + Calendar patch</span></pre>
+  </div>
+
+  <h3>G. Webhook Registration</h3>
+  <div class="schema-block">
+<pre><span class="keyword">interface</span> WebhookRegistration {
+  id: <span class="type">string</span>;
+  url: <span class="type">string</span>;
+  events: <span class="type">string</span>[];                     <span class="comment">// Glob patterns: ["meeting.*", "task.*"]</span>
+  secret?: <span class="type">string</span>;                      <span class="comment">// HMAC signing key</span>
+  createdAt: <span class="type">number</span>;
+}
+
+<span class="comment">// Webhook delivery headers:</span>
+<span class="comment">// X-CallingClaw-Event: {type}</span>
+<span class="comment">// X-CallingClaw-Webhook-Id: {id}</span>
+<span class="comment">// X-CallingClaw-Signature: sha256={hmac}</span></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 7: File Conventions -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="files">
+  <h2>文件约定 — 目录结构与命名 <span class="badge badge-detail">FILES</span></h2>
+
+  <h3>运行时目录结构</h3>
+  <div class="schema-block">
+<pre><span class="comment">~/.callingclaw/</span>
+  shared/
+    sessions.json                        <span class="comment"># 会议索引 (最近 50 个)</span>
+    cc_1710123456_ab12_prep.md           <span class="comment"># 会前 brief (OpenClaw 写)</span>
+    cc_1710123456_ab12_live.md           <span class="comment"># 会中实时日志 (追加)</span>
+    cc_1710123456_ab12_summary.md        <span class="comment"># 会后摘要</span>
+    cc_1710123456_ab12_transcript.md     <span class="comment"># 完整 transcript</span>
+  google-credentials.json               <span class="comment"># Google OAuth (fallback path)</span>
+
+<span class="comment">~/.openclaw/workspace/</span>
+  MEMORY.md                              <span class="comment"># OpenClaw 持久记忆</span>
+  google-credentials.json                <span class="comment"># Google OAuth (primary path)</span>
+  google-token.json                      <span class="comment"># OAuth refresh token</span>
+
+<span class="comment">~/.claude/commands/</span>
+  callingclaw.md                         <span class="comment"># Skill 定义 (Desktop 安装)</span></pre>
+  </div>
+
+  <h3>源码目录 — 按职责分层</h3>
+  <div class="schema-block">
+<pre><span class="comment">callingclaw/src/</span>
+  callingclaw.ts                         <span class="comment"># 入口: 模块编排 + 事件接线</span>
+  config.ts                              <span class="comment"># 配置: 模型、端口、API Keys</span>
+  config_server.ts                       <span class="comment"># Bun.serve() REST + WebSocket</span>
+  voice-persona.ts                       <span class="comment"># Voice AI persona + pushContextUpdate</span>
+  bridge.ts                              <span class="comment"># Python Sidecar WebSocket bridge</span>
+  openclaw_bridge.ts                     <span class="comment"># OpenClaw Gateway WebSocket</span>
+  openclaw-protocol.ts                   <span class="comment"># OC-001/002 prompt protocols</span>
+
+  modules/
+    voice.ts                             <span class="comment"># OpenAI Realtime session management</span>
+    transcript-auditor.ts                <span class="comment"># Haiku-based intent classification</span>
+    context-retriever.ts                 <span class="comment"># Two-layer gap detection (914 lines)</span>
+    context-sync.ts                      <span class="comment"># OpenClaw MEMORY bridge + pins</span>
+    shared-context.ts                    <span class="comment"># Central in-memory state</span>
+    shared-documents.ts                  <span class="comment"># File-based meeting artifacts</span>
+    event-bus.ts                         <span class="comment"># Pub/sub + WS + webhooks</span>
+    task-store.ts                        <span class="comment"># Task persistence + events</span>
+    vision.ts                            <span class="comment"># Screenshot → Gemini analysis</span>
+    meeting.ts                           <span class="comment"># Recording + action item extraction</span>
+    computer-use.ts                      <span class="comment"># Anthropic Computer Use wrapper</span>
+    post-meeting-delivery.ts             <span class="comment"># Summary → Telegram + Calendar</span>
+
+  mcp_client/
+    playwright-cli.ts                    <span class="comment"># Layer 2: browser automation</span>
+    google_cal.ts                        <span class="comment"># Google Calendar REST API</span>
+    peekaboo.ts                          <span class="comment"># Layer 3: macOS native automation</span>
+
+  ai_gateway/
+    claude_agent.ts                      <span class="comment"># Computer Use beta protocol</span>
+
+  skills/
+    meeting-prep.ts                      <span class="comment"># MeetingPrepBrief generation</span>
+
+  tool-definitions/
+    index.ts                             <span class="comment"># Voice AI tool schemas</span>
+    ai-tools.ts                          <span class="comment"># recall_context 3-path routing</span>
+
+  routes/
+    index.ts                             <span class="comment"># Route composition</span>
+    context-routes.ts                    <span class="comment"># /api/context/*</span>
+    voice-routes.ts, meeting-routes.ts, ...
+
+<span class="comment">callingclaw/data/</span>
+  tasks.json                             <span class="comment"># Task database (62 tasks)</span>
+
+<span class="comment">callingclaw/python_sidecar/</span>
+  main.py                                <span class="comment"># WebSocket client + audio/input</span>
+  requirements.txt                       <span class="comment"># websockets, pyautogui, pyaudio, etc.</span></pre>
+  </div>
+
+  <h3>ID 生成规则</h3>
+  <table class="comp-table">
+    <tr><th>ID 类型</th><th>格式</th><th>示例</th><th>生成位置</th></tr>
+    <tr><td>Meeting ID</td><td><code>cc_{timestamp}_{random}</code></td><td><code>cc_1710123456_ab12</code></td><td>shared-documents.ts</td></tr>
+    <tr><td>Task ID</td><td><code>task_{ts_base36}_{random}</code></td><td><code>task_mmx1v31a_j788</code></td><td>task-store.ts</td></tr>
+    <tr><td>Correlation ID</td><td><code>{prefix}_{timestamp_hex}_{random}</code></td><td><code>mtg_1234567890ab_xyz</code></td><td>event-bus.ts</td></tr>
+    <tr><td>Webhook ID</td><td><code>whk_{random}</code></td><td><code>whk_a1b2c3d4</code></td><td>event-bus.ts</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 8: End-to-End Data Flow -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="dataflow">
+  <h2>端到端数据流 — 三阶段完整链路 <span class="badge badge-proposed">E2E</span></h2>
+
+  <div class="mermaid-wrap">
+    <div class="title">End-to-End Context Flow: Pre → During → Post Meeting</div>
+    <div class="mermaid">
+flowchart TB
+  subgraph Pre["=== PRE-MEETING ==="]
+    direction TB
+    P1["Calendar Event<br/>detected by Scheduler"]
+    P2["OpenClaw OC-001<br/>reads MEMORY.md + files"]
+    P3["MeetingPrepBrief<br/>generated (5-30s)"]
+    P4["{id}_prep.md<br/>saved to SharedDocs"]
+    P1 --> P2 --> P3 --> P4
+  end
+
+  subgraph During["=== MEETING ACTIVE ==="]
+    direction TB
+
+    D1["User Speech<br/>→ Voice AI → Transcript"]
+    D2["Screen Capture<br/>→ Vision → Description"]
+    D3["TranscriptAuditor<br/>command classification"]
+    D4["ContextRetriever<br/>gap detection + search"]
+    D5["AutomationRouter<br/>4-layer tool execution"]
+    D6["{id}_live.md<br/>real-time append"]
+
+    D1 --> D3
+    D1 --> D4
+    D2 --> D4
+    D3 -->|"conf >= 0.85"| D5
+    D3 -->|"liveNote"| D6
+    D4 -->|"session.update"| D1
+    D5 -->|"[DONE]"| D6
+  end
+
+  subgraph Post["=== POST-MEETING ==="]
+    direction TB
+    E1["MeetingModule<br/>generateSummary()"]
+    E2["{id}_summary.md"]
+    E3["TaskStore<br/>create from action items"]
+    E4["Telegram<br/>delivery + buttons"]
+    E5["Calendar Patch<br/>add notes link"]
+    E1 --> E2
+    E1 --> E3
+    E1 --> E4
+    E1 --> E5
+  end
+
+  Pre --> During --> Post
+
+  classDef pre fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+  classDef during fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef post fill:#3d2b10,stroke:#f59e0b,color:#e2e8f0
+
+  class P1,P2,P3,P4 pre
+  class D1,D2,D3,D4,D5,D6 during
+  class E1,E2,E3,E4,E5 post
+    </div>
+  </div>
+
+  <h3>recall_context 三路知识访问</h3>
+  <p>Voice AI 的 <code>recall_context</code> tool 通过三条路径查找信息，从快到慢逐级升级:</p>
+
+  <div class="mermaid-wrap">
+    <div class="title">recall_context: 3-Path Knowledge Access</div>
+    <div class="mermaid">
+flowchart LR
+  Q["recall_context<br/>query"] --> P0{"Path 0<br/>ContextRetriever Cache"}
+  P0 -->|"hit (<1ms)"| R0["instant result"]
+  P0 -->|"miss"| PA{"Path A<br/>MEMORY.md Search"}
+  PA -->|"found (<100ms)"| RA["keyword result"]
+  PA -->|"miss"| PB["Path B<br/>OpenClaw OC-002<br/>(2-15s deep search)"]
+  PB --> RB["thorough result"]
+
+  classDef fast fill:#1a3324,stroke:#34d399,color:#e2e8f0
+  classDef med fill:#1a2744,stroke:#4f8cff,color:#e2e8f0
+  classDef slow fill:#2d1f4e,stroke:#a78bfa,color:#e2e8f0
+
+  class P0,R0 fast
+  class PA,RA med
+  class PB,RB slow
+    </div>
+  </div>
+
+  <h3>Model 路由总览</h3>
+  <table class="comp-table">
+    <tr><th>场景</th><th>Model</th><th>Gateway</th><th>延迟</th><th>成本</th></tr>
+    <tr>
+      <td>实时语音对话</td>
+      <td>GPT-4o Realtime</td>
+      <td>OpenAI Direct</td>
+      <td>&lt;300ms</td>
+      <td>~$0.30/min</td>
+    </tr>
+    <tr>
+      <td>实时语音对话 (低成本)</td>
+      <td>Grok Realtime</td>
+      <td>xAI Direct</td>
+      <td>&lt;300ms</td>
+      <td>~$0.05/min (6x cheaper)</td>
+    </tr>
+    <tr>
+      <td>指令分类 / Gap 检测</td>
+      <td>Claude Haiku 4.5</td>
+      <td>OpenRouter</td>
+      <td>~1-2s</td>
+      <td>$0.001/1K tokens</td>
+    </tr>
+    <tr>
+      <td>屏幕视觉分析</td>
+      <td>Gemini 3 Flash Preview</td>
+      <td>OpenRouter</td>
+      <td>~2s</td>
+      <td>Very low</td>
+    </tr>
+    <tr>
+      <td>Computer Use / Automation</td>
+      <td>Claude Sonnet 4.6</td>
+      <td>OpenRouter / Anthropic</td>
+      <td>~3-5s/step</td>
+      <td>$0.003/1K tokens</td>
+    </tr>
+    <tr>
+      <td>会前准备 / 深度推理</td>
+      <td>Claude Opus (via OpenClaw)</td>
+      <td>OpenClaw Gateway</td>
+      <td>5-30s</td>
+      <td>$0.015/1K tokens</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 9: Context API -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="api">
+  <h2>Context REST API <span class="badge badge-current">API</span></h2>
+
+  <p>所有 context 相关的 REST 端点，供 Desktop UI 和外部集成使用。</p>
+
+  <table class="comp-table">
+    <tr><th>Endpoint</th><th>Method</th><th>描述</th><th>Response 概要</th></tr>
+    <tr>
+      <td><code>/api/context</code></td>
+      <td>GET</td>
+      <td>SharedContext 摘要</td>
+      <td>transcriptLength, screenCapturedAt, meetingNotes, todos, workspace, browserContext</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/workspace</code></td>
+      <td>POST</td>
+      <td>注入 workspace context</td>
+      <td>{ok, workspace}</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/workspace</code></td>
+      <td>DELETE</td>
+      <td>清除 workspace</td>
+      <td>{ok}</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/sync</code></td>
+      <td>GET</td>
+      <td>ContextSync 状态</td>
+      <td>openclawMemory, pinnedFiles, customNotes, briefLengths</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/brief</code></td>
+      <td>GET</td>
+      <td>生成的 tiered briefs</td>
+      <td>{voice, computer, voiceChars, computerChars}</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/pin</code></td>
+      <td>POST</td>
+      <td>Pin file 到 context</td>
+      <td>{ok, pinned: {path, summary, contentLength}}</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/pin</code></td>
+      <td>DELETE</td>
+      <td>Unpin file</td>
+      <td>{ok}</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/note</code></td>
+      <td>POST</td>
+      <td>添加 session note</td>
+      <td>{ok}</td>
+    </tr>
+    <tr>
+      <td><code>/api/context/reload</code></td>
+      <td>GET</td>
+      <td>重新加载 MEMORY.md</td>
+      <td>{ok, loaded}</td>
+    </tr>
+  </table>
+
+  <h3>EventBus WebSocket</h3>
+  <div class="card">
+    <div class="card-header"><span class="dot dot-blue"></span>ws://localhost:4000/ws/events</div>
+    <p>连接后自动接收所有 EventBus 事件 (JSON 格式)。Desktop UI 通过此通道获取实时状态更新。</p>
+    <div class="schema-block">
+<pre><span class="comment">// 客户端收到的每条消息:</span>
+{
+  <span class="string">"type"</span>: <span class="string">"retriever.topic"</span>,
+  <span class="string">"timestamp"</span>: 1710123456789,
+  <span class="string">"correlationId"</span>: <span class="string">"mtg_1234567890ab_xyz"</span>,
+  <span class="string">"data"</span>: {
+    <span class="string">"topic"</span>: <span class="string">"SSO 认证架构"</span>,
+    <span class="string">"direction"</span>: <span class="string">"decide"</span>
+  }
+}</pre>
+    </div>
+  </div>
+
+  <h3>Webhook 注册</h3>
+  <div class="card">
+    <div class="card-header"><span class="dot dot-yellow"></span>POST /api/events/webhooks</div>
+    <div class="schema-block">
+<pre><span class="comment">// 注册:</span>
+POST /api/events/webhooks
+{
+  <span class="string">"url"</span>: <span class="string">"https://example.com/hook"</span>,
+  <span class="string">"events"</span>: [<span class="string">"meeting.*"</span>, <span class="string">"task.created"</span>],
+  <span class="string">"secret"</span>: <span class="string">"my-hmac-secret"</span>
+}
+
+<span class="comment">// 投递 (fire-and-forget):</span>
+POST https://example.com/hook
+Headers:
+  X-CallingClaw-Event: meeting.started
+  X-CallingClaw-Webhook-Id: whk_a1b2c3d4
+  X-CallingClaw-Signature: sha256={hmac_hex}
+Body: CallingClawEvent JSON</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 10: Known Gaps -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="gaps">
+  <h2>已知 Gap 与优化方向 <span class="badge badge-problem">GAPS</span></h2>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><span class="dot dot-red"></span>Gap 1: session.update 全量替换</div>
+      <p>OpenAI Realtime 的 <code>session.update</code> 是全量替换 instructions, 不支持增量 patch。</p>
+      <ul>
+        <li>liveNotes 累积导致每次 push token 线性增长</li>
+        <li>30 分钟会议后 system prompt 可达 ~9.5K chars</li>
+      </ul>
+      <p><strong>方向</strong>: liveNotes 分层 (pinned + recent + archived) + 周期压缩</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-red"></span>Gap 2: Auditor 单一 Chunk 策略</div>
+      <p>TranscriptAuditor 给 Haiku 发送 15 条 unclassified entries, 包含大量噪声。</p>
+      <ul>
+        <li>不区分 command / requirement / decision / chat</li>
+        <li>浪费 tokens 且降低准确率</li>
+      </ul>
+      <p><strong>方向</strong>: EntryClassifier (零成本规则引擎) 前置分类 → micro-task 拆分</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>Gap 3: System 2 会中被动</div>
+      <p>OpenClaw 在会议中只接收 batch push, 缺少周期性主动参与。</p>
+      <ul>
+        <li>无 "每 60s" 的 checkpoint 评估</li>
+        <li>无法及时检测 topic 转换或需求变化</li>
+      </ul>
+      <p><strong>方向</strong>: PeriodicCheckpoint (60s / 20 entries) 状态评估 + 压缩</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>Gap 4: 后台任务单线程</div>
+      <p>TranscriptAuditor 有 single processing lock + 5s cooldown, 无法并行处理。</p>
+      <ul>
+        <li>不同类型任务共享同一个执行通道</li>
+        <li>"打开文件" 和 "记录需求" 无法同时进行</li>
+      </ul>
+      <p><strong>方向</strong>: MicroTaskScheduler — 4 个独立队列, 各自 debounce/cooldown</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-yellow"></span>Gap 5: Context Retriever 与 Auditor 解耦</div>
+      <p>ContextRetriever 和 TranscriptAuditor 独立运行, 但共享 transcript 输入, 缺少协同。</p>
+      <ul>
+        <li>Retriever 的 topic 信息未被 Auditor 利用</li>
+        <li>可能重复分析相同内容</li>
+      </ul>
+      <p><strong>方向</strong>: 共享 topic state, Retriever 为 Auditor 提供 context enrichment</p>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="dot dot-green"></span>Strength: Topic Cache 316x 加速</div>
+      <p>ContextRetriever 的 topic-based cache 已经实现显著优化。</p>
+      <ul>
+        <li>86% cache hit rate (conversation turns 5-9)</li>
+        <li>110ms → 0.35ms per lookup</li>
+        <li>Last 5 topics retained (LRU)</li>
+      </ul>
+      <p><strong>方向</strong>: 可扩展到 Auditor 使用相同 cache, 进一步减少 Haiku 调用</p>
+    </div>
+  </div>
+
+  <h3>优化路线图</h3>
+  <div class="timeline">
+    <div class="timeline-item active">
+      <div class="time">Phase 0 (已完成)</div>
+      <div class="desc"><strong>事件驱动 ContextRetriever</strong> — 替换固定间隔, Topic Cache 316x 加速</div>
+    </div>
+    <div class="timeline-item">
+      <div class="time">Phase 1 (基础设施)</div>
+      <div class="desc"><strong>EntryClassifier + MicroTaskScheduler</strong> — 零成本分类 + 独立队列</div>
+    </div>
+    <div class="timeline-item">
+      <div class="time">Phase 2 (Micro-Tasks)</div>
+      <div class="desc"><strong>CommandAudit / RequirementExtract / DecisionCapture / TopicTracker</strong> — 拆分 Auditor</div>
+    </div>
+    <div class="timeline-item">
+      <div class="time">Phase 3 (Checkpoint + Delta Push)</div>
+      <div class="desc"><strong>StateCheckpoint</strong> (60s/20 entries) + <strong>分层 liveNotes</strong> (pinned + recent + archived)</div>
+    </div>
+    <div class="timeline-item">
+      <div class="time">Phase 4 (验证)</div>
+      <div class="desc"><strong>Token 统计 + 阈值调优 + 实际会议验证</strong></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SECTION 11: Review Decisions -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<section id="decisions">
+  <h2>Eng Review 决策记录 <span class="badge badge-proposed">2026-03-19</span></h2>
+
+  <p>以下决策在 <code>/plan-eng-review</code> 中确认，作为优化路线图的实施约束。</p>
+
+  <table class="comp-table">
+    <tr>
+      <th>#</th>
+      <th>决策</th>
+      <th>选项</th>
+      <th>Rationale</th>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td><strong>Topic 检测: 单一权威</strong></td>
+      <td>ContextRetriever 是唯一 topic 源, 移除 TopicTracker micro-task</td>
+      <td>DRY — 避免 3 个系统独立检测同一件事。Retriever 已有 topic cache (316x)。</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><strong>EntryClassifier: Gemini Flash nano-classifier</strong></td>
+      <td>用 Gemini 3 Flash (~30 tok/entry) 替代 regex 规则引擎</td>
+      <td>Regex 无法处理中英混合 (code-switching)。Gemini Flash 比 Haiku 便宜 15x、快 200ms。</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><strong>liveNotes 压缩: 双层安全网</strong></td>
+      <td>压缩推给 Voice, 但完整原文保留在 live.md + SharedContext</td>
+      <td>recall_context 可从完整记录回查, 零信息丢失。压缩只影响 Voice system prompt token。</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><strong>Dead config: 修复并引用</strong></td>
+      <td>Vision 改用 CONFIG.screen.ssimThreshold, 值改为实际的 0.7</td>
+      <td>Config 声明 0.95 但代码用 0.7 — 消除误导, 让 threshold 可配置。</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><strong>Topic state 共享</strong></td>
+      <td>Retriever 暴露 getCurrentTopic(), micro-tasks 附带 topic context</td>
+      <td>Auditor 知道 topic 后分类更准确 — "帮我打开那个" + topic="SSO" → 推断 SSO PRD。</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><strong>测试策略: Full eval suite</strong></td>
+      <td>50+ 双语 entries 做 eval dataset, 每个 micro-task >85% accuracy baseline</td>
+      <td>LLM 集成不能 mock — 需要真实双语 transcript 验证分类准确率。</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><strong>API 调用量: 微批量</strong></td>
+      <td>累积 3-5 entries 后一次性分类, 调用量与当前持平 (~15 次/会议)</td>
+      <td>避免 OpenRouter rate limit, 延迟增加 ~3-5s 可接受。</td>
+    </tr>
+  </table>
 </section>
 
 </div>

@@ -3,6 +3,21 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.10] - 2026-03-19
+
+### Fixed
+- **Desktop: external daemon detection** — DaemonSupervisor now detects externally-started daemons (e.g. manual `bun run start`) via health check, renderer correctly shows "Engine Running" status
+- **Playwright: Meet mic/camera auto-allow** — Chrome preferences set `media_stream_mic=allow`, `media_stream_camera=allow` + site-specific permission for `meet.google.com`, eliminating permission dialog on every join
+
+### Added
+- **AI Context Engineering survey** — comprehensive architecture doc (`context-sync-architecture.html`) mapping all 5 AI roles, 10 context nodes, 5 sync mechanisms, timing, schemas, and optimization roadmap with eng review decisions
+- **AutomationRouter fallback chain** documented in architecture survey (Shortcuts → Playwright → Peekaboo → Computer Use)
+
+### Changed
+- `.gitignore`: added `.collaborator` directory
+- `ARCHITECTURE-DECISIONS.md`: YAML front-matter + format normalization
+- `.claude/`: added project config, hooks, and settings for Claude Code tooling
+
 ## [2.4.9] - 2026-03-19
 
 ### Fixed

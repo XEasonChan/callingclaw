@@ -301,11 +301,10 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           const corrId = eventBus.startCorrelation("mtg");
           eventBus.emit("meeting.creating", { summary: args.summary });
 
-          // Auto-add user email as attendee if configured
+          // Do NOT add CONFIG.userEmail — the organizer already has the event.
+          // Adding your own email as an attendee causes Google Calendar to send
+          // a self-invitation, creating a duplicate "no response" event.
           const meetingAttendees = [...(args.attendees || [])];
-          if (CONFIG.userEmail && !meetingAttendees.includes(CONFIG.userEmail)) {
-            meetingAttendees.push(CONFIG.userEmail);
-          }
 
           const session = await meetJoiner.createAndJoinMeeting(
             calendar,

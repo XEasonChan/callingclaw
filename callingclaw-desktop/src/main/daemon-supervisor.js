@@ -18,6 +18,7 @@ class DaemonSupervisor extends EventEmitter {
     this._daemonDir = daemonDir;
     this._isDev = isDev;
     this._process = null;
+    this._externalDaemonAlive = false;
     this._healthTimer = null;
     this._restarting = false;
   }
@@ -46,7 +47,10 @@ class DaemonSupervisor extends EventEmitter {
   }
 
   isRunning() {
-    return this._process !== null && !this._process.killed;
+    // Check our own spawned process first
+    if (this._process !== null && !this._process.killed) return true;
+    // Also detect externally-started daemon (e.g. manual `bun run start`)
+    return this._externalDaemonAlive === true;
   }
 
   async start() {
@@ -160,17 +164,28 @@ class DaemonSupervisor extends EventEmitter {
   // ── Health Check ─────────────────────────────────────────────
 
   _startHealthCheck() {
-    this._healthTimer = setInterval(async () => {
-      try {
-        const status = await this._httpGet(HEALTH_CHECK_URL, 3000);
-        const data = JSON.parse(status);
-        this.emit('health', data);
-      } catch {
-        if (this.isRunning()) {
-          this.emit('log', '[Supervisor] Health check failed, daemon unresponsive');
-        }
+    // Run once immediately to detect externally-started daemon
+    this._doHealthCheck();
+    this._healthTimer = setInterval(() => this._doHealthCheck(), HEALTH_CHECK_INTERVAL);
+  }
+
+  async _doHealthCheck() {
+    try {
+      const status = await this._httpGet(HEALTH_CHECK_URL, 3000);
+      const data = JSON.parse(status);
+      // Detect externally-started daemon (not spawned by us)
+      if (!this._process && !this._externalDaemonAlive) {
+        this._externalDaemonAlive = true;
+        this.emit('log', '[Supervisor] Detected external daemon on :4000');
       }
-    }, HEALTH_CHECK_INTERVAL);
+      this._externalDaemonAlive = true;
+      this.emit('health', data);
+    } catch {
+      this._externalDaemonAlive = false;
+      if (this._process && !this._process.killed) {
+        this.emit('log', '[Supervisor] Health check failed, daemon unresponsive');
+      }
+    }
   }
 
   _stopHealthCheck() {
