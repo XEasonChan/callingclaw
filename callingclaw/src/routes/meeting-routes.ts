@@ -7,6 +7,7 @@
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
 import { buildVoiceInstructions, prepareMeeting } from "../voice-persona";
+import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import type { Services, RouteHandler } from "./types";
 
 export function meetingRoutes(services: Services): RouteHandler {
@@ -136,6 +137,9 @@ export function meetingRoutes(services: Services): RouteHandler {
           voiceStarted = true;
         }
 
+        // Generate stable meetingId for session tracking
+        const meetingId = generateMeetingId();
+
         // Look up calendar event to get attendees
         let meetAttendees: any[] = [];
         let calEvent: any = null;
@@ -146,12 +150,14 @@ export function meetingRoutes(services: Services): RouteHandler {
           } catch {}
         }
 
-        // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
         const meetTopic = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
+        upsertSession({ meetingId, topic: meetTopic, meetUrl: validated.url, status: "active" });
+
+        // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
         let prepBrief: any = null;
         if (services.meetingPrepSkill && services.openclawBridge?.connected) {
           try {
-            const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees);
+            const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
               services.realtime.updateInstructions(prepResult.instructions);
@@ -299,6 +305,7 @@ export function meetingRoutes(services: Services): RouteHandler {
         const attendeeNames = meetAttendees.filter((a: any) => !a.self).map((a: any) => a.displayName || a.email);
 
         return Response.json({
+          meetingId,
           status: joinState,
           success: joinSuccess,
           joinSummary,
@@ -415,12 +422,13 @@ STEP-BY-STEP FLOW:
         const workspace = services.context.workspace;
         const syncBrief = services.contextSync?.getBrief();
         const calendarEvents = await services.calendar.listUpcomingEvents(3).catch(() => []);
+        const prepMeetingId = generateMeetingId();
 
         // Generate structured meeting prep brief via OpenClaw (if available)
         let prepBriefData: any = null;
         if (services.meetingPrepSkill && services.openclawBridge?.connected) {
           try {
-            const prepResult = await prepareMeeting(services.meetingPrepSkill, body.topic, body.context);
+            const prepResult = await prepareMeeting(services.meetingPrepSkill, body.topic, body.context, undefined, prepMeetingId);
             prepBriefData = {
               topic: prepResult.brief.topic,
               goal: prepResult.brief.goal,
@@ -434,6 +442,7 @@ STEP-BY-STEP FLOW:
         }
 
         const agenda = {
+          meetingId: prepMeetingId,
           topic: body.topic,
           meetUrl: body.url || null,
           generatedAt: Date.now(),

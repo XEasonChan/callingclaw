@@ -21,6 +21,7 @@
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { CalendarAttendee } from "../mcp_client/google_cal";
 import { savePrepBrief, startLiveLog, appendToLiveLog, stopLiveLog } from "../modules/shared-documents";
+import { OC001_PROMPT, parseOC001, type OC001_Request } from "../openclaw-protocol";
 
 // ── Meeting Prep Brief Structure ──
 // This is the output that feeds into Voice AI + Computer Use
@@ -103,7 +104,7 @@ export class MeetingPrepSkill {
    * @param topic - What the meeting is about (e.g., "CallingClaw 2.0 PRD review")
    * @param userContext - Any additional instructions from the user
    */
-  async generate(topic: string, userContext?: string, attendees?: CalendarAttendee[]): Promise<MeetingPrepBrief> {
+  async generate(topic: string, userContext?: string, attendees?: CalendarAttendee[], meetingId?: string): Promise<MeetingPrepBrief> {
     // Build typed request (OC-001)
     const req: OC001_Request = {
       id: "OC-001",
@@ -118,7 +119,7 @@ export class MeetingPrepSkill {
         })),
     };
 
-    console.log(`[MeetingPrep] Generating brief for: "${topic}" (${attendees?.length || 0} attendees)`);
+    console.log(`[MeetingPrep] Generating brief for: "${topic}" (${attendees?.length || 0} attendees, meetingId=${meetingId || "auto"})`);
     const startTime = Date.now();
 
     // Delegate to OpenClaw via OC-001 protocol
@@ -136,12 +137,13 @@ export class MeetingPrepSkill {
     console.log(`[MeetingPrep] Brief ready: ${brief.keyPoints.length} key points, ${brief.filePaths.length} files, ${brief.browserUrls.length} URLs`);
 
     // Persist prep brief to shared directory (non-blocking)
-    savePrepBrief(brief).catch((e: any) => {
+    // Pass meetingId so the file is saved with the same ID the frontend expects
+    savePrepBrief(brief, meetingId).catch((e: any) => {
       console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
     });
 
     // Start a live log file for this meeting
-    startLiveLog(topic).then((logPath) => {
+    startLiveLog(topic, meetingId).then((logPath) => {
       this._liveLogPath = logPath;
       console.log(`[MeetingPrep] Live log started: ${logPath}`);
     }).catch((e: any) => {

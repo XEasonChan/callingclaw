@@ -18,6 +18,7 @@ import type { SharedContext } from "../modules/shared-context";
 import type { ContextSync } from "../modules/context-sync";
 import type { PostMeetingDelivery } from "../modules/post-meeting-delivery";
 import { buildVoiceInstructions, prepareMeeting, getPostMeetingSummary } from "../voice-persona";
+import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import { OC009_PROMPT, type OC009_Request } from "../openclaw-protocol";
 
 export interface MeetingToolDeps {
@@ -167,10 +168,12 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           // ── Step 2: Generate meeting prep brief with attendee context ──
           const meetTopic = calEvent?.summary || context.workspace?.topic || `Meeting at ${args.meet_url}`;
+          const toolMeetingId = generateMeetingId();
+          upsertSession({ meetingId: toolMeetingId, topic: meetTopic, meetUrl: args.meet_url, status: "active" });
           let prepResult: { brief: any; instructions: string } | null = null;
           if (openclawBridge.connected) {
             try {
-              prepResult = await prepareMeeting(meetingPrepSkill, meetTopic, undefined, meetAttendees);
+              prepResult = await prepareMeeting(meetingPrepSkill, meetTopic, undefined, meetAttendees, toolMeetingId);
               if (deps.voice.connected) {
                 deps.voice.updateInstructions(prepResult.instructions);
                 console.log("[Meeting] Voice switched to MEETING_PERSONA with prep brief");
