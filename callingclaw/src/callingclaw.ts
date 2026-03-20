@@ -293,7 +293,13 @@ function stopMeetingVisionAndFlush(reason: string) {
 // ── Screen capture lifecycle: start on voice.started, stop on voice.stopped ──
 // Talk Locally: voice.started → screen capture in "talk_locally" mode
 // Meeting: meeting.started → screen capture in "meeting" mode (overrides TL)
-eventBus.on("voice.started", async () => {
+eventBus.on("voice.started", async (data) => {
+  // Skip Chrome/Playwright for local conversations — Talk Locally uses Electron audio only
+  const mode = (data as any)?.mode || (data as any)?.audio_mode;
+  if (mode === "local" || mode === "browser") {
+    console.log("[Init] Voice started in local/browser mode — skipping Chrome CDP");
+    return;
+  }
   // Connect CDP for browser screenshots (discovers Chrome's debug port)
   if (!await browserCapture.isAvailable()) {
     await browserCapture.connect();

@@ -1110,6 +1110,39 @@ function handleMeetingEvent(event) {
     case 'meeting.vision':
       addMpActivity('delta', '[视觉] ' + (data.description || '').slice(0, 60));
       break;
+    case 'voice.started':
+      addMpActivity('done', '语音已连接 (' + (data.provider || 'openai') + ')');
+      break;
+    case 'voice.stopped':
+      addMpActivity('done', '语音已断开');
+      break;
+    case 'voice.reconnect_failed':
+      addMpActivity('error', '语音重连失败');
+      break;
+    case 'auditor.activated':
+      addMpActivity('done', '会议审计器已启动');
+      break;
+    case 'auditor.deactivated':
+      addMpActivity('done', '会议审计器已停止');
+      break;
+    case 'retriever.activated':
+      addMpActivity('done', '上下文检索器已启动');
+      break;
+    case 'retriever.deactivated':
+      addMpActivity('done', '上下文检索器已停止');
+      break;
+    case 'retriever.searching':
+      addMpActivity('delta', '检索: ' + ((data.topic || '').slice(0, 40)));
+      break;
+    case 'retriever.found':
+      addMpActivity('done', '找到相关上下文');
+      break;
+    case 'screen.updated':
+      addMpActivity('delta', '[屏幕] ' + ((data.title || data.description || '').slice(0, 50)));
+      break;
+    case 'postmeeting.delivered':
+      addMpActivity('done', '会后总结已发送');
+      break;
   }
 }
 
