@@ -485,6 +485,16 @@
           if (!audioCtx || audioCtx.state === 'closed') return;
           if (audioCtx.state === 'suspended') audioCtx.resume();
 
+          // Micro fade-in/out (24 samples = 1ms) prevents DC offset clicks
+          const FADE = 24;
+          if (float32.length > FADE * 2) {
+            for (let f = 0; f < FADE; f++) {
+              const gain = f / FADE;
+              float32[f] *= gain;
+              float32[float32.length - 1 - f] *= gain;
+            }
+          }
+
           const buffer = audioCtx.createBuffer(1, float32.length, 24000);
           buffer.copyToChannel(float32, 0);
 
@@ -493,8 +503,13 @@
           source.connect(audioCtx.destination);
 
           const now = audioCtx.currentTime;
-          // 150ms initial buffer absorbs the burst of chunks at response start
-          if (_nextPlayTime < now) _nextPlayTime = now + 0.15;
+          // Only reset on new response (>2s behind). Small inter-sentence gaps
+          // (200-500ms) schedule naturally to avoid "pushing" artifacts.
+          if (_nextPlayTime < now - 2.0) {
+            _nextPlayTime = now + 0.15; // new response
+          } else if (_nextPlayTime < now) {
+            _nextPlayTime = now + 0.02; // small underrun
+          }
 
           source.start(_nextPlayTime);
           _nextPlayTime += float32.length / 24000;

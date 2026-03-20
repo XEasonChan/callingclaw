@@ -248,6 +248,16 @@ var ElectronAudioBridge = (function() {
         float32[j] = pcm16[j] / 32768;
       }
 
+      // Apply micro fade-in/out (24 samples = 1ms) to prevent DC offset clicks
+      var FADE = 24;
+      if (float32.length > FADE * 2) {
+        for (var f = 0; f < FADE; f++) {
+          var gain = f / FADE;
+          float32[f] *= gain;
+          float32[float32.length - 1 - f] *= gain;
+        }
+      }
+
       // Schedule on AudioContext timeline for gapless playback
       var buffer = _audioCtx.createBuffer(1, float32.length, SAMPLE_RATE);
       buffer.copyToChannel(float32, 0);
@@ -257,7 +267,14 @@ var ElectronAudioBridge = (function() {
       source.connect(_audioCtx.destination);
 
       var now = _audioCtx.currentTime;
-      if (_nextPlayTime < now) _nextPlayTime = now + 0.15; // 150ms initial buffer
+      // Only reset if severely behind (>2s = new response). Small gaps between
+      // sentences (200-500ms) should NOT reset — let audio schedule naturally
+      // to avoid the "next sentence pushes previous" artifact.
+      if (_nextPlayTime < now - 2.0) {
+        _nextPlayTime = now + 0.15; // new response: 150ms initial buffer
+      } else if (_nextPlayTime < now) {
+        _nextPlayTime = now + 0.02; // small underrun: tiny gap, no overlap
+      }
 
       source.start(_nextPlayTime);
       _nextPlayTime += float32.length / SAMPLE_RATE;
