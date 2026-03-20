@@ -1,23 +1,21 @@
 // ═══════════════════════════════════════════════════════════════
-// AudioBridge v2 — Electron audio capture/playback via Web Audio API
+// AudioBridge v3 — Electron audio capture/playback via Web Audio API
 // ═══════════════════════════════════════════════════════════════
 //
 // Architecture (both modes share the same code):
 //
 //   Talk Locally (direct):
 //     Real mic → AudioWorklet → PCM16 24kHz → base64 → WS → Grok/OpenAI
-//     AI audio → base64 → PCM16 → BufferSource(scheduled) → Speaker
+//     AI audio → base64 → PCM16 → PlaybackWorklet(ring buffer) → Speaker
 //
 //   Meet Bridge:
 //     BlackHole 2ch → AudioWorklet → PCM16 24kHz → base64 → WS → Grok/OpenAI
-//     AI audio → base64 → PCM16 → BufferSource(scheduled) → BlackHole 16ch → Meet mic
+//     AI audio → base64 → PCM16 → PlaybackWorklet(ring buffer) → BlackHole 16ch → Meet mic
 //
-// Key improvements over v1:
-//   - AudioWorklet (audio thread) replaces ScriptProcessor (main thread, deprecated)
-//   - Scheduled BufferSource playback eliminates chunk-boundary pops/clicks
-//   - Interruption support: interruptPlayback() stops all queued sources
-//   - Chunked base64 encoding avoids stack overflow on large buffers
-//   - Capture failure doesn't kill playback
+// Key improvements over v2:
+//   - AudioWorklet ring buffer for playback (gapless, no scheduling, no pops)
+//   - AnalyserNode on capture for real-time mic level visualization
+//   - Capture AudioWorklet + playback AudioWorklet (both via Blob URL)
 //
 // ⚠️  CRITICAL: setSinkId() MUST be called BEFORE getUserMedia()
 //     to avoid Electron bug #40704 (silent output failure)
@@ -33,18 +31,16 @@ var ElectronAudioBridge = (function() {
   var _captureStream = null;
   var _captureSource = null;
   var _workletNode = null;
+  var _analyserNode = null;   // AnalyserNode for mic level visualization
+  var _playbackWorklet = null; // AudioWorkletNode for ring buffer playback
   var _running = false;
   var _starting = false;
   var _mode = null;            // 'direct' | 'meet_bridge'
   var _onAudioChunk = null;    // callback(base64Pcm)
   var _devices = { input: null, output: null };
 
-  // Scheduled playback state
-  var _nextPlayTime = 0;
-  var _queuedSources = [];
-
-  // ── AudioWorklet code (inlined as Blob URL to avoid file:// issues in Electron) ──
-  var WORKLET_CODE = [
+  // ── Capture AudioWorklet code (inlined as Blob URL to avoid file:// issues in Electron) ──
+  var CAPTURE_WORKLET_CODE = [
     'class PCMProcessor extends AudioWorkletProcessor {',
     '  process(inputs) {',
     '    var input = inputs[0] && inputs[0][0];',
@@ -60,6 +56,44 @@ var ElectronAudioBridge = (function() {
     '  }',
     '}',
     "registerProcessor('pcm-processor', PCMProcessor);",
+  ].join('\n');
+
+  // ── Playback AudioWorklet code (ring buffer — gapless, no scheduling complexity) ──
+  var PLAYBACK_WORKLET_CODE = [
+    'class PlaybackProcessor extends AudioWorkletProcessor {',
+    '  constructor() {',
+    '    super();',
+    '    this._buffer = new Float32Array(24000 * 10);', // 10 second ring buffer
+    '    this._writePos = 0;',
+    '    this._readPos = 0;',
+    '    this.port.onmessage = (e) => {',
+    '      if (e.data === "clear") {',
+    '        this._writePos = 0;',
+    '        this._readPos = 0;',
+    '        return;',
+    '      }',
+    '      var samples = e.data;',
+    '      for (var i = 0; i < samples.length; i++) {',
+    '        this._buffer[this._writePos % this._buffer.length] = samples[i];',
+    '        this._writePos++;',
+    '      }',
+    '    };',
+    '  }',
+    '  process(inputs, outputs) {',
+    '    var output = outputs[0][0];',
+    '    if (!output) return true;',
+    '    for (var i = 0; i < output.length; i++) {',
+    '      if (this._readPos < this._writePos) {',
+    '        output[i] = this._buffer[this._readPos % this._buffer.length];',
+    '        this._readPos++;',
+    '      } else {',
+    '        output[i] = 0;',
+    '      }',
+    '    }',
+    '    return true;',
+    '  }',
+    '}',
+    "registerProcessor('playback-processor', PlaybackProcessor);",
   ].join('\n');
 
   // ── Chunked base64 encoder (avoids stack overflow on large buffers) ──
@@ -105,8 +139,6 @@ var ElectronAudioBridge = (function() {
     _starting = true;
     _mode = mode || 'direct';
     _onAudioChunk = onAudioChunk;
-    _nextPlayTime = 0;
-    _queuedSources = [];
 
     return findBlackHoleDevices().then(function(bh) {
       var inputDeviceId = null;
@@ -137,7 +169,7 @@ var ElectronAudioBridge = (function() {
       _starting = false;
       console.log('[AudioBridge] Started in ' + _mode + ' mode (capture: ' +
         (_captureCtx ? _captureCtx.sampleRate + 'Hz AudioWorklet' : 'N/A') +
-        ', playback: ' + (_audioCtx ? _audioCtx.sampleRate + 'Hz BufferSource' : 'N/A') + ')');
+        ', playback: ' + (_audioCtx ? _audioCtx.sampleRate + 'Hz WorkletRingBuffer' : 'N/A') + ')');
       return { ok: true, mode: _mode };
     }).catch(function(err) {
       _starting = false;
@@ -145,7 +177,7 @@ var ElectronAudioBridge = (function() {
     });
   }
 
-  // ── Setup Playback (BufferSource scheduled) — MUST be called first ──
+  // ── Setup Playback (AudioWorklet ring buffer) — MUST be called first ──
 
   function _setupPlayback(outputDeviceId) {
     _audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -169,8 +201,16 @@ var ElectronAudioBridge = (function() {
       sinkPromise = resumePromise;
     }
 
+    // Load playback worklet via Blob URL and create node
     return sinkPromise.then(function() {
-      console.log('[AudioBridge] Playback ready (BufferSource, ' + _audioCtx.state + ')');
+      var blob = new Blob([PLAYBACK_WORKLET_CODE], { type: 'application/javascript' });
+      var workletUrl = URL.createObjectURL(blob);
+      return _audioCtx.audioWorklet.addModule(workletUrl).then(function() {
+        URL.revokeObjectURL(workletUrl);
+        _playbackWorklet = new AudioWorkletNode(_audioCtx, 'playback-processor');
+        _playbackWorklet.connect(_audioCtx.destination);
+        console.log('[AudioBridge] Playback ready (WorkletRingBuffer, ' + _audioCtx.state + ')');
+      });
     });
   }
 
@@ -194,7 +234,7 @@ var ElectronAudioBridge = (function() {
     }
 
     // Load AudioWorklet from Blob URL (works with file:// in Electron)
-    var blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+    var blob = new Blob([CAPTURE_WORKLET_CODE], { type: 'application/javascript' });
     var workletUrl = URL.createObjectURL(blob);
 
     return _captureCtx.resume().then(function() {
@@ -205,6 +245,12 @@ var ElectronAudioBridge = (function() {
     }).then(function(stream) {
       _captureStream = stream;
       _captureSource = _captureCtx.createMediaStreamSource(stream);
+
+      // Create AnalyserNode for mic level visualization
+      _analyserNode = _captureCtx.createAnalyser();
+      _analyserNode.fftSize = 256;
+      _analyserNode.smoothingTimeConstant = 0.3;
+      _captureSource.connect(_analyserNode);
 
       _workletNode = new AudioWorkletNode(_captureCtx, 'pcm-processor');
       _captureSource.connect(_workletNode);
@@ -227,14 +273,14 @@ var ElectronAudioBridge = (function() {
         _onAudioChunk(audioToBase64(int16Data));
       };
 
-      console.log('[AudioBridge] Capture ready (AudioWorklet, ' + captureRate + 'Hz → ' + SAMPLE_RATE + 'Hz)');
+      console.log('[AudioBridge] Capture ready (AudioWorklet, ' + captureRate + 'Hz -> ' + SAMPLE_RATE + 'Hz, AnalyserNode attached)');
     });
   }
 
-  // ── Receive AI Audio (BufferSource scheduled playback — no pops/clicks) ──
+  // ── Receive AI Audio (AudioWorklet ring buffer — gapless, pop-free) ──
 
   function playAudio(base64Pcm) {
-    if (!_running || !_audioCtx) return;
+    if (!_running || !_audioCtx || !_playbackWorklet) return;
     if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(function() {});
 
     try {
@@ -258,45 +304,19 @@ var ElectronAudioBridge = (function() {
         }
       }
 
-      // Schedule on AudioContext timeline for gapless playback
-      var buffer = _audioCtx.createBuffer(1, float32.length, SAMPLE_RATE);
-      buffer.copyToChannel(float32, 0);
-
-      var source = _audioCtx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(_audioCtx.destination);
-
-      var now = _audioCtx.currentTime;
-      // Only reset if severely behind (>2s = new response). Small gaps between
-      // sentences (200-500ms) should NOT reset — let audio schedule naturally
-      // to avoid the "next sentence pushes previous" artifact.
-      if (_nextPlayTime < now - 2.0) {
-        _nextPlayTime = now + 0.15; // new response: 150ms initial buffer
-      } else if (_nextPlayTime < now) {
-        _nextPlayTime = now + 0.02; // small underrun: tiny gap, no overlap
-      }
-
-      source.start(_nextPlayTime);
-      _nextPlayTime += float32.length / SAMPLE_RATE;
-
-      _queuedSources.push(source);
-      source.onended = function() {
-        var idx = _queuedSources.indexOf(source);
-        if (idx !== -1) _queuedSources.splice(idx, 1);
-      };
+      // Post to ring buffer worklet — no scheduling needed
+      _playbackWorklet.port.postMessage(float32, [float32.buffer]);
     } catch (e) {
       console.warn('[AudioBridge] playAudio error:', e.message);
     }
   }
 
-  // ── Interrupt: stop all queued audio + reset timeline ──
+  // ── Interrupt: clear ring buffer ──
 
   function interruptPlayback() {
-    for (var i = 0; i < _queuedSources.length; i++) {
-      try { _queuedSources[i].stop(); } catch (e) {}
+    if (_playbackWorklet) {
+      _playbackWorklet.port.postMessage('clear');
     }
-    _queuedSources = [];
-    _nextPlayTime = 0;
   }
 
   // ── Stop ──
@@ -310,16 +330,24 @@ var ElectronAudioBridge = (function() {
     interruptPlayback();
 
     if (_workletNode) { _workletNode.disconnect(); _workletNode = null; }
+    if (_analyserNode) { _analyserNode.disconnect(); _analyserNode = null; }
     if (_captureSource) { _captureSource.disconnect(); _captureSource = null; }
     if (_captureStream) {
       _captureStream.getTracks().forEach(function(t) { t.stop(); });
       _captureStream = null;
     }
+    if (_playbackWorklet) { _playbackWorklet.disconnect(); _playbackWorklet = null; }
     if (_captureCtx) { _captureCtx.close().catch(function() {}); _captureCtx = null; }
     if (_audioCtx) { _audioCtx.close().catch(function() {}); _audioCtx = null; }
     _mode = null;
     _devices = { input: null, output: null };
     console.log('[AudioBridge] Stopped');
+  }
+
+  // ── AnalyserNode accessor (for mic level visualization) ──
+
+  function getAnalyserNode() {
+    return _analyserNode;
   }
 
   // ── Status ──
@@ -329,10 +357,10 @@ var ElectronAudioBridge = (function() {
       running: _running,
       mode: _mode,
       devices: _devices,
-      queuedSources: _queuedSources.length,
       sampleRate: SAMPLE_RATE,
       audioContextState: _audioCtx ? _audioCtx.state : null,
       captureContextState: _captureCtx ? _captureCtx.state : null,
+      playbackWorkletActive: !!_playbackWorklet,
     };
   }
 
@@ -343,6 +371,7 @@ var ElectronAudioBridge = (function() {
     playAudio: playAudio,
     interruptPlayback: interruptPlayback,
     getStatus: getStatus,
+    getAnalyserNode: getAnalyserNode,
     enumerateAudioDevices: enumerateAudioDevices,
     findBlackHoleDevices: findBlackHoleDevices,
   };

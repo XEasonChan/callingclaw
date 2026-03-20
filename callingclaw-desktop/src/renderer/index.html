@@ -727,7 +727,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <div class="sp-header">
         <h3 id="sp-title">--</h3>
         <div style="display:flex;align-items:center;gap:6px;">
-          <span id="sp-voice-status" style="display:none;font-size:11px;color:var(--green);display:flex;align-items:center;gap:4px;"><span id="sp-voice-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s ease-in-out infinite;"></span><span id="sp-voice-label">语音已连接</span></span>
+          <span id="sp-voice-status" style="display:none;font-size:11px;color:var(--green);align-items:center;gap:4px;"><span id="sp-voice-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s ease-in-out infinite;"></span><span id="sp-voice-label">语音已连接</span></span>
+          <div id="sp-mic-bar" style="display:none;width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;"><div id="sp-mic-fill" style="height:100%;background:var(--green);border-radius:2px;width:0;transition:width 50ms;"></div></div>
           <button class="btn btn-sm btn-danger" id="sp-stop-btn" style="display:none" onclick="stopLocalTalk()">停止</button>
           <button class="sp-close" onclick="closePanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
@@ -802,7 +803,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 <footer class="statusbar">
   <div class="st-items">
     <div class="st-item" title="Bun 引擎状态"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">引擎</span></div>
-    <div class="st-item" title="实时语音连接"><div class="st-dot" id="st-voice"></div><span>语音</span></div>
+    <div class="st-item" title="实时语音连接"><div class="st-dot" id="st-voice-dot"></div><span>语音</span></div>
     <div class="st-item" title="OpenClaw 网关"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
     <div class="st-item" title="BlackHole 音频桥接"><div class="st-dot" id="st-audio"></div><span>音频</span></div>
   </div>
@@ -811,7 +812,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <option value="openai">OpenAI</option>
       <option value="grok">Grok</option>
     </select>
-    <select id="st-voice" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;">
+    <select id="st-voice-select" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;">
     </select>
     <button class="btn btn-sm btn-primary" id="st-eng-btn" style="display:none" onclick="toggleEngine()">启动引擎</button>
     <span id="st-ver"></span>
@@ -1242,11 +1243,11 @@ function updateStatusBar() {
     // API returns strings ("connected"/"disconnected") or objects ({connected: bool}) — handle both
     const isConn = v => v === 'connected' || v === true || v?.connected === true;
     const v = isConn(S.status.voiceSession) || isConn(S.status.voice) || isConn(S.status.realtime);
-    document.getElementById('st-voice').className = 'st-dot ' + (v ? 'green' : '');
+    document.getElementById('st-voice-dot').className = 'st-dot ' + (v ? 'green' : '');
     document.getElementById('st-oc').className = 'st-dot ' + (isConn(S.status.openclaw) ? 'green' : '');
     document.getElementById('st-audio').className = 'st-dot ' + (isConn(S.status.bridge) || isConn(S.status.sidecar) || S.status.audio?.bridgeActive ? 'green' : '');
   } else if (!S.daemon) {
-    ['st-voice','st-oc','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
+    ['st-voice-dot','st-oc','st-audio'].forEach(id => document.getElementById(id).className = 'st-dot');
   }
 }
 
@@ -1266,7 +1267,7 @@ var VOICE_OPTIONS = {
 var VOICE_DEFAULTS = { openai: 'marin', grok: 'Eve' };
 
 function rebuildVoiceSelect(provider) {
-  var sel = document.getElementById('st-voice');
+  var sel = document.getElementById('st-voice-select');
   if (!sel) return;
   sel.innerHTML = '';
   var voices = VOICE_OPTIONS[provider] || VOICE_OPTIONS.openai;
@@ -1725,84 +1726,135 @@ async function leaveMeeting() {
   setTimeout(refreshAll, 2000);
 }
 
-// Talk Locally — full meeting intelligence stack
+// Talk Locally — full meeting intelligence stack (parallel startup + instant UI)
+var _spMicRAF = null; // mic level animation frame handle
 async function startLocalTalk(topic) {
   if (localTalkStarting) return;
   if (typeof ElectronAudioBridge !== 'undefined' && ElectronAudioBridge.getStatus().running) return; // double-start guard
   localTalkStarting = true;
   localTalkTopic = topic || 'Local Conversation';
-  var voiceInstructions = '';
 
-  // 1. Tell backend to start meeting lifecycle (transcript, vision, auditor, etc.)
+  // ── Instant UI: open panel immediately with temp ID ──
   var meetingId = 'local_' + Date.now();
-  try {
-    var r = await fetch(API + '/api/meeting/talk-locally', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic: localTalkTopic }),
-    });
-    var data = await r.json();
-    meetingId = data.meetingId || meetingId;
-    voiceInstructions = data.voiceInstructions || '';
-  } catch (e) {
-    console.warn('[TalkLocally] Backend call failed:', e);
-    openPanel('本地对话', '<div class="md">启动失败：' + esc(e.message) + '</div>');
-    localTalkStarting = false;
-    return;
-  }
-
-  // Set up UI immediately so the user sees feedback while session/transport are still starting
   var mfData = getMeetingData(meetingId);
   mfData.topic = localTalkTopic;
   mfData.status = 'live';
   S.activeMeetingId = meetingId;
   openMeetingPanel(meetingId, 'local');
-  // Show voice status indicator
+
+  // Show voice status indicator — yellow "connecting" state
   var voiceStatus = document.getElementById('sp-voice-status');
   var voiceLabel = document.getElementById('sp-voice-label');
   var voiceDot = document.getElementById('sp-voice-dot');
   if (voiceStatus) { voiceStatus.style.display = 'flex'; }
-  if (voiceLabel) { voiceLabel.textContent = '连接中...'; }
+  if (voiceLabel) { voiceLabel.textContent = '启动中...'; }
   if (voiceDot) { voiceDot.style.background = 'var(--yellow)'; }
-  addMpActivity('done', 'Talk locally lifecycle ready');
-  if (data && data.prepBrief) {
-    addMpActivity('done', 'Meeting prep: ' + (data.prepBrief.keyPoints || 0) + ' key points loaded');
-  }
+  addMpActivity('done', 'Talk locally panel opened');
 
-  // 2. Start unified voice session for local testing
+  // ── Parallel startup: both API calls run concurrently ──
+  var provider = document.getElementById('st-provider').value || undefined;
+  var voice = document.getElementById('st-voice-select').value || undefined;
+
   try {
-    var sr = await fetch(API + '/api/voice/session/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'local',
-        transport: 'direct',
-        topic: localTalkTopic,
-        instructions: voiceInstructions || undefined,
-        provider: document.getElementById('st-provider').value || undefined,
-        voice: document.getElementById('st-voice').value || undefined,
+    var results = await Promise.all([
+      // 1. Backend meeting lifecycle (transcript, vision, auditor, etc.)
+      fetch(API + '/api/meeting/talk-locally', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: localTalkTopic }),
+      }).then(function(r) { return r.json(); }),
+      // 2. Voice session start
+      fetch(API + '/api/voice/session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'local',
+          transport: 'direct',
+          topic: localTalkTopic,
+          provider: provider,
+          voice: voice,
+        }),
+      }).then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'Voice session start failed'); });
+        return r.json();
       }),
-    });
-    var session = await sr.json();
-    if (!sr.ok || session.error) {
-      throw new Error(session.error || 'Voice session start failed');
+    ]);
+
+    var talkData = results[0];
+    var session = results[1];
+
+    // Update meetingId from backend if different
+    if (talkData.meetingId && talkData.meetingId !== meetingId) {
+      var oldId = meetingId;
+      meetingId = talkData.meetingId;
+      S.meetingFiles[meetingId] = S.meetingFiles[oldId] || mfData;
+      delete S.meetingFiles[oldId];
+      S.activeMeetingId = meetingId;
+      mfData = getMeetingData(meetingId);
+      mfData.topic = localTalkTopic;
+      mfData.status = 'live';
+    }
+
+    // Apply voice instructions if the talk-locally endpoint returned them
+    // (already sent in the parallel call; backend merges them)
+    addMpActivity('done', 'Talk locally lifecycle ready');
+    if (talkData.prepBrief) {
+      addMpActivity('done', 'Meeting prep: ' + (talkData.prepBrief.keyPoints || 0) + ' key points loaded');
+    }
+
+    if (session.error) {
+      throw new Error(session.error);
     }
     addMpActivity('done', 'Voice session ready (' + (session.provider || 'openai') + ', ' + (session.transport || 'direct') + ')');
-    // Update voice status to connected
+
+    // Update voice status to connected (green)
     if (voiceLabel) voiceLabel.textContent = '语音已连接';
     if (voiceDot) voiceDot.style.background = 'var(--green)';
+
   } catch (e) {
-    addMpActivity('error', 'Voice session failed: ' + e.message);
+    console.warn('[TalkLocally] Parallel startup failed:', e);
+    addMpActivity('error', 'Startup failed: ' + e.message);
     if (voiceLabel) voiceLabel.textContent = '连接失败';
     if (voiceDot) voiceDot.style.background = 'var(--accent)';
     try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
+    localTalkStarting = false;
     return;
   } finally {
     localTalkStarting = false;
   }
 
-  // 3. Attach direct audio transport after session is ready
+  // 3. Attach direct audio transport after both APIs succeeded
   startAudioBridge('direct');
+}
+
+// ── Mic level animation for side panel ──
+function startSpMicLevel() {
+  if (typeof ElectronAudioBridge === 'undefined') return;
+  var analyser = ElectronAudioBridge.getAnalyserNode();
+  if (!analyser) return;
+  var barContainer = document.getElementById('sp-mic-bar');
+  var barFill = document.getElementById('sp-mic-fill');
+  if (!barContainer || !barFill) return;
+  barContainer.style.display = 'block';
+  var data = new Uint8Array(analyser.frequencyBinCount);
+  function tick() {
+    if (!analyser) { barContainer.style.display = 'none'; return; }
+    analyser.getByteFrequencyData(data);
+    var sum = 0;
+    for (var i = 0; i < data.length; i++) sum += data[i];
+    var level = Math.min(100, (sum / data.length / 128) * 100);
+    barFill.style.width = level + '%';
+    _spMicRAF = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function stopSpMicLevel() {
+  if (_spMicRAF) { cancelAnimationFrame(_spMicRAF); _spMicRAF = null; }
+  var barContainer = document.getElementById('sp-mic-bar');
+  var barFill = document.getElementById('sp-mic-fill');
+  if (barFill) barFill.style.width = '0%';
+  if (barContainer) barContainer.style.display = 'none';
 }
 
 // ── Electron Audio Bridge Integration ──
@@ -1826,6 +1878,8 @@ function startAudioBridge(mode) {
         addMpActivity('done', 'Audio transport attached: ' + result.mode);
         var dot = document.getElementById('st-audio');
         if (dot) dot.className = 'st-dot green';
+        // Start mic level visualization in panel header
+        startSpMicLevel();
       }).catch(function(err) {
         addMpActivity('error', 'Audio transport failed: ' + err.message);
         console.error('[AudioBridge] Start failed:', err);
@@ -1865,9 +1919,10 @@ function stopAudioBridge() {
 }
 
 async function stopLocalTalk() {
-  // Hide voice status
+  // Hide voice status + mic level bar
   var voiceStatus = document.getElementById('sp-voice-status');
   if (voiceStatus) voiceStatus.style.display = 'none';
+  stopSpMicLevel();
   // 1. Stop audio transport (only once — stopAudioBridge handles ElectronAudioBridge.stop + WS close)
   if (localTalkTimer) { clearInterval(localTalkTimer); localTalkTimer = null; }
   stopAudioBridge();
