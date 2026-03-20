@@ -130,10 +130,22 @@ export function startConfigServer(services: Services) {
     transport?: "direct" | "meet_bridge" | "browser";
     mode?: "default" | "local" | "meeting" | "test";
     topic?: string;
+    provider?: string;
+    voice?: string;
   }) => {
-    if (!CONFIG.openai.apiKey) {
+    const provider = (opts.provider || CONFIG.voiceProvider) as any;
+
+    // Validate API key for selected provider
+    if (provider === "grok" && !CONFIG.grok.apiKey) {
+      throw new Error("Grok API key not configured (set XAI_API_KEY in .env)");
+    }
+    if (provider === "openai" && !CONFIG.openai.apiKey) {
       throw new Error("OpenAI API key not configured");
     }
+
+    // Apply voice selection
+    if (opts.voice && provider === "grok") CONFIG.grok.voice = opts.voice;
+    else if (opts.voice && provider === "openai") CONFIG.openai.voice = opts.voice;
 
     const transport = opts.transport || "meet_bridge";
     const mode = opts.mode || "default";
@@ -143,7 +155,7 @@ export function startConfigServer(services: Services) {
       services.realtime.stop();
     }
 
-    await services.realtime.start(instructions);
+    await services.realtime.start(instructions, provider);
 
     if (transport === "meet_bridge") {
       const audioOk = await services.bridge.sendConfigAndVerify(
@@ -523,12 +535,16 @@ export function startConfigServer(services: Services) {
             transport?: "direct" | "meet_bridge" | "browser";
             mode?: "default" | "local" | "meeting" | "test";
             topic?: string;
+            provider?: string;
+            voice?: string;
           };
           const result = await startVoiceSession({
             instructions: body.instructions,
             transport: body.transport || "direct",
             mode: body.mode || "default",
             topic: body.topic,
+            provider: body.provider,
+            voice: body.voice,
           });
           return Response.json(result, { headers });
         } catch (e: any) {
