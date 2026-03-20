@@ -211,6 +211,8 @@ eventBus.on("meeting.started", (data) => {
   activeMeetingId = data?.meetingId || activeMeetingId || `cc_${Date.now().toString(36)}_live`;
   // Reset incremental context injection state for new meeting
   resetContextInjectionState();
+  // Reset transcript from previous meeting to prevent context leakage
+  context.resetTranscript();
   if (!vision.isMeetingMode) {
     vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");

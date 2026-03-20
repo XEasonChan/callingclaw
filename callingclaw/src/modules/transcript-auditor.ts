@@ -115,6 +115,8 @@ export class TranscriptAuditor {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = null;
     }
+    // Unsubscribe listener to prevent leaking handlers across meetings
+    this.context.off("transcript", this._onTranscript);
     this.voice = null;
     console.log("[TranscriptAuditor] Deactivated");
     this.eventBus.emit("auditor.deactivated", {});

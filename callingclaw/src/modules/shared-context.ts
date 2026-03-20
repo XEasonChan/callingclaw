@@ -75,6 +75,10 @@ export class SharedContext {
     }
   }
 
+  resetTranscript() {
+    this._transcript = [];
+  }
+
   getRecentTranscript(count = 20): TranscriptEntry[] {
     return this._transcript.slice(-count);
   }
@@ -191,6 +195,14 @@ export class SharedContext {
     const list = this._listeners.get(event) || [];
     list.push(handler);
     this._listeners.set(event, list);
+  }
+
+  off(event: string, handler: (data: any) => void) {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      const idx = listeners.indexOf(handler);
+      if (idx !== -1) listeners.splice(idx, 1);
+    }
   }
 
   private emit(event: string, data: any) {

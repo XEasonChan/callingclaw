@@ -131,6 +131,12 @@ export class ContextRetriever {
     this._lastAnalysisTs = Date.now();
     this._retrievedContexts = [];
     this._lastScreenUrl = "";
+    // Reset topic tracking state to prevent leakage from previous meetings
+    this._topicCache.clear();
+    this._currentTopic = "";
+    this._currentDirection = "";
+    this._topicStableSince = 0;
+    this._pendingQuestion = false;
 
     this.context.on("transcript", this._onTranscript);
     this.context.on("screen", this._onScreenChange);
@@ -146,6 +152,9 @@ export class ContextRetriever {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = null;
     }
+    // Unsubscribe listeners to prevent leaking handlers across meetings
+    this.context.off("transcript", this._onTranscript);
+    this.context.off("screen", this._onScreenChange);
     this.voice = null;
     console.log("[ContextRetriever] Deactivated");
     this.eventBus.emit("retriever.deactivated", {});

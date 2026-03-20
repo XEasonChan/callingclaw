@@ -27,6 +27,7 @@ export class MeetingModule {
   private openai: OpenAI;
   private _meetingStartTime: number | null = null;
   private _extractionTimer: Timer | null = null;
+  private _transcriptHandler: ((entry: any) => void) | null = null;
 
   constructor(context: SharedContext) {
     this.context = context;
@@ -47,7 +48,7 @@ export class MeetingModule {
     }, 120_000);
 
     // Also listen for new transcript entries
-    this.context.on("transcript", (entry) => {
+    this._transcriptHandler = (entry) => {
       // Auto-detect explicit action items in speech
       const text = entry.text.toLowerCase();
       if (
@@ -63,7 +64,8 @@ export class MeetingModule {
           ts: Date.now(),
         });
       }
-    });
+    };
+    this.context.on("transcript", this._transcriptHandler);
   }
 
   /**
@@ -71,6 +73,10 @@ export class MeetingModule {
    */
   stopRecording() {
     if (this._extractionTimer) clearInterval(this._extractionTimer);
+    if (this._transcriptHandler) {
+      this.context.off("transcript", this._transcriptHandler);
+      this._transcriptHandler = null;
+    }
     this._meetingStartTime = null;
     console.log("[Meeting] Recording stopped");
   }
