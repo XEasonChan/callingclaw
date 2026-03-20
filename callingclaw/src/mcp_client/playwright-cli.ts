@@ -37,7 +37,9 @@ export class PlaywrightCLIClient {
     this.profileDir = opts?.profileDir || process.env.PLAYWRIGHT_USER_DATA_DIR || DEFAULT_PROFILE_DIR;
   }
 
-  /** Start by opening a blank page (launches the browser daemon) */
+  /** Start the Playwright-controlled Chrome session.
+   *  1. Try to reconnect to an existing session (no new tabs).
+   *  2. If no session exists, launch Chrome with about:blank. */
   async start(): Promise<void> {
     if (this._connected) return;
     this._explicitlyStopped = false; // Clear stopped flag on explicit start
@@ -50,8 +52,19 @@ export class PlaywrightCLIClient {
 
     console.log(`[PlaywrightCLI] Starting (session: ${SESSION}, profile: ${this.profileDir}, browser: chrome)...`);
 
+    // Step 1: Try reconnecting to existing session (no new tab opened)
     try {
-      await this.run("open about:blank");
+      await this._exec(`eval "document.title || 'ok'"`);
+      this._connected = true;
+      console.log("[PlaywrightCLI] Reconnected to existing session");
+      return;
+    } catch {
+      // No existing session — need to launch Chrome
+    }
+
+    // Step 2: Launch fresh Chrome (opens about:blank as initial tab)
+    try {
+      await this._exec("open about:blank");
       this._connected = true;
       console.log("[PlaywrightCLI] Ready — persistent Chrome profile active");
     } catch (e: any) {
@@ -840,8 +853,10 @@ export class PlaywrightCLIClient {
     }
 
     // Auto-start on first use (lazy initialization — avoids opening Chrome at startup)
+    // Only start() can launch Chrome; callers should use start() explicitly or evaluateIfConnected()
     if (!this._connected && !subcommand.startsWith("open")) {
-      await this.start();
+      console.log(`[PlaywrightCLI] Not connected — auto-starting for: ${subcommand.slice(0, 40)}`);
+      await this.start(); // start() now reconnects without new tabs if session exists
     }
 
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
@@ -898,6 +913,20 @@ export class PlaywrightCLIClient {
     }
     // No file reference found — return raw output (may already contain inline tree)
     return output;
+  }
+
+  /** Low-level exec: runs playwright-cli without auto-start logic.
+   *  Used by start() to probe/launch the session without triggering recursion. */
+  private async _exec(subcommand: string): Promise<string> {
+    const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
+    const fullCmd = `${quotedCmd} ${this.globalFlags} ${subcommand}`;
+    const result = await Promise.race([
+      Bun.$`${{ raw: fullCmd }}`.quiet().cwd(this.cwd).text(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout (${TIMEOUT_MS}ms): ${subcommand}`)), TIMEOUT_MS)
+      ),
+    ]);
+    return result.trim();
   }
 
   /** Working directory for resolving relative file paths from CLI output */
