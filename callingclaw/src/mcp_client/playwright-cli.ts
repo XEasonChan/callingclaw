@@ -782,9 +782,16 @@ export class PlaywrightCLIClient {
 
   /** Stop the browser session */
   stop() {
-    if (!this._connected) return;
+    this._explicitlyStopped = true; // Always set — prevents auto-start from run()
+
+    // Stop admission monitor + meeting-end watcher (even if already disconnected)
+    if (this._admissionInterval) {
+      this.stopAdmissionMonitor();
+    }
+    this._meetingEndCallback = null;
+
+    if (!this._connected) return; // Already disconnected — skip close command
     this._connected = false;
-    this._explicitlyStopped = true; // Prevent auto-start from run()
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
     const stopCmd = `${quotedCmd} -s=${SESSION} close`;
     Bun.$`${{ raw: stopCmd }}`.quiet().nothrow();

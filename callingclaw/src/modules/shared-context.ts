@@ -85,6 +85,19 @@ export class SharedContext {
       .join("\n");
   }
 
+  /**
+   * Get conversation-only transcript (user + assistant speech).
+   * Excludes system messages, tool calls/results, screen updates, etc.
+   * Used by meeting summary generator to avoid OpenClaw task pollution.
+   */
+  getConversationText(count = 200): string {
+    return this._transcript
+      .filter((e) => e.role === "user" || e.role === "assistant")
+      .slice(-count)
+      .map((e) => `[${e.role}${e.speaker ? ` (${e.speaker})` : ""}] ${e.text}`)
+      .join("\n");
+  }
+
   // ── Screen State ──
 
   get screen(): ScreenState {

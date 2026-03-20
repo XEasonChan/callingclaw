@@ -125,7 +125,9 @@ Only include items NOT already captured. Be concise.`,
    * Generate a full meeting summary after the meeting ends
    */
   async generateSummary(): Promise<MeetingSummary> {
-    const transcript = this.context.getTranscriptText(200);
+    // Use conversation-only transcript (user + assistant speech).
+    // Excludes system/tool entries to prevent OpenClaw task pollution in summaries.
+    const transcript = this.context.getConversationText(200);
     const notes = this.context.meetingNotes;
     const duration = this._meetingStartTime
       ? `${Math.round((Date.now() - this._meetingStartTime) / 60000)} minutes`
@@ -197,8 +199,8 @@ Be thorough — this will be used for ongoing project tracking.`,
     const fname = filename || `${dateStr}_${timeStr}_${safeTitle}.md`;
     const filepath = `${NOTES_DIR}/${fname}`;
 
-    // Build markdown content
-    const transcript = this.context.getTranscriptText(200);
+    // Build markdown content — conversation only (no tool/system noise)
+    const transcript = this.context.getConversationText(200);
     const md = `# ${summary.title}
 
 **Date:** ${now.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
