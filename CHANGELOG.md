@@ -3,6 +3,36 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.0] - 2026-03-20
+
+### Added
+- **Grok (xAI) voice provider** — full realtime voice support with Eve/Ara/Rex/Sal/Leo voices, `input_audio_transcription` via grok-2-audio, native `web_search` + `x_search` tools
+- **Provider/voice selector in Desktop** — status bar dropdowns for OpenAI/Grok + voice, passed through to session start
+- **AudioWorklet mic capture** — replaces deprecated ScriptProcessor; runs on audio thread via Blob URL (Electron-compatible)
+- **Scheduled BufferSource playback** — sample-accurate gapless audio, eliminates chunk-boundary pops/clicks
+- **Speech interruption** — `speech_started` → auto-cancel AI response + stop playback on all clients
+- **Microphone device selector** — voice-test.html dropdown, auto-skips BlackHole/virtual devices
+- **Mic audio buffering** — captures first 200-700ms of speech before session ready, flushes on connect
+- **Talk Locally voice status indicator** — pulsing dot (connecting → connected → failed)
+- **5-layer context engineering** — CORE_IDENTITY (Layer 0) via session.update, meeting brief (Layer 2) via conversation.item.create
+
+### Fixed
+- **AudioBridge: suspended AudioContext** — explicit `resume()` for contexts created outside user gesture
+- **AudioBridge: mic failure no longer kills playback** — capture error is soft
+- **79% audio data loss with Grok** — large audio deltas (13K-32K samples) now handled correctly
+- **Provider selection ignored** — duplicate route handler in config_server.ts stripped provider/voice fields
+- **Talk Locally startup crash** — `browserAudio` ReferenceError silently killed `startLocalTalk()`
+- **Mic silence in Edge/Safari** — dual AudioContext (native capture + 24kHz playback) with downsampling
+- **Meeting prep file 404** — meetingId threaded through entire prepareMeeting chain
+- **OpenClaw response parsing** — handles more formats (output_text, parts[], nested messages[])
+- **Context recall fallback** — validates OpenClaw answers, falls back to local memory on errors
+- **Playwright Chrome tab spam** — prevented auto-start from opening repeated about:blank tabs
+
+### Changed
+- System instructions reduced 94% (~1650 → ~100 tokens) — context on-demand via recall_context
+- Voice routes unified: `startVoiceSession()` helper with provider/voice passthrough
+- Desktop audio-bridge.js fully rewritten: AudioWorklet + BufferSource + interruption
+
 ## [2.4.21] - 2026-03-20
 
 ### Changed
