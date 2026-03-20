@@ -3,6 +3,19 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.21] - 2026-03-20
+
+### Changed
+- **Context engineering layers** — meeting briefs now injected via `conversation.item.create` (Layer 2) instead of overriding session instructions. Voice reverts to Layer 0 CORE_IDENTITY on meeting end
+- **Token budget tracking** — RealtimeClient tracks input/output tokens per response, warns at 80%, auto-evicts oldest context items at 90%
+- **Reconnect no longer stuffs transcript** — reconnect uses clean Layer 0 instructions; context restored via `_replayContextQueue()` after session.updated
+- **Voice provider selection in Desktop UI** — status bar now has OpenAI/Grok provider selector with voice list (alloy/ash/marin/etc. for OpenAI, Eve/Ara/Rex for Grok)
+
+### Fixed
+- **Context retriever enhancements** — improved gap detection and retrieval
+- **Computer use simplification** — cleaned up vision analysis prompts
+- **Meeting tools cleanup** — removed redundant voice instruction overrides
+
 ## [2.4.20] - 2026-03-20
 
 ### Fixed
