@@ -143,7 +143,7 @@ export async function updateManifest(_mutate?: any): Promise<any> {
  * Path: ~/.callingclaw/shared/{meetingId}_prep.md
  */
 export async function savePrepBrief(brief: MeetingPrepBrief, meetingId?: string): Promise<string> {
-  const id = meetingId || generateMeetingId(undefined, brief.topic);
+  const id = meetingId || generateMeetingId();
   const filePath = getMeetingFilePath(id, "prep");
   const md = renderPrepBriefMarkdown(brief);
   await Bun.write(filePath, md);
@@ -340,7 +340,7 @@ export async function saveHtml(markdown: string, title: string, meetingId: strin
  * Start a live log file for a meeting. Returns the log filepath.
  */
 export async function startLiveLog(topic: string, meetingId?: string): Promise<string> {
-  const id = meetingId || generateMeetingId(undefined, topic);
+  const id = meetingId || generateMeetingId();
   const filepath = getMeetingFilePath(id, "live");
 
   const header = `# Live Meeting Log: ${topic}\n\n**Started:** ${new Date().toLocaleString()}\n\n---\n\n`;

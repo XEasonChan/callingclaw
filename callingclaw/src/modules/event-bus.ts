@@ -30,6 +30,9 @@ export class EventBus {
 
   /** Start a new correlation (e.g. a meeting lifecycle) */
   startCorrelation(prefix = "mtg"): string {
+    if (this._correlationId) {
+      console.warn(`[EventBus] Overwriting active correlation ${this._correlationId}`);
+    }
     this._correlationId = `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     return this._correlationId;
   }
@@ -39,6 +42,10 @@ export class EventBus {
   }
 
   endCorrelation() {
+    if (!this._correlationId) {
+      console.warn("[EventBus] endCorrelation called but no active correlation");
+      return;
+    }
     this._correlationId = null;
   }
 

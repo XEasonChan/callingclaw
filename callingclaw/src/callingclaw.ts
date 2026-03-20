@@ -369,6 +369,9 @@ eventBus.on("meeting.ended", () => {
   }
   playwrightCli.stop(); // Prevent auto-start from spawning empty Chrome windows
 
+  // ── Clear pinned files to prevent cross-meeting context leakage ──
+  contextSync.clearPinnedFiles();
+
   // ── Deactivate TranscriptAuditor + ContextRetriever + restore all tools ──
   if (transcriptAuditor.active) {
     transcriptAuditor.deactivate();

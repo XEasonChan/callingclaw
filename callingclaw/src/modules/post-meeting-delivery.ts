@@ -127,6 +127,14 @@ export class PostMeetingDelivery {
 
     this.deliveries.set(meetingId, delivery);
 
+    // Trim old deliveries to prevent unbounded Map growth (keep last 10)
+    if (this.deliveries.size > 10) {
+      const keys = Array.from(this.deliveries.keys());
+      for (let i = 0; i < keys.length - 10; i++) {
+        this.deliveries.delete(keys[i]!);
+      }
+    }
+
     // Send to OpenClaw with instructions to deliver via Telegram with inline buttons
     await this.sendTodoMessage(delivery);
 

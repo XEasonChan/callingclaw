@@ -170,6 +170,15 @@ export class ContextSync {
     return true;
   }
 
+  /** Clear all pinned files (called on meeting end to prevent cross-meeting leakage) */
+  clearPinnedFiles() {
+    if (this.pinnedFiles.length > 0) {
+      console.log(`[ContextSync] Clearing ${this.pinnedFiles.length} pinned files`);
+      this.pinnedFiles = [];
+      this._onUpdate?.();
+    }
+  }
+
   /** Get list of pinned files (without full content) */
   getPinnedFiles(): Array<{ path: string; summary?: string; pinnedAt: number; contentLength: number }> {
     return this.pinnedFiles.map((f) => ({
