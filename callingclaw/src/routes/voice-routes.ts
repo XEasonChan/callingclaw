@@ -25,6 +25,11 @@ export function voiceRoutes(services: Services): RouteHandler {
     // Context is available on-demand via recall_context tool.
     let instructions = body.instructions || undefined;
 
+    // Apply voice selection from frontend (if provided)
+    const voice = (body as any).voice;
+    if (voice && provider === "grok") CONFIG.grok.voice = voice;
+    else if (voice && provider === "openai") CONFIG.openai.voice = voice;
+
     await services.realtime.start(instructions, provider);
 
     const transport = body.transport || (body.audio_mode as any) || "meet_bridge";
