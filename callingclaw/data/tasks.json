@@ -1,5 +1,60 @@
 [
   {
+    "id": "task_mmyq443h_cpvr",
+    "task": "Review and refine the PowerPoint slides for clarity and impact on the audience.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "xueyi chen",
+    "deadline": "2023-10-30",
+    "sourceMeetingId": "mtg_mmyq03q4_m5sg",
+    "createdAt": 1774000533437,
+    "updatedAt": 1774000533437
+  },
+  {
+    "id": "task_mmyq443h_bwh3",
+    "task": "Finalize the use case documentation for the event.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "XEason Chan",
+    "deadline": "2023-10-31",
+    "sourceMeetingId": "mtg_mmyq03q4_m5sg",
+    "createdAt": 1774000533437,
+    "updatedAt": 1774000533437
+  },
+  {
+    "id": "task_mmyq443h_og8v",
+    "task": "Verify the technical setup of audio systems is optimal for the event.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Technical Team",
+    "deadline": "2023-10-28",
+    "sourceMeetingId": "mtg_mmyq03q4_m5sg",
+    "createdAt": 1774000533437,
+    "updatedAt": 1774000533437
+  },
+  {
+    "id": "task_mmypmmyz_vqdj",
+    "task": "Review and document user's standards for project work.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Assistant",
+    "deadline": "2023-11-07",
+    "sourceMeetingId": "talk_mmypllwm_o21g",
+    "createdAt": 1773999718091,
+    "updatedAt": 1773999718091
+  },
+  {
+    "id": "task_mmypmmyz_l2cn",
+    "task": "Establish a regular check-in schedule to ensure alignment with user expectations.",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Assistant",
+    "deadline": "2023-11-10",
+    "sourceMeetingId": "talk_mmypllwm_o21g",
+    "createdAt": 1773999718091,
+    "updatedAt": 1773999718091
+  },
+  {
     "id": "task_mmyb2ziw_088e",
     "task": "Submit first draft of the project report",
     "status": "pending",

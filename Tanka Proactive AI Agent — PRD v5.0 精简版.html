@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanka Proactive AI Agent — 完整需求文档 v5.0</title>
+    <link href="file:///Users/admin/Downloads/Tanka%20Proactive%20AI%20Agent%20%E2%80%94%20%E5%AE%8C%E6%95%B4%E9%9C%80%E6%B1%82%E6%96%87%E6%A1%A3%20v2.0_files/css2" rel="stylesheet">
+    <script src="file:///Users/admin/Downloads/Tanka%20Proactive%20AI%20Agent%20%E2%80%94%20%E5%AE%8C%E6%95%B4%E9%9C%80%E6%B1%82%E6%96%87%E6%A1%A3%20v2.0_files/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary: #4B7BF5;
+            --primary-light: #EBF0FF;
+            --accent: #ffc53d;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+            --gray-900: #111827;
+            --gray-800: #1f2937;
+            --gray-700: #374151;
+            --gray-600: #4b5563;
+            --gray-500: #6b7280;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --gray-50: #f9fafb;
+            --white: #ffffff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--gray-50); color: var(--gray-900); line-height: 1.6; }
+        .nav { position: fixed; top: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--gray-200); padding: 12px 24px; z-index: 100; }
+        .nav-content { max-width: 1000px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+        .nav-logo { font-size: 1rem; font-weight: 700; color: var(--gray-900); display: flex; align-items: center; gap: 8px; text-decoration: none; white-space: nowrap; }
+        .nav-logo-icon { width: 28px; height: 28px; background: var(--primary); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: 700; }
+        .nav-links { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+        .nav-links a { padding: 6px 10px; color: var(--gray-600); text-decoration: none; font-size: 0.75rem; border-radius: 6px; transition: all 0.2s; white-space: nowrap; }
+        .nav-links a:hover { color: var(--primary); background: var(--primary-light); }
+        .main { max-width: 1000px; margin: 0 auto; padding: 80px 24px 60px; }
+        .hero { text-align: center; padding: 60px 0 40px; border-bottom: 1px solid var(--gray-200); margin-bottom: 40px; }
+        .hero-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--primary-light); color: var(--primary); padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; margin-bottom: 16px; }
+        .hero h1 { font-size: 2.25rem; font-weight: 700; color: var(--gray-900); margin-bottom: 12px; line-height: 1.3; }
+        .hero p { font-size: 1.1rem; color: var(--gray-600); max-width: 760px; margin: 0 auto; }
+        .hero-meta { display: flex; justify-content: center; gap: 24px; margin-top: 20px; font-size: 0.85rem; color: var(--gray-500); flex-wrap: wrap; }
+        .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+        .prototype-open-btn { display: inline-block; margin-top: 20px; padding: 12px 24px; background: var(--primary); color: white; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: background 0.2s; }
+        .prototype-open-btn:hover { background: #3A66D4; }
+        .section { margin-bottom: 48px; scroll-margin-top: 88px; }
+        .section-header { margin-bottom: 24px; }
+        .section-number { display: inline-block; font-size: 0.7rem; font-weight: 600; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .section-title { font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+        .section-subtitle { font-size: 0.95rem; color: var(--gray-600); }
+        .subsection { margin-bottom: 28px; margin-top: 32px; }
+        .subsection-title { font-size: 1.15rem; font-weight: 700; color: var(--gray-900); margin-bottom: 12px; border-bottom: 2px solid var(--primary); display: inline-block; padding-bottom: 4px; }
+        .sub3-title { font-size: 1rem; font-weight: 600; color: var(--gray-800); margin-bottom: 10px; margin-top: 20px; }
+        .content-box { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .content-box h4 { font-size: 1rem; font-weight: 600; margin-bottom: 10px; color: var(--gray-900); }
+        .content-box h5 { font-size: 0.9rem; font-weight: 600; margin: 16px 0 8px; color: var(--gray-800); }
+        .content-box p, .content-box li { font-size: 0.9rem; color: var(--gray-600); line-height: 1.7; }
+        .content-box ul, .content-box ol { padding-left: 20px; margin: 8px 0; }
+        .content-box li { margin-bottom: 6px; }
+        .content-box strong { color: var(--gray-800); }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .mermaid-container { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        .mermaid-header { padding: 16px 24px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; background: var(--gray-50); }
+        .mermaid-header h3 { font-size: 0.95rem; font-weight: 600; }
+        .mermaid-badge { background: var(--primary-light); color: var(--primary); padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
+        .mermaid-body { padding: 24px; display: flex; justify-content: center; overflow-x: auto; }
+        .mermaid-body .mermaid { width: 100%; }
+        .table-container { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        .table-header { padding: 16px 24px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50); }
+        .table-header h4 { font-size: 0.95rem; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--gray-50); padding: 10px 16px; text-align: left; font-size: 0.8rem; font-weight: 600; color: var(--gray-600); border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+        td { padding: 10px 16px; font-size: 0.85rem; color: var(--gray-700); border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        code { background: var(--gray-100); color: var(--primary); font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; }
+        .tag { display: inline-block; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin: 2px; }
+        .tag.green { background: var(--success-light); color: var(--success); }
+        .tag.yellow { background: var(--warning-light); color: #92400e; }
+        .tag.gray { background: var(--gray-100); color: var(--gray-600); }
+        .highlight-box { border-left: 4px solid var(--primary); background: var(--primary-light); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+        .highlight-box.warning { border-left-color: var(--warning); background: var(--warning-light); }
+        .highlight-box.success { border-left-color: var(--success); background: var(--success-light); }
+        .highlight-box p { font-size: 0.88rem; color: var(--gray-700); }
+        .wireframe-card { background: var(--white); border: 2px solid var(--gray-200); border-radius: 16px; max-width: 420px; margin: 16px auto; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+        .wireframe-card .wf-accent { height: 4px; background: var(--primary); }
+        .wireframe-card .wf-header { padding: 14px 20px 10px; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 600; color: var(--gray-800); border-bottom: 1px solid var(--gray-100); }
+        .wireframe-card .wf-body { padding: 16px 20px; }
+        .wireframe-card .wf-body p { font-size: 0.85rem; color: var(--gray-600); margin-bottom: 8px; line-height: 1.6; }
+        .wireframe-card .wf-body .wf-title { font-size: 0.95rem; font-weight: 600; color: var(--gray-900); margin-bottom: 4px; }
+        .wireframe-card .wf-body .wf-meta { font-size: 0.8rem; color: var(--gray-500); margin-bottom: 6px; }
+        .wireframe-card .wf-detail-box { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px 14px; margin: 10px 0; font-size: 0.82rem; color: var(--gray-600); line-height: 1.7; }
+        .wireframe-card .wf-actions { padding: 12px 20px 16px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--gray-100); }
+        .wireframe-card .wf-btn { padding: 8px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; border: none; cursor: pointer; }
+        .wireframe-card .wf-btn.secondary { background: var(--gray-100); color: var(--gray-600); }
+        .wireframe-card .wf-btn.primary { background: var(--primary); color: white; }
+        .wireframe-card .wf-btn.success { background: var(--success); color: white; }
+        .footer { text-align: center; padding: 40px 24px; color: var(--gray-500); font-size: 0.8rem; border-top: 1px solid var(--gray-200); margin-top: 40px; }
+        @media (max-width: 768px) {
+            .nav-content { flex-direction: column; align-items: flex-start; }
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 1.8rem; }
+            .hero-meta { gap: 10px 20px; }
+        }
+    </style>
+</head>
+<body>
+<nav class="nav">
+    <div class="nav-content">
+        <a href="#hero" class="nav-logo">
+            <div class="nav-logo-icon">T</div>
+            Proactive AI Agent PRD v5.0
+        </a>
+        <div class="nav-links">
+            <a href="#s1">背景</a>
+            <a href="#s2">Use Case</a>
+            <a href="#s3">Trigger</a>
+            <a href="#s4">Planning</a>
+            <a href="#s5">Vote</a>
+            <a href="#s6">群聊信号</a>
+            <a href="#s7">Role & Drive</a>
+            <a href="#s8">权限</a>
+            <a href="#s9">Dashboard</a>
+            <a href="#s10">文件记忆</a>
+            <a href="#s11">原型</a>
+        </div>
+    </div>
+</nav>
+
+<div class="main">
+    <div class="hero" id="hero">
+        <div class="hero-badge">PRD v5.0 · Proactive AI Agent — Simplified Main Spec</div>
+        <h1>Tanka Proactive AI Agent<br>完整需求文档 v5.0</h1>
+        <p>在 v4.0 基础上完成去重、逻辑收敛和信息重组。保持原有原型和设计风格一致，统一为 Trigger → Planning → Vote → Execute → Memory 的主链路。</p>
+        <div class="hero-meta">
+            <span>Version 5.0</span>
+            <span>2026-03-20</span>
+            <span>Tanka Product Team</span>
+        </div>
+        <a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive-AI-Agent-Prototype.html" class="prototype-open-btn">打开桌面端交互原型 →</a>
+        <div style="display:flex; gap:10px; justify-content:center; margin-top:12px; flex-wrap:wrap;">
+            <a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/1-Trigger-Chip-Prototype.html" class="prototype-open-btn" style="background:var(--gray-700);font-size:0.8rem;padding:8px 16px;">Trigger Chip 原型</a>
+            <a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/2-Task-Creation-Prototype.html" class="prototype-open-btn" style="background:var(--gray-700);font-size:0.8rem;padding:8px 16px;">Task 创建原型</a>
+            <a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/2b-Action-Card-PlanB-Prototype.html" class="prototype-open-btn" style="background:var(--gray-700);font-size:0.8rem;padding:8px 16px;">Planning / Plan B 原型</a>
+            <a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/3-Link-Authorization-Prototype.html" class="prototype-open-btn" style="background:var(--gray-700);font-size:0.8rem;padding:8px 16px;">Link 授权原型</a>
+        </div>
+    </div>
+
+    <div class="section" id="s1">
+        <div class="section-header">
+            <div class="section-number">Section 1</div>
+            <div class="section-title">背景与整体流程图</div>
+            <div class="section-subtitle">5.0 的核心是收敛主链路，而不是继续叠加概念</div>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>为什么要从 4.0 整理成 5.0</h4>
+                <ul>
+                    <li><strong>重复太多：</strong><code>Trigger / Action / Memory</code> 在多个章节反复出现。</li>
+                    <li><strong>对象混乱：</strong><code>群助手 / Personal Assistant / Flow Agent</code> 同时被写成产品角色和系统模块。</li>
+                    <li><strong>权限与等级交叉过深：</strong>容易误读成 “Level 越高 = 越能自动执行”。</li>
+                    <li><strong>Planning 定位不稳：</strong>有时像中间态，有时像独立卡片体系。</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>5.0 的统一规则</h4>
+                <ul>
+                    <li>前台永远只有一个用户可感知 AI：<strong>Personal AI Assistant</strong></li>
+                    <li>短动作只走：<code>Trigger -&gt; Vote -&gt; Execute</code></li>
+                    <li>复杂动作走：<code>Trigger -&gt; Planning -&gt; Vote -&gt; Execute</code></li>
+                    <li>长期任务升级成 <strong>Flow</strong>，文件留存在 <strong>Git Cloud Drive</strong></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box">
+            <p><strong>5.0 最终主链路：</strong>Signal Detection → Trigger Chip → Planning → Vote → Execute → AI Secretary Review → Memory Update → Memory Dashboard</p>
+        </div>
+
+        <div class="mermaid-container">
+            <div class="mermaid-header">
+                <h3>5.0 整体流程图</h3>
+                <span class="mermaid-badge">Unified Flow</span>
+            </div>
+            <div class="mermaid-body">
+                <div class="mermaid">
+flowchart LR
+    A["多源事件<br/>群聊 / Gmail / Calendar / CRM / Jira / Slack"] --> B["Signal Detection"]
+    B --> C["Trigger Chip<br/>群聊或私聊中的轻量提示"]
+    C --> D{"是否需要复杂规划?"}
+    D -- "否" --> E["Vote Card<br/>提交可执行方案"]
+    D -- "是" --> F["Planning Layer<br/>拉上下文 / 拆步骤 / 风险预检"]
+    F --> E
+    E --> G{"是否通过?"}
+    G -- "拒绝 / 稍后" --> H["结束或延迟"]
+    G -- "通过" --> I["执行器<br/>消息 / 邮件 / 会议 / CRM / 文件"]
+    I --> J["AI Secretary Review<br/>执行前二次审核"]
+    J --> K["结果回写"]
+    K --> L["Memory Update<br/>偏好 / 联系人 / 项目 / 文件"]
+    L --> M["Memory Dashboard"]
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section" id="s2">
+        <div class="section-header">
+            <div class="section-number">Section 2</div>
+            <div class="section-title">目标实现的 Use Case</div>
+            <div class="section-subtitle">只保留当前主逻辑下最有代表性的 P0 / P1 用例</div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>P0 主用例</h4></div>
+            <table>
+                <thead>
+                    <tr><th>Use Case</th><th>触发来源</th><th>用户价值</th><th>默认输出</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>群聊会议发现 → 自动约会</strong></td><td>群聊 + 跨渠道确认</td><td>从讨论直接进入安排</td><td>Meeting Vote</td></tr>
+                    <tr><td><strong>群聊任务分配 → 创建 Jira/Linear</strong></td><td>群聊任务信号</td><td>从口头协作进入结构化跟进</td><td>Task Vote</td></tr>
+                    <tr><td><strong>会后自动跟进 → 邮件 + CRM</strong></td><td>meeting ended + transcript</td><td>会议结束直接推进 follow-up</td><td>Compound Vote</td></tr>
+                    <tr><td><strong>客户邮件/反馈 → 草拟回复或建单</strong></td><td>Gmail / Slack / HubSpot</td><td>从收到信号直接进入响应</td><td>Reply / Issue Vote</td></tr>
+                    <tr><td><strong>定期简报 / 周报 / 项目摘要</strong></td><td>定时任务 + 多源聚合</td><td>从信息过载进入可读产出</td><td>Planning + Deliverable Vote</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>P1 扩展用例</h4></div>
+            <table>
+                <thead>
+                    <tr><th>Use Case</th><th>触发来源</th><th>升级条件</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>多个相关信号聚合成项目</td><td>两周内同主题多信号</td><td>升级成 Flow</td></tr>
+                    <tr><td>群聊中的角色定制建议</td><td>群聊 + role awareness</td><td>不同成员看到不同 Trigger</td></tr>
+                    <tr><td>Git Cloud Drive 文件协同</td><td>Flow / Deliverable</td><td>需要版本化产出物</td></tr>
+                    <tr><td>智能权限升级建议</td><td>高频低风险动作</td><td>用户长期批准稳定</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section" id="s3">
+        <div class="section-header">
+            <div class="section-number">Section 3</div>
+            <div class="section-title">Trigger 的设计与交互逻辑</div>
+            <div class="section-subtitle">Trigger 是最小可行动信号，而不是又一张复杂卡片</div>
+        </div>
+
+        <div class="grid-3">
+            <div class="content-box">
+                <h4>定义</h4>
+                <p>Trigger 是 AI 从连续协作行为中抽取出的“现在值得处理”的最小决策单元。</p>
+            </div>
+            <div class="content-box">
+                <h4>设计原则</h4>
+                <p>只表达一件事；不承载复杂执行；可追溯；在群聊内保持轻量不打断。</p>
+            </div>
+            <div class="content-box">
+                <h4>交互去向</h4>
+                <p>群聊里点击进入右侧 Assistant；私聊里可直接进入 Vote；Flow 中进入项目事件流。</p>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>当前 Trigger 列表</h4></div>
+            <table>
+                <thead>
+                    <tr><th>类别</th><th>Trigger</th><th>来源</th><th>默认去向</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>群聊协作</td><td><code>meeting_intent</code></td><td>Tanka 群聊 / Slack 群聊</td><td>Meeting Vote</td></tr>
+                    <tr><td>群聊协作</td><td><code>task_assignment</code></td><td>群聊消息</td><td>Task Vote</td></tr>
+                    <tr><td>群聊协作</td><td><code>decision_made</code></td><td>群聊讨论</td><td>Summary / ADR / Flow</td></tr>
+                    <tr><td>群聊协作</td><td><code>reply_needed</code></td><td>@mention / 问题点名</td><td>Reply Vote</td></tr>
+                    <tr><td>群聊协作</td><td><code>follow_up_needed</code></td><td>群聊行动项 / deadline</td><td>Follow-up Vote</td></tr>
+                    <tr><td>邮件</td><td><code>new_email_high_priority</code></td><td>Gmail / Outlook</td><td>Reply Vote</td></tr>
+                    <tr><td>邮件</td><td><code>follow_up_due</code></td><td>Gmail / CRM 历史</td><td>Follow-up Vote</td></tr>
+                    <tr><td>日历 / 会议</td><td><code>meeting_ended</code></td><td>Calendar / Zoom / Meet</td><td>Summary + Follow-up Vote</td></tr>
+                    <tr><td>日历 / 会议</td><td><code>calendar_conflict</code></td><td>Calendar</td><td>Reschedule Vote</td></tr>
+                    <tr><td>CRM</td><td><code>deal_stage_change</code></td><td>HubSpot / Salesforce</td><td>CRM Update Vote</td></tr>
+                    <tr><td>CRM</td><td><code>contact_activity</code></td><td>CRM / email tracking</td><td>Follow-up Vote</td></tr>
+                    <tr><td>项目工具</td><td><code>ticket_blocked</code></td><td>Jira / Linear</td><td>Alert / Resolution Vote</td></tr>
+                    <tr><td>项目工具</td><td><code>sprint_complete</code></td><td>Jira / Linear</td><td>Summary Deliverable</td></tr>
+                    <tr><td>多源聚合</td><td><code>multi_signal_aggregation</code></td><td>Cross-channel</td><td>Flow Suggestion / Compound Vote</td></tr>
+                    <tr><td>定时任务</td><td><code>scheduled_digest_ready</code></td><td>Cron + aggregation</td><td>Deliverable Vote</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="highlight-box success">
+            <p><strong>5.0 收敛：</strong>前台仍可用 Smart Meeting / Smart Reply / Smart Follow-up 这些文案，但底层 schema 统一回到结构化 trigger type，不再并行维护两套概念体系。</p>
+        </div>
+    </div>
+
+    <div class="section" id="s4">
+        <div class="section-header">
+            <div class="section-number">Section 4</div>
+            <div class="section-title">Planning 的设计与交互逻辑</div>
+            <div class="section-subtitle">Planning 是复杂任务的执行准备态，不是独立产品物种</div>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>何时进入 Planning</h4>
+                <ul>
+                    <li>需要调用 2 个及以上外部工具</li>
+                    <li>需要读取或生成文件</li>
+                    <li>需要多步执行且存在依赖</li>
+                    <li>需要跨系统校验数据</li>
+                    <li>预计执行时长超过 10 秒</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>Planning 的产物</h4>
+                <ul>
+                    <li>Step List：步骤拆解</li>
+                    <li>Inputs：上下文来源</li>
+                    <li>Risks：当前识别到的风险</li>
+                    <li>Draft：待审批草稿</li>
+                    <li>Tool Scope：将调用的工具和权限</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>Planning 交互逻辑</h4></div>
+            <table>
+                <thead>
+                    <tr><th>场景</th><th>交互方式</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>简单任务</td><td>不显示 Planning，直接进入 Vote</td></tr>
+                    <tr><td>多步任务</td><td>先显示 Planning 摘要，再提交 Vote</td></tr>
+                    <tr><td>长耗时任务</td><td>Planning 持续更新步骤状态</td></tr>
+                    <tr><td>用户要求修改</td><td>回到 Planning 重算，生成新 Vote</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="wireframe-card">
+            <div class="wf-accent"></div>
+            <div class="wf-header">🧭 Planning Preview</div>
+            <div class="wf-body">
+                <div class="wf-title">准备生成客户会后跟进</div>
+                <div class="wf-meta">3 steps · Gmail + CRM + Calendar</div>
+                <div class="wf-detail-box">
+                    1. 拉取会议纪要和参会人<br>
+                    2. 生成 follow-up 邮件草稿<br>
+                    3. 准备 CRM note 和 next step 更新
+                </div>
+                <div class="wf-detail-box">
+                    风险预检：收件人有 1 位外部联系人；会议纪要里包含金额信息。
+                </div>
+            </div>
+            <div class="wf-actions">
+                <button class="wf-btn secondary">调整计划</button>
+                <button class="wf-btn primary">继续生成 Vote</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="section" id="s5">
+        <div class="section-header">
+            <div class="section-number">Section 5</div>
+            <div class="section-title">Action Card（Vote）的设计与交互逻辑</div>
+            <div class="section-subtitle">前台统一只保留 Vote 心智，复杂度差异通过内容深度表达</div>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>Vote 的统一结构</h4>
+                <ul>
+                    <li>Header：动作标题 + 目标对象</li>
+                    <li>Context：信号来源和上下文摘要</li>
+                    <li>Draft / Payload：将发送或更新的具体内容</li>
+                    <li>Options：A / B / Decline</li>
+                    <li>Permission：涉及工具和授权范围</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>Vote 状态机</h4>
+                <p><code>draft -> proposed -> user_editing -> approved -> reviewing -> executing -> done / failed / blocked / deferred</code></p>
+                <div class="highlight-box warning" style="margin-bottom:0;">
+                    <p><strong>5.0 关键收敛：</strong>Permission Vote 是 Vote 的一种，不再另起一套 UI 心智。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>当前已经实现 / 已明确的 Vote 模板</h4></div>
+            <table>
+                <thead>
+                    <tr><th>Vote 模板</th><th>动作标题</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Tanka Send to Chat</td><td>给单人发消息</td></tr>
+                    <tr><td>Tanka Send to Group</td><td>给群发消息</td></tr>
+                    <tr><td>Linear Update Task</td><td>更新任务</td></tr>
+                    <tr><td>Jira Create Issue</td><td>创建 Issue</td></tr>
+                    <tr><td>Gmail Send Email</td><td>发送单封邮件</td></tr>
+                    <tr><td>Gmail Send to N People</td><td>批量发送</td></tr>
+                    <tr><td>Zoom Create Meeting</td><td>创建会议</td></tr>
+                    <tr><td>HubSpot Update Deal</td><td>更新 CRM Deal</td></tr>
+                    <tr><td>Notion Create Page</td><td>创建文档</td></tr>
+                    <tr><td>Notion Update Page</td><td>更新文档</td></tr>
+                    <tr><td>Sheets Add Rows</td><td>写入表格</td></tr>
+                    <tr><td>Compound: Create Meeting + Notify</td><td>多步执行</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="wireframe-card">
+            <div class="wf-accent"></div>
+            <div class="wf-header">🤖 Vote Card</div>
+            <div class="wf-body">
+                <div class="wf-title">Create Meeting + Notify</div>
+                <div class="wf-meta">来自 Trigger：会议意图 · 3 人确认</div>
+                <div class="wf-detail-box">
+                    我准备创建 Zoom 会议、发送日历邀请，并在群里回发链接。
+                </div>
+                <div class="wf-detail-box">
+                    相关权限：Zoom、Google Calendar、Tanka Group Message
+                </div>
+            </div>
+            <div class="wf-actions">
+                <button class="wf-btn secondary">B. 改时间后执行</button>
+                <button class="wf-btn primary">A. 直接执行</button>
+                <button class="wf-btn secondary">Decline</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="section" id="s6">
+        <div class="section-header">
+            <div class="section-number">Section 6</div>
+            <div class="section-title">群聊里的信号收集</div>
+            <div class="section-subtitle">AI 不在群里“发言”，而是在群里“观察、理解、触发”</div>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>采集对象</h4>
+                <ul>
+                    <li>会议意图</li>
+                    <li>任务分配</li>
+                    <li>决策形成</li>
+                    <li>明确同意 / 拒绝 / 待定</li>
+                    <li>deadline、owner、依赖关系</li>
+                    <li>需要某个角色回应的问题</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>核心模块</h4>
+                <ul>
+                    <li>Message Parser</li>
+                    <li>Thread Aggregator</li>
+                    <li>Participant Resolver</li>
+                    <li>Cross-channel Resolver</li>
+                    <li>Threshold Engine</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box">
+            <p><strong>5.0 定义：</strong><code>群聊确认收集</code> 是系统能力，不是单独用例；<code>群聊 Context 模式</code> 继续保留，但本质上是 Personal AI 读取当前群语境，而不是一个独立群机器人在工作。</p>
+        </div>
+    </div>
+
+    <div class="section" id="s7">
+        <div class="section-header">
+            <div class="section-number">Section 7</div>
+            <div class="section-title">Role Awareness 与 Git Cloud Drive</div>
+            <div class="section-subtitle">角色感知决定“给谁看什么”，Git Cloud Drive 负责“把结果记下来”</div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>Role-aware 输出规则</h4></div>
+            <table>
+                <thead>
+                    <tr><th>角色</th><th>默认输出</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>发起人 / Owner</td><td>完整 Vote + 风险 + 执行按钮</td></tr>
+                    <tr><td>Manager</td><td>摘要 + 审批选项 + 升级建议</td></tr>
+                    <tr><td>Contributor</td><td>与自己相关的任务或回复建议</td></tr>
+                    <tr><td>Watcher</td><td>低打扰摘要，不默认推执行</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>Role Awareness 的输入</h4>
+                <ul>
+                    <li>组织角色：title / team / manager 关系</li>
+                    <li>项目角色：owner / approver / watcher / contributor</li>
+                    <li>历史行为：经常审批什么、忽略什么</li>
+                    <li>当前上下文：正在看的群、当前 Flow、最近会议</li>
+                    <li>权限范围：能看什么、能批什么、能执行什么</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>Git Cloud Drive 的职责</h4>
+                <ul>
+                    <li>所有正式交付物都文件化</li>
+                    <li>所有文件都有版本，不覆盖历史</li>
+                    <li>文件和 Trigger / Vote / Flow / 执行记录互相链接</li>
+                    <li>文件既是产出物，也是长期记忆源</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="section" id="s8">
+        <div class="section-header">
+            <div class="section-number">Section 8</div>
+            <div class="section-title">智能权限管理与 AI 秘书兜底二次审核提醒</div>
+            <div class="section-subtitle">Level 影响默认确认深度，但不会突破高风险安全底线</div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>确认级别</h4></div>
+            <table>
+                <thead>
+                    <tr><th>Level</th><th>名称</th><th>行为</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>L1</td><td>Silent</td><td>自动执行，时间线可追溯</td></tr>
+                    <tr><td>L2</td><td>Notify</td><td>执行后通知，可短时撤回</td></tr>
+                    <tr><td>L3</td><td>Confirm</td><td>标准 Vote 审批</td></tr>
+                    <tr><td>L4</td><td>Deep Review</td><td>增强上下文审核</td></tr>
+                    <tr><td>L5</td><td>Multi-gate</td><td>多步逐级确认</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>权限模型</h4>
+                <ul>
+                    <li><code>Tool Permission</code>：工具能不能用</li>
+                    <li><code>Action Permission</code>：动作能不能做</li>
+                    <li><code>Confirmation Level</code>：做到什么确认深度</li>
+                </ul>
+                <h5>权限 Vote 统一三选项</h5>
+                <ul>
+                    <li>仅这次</li>
+                    <li>在当前项目 / Flow 内始终允许</li>
+                    <li>拒绝</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>AI Secretary Review</h4>
+                <ul>
+                    <li>收件人 / 对象是否正确</li>
+                    <li>时间与时区是否合理</li>
+                    <li>数据是否一致</li>
+                    <li>附件是否完整</li>
+                    <li>是否重复执行</li>
+                    <li>是否越权</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box warning">
+            <p><strong>兜底提醒机制：</strong>用户点击通过后，并不总是立即落地执行。若执行前复核发现问题，系统回到用户面前提示 “等一下，我发现一个风险”，并给出继续执行、修改后执行、取消三个后续动作。</p>
+        </div>
+    </div>
+
+    <div class="section" id="s9">
+        <div class="section-header">
+            <div class="section-number">Section 9</div>
+            <div class="section-title">Memory Dashboard</div>
+            <div class="section-subtitle">从“设置页”升级为 AI 和用户之间的协作透明层</div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>新的等级设计</h4></div>
+            <table>
+                <thead>
+                    <tr><th>Level</th><th>名称</th><th>定义</th><th>默认状态</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Lv.0</td><td>未建立</td><td>未连接工具、无稳定记忆、只能被动聊天</td><td>初始默认</td></tr>
+                    <tr><td>Lv.1</td><td>观察中</td><td>已接入基础数据，能识别低风险信号</td><td>新用户</td></tr>
+                    <tr><td>Lv.2</td><td>试用中</td><td>可做轻量提醒和草稿生成</td><td>完成首批连接</td></tr>
+                    <tr><td>Lv.3</td><td>新同事</td><td>能稳定完成标准协作任务</td><td>已有持续审批记录</td></tr>
+                    <tr><td>Lv.4</td><td>得力助手</td><td>对常规工作形成稳定默契</td><td>低风险动作高通过</td></tr>
+                    <tr><td>Lv.5</td><td>左右手</td><td>在低风险、高频任务上高度自治</td><td>长期稳定使用</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>等级定义初始化和升级逻辑表格</h4></div>
+            <table>
+                <thead>
+                    <tr><th>Level</th><th>进入条件</th><th>升级条件</th><th>降级条件</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Lv.0</td><td>默认初始</td><td>连接至少 1 个核心工具并产生首个可用 Trigger</td><td>无</td></tr>
+                    <tr><td>Lv.1</td><td>有基础连接</td><td>7 天内产生有效 Trigger 且用户处理 ≥ 3 次</td><td>长期无使用</td></tr>
+                    <tr><td>Lv.2</td><td>已有轻量互动</td><td>14 天内批准 ≥ 5 次，成功执行 ≥ 3 次</td><td>通过率持续过低</td></tr>
+                    <tr><td>Lv.3</td><td>有稳定协作</td><td>30 天内多源信号稳定、拒绝率低、至少 1 个项目持续跟进</td><td>错误率或拒绝率明显升高</td></tr>
+                    <tr><td>Lv.4</td><td>已形成工作默契</td><td>高频低风险动作具备稳定模式，用户开始开放项目级权限</td><td>风险拦截频繁、权限被回收</td></tr>
+                    <tr><td>Lv.5</td><td>长期稳定协作</td><td>60 天以上稳定使用，多个 Flow 持续运行，文件化记忆和角色感知完整</td><td>高风险误判或长期停用</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>更多的数据维度看板</h4></div>
+            <table>
+                <thead>
+                    <tr><th>维度</th><th>说明</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Productivity</td><td>产出量：完成了多少动作和交付物</td></tr>
+                    <tr><td>Approval Quality</td><td>通过率：批准、拒绝、修改分布</td></tr>
+                    <tr><td>Coverage</td><td>覆盖了多少群、项目、联系人、工作域</td></tr>
+                    <tr><td>Signal Health</td><td>有效 trigger 比例、噪音率、过期率</td></tr>
+                    <tr><td>Automation Depth</td><td>L1-L5 动作分布</td></tr>
+                    <tr><td>Permission Footprint</td><td>连接了哪些 app、开放到什么粒度</td></tr>
+                    <tr><td>Role Fit</td><td>不同角色触发和采用情况</td></tr>
+                    <tr><td>File Memory</td><td>产出物数、版本数、被回用次数</td></tr>
+                    <tr><td>Live Status</td><td>正在监控、规划、等待审批、执行中</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section" id="s10">
+        <div class="section-header">
+            <div class="section-number">Section 10</div>
+            <div class="section-title">文件化记忆留存</div>
+            <div class="section-subtitle">所有对未来有复用价值的产出，都必须文件化，而不只是留在聊天里</div>
+        </div>
+
+        <div class="grid-2">
+            <div class="content-box">
+                <h4>必须文件化的内容</h4>
+                <ul>
+                    <li>会议纪要</li>
+                    <li>决策记录</li>
+                    <li>周报 / 月报 / brief</li>
+                    <li>项目阶段总结</li>
+                    <li>客户沟通摘要</li>
+                    <li>研究型长文档</li>
+                    <li>Flow 的中间和最终交付物</li>
+                </ul>
+            </div>
+            <div class="content-box">
+                <h4>文件化记忆统一结构</h4>
+                <ul>
+                    <li><code>memory_file_id</code></li>
+                    <li><code>title</code></li>
+                    <li><code>type</code></li>
+                    <li><code>linked_signal_ids</code></li>
+                    <li><code>linked_vote_ids</code></li>
+                    <li><code>linked_flow_id</code></li>
+                    <li><code>version</code></li>
+                    <li><code>status</code></li>
+                    <li><code>owners</code></li>
+                    <li><code>tags</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box success">
+            <p><strong>沉淀逻辑：</strong><code>Trigger / Flow -> Planning -> Draft File -> Vote -> Approved File -> Git Cloud Drive -> Dashboard &amp; Retrieval</code></p>
+        </div>
+    </div>
+
+    <div class="section" id="s11">
+        <div class="section-header">
+            <div class="section-number">Section 11</div>
+            <div class="section-title">相关原型与设计连续性</div>
+            <div class="section-subtitle">5.0 内容已切换，但原型入口和设计风格保持与旧版 HTML 连续</div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header"><h4>原型入口</h4></div>
+            <table>
+                <thead>
+                    <tr><th>名称</th><th>类型</th><th>说明</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>桌面端交互原型</strong></td><td>Prototype</td><td><a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive-AI-Agent-Prototype.html" style="color: var(--primary);">打开原型 →</a></td></tr>
+                    <tr><td><strong>Trigger Chip 原型</strong></td><td>Prototype</td><td><a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/1-Trigger-Chip-Prototype.html" style="color: var(--primary);">查看 Trigger 原型 →</a></td></tr>
+                    <tr><td><strong>Task 创建原型</strong></td><td>Prototype</td><td><a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/2-Task-Creation-Prototype.html" style="color: var(--primary);">查看 Task 创建原型 →</a></td></tr>
+                    <tr><td><strong>Planning / Plan B 原型</strong></td><td>Prototype</td><td><a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/2b-Action-Card-PlanB-Prototype.html" style="color: var(--primary);">查看 Planning 原型 →</a></td></tr>
+                    <tr><td><strong>Link 授权原型</strong></td><td>Prototype</td><td><a href="file:///Users/admin/Library/Mobile%20Documents/com~apple~CloudDocs/Tanka/Tanka%20Link%202.0/Link%20Action/Proactive%20Action%20card/3-Link-Authorization-Prototype.html" style="color: var(--primary);">查看授权原型 →</a></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="content-box">
+            <h4>本次 HTML 保持一致的部分</h4>
+            <ul>
+                <li>复用了原 v4.0 的色板、Hero、Nav、Section、Table、Mermaid、Wireframe Card 视觉语言。</li>
+                <li>继续沿用旧版 PRD 的“长文档展示风格”，没有另起新 UI。</li>
+                <li>保留原型入口，方便和既有 demo 直接对照。</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Tanka Proactive AI Agent — 完整需求文档 v5.0</p>
+        <p>Version 5.0 · Last updated: 2026-03-20 · Tanka Product Team</p>
+    </div>
+</div>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'neutral',
+        securityLevel: 'loose',
+        flowchart: {
+            useMaxWidth: true,
+            htmlLabels: true,
+            curve: 'basis'
+        },
+        sequence: {
+            useMaxWidth: true,
+            showSequenceNumbers: false,
+            actorMargin: 30
+        }
+    });
+</script>
+</body>
+</html>

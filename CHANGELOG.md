@@ -3,6 +3,33 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.1] - 2026-03-20
+
+### Fixed
+- **Meeting summary OpenClaw pollution** — `generateSummary()` now uses `getConversationText()` (user + assistant only), excluding tool calls, system messages, and OpenClaw task results
+- **Chrome blank page loop after meeting exit** — `playwright-cli.stop()` now always sets `_explicitlyStopped` and cleans up admission monitor, even when already disconnected
+- **Cross-session transcript leak** — `SharedContext.resetTranscript()` called on `meeting.started`; old meeting's 200 entries no longer pollute new meeting
+- **Listener accumulation** — `MeetingModule` and `TranscriptAuditor` now unsubscribe transcript listeners on stop/deactivate via new `SharedContext.off()` method
+- **ContextRetriever stale state** — `activate()` resets `_topicCache`, `_currentTopic`, `_currentDirection`, `_topicStableSince`, `_pendingQuestion`
+- **Pinned files leak** — `ContextSync.clearPinnedFiles()` called on `meeting.ended`
+- **PostMeetingDelivery unbounded** — deliveries Map trimmed to last 10 entries
+- **Live log file collision** — removed extraneous args from `generateMeetingId()` calls
+- **EventBus correlation guards** — warns on overwrite and double-end of correlations
+- **Talk Locally skips Chrome** — `voice.started` handler checks mode, skips `browserCapture.connect()` for local sessions
+- **Provider selection ignored** — config_server.ts duplicate route handler now passes provider/voice through
+- **Talk Locally startup crash** — fixed `browserAudio` ReferenceError → `ElectronAudioBridge`
+- **Duplicate `st-voice` ID** — renamed to `st-voice-dot` + `st-voice-select`
+
+### Added
+- **Instant Talk Locally startup** — UI opens immediately, API calls run in parallel (perceived: 5-9s → <1s)
+- **AudioWorklet ring buffer playback** — replaces BufferSource scheduling, eliminates pops/clicks
+- **Mic level waveform bar** — AnalyserNode + RAF loop in Desktop panel header
+- **12 activity feed events** — voice, auditor, retriever, screen, postmeeting events now visible in Desktop
+- **`SharedContext.off()`** — listener cleanup for all modules
+- **`SharedContext.getConversationText()`** — filtered transcript for summaries
+- **`SharedContext.resetTranscript()`** — clean slate per meeting
+- **`ContextSync.clearPinnedFiles()`** — meeting-scoped file references
+
 ## [2.5.0] - 2026-03-20
 
 ### Added
