@@ -152,6 +152,23 @@ export interface ContextItem {
   injectedAt: number;
 }
 
+// ── Token Budget Tracking ────────────────────────────────────────
+
+/** Estimated context window size for the Realtime API */
+const TOTAL_CONTEXT_TOKENS = 128_000;
+const TOKEN_WARNING_THRESHOLD = 0.8;   // 80% → emit warning
+const TOKEN_COMPRESS_THRESHOLD = 0.9;  // 90% → auto-compress context queue
+
+export interface TokenBudget {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  contextCapacity: number;       // TOTAL_CONTEXT_TOKENS
+  usagePercent: number;          // 0-100
+  warningLevel: "ok" | "warning" | "critical";
+  responsesTracked: number;
+}
+
 // ── RealtimeClient ─────────────────────────────────────────────────
 
 export class RealtimeClient {
@@ -173,6 +190,18 @@ export class RealtimeClient {
   // Incremental context injection queue
   private _contextQueue: ContextItem[] = [];
 
+  // Token budget tracking
+  private _tokenBudget: TokenBudget = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    contextCapacity: TOTAL_CONTEXT_TOKENS,
+    usagePercent: 0,
+    warningLevel: "ok",
+    responsesTracked: 0,
+  };
+  private _onTokenWarning?: (budget: TokenBudget) => void;
+
   get connected() {
     return this._connected;
   }
@@ -188,6 +217,16 @@ export class RealtimeClient {
   /** Register callback for when reconnect retries are exhausted */
   onReconnectFailed(handler: () => void) {
     this._onReconnectFailed = handler;
+  }
+
+  /** Register callback for token budget warnings (80% or 90% threshold) */
+  onTokenWarning(handler: (budget: TokenBudget) => void) {
+    this._onTokenWarning = handler;
+  }
+
+  /** Get current token budget state */
+  getTokenBudget(): TokenBudget {
+    return { ...this._tokenBudget };
   }
 
   /** Feed transcript entries for context replay on reconnect */
@@ -282,6 +321,11 @@ export class RealtimeClient {
           if (parsed.type === "error") {
             console.error("[Realtime] API error:", JSON.stringify(parsed.error, null, 2));
           }
+
+          // Token budget tracking from response.done events
+          if (parsed.type === "response.done" && parsed.response?.usage) {
+            this._updateTokenBudget(parsed.response.usage);
+          }
         } catch (e) {
           console.error("[Realtime] Parse error:", e);
         }
@@ -304,6 +348,50 @@ export class RealtimeClient {
     });
   }
 
+  // ── Token Budget Tracking ────────────────────────────────────────
+
+  private _updateTokenBudget(usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number }) {
+    this._tokenBudget.inputTokens = usage.input_tokens || 0;
+    this._tokenBudget.outputTokens = usage.output_tokens || 0;
+    this._tokenBudget.totalTokens = usage.total_tokens || (this._tokenBudget.inputTokens + this._tokenBudget.outputTokens);
+    this._tokenBudget.usagePercent = Math.round((this._tokenBudget.totalTokens / TOTAL_CONTEXT_TOKENS) * 100);
+    this._tokenBudget.responsesTracked++;
+
+    // Determine warning level
+    const ratio = this._tokenBudget.totalTokens / TOTAL_CONTEXT_TOKENS;
+    if (ratio >= TOKEN_COMPRESS_THRESHOLD) {
+      this._tokenBudget.warningLevel = "critical";
+      // Auto-compress: evict half the context queue
+      const evictCount = Math.ceil(this._contextQueue.length / 2);
+      for (let i = 0; i < evictCount; i++) {
+        const oldest = this._contextQueue.shift();
+        if (oldest) {
+          this.sendEvent("conversation.item.delete", { item_id: oldest.id });
+          console.log(`[Realtime] Token critical (${this._tokenBudget.usagePercent}%) — evicted context: ${oldest.id}`);
+        }
+      }
+    } else if (ratio >= TOKEN_WARNING_THRESHOLD) {
+      this._tokenBudget.warningLevel = "warning";
+    } else {
+      this._tokenBudget.warningLevel = "ok";
+    }
+
+    // Notify listener
+    if (this._tokenBudget.warningLevel !== "ok" && this._onTokenWarning) {
+      this._onTokenWarning(this._tokenBudget);
+    }
+
+    // Log periodically (every 10 responses)
+    if (this._tokenBudget.responsesTracked % 10 === 0 || this._tokenBudget.warningLevel !== "ok") {
+      console.log(
+        `[Realtime] Token budget: ${this._tokenBudget.usagePercent}% ` +
+        `(${this._tokenBudget.totalTokens}/${TOTAL_CONTEXT_TOKENS}) ` +
+        `[${this._tokenBudget.warningLevel}] ` +
+        `after ${this._tokenBudget.responsesTracked} responses`
+      );
+    }
+  }
+
   // ── Auto-Reconnect with Context Replay ───────────────────────────
 
   private _scheduleReconnect() {
@@ -319,13 +407,10 @@ export class RealtimeClient {
 
     this._reconnectTimer = setTimeout(async () => {
       try {
-        // Rebuild instructions with transcript context for continuity
-        let instructions = this._lastInstructions;
-        if (this._transcriptContext.length > 0) {
-          const contextBlock = this._transcriptContext.join("\n");
-          instructions += `\n\n═══ RECONNECTED SESSION ═══\nThe previous session disconnected. Here is the recent conversation context:\n${contextBlock}\n═══ Continue the conversation naturally. ═══`;
-        }
-        await this._connectInternal(instructions);
+        // Reconnect with clean Layer 0 instructions (no transcript stuffing).
+        // Context is restored via _replayContextQueue() after session.updated.
+        // See CONTEXT-ENGINEERING.md — transcript in instructions violates layer separation.
+        await this._connectInternal(this._lastInstructions);
         console.log(`[Realtime] Reconnected to ${this._provider.name} successfully`);
 
         // Wait for session.updated before replaying context items

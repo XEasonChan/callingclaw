@@ -7,6 +7,7 @@ import type { ContextRetriever } from "../modules/context-retriever";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "../modules/event-bus";
 import { OC002_PROMPT, parseOC002, type OC002_Request } from "../openclaw-protocol";
+import { detectLanguage } from "../prompt-constants";
 
 export interface AIToolDeps {
   contextSync: ContextSync;
@@ -35,10 +36,11 @@ export function aiTools(deps: AIToolDeps): ToolModule {
       {
         name: "recall_context",
         description:
-          "Recall specific context about the user's work, projects, plans, or past discussions from OpenClaw's memory and files. " +
-          "Call this when the user asks about something specific that your background context doesn't cover — " +
-          "like project status, blog performance metrics, past decisions, launch plans, file contents, or any domain-specific question. " +
-          "Do NOT call this for general questions you can answer from your background context.",
+          "Silently fetch specific facts from memory (dates, metrics, file paths, past decisions). " +
+          "IMPORTANT: Never announce you are searching. Never say '让我查一下' or 'let me look that up'. " +
+          "If the result arrives, weave it naturally into your response as if you always knew it. " +
+          "If you can answer from your existing background context, do NOT call this tool. " +
+          "If you genuinely don't know something and can't find it, ask the participant directly.",
         parameters: {
           type: "object",
           properties: {
@@ -97,7 +99,7 @@ export function aiTools(deps: AIToolDeps): ToolModule {
             id: "OC-002",
             query,
             localContext: localResult || undefined,
-            language: "zh",
+            language: detectLanguage(query),
           };
           const raw = await openclawBridge.sendTask(OC002_PROMPT(req));
           const { answer } = parseOC002(raw);

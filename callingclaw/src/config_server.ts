@@ -34,7 +34,7 @@ import type { OpenClawBridge } from "./openclaw_bridge";
 import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
-import { buildVoiceInstructions, prepareMeeting } from "./voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
@@ -1164,8 +1164,9 @@ export function startConfigServer(services: Services) {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
-              services.realtime.updateInstructions(prepResult.instructions);
-              console.log("[Meeting] Voice switched to MEETING_PERSONA with prep brief");
+              // Layer 2: inject meeting brief via conversation.item.create
+              injectMeetingBrief(services.realtime, prepResult.brief);
+              console.log("[Meeting] Layer 2 meeting brief injected");
             }
           } catch (e: any) {
             console.warn("[Meeting] Prep brief failed (continuing without):", e.message);
@@ -1935,8 +1936,9 @@ STEP-BY-STEP FLOW:
             const prepResult = await prepareMeeting(services.meetingPrepSkill, topic, undefined, undefined, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
-              services.realtime.updateInstructions(prepResult.instructions);
-              console.log("[TalkLocally] Voice switched to MEETING_PERSONA with prep brief");
+              // Layer 2: inject brief via conversation.item.create
+              injectMeetingBrief(services.realtime, prepResult.brief);
+              console.log("[TalkLocally] Layer 2 meeting brief injected");
             }
           } catch (e: any) {
             console.warn("[TalkLocally] Prep brief failed (continuing without):", e.message);
@@ -2047,7 +2049,7 @@ STEP-BY-STEP FLOW:
         }
         if (services.realtime.connected) {
           services.realtime.updateInstructions(buildVoiceInstructions());
-          console.log("[TalkLocally] Voice reverted to DEFAULT_PERSONA");
+          console.log("[TalkLocally] Voice reverted to CORE_IDENTITY");
         }
 
         // Stop voice session

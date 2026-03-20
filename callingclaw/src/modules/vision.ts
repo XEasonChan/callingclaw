@@ -18,6 +18,7 @@
 import type { SharedContext } from "./shared-context";
 import type { BrowserCaptureProvider } from "../capture/browser-capture-provider";
 import { CONFIG } from "../config";
+import { LANGUAGE_RULE } from "../prompt-constants";
 import OpenAI from "openai";
 
 export type ScreenCaptureMode = "meeting" | "talk_locally";
@@ -228,21 +229,20 @@ export class VisionModule {
         ? `You are analyzing a meeting screen capture. Focus on NEW and CHANGED content only.
 
 Rules:
-- Describe what is being SHOWN/PRESENTED (slides, code, diagrams, documents, browser tabs)
-- Note any text, code, data, charts, or key visual elements visible
-- If someone is sharing their screen, describe the shared content specifically
-- If it's just the meeting grid (faces), say "Meeting grid view, no shared content"
-- Be concise: 1-3 sentences maximum
-- Focus on WHAT'S DIFFERENT from previous state
-- Use the meeting's language (Chinese if the conversation is in Chinese)
+- Describe what is SHOWN/PRESENTED (slides, code, diagrams, documents, browser tabs)
+- Note text, code, data, charts, or key visual elements visible
+- If shared screen, describe the shared content specifically
+- If just meeting grid (faces), say "Meeting grid view, no shared content"
+- 1-3 sentences maximum. Focus on WHAT'S DIFFERENT from previous state.
+- ${LANGUAGE_RULE}
 
 ${prevDescription}
 
 Recent conversation:
 ${recentTranscript}`
         : `You are CallingClaw's vision module. Describe what's on the screen concisely.
-Focus on: active application, visible UI elements, any text/content, button locations.
-If there's a meeting/presentation, describe the content being shown.
+Focus on: active application, visible UI elements, any text/content.
+1-3 sentences maximum. ${LANGUAGE_RULE}
 
 ${prevDescription}
 

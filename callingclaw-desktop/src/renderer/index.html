@@ -806,7 +806,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <div class="st-item" title="OpenClaw 网关"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
     <div class="st-item" title="BlackHole 音频桥接"><div class="st-dot" id="st-audio"></div><span>音频</span></div>
   </div>
-  <div class="st-right">
+  <div class="st-right" style="display:flex;align-items:center;gap:8px;">
+    <select id="st-provider" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;" onchange="onProviderChange(this.value)">
+      <option value="openai">OpenAI</option>
+      <option value="grok">Grok</option>
+    </select>
+    <select id="st-voice" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;">
+    </select>
     <button class="btn btn-sm btn-primary" id="st-eng-btn" style="display:none" onclick="toggleEngine()">启动引擎</button>
     <span id="st-ver"></span>
   </div>
@@ -1252,6 +1258,39 @@ async function toggleEngine() {
   setTimeout(refreshAll, 1500);
 }
 
+// ── Voice provider + voice selection ──
+var VOICE_OPTIONS = {
+  openai: ['alloy','ash','ballad','coral','echo','fable','marin','nova','onyx','sage','shimmer','verse'],
+  grok: ['Eve','Ara','Rex','Sal','Leo'],
+};
+var VOICE_DEFAULTS = { openai: 'marin', grok: 'Eve' };
+
+function rebuildVoiceSelect(provider) {
+  var sel = document.getElementById('st-voice');
+  if (!sel) return;
+  sel.innerHTML = '';
+  var voices = VOICE_OPTIONS[provider] || VOICE_OPTIONS.openai;
+  var def = VOICE_DEFAULTS[provider];
+  voices.forEach(function(v) {
+    var opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    if (v === def) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+function onProviderChange(provider) {
+  rebuildVoiceSelect(provider);
+}
+// Initialize on page load
+(function initProviderVoice() {
+  // Try to detect current provider from backend
+  fetch(API + '/api/status').then(function(r) { return r.json(); }).then(function(d) {
+    var prov = d.voiceSession && d.voiceSession.provider;
+    if (prov) document.getElementById('st-provider').value = prov;
+    rebuildVoiceSelect(document.getElementById('st-provider').value);
+  }).catch(function() { rebuildVoiceSelect('openai'); });
+})();
+
 // Meeting status helpers
 function meetingStatus(event) {
   const now = Date.now(), start = new Date(event.start?.dateTime || event.start?.date).getTime();
@@ -1689,7 +1728,7 @@ async function leaveMeeting() {
 // Talk Locally — full meeting intelligence stack
 async function startLocalTalk(topic) {
   if (localTalkStarting) return;
-  if (browserAudio && browserAudio.getStatus().running) return; // double-start guard
+  if (typeof ElectronAudioBridge !== 'undefined' && ElectronAudioBridge.getStatus().running) return; // double-start guard
   localTalkStarting = true;
   localTalkTopic = topic || 'Local Conversation';
   var voiceInstructions = '';
@@ -1740,6 +1779,8 @@ async function startLocalTalk(topic) {
         transport: 'direct',
         topic: localTalkTopic,
         instructions: voiceInstructions || undefined,
+        provider: document.getElementById('st-provider').value || undefined,
+        voice: document.getElementById('st-voice').value || undefined,
       }),
     });
     var session = await sr.json();

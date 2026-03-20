@@ -97,11 +97,14 @@ export class ContextRetriever {
   private _retrievedContexts: RetrievedContext[] = [];
 
   // ── Tuning knobs ──
-  private CHAR_THRESHOLD = 500;       // ~2-4 min of dialogue
-  private MIN_INTERVAL_MS = 30_000;   // Min 30s between analyses
+  // Strategy: aggressive silent retrieval. Cast a wide net so the Voice AI
+  // "just knows" context naturally. Users should feel the AI gets smarter
+  // as the meeting progresses, without ever seeing a "let me look that up" moment.
+  private CHAR_THRESHOLD = 300;       // ~1-2 min of dialogue (was 500 — more aggressive)
+  private MIN_INTERVAL_MS = 20_000;   // Min 20s between analyses (was 30s — faster cycles)
   private QUESTION_BOOST = true;      // Trigger immediately on user questions
-  private DEBOUNCE_MS = 3000;         // Wait 3s after last utterance before analyzing
-  private MAX_RETRIEVED_CONTEXTS = 10; // Keep last N retrieved contexts
+  private DEBOUNCE_MS = 2000;         // Wait 2s after last utterance (was 3s — faster response)
+  private MAX_RETRIEVED_CONTEXTS = 15; // Keep last N retrieved contexts (was 10 — wider coverage)
 
   constructor(opts: {
     context: SharedContext;
@@ -185,13 +188,28 @@ export class ContextRetriever {
     this._lastScreenUrl = url;
   };
 
+  /**
+   * Detect utterances that signal a context need — not just literal questions,
+   * but also discussion triggers like mentioning a project name, referencing
+   * a past decision, or bringing up metrics. Cast a wide net so background
+   * retrieval stays ahead of the conversation.
+   */
   private looksLikeQuestion(text: string): boolean {
     const trimmed = text.trim();
+    const lower = trimmed.toLowerCase();
     return (
+      // Literal questions
       trimmed.endsWith("?") ||
       trimmed.endsWith("？") ||
       /[吗呢么嘛][\s。？?]*$/.test(trimmed) ||
-      /^(什么|怎么|为什么|哪|谁|几|多少|是不是|有没有|能不能)/.test(trimmed)
+      /^(什么|怎么|为什么|哪|谁|几|多少|是不是|有没有|能不能)/.test(trimmed) ||
+      // Discussion triggers — someone is referencing context the AI should have ready
+      /之前|上次|当时|那个|记得/.test(trimmed) ||                     // past reference (zh)
+      /last time|previously|remember when|back when/i.test(trimmed) || // past reference (en)
+      /决定|决策|方案|架构|设计/.test(trimmed) ||                     // decision/architecture reference
+      /数据|指标|成本|ROI|转化|metrics|numbers/i.test(trimmed) ||     // metrics reference
+      /bug|issue|问题|修了|修复|fix/i.test(trimmed) ||               // bug reference
+      /对比|竞品|compare|competitor/i.test(trimmed)                   // competitor reference
     );
   }
 
