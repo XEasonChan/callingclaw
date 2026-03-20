@@ -6,7 +6,7 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import type { Services, RouteHandler } from "./types";
 
@@ -151,8 +151,10 @@ export function meetingRoutes(services: Services): RouteHandler {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
-              services.realtime.updateInstructions(prepResult.instructions);
-              console.log("[Meeting] Voice switched to MEETING_PERSONA with prep brief");
+              // Layer 0: CORE_IDENTITY via session.update (already set at voice.start)
+              // Layer 2: Meeting brief via conversation.item.create
+              injectMeetingBrief(services.realtime, prepResult.brief);
+              console.log("[Meeting] Layer 2 meeting brief injected");
             }
           } catch (e: any) {
             console.warn("[Meeting] Prep brief failed (continuing without):", e.message);

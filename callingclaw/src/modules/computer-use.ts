@@ -403,32 +403,32 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
       },
     ];
 
-    const openclawHint = this.openclaw.connected
-      ? "\n3. `openclaw` — delegate complex tasks to the OpenClaw agent (file editing, browser automation, messaging, scheduling).\n" +
-        "   Use openclaw for: precise file editing, web research, sending messages, calendar operations.\n" +
-        "   Use bash for: quick commands, launching apps, simple file operations.\n" +
-        "   Use computer for: visual interaction, clicking, typing in GUI apps.\n"
-      : "";
-
     // Build shared context brief from ContextSync (OpenClaw memory + pinned files)
     const contextBrief = this._contextSync?.getBrief().computer || "";
     const contextBlock = contextBrief
-      ? `\n\n--- SHARED CONTEXT (from OpenClaw memory & pinned files) ---\n${contextBrief}\n--- END SHARED CONTEXT ---\n`
+      ? `\n## Context\n${contextBrief}`
       : "";
 
-    const systemPrompt =
-      "You are CallingClaw's computer control module running on macOS. You have these tools:\n" +
-      "1. `computer` — take screenshots, click, type, scroll, drag on the screen.\n" +
-      "2. `bash` — run shell commands directly on macOS.\n" +
-      openclawHint + "\n" +
-      "To launch applications that are NOT visible on screen, use bash:\n" +
-      '  open -a "Microsoft Edge"   (launch any macOS app by name)\n' +
-      '  open "https://meet.google.com/xxx"   (open URL in default browser)\n' +
-      '  open -a "Google Chrome" "https://..."   (open URL in specific browser)\n\n' +
-      "After launching an app with bash, take a screenshot to verify it appeared.\n" +
-      "Use the conversation transcript to understand what the user or meeting participants are discussing. " +
-      "Be precise with coordinates when clicking. Take screenshots to verify your actions." +
-      contextBlock;
+    // ── Structured system prompt: 3 sections ──
+    // See CONTEXT-ENGINEERING.md for design rationale.
+    const identitySection =
+      "## Identity\n" +
+      "You are CallingClaw's computer control module on macOS.\n" +
+      "Be precise with coordinates. Take screenshots to verify actions.";
+
+    const toolSelectionSection = this.openclaw.connected
+      ? "## Tool Selection (priority order)\n" +
+        "1. `computer` — visual interaction: click, type, scroll, drag, screenshot.\n" +
+        "2. `bash` — shell commands: launch apps, run scripts, quick file ops.\n" +
+        '   Launch apps: open -a "AppName"  |  Open URLs: open "https://..."  |  Verify: take screenshot after.\n' +
+        "3. `openclaw` — delegate to OpenClaw agent: precise file editing, web research, messaging, calendar.\n" +
+        "   Prefer openclaw over bash for: multi-step workflows, file editing, browser automation."
+      : "## Tool Selection (priority order)\n" +
+        "1. `computer` — visual interaction: click, type, scroll, drag, screenshot.\n" +
+        "2. `bash` — shell commands: launch apps, run scripts, quick file ops.\n" +
+        '   Launch apps: open -a "AppName"  |  Open URLs: open "https://..."  |  Verify: take screenshot after.';
+
+    const systemPrompt = `${identitySection}\n\n${toolSelectionSection}${contextBlock}`;
 
     this.emitActivity("ai.step", `Starting: "${instruction.slice(0, 60)}"`);
 

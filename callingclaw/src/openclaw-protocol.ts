@@ -5,7 +5,10 @@
 // an English prompt builder + response parser.
 //
 // All prompts are in English for consistency and model performance.
+// Language detection uses detectLanguage() from prompt-constants.ts.
 // ═══════════════════════════════════════════════════════════════════
+
+import { LANGUAGE_RULE } from "./prompt-constants";
 
 // ══════════════════════════════════════════════════════════════
 // OC-001: Meeting Prep Brief Generation
@@ -130,7 +133,7 @@ User's question: "${req.query}"
 
 ${req.localContext ? `Pre-fetched local context:\n${req.localContext}\n\nExpand on this with more details from your files.` : "No local context found. Search broadly across your memory and files."}
 
-Return a concise factual answer (under 500 words) for the voice assistant to relay. Focus on concrete facts, dates, metrics, and actionable information. Answer in the user's language (${req.language}).`;
+Return a concise factual answer (under 500 words) for the voice assistant to relay. Focus on concrete facts, dates, metrics, and actionable information. ${LANGUAGE_RULE}`;
 
 export function parseOC002(raw: string): OC002_Response {
   return { answer: raw.slice(0, 3000) };

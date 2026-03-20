@@ -14,7 +14,7 @@ import { OpenClawBridge } from "./openclaw_bridge";
 import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
-import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState } from "./voice-persona";
+import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState, injectMeetingBrief } from "./voice-persona";
 // OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
 // ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
 import { startConfigServer } from "./config_server";
@@ -249,9 +249,10 @@ eventBus.on("meeting.started", (data) => {
   // In Talk Locally: captures whatever the user is browsing.
   if (playwrightCli.connected) {
     _domContextInterval = setInterval(async () => {
+      // Check connected flag directly to avoid triggering auto-start (which opens new about:blank tabs)
       if (!playwrightCli.connected) return;
       try {
-        const raw = await playwrightCli.evaluate(`() => {
+        const raw = await playwrightCli.evaluateIfConnected(`() => {
           // Skip if on Google Meet page (Meet mode uses it for other things)
           if (location.hostname === 'meet.google.com') return JSON.stringify({ skip: true });
           return JSON.stringify({
@@ -443,10 +444,8 @@ async function autoLeaveMeeting() {
     // Revert voice to default persona
     meetingPrepSkill.clear();
     if (voice.connected) {
-      const defaultBrief = contextSync.getBrief().voice;
-      const defaultInstructions = buildVoiceInstructions() +
-        (defaultBrief ? `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${defaultBrief}` : "");
-      voice.updateInstructions(defaultInstructions);
+      // Revert to Layer 0 CORE_IDENTITY (no meeting context)
+      voice.updateInstructions(buildVoiceInstructions());
       voice.sendText("会议已经结束了，我已经保存了会议记录。");
     }
 

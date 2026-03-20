@@ -16,6 +16,7 @@ import { googleRoutes } from "./google-routes";
 import { eventRoutes } from "./event-routes";
 import { schedulerRoutes } from "./scheduler-routes";
 import { postmeetingRoutes } from "./postmeeting-routes";
+import { debugRoutes } from "./debug-routes";
 
 export type { Services, RouteHandler } from "./types";
 
@@ -35,5 +36,6 @@ export function buildAllRoutes(services: Services): RouteHandler[] {
     eventRoutes(services),
     schedulerRoutes(services),
     postmeetingRoutes(services),
+    debugRoutes(services),
   ];
 }

@@ -17,7 +17,7 @@ import type { TaskStore } from "../modules/task-store";
 import type { SharedContext } from "../modules/shared-context";
 import type { ContextSync } from "../modules/context-sync";
 import type { PostMeetingDelivery } from "../modules/post-meeting-delivery";
-import { buildVoiceInstructions, prepareMeeting, getPostMeetingSummary } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, getPostMeetingSummary, injectMeetingBrief } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import { OC009_PROMPT, type OC009_Request } from "../openclaw-protocol";
 
@@ -170,13 +170,14 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           const meetTopic = calEvent?.summary || context.workspace?.topic || `Meeting at ${args.meet_url}`;
           const toolMeetingId = generateMeetingId();
           upsertSession({ meetingId: toolMeetingId, topic: meetTopic, meetUrl: args.meet_url, status: "active" });
-          let prepResult: { brief: any; instructions: string } | null = null;
+          let prepResult: Awaited<ReturnType<typeof prepareMeeting>> | null = null;
           if (openclawBridge.connected) {
             try {
               prepResult = await prepareMeeting(meetingPrepSkill, meetTopic, undefined, meetAttendees, toolMeetingId);
               if (deps.voice.connected) {
-                deps.voice.updateInstructions(prepResult.instructions);
-                console.log("[Meeting] Voice switched to MEETING_PERSONA with prep brief");
+                // Layer 2: inject meeting brief via conversation.item.create
+                injectMeetingBrief(deps.voice, prepResult.brief);
+                console.log("[Meeting] Layer 2 meeting brief injected");
               }
             } catch (e: any) {
               console.warn("[Meeting] Prep brief generation failed (continuing without):", e.message);
@@ -397,14 +398,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           });
 
-          // Clear meeting prep state + revert voice to default persona
+          // Clear meeting prep state + revert voice to CORE_IDENTITY
           meetingPrepSkill.clear();
           if (deps.voice.connected) {
-            const defaultBrief = contextSync.getBrief().voice;
-            const defaultInstructions = buildVoiceInstructions() +
-              (defaultBrief ? `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${defaultBrief}` : "");
-            deps.voice.updateInstructions(defaultInstructions);
-            console.log("[Meeting] Voice reverted to DEFAULT_PERSONA");
+            deps.voice.updateInstructions(buildVoiceInstructions());
+            console.log("[Meeting] Voice reverted to CORE_IDENTITY");
           }
 
           return `Left the meeting. Notes saved to: ${filepath}. Created ${createdTasks.length} tasks. Follow-up report has been sent — pending your confirmation to start executing.`;

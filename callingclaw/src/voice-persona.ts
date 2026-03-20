@@ -37,139 +37,118 @@ import type { VoiceModule } from "./modules/voice";
 import type { MeetingPrepSkill, MeetingPrepBrief } from "./skills/meeting-prep";
 import type { CalendarAttendee } from "./mcp_client/google_cal";
 import type { EventBus } from "./modules/event-bus";
+import {
+  CORE_IDENTITY,
+  MISSION_CONTEXT_PREFIX,
+  MISSION_CONTEXT_SUFFIX,
+} from "./prompt-constants";
 
 // ══════════════════════════════════════════════════════════════
-// 1. DEFAULT VOICE PERSONA (no meeting prep)
+// 1. LAYER 0 — CORE IDENTITY (re-exported for convenience)
+//    See prompt-constants.ts for the canonical definition.
+//    This is the ONLY content sent via session.update instructions.
+//    Budget: <200 tokens.
 // ══════════════════════════════════════════════════════════════
 
-export const DEFAULT_PERSONA = `You are CallingClaw, a voice AI assistant for meetings and local conversations.
+export { CORE_IDENTITY };
 
-## Core Behavior
-- Respond concisely and naturally — you are a voice assistant, not a chatbot. Keep answers short unless asked to elaborate.
-- Follow the user's language. If they speak Chinese, respond in Chinese. Technical terms stay in English.
-- When the user asks about something you don't know, use the recall_context tool. Say "让我查一下" while waiting.
-- Summarize decisions and action items proactively during conversations.
-
-## Tools Available
-- recall_context: Look up information from memory and files
-- schedule_meeting / check_calendar: Calendar management
-- join_meeting / leave_meeting: Meeting control
-- computer_action / take_screenshot: Screen control`;
-
-// ══════════════════════════════════════════════════════════════
-// 2. MEETING PERSONA (with prep brief injected)
-// ══════════════════════════════════════════════════════════════
-
-export const MEETING_PERSONA = `You are CallingClaw, an AI meeting assistant currently in a live meeting.
-
-## Your Role
-You are the "fast thinking" voice layer. You have a Meeting Prep Brief prepared by OpenClaw (the "slow thinking" agent) that gives you full context about what's being discussed.
-
-## How to Use the Meeting Prep Brief
-- Use the **summary** and **keyPoints** to guide the discussion flow
-- Reference **architectureDecisions** when explaining WHY something was built a certain way
-- Use **expectedQuestions** to proactively address likely concerns
-- When the user asks you to show something, reference the **filePaths** and **browserUrls** — you can trigger Computer Use to open them
-- When **liveNotes** are updated, acknowledge the new information
-
-## Your Communication Style
-- Be inspirational and encouraging — help the user present their work confidently
-- Ask clarifying questions to deepen understanding: "What's the core assumption here?" "What other considerations led to this decision?"
-- Proactively summarize: "So your main point is..."
-- When the user seems stuck, reference the keyPoints to suggest what to cover next
-- Record requirements: when the user says what they want changed or improved, explicitly note it
-
-## What You Track During the Meeting
-1. **User requirements** — what they want built/changed/improved
-2. **Decisions made** — any conclusions reached during discussion
-3. **Open questions** — things that need follow-up
-4. **Action items** — who does what next
-
-## Computer Use Integration
-- When you ask Computer Use to perform a task, wait for the completion notification
-- After receiving "[DONE] ..." in your context, acknowledge it and continue the presentation
-- You can say things like "Alright, the file is now open" or "The page has been switched to..."
-
-## Language
-- Follow the user's language. If they speak Chinese, respond in Chinese.
-- Technical terms can stay in English.`;
+// Legacy aliases — deprecated, use CORE_IDENTITY directly.
+// These exist so callers that import DEFAULT_PERSONA / MEETING_PERSONA
+// continue to compile, but they now return the same Layer 0 identity.
+/** @deprecated Use CORE_IDENTITY instead */
+export const DEFAULT_PERSONA = CORE_IDENTITY;
+/** @deprecated Use CORE_IDENTITY instead */
+export const MEETING_PERSONA = CORE_IDENTITY;
 
 // ══════════════════════════════════════════════════════════════
 // 3. BUILD VOICE INSTRUCTIONS (combines persona + brief)
 // ══════════════════════════════════════════════════════════════
 
 /**
- * Build the full system prompt for Voice AI.
+ * Build Layer 0 system instructions for Voice AI.
  *
- * Without a brief: uses DEFAULT_PERSONA (general assistant mode)
- * With a brief: uses MEETING_PERSONA + the brief content
+ * ALWAYS returns CORE_IDENTITY — the brief is no longer bundled here.
+ * Meeting context (brief) is injected separately as Layer 2 via
+ * injectMeetingBrief() → conversation.item.create.
  *
- * @param brief - Meeting Prep Brief from MeetingPrepSkill (optional)
- * @returns Full system prompt string for OpenAI Realtime session.update
+ * See CONTEXT-ENGINEERING.md for the full 5-layer strategy.
+ *
+ * @param brief - Ignored (kept for backward compatibility). Use injectMeetingBrief() instead.
+ * @returns Layer 0 system prompt string for session.update instructions
  */
-export function buildVoiceInstructions(brief?: MeetingPrepBrief | null): string {
-  if (!brief) {
-    return DEFAULT_PERSONA;
-  }
+export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string {
+  return CORE_IDENTITY;
+}
 
-  // Build the brief text for injection
-  const briefParts: string[] = [];
+/**
+ * Build the Layer 2 meeting brief text for injection via conversation.item.create.
+ * This is injected ONCE after session starts — not in session.update instructions.
+ *
+ * @param brief - Meeting Prep Brief from MeetingPrepSkill
+ * @returns Formatted meeting context string, or null if no brief
+ */
+export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefined): string | null {
+  if (!brief) return null;
 
-  briefParts.push(`## Meeting Topic: ${brief.topic}`);
-  briefParts.push(`Goal: ${brief.goal}`);
-  briefParts.push(`\n${brief.summary}`);
+  const parts: string[] = [];
+
+  parts.push(`${MISSION_CONTEXT_PREFIX}`);
+  parts.push(`Topic: ${brief.topic}`);
+  parts.push(`Goal: ${brief.goal}`);
+  parts.push(brief.summary);
 
   if (brief.keyPoints.length > 0) {
-    briefParts.push(`\n### Key Points`);
-    brief.keyPoints.forEach((p, i) => briefParts.push(`${i + 1}. ${p}`));
+    parts.push(`Key points: ${brief.keyPoints.join("; ")}`);
   }
 
   if (brief.architectureDecisions.length > 0) {
-    briefParts.push(`\n### Architecture Decisions (reference when asked "why")`);
-    brief.architectureDecisions.forEach((d) =>
-      briefParts.push(`- **${d.decision}**: ${d.rationale}`)
-    );
+    const decisions = brief.architectureDecisions
+      .map((d) => `${d.decision}: ${d.rationale}`)
+      .join("; ");
+    parts.push(`Decisions: ${decisions}`);
   }
 
   if (brief.expectedQuestions.length > 0) {
-    briefParts.push(`\n### Expected Questions`);
-    brief.expectedQuestions.forEach((q) =>
-      briefParts.push(`Q: ${q.question}\nA: ${q.suggestedAnswer}`)
-    );
+    const questions = brief.expectedQuestions
+      .map((q) => `Q: ${q.question} → A: ${q.suggestedAnswer}`)
+      .join(" | ");
+    parts.push(`Expected questions: ${questions}`);
   }
 
   if (brief.previousContext) {
-    briefParts.push(`\n### Previous Meeting Review\n${brief.previousContext}`);
+    parts.push(`Previous meeting: ${brief.previousContext}`);
   }
 
-  // Computer Use references (so Voice can say "let me open that file")
+  // File/URL references for Computer Use
   if (brief.filePaths.length > 0) {
-    briefParts.push(`\n### Available Files (can ask Computer Use to open)`);
-    brief.filePaths.forEach((f) =>
-      briefParts.push(`- ${f.description}: \`${f.path}\``)
-    );
+    const files = brief.filePaths.map((f) => `${f.description}: ${f.path}`).join("; ");
+    parts.push(`Files: ${files}`);
   }
 
   if (brief.browserUrls.length > 0) {
-    briefParts.push(`\n### Available URLs (can ask Computer Use to navigate)`);
-    brief.browserUrls.forEach((u) =>
-      briefParts.push(`- ${u.description}: ${u.url}`)
-    );
+    const urls = brief.browserUrls.map((u) => `${u.description}: ${u.url}`).join("; ");
+    parts.push(`URLs: ${urls}`);
   }
 
-  // Live notes are NO LONGER included in the static instructions.
-  // They are injected incrementally via conversation.item.create
-  // by pushContextUpdate(). This avoids session.update during meetings
-  // which causes audio breaks when the model is mid-response.
+  parts.push(`${MISSION_CONTEXT_SUFFIX}`);
+  parts.push("Context updates will appear as system messages. Use them naturally — do not repeat verbatim.");
 
-  return `${MEETING_PERSONA}\n\n` +
-    `═══════════════════════════════════════\n` +
-    `MEETING PREP BRIEF (from OpenClaw)\n` +
-    `═══════════════════════════════════════\n\n` +
-    briefParts.join("\n") +
-    `\n\n### Live Updates\n` +
-    `Context updates will appear as system messages in the conversation.\n` +
-    `Use them naturally when relevant — do not repeat them verbatim.`;
+  return parts.join("\n");
+}
+
+/**
+ * Inject the meeting brief into the live voice session as a Layer 2 context item.
+ * Call this ONCE after session starts (after session.updated event).
+ *
+ * @returns The context item ID if injected, false if not connected or no brief
+ */
+export function injectMeetingBrief(
+  voiceModule: VoiceModule,
+  brief: MeetingPrepBrief | null | undefined,
+): string | false {
+  const briefText = buildMeetingBriefContext(brief);
+  if (!briefText) return false;
+  return voiceModule.injectContext(briefText);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -266,6 +245,11 @@ export function notifyTaskCompletion(
 /**
  * Start a meeting session with a prep brief.
  * This is the main entry point — call this before Voice.start()
+ *
+ * Returns Layer 0 instructions (for session.update) AND the brief (for Layer 2 injection).
+ * Callers should:
+ *   1. voice.start(instructions)            → sets Layer 0
+ *   2. injectMeetingBrief(voice, brief)     → sets Layer 2
  */
 export async function prepareMeeting(
   prepSkill: MeetingPrepSkill,
@@ -273,10 +257,11 @@ export async function prepareMeeting(
   userContext?: string,
   attendees?: CalendarAttendee[],
   meetingId?: string,
-): Promise<{ brief: MeetingPrepBrief; instructions: string }> {
+): Promise<{ brief: MeetingPrepBrief; instructions: string; briefContext: string | null }> {
   const brief = await prepSkill.generate(topic, userContext, attendees, meetingId);
-  const instructions = buildVoiceInstructions(brief);
-  return { brief, instructions };
+  const instructions = buildVoiceInstructions();
+  const briefContext = buildMeetingBriefContext(brief);
+  return { brief, instructions, briefContext };
 }
 
 /**
