@@ -249,9 +249,10 @@ eventBus.on("meeting.started", (data) => {
   // In Talk Locally: captures whatever the user is browsing.
   if (playwrightCli.connected) {
     _domContextInterval = setInterval(async () => {
+      // Check connected flag directly to avoid triggering auto-start (which opens new about:blank tabs)
       if (!playwrightCli.connected) return;
       try {
-        const raw = await playwrightCli.evaluate(`() => {
+        const raw = await playwrightCli.evaluateIfConnected(`() => {
           // Skip if on Google Meet page (Meet mode uses it for other things)
           if (location.hostname === 'meet.google.com') return JSON.stringify({ skip: true });
           return JSON.stringify({

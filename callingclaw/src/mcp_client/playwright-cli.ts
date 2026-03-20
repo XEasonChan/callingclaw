@@ -155,6 +155,13 @@ export class PlaywrightCLIClient {
     return this.extractEvalResult(raw);
   }
 
+  /** Evaluate JS only if already connected — no auto-start, no new tabs.
+   *  Returns empty string if not connected. Use for background polling. */
+  async evaluateIfConnected(js: string): Promise<string> {
+    if (!this._connected) return "";
+    return this.evaluate(js);
+  }
+
   // ══════════════════════════════════════════════════════════════
   // High-level: Google Meet Join (Deterministic Fast Path)
   // ══════════════════════════════════════════════════════════════
