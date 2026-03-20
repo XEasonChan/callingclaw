@@ -3,6 +3,14 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.20] - 2026-03-20
+
+### Fixed
+- **Playwright Chrome crash (SIGTRAP)** — `playwright-config.json` had `--use-fake-ui-for-media-stream` in `launchOptions.args` which is incompatible with system Chrome (`--browser=chrome`). Removed the flag; media permissions already handled by `ensureChromePreferences()`
+
+### Changed
+- Voice session start passes frontend voice selection to provider config (Grok/OpenAI)
+
 ## [2.4.19] - 2026-03-20
 
 ### Fixed
