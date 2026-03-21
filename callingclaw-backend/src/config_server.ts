@@ -1006,11 +1006,15 @@ export function startConfigServer(services: Services) {
           enriched = events.map((e: any) => {
             const titleLower = (e.summary || "").toLowerCase();
             let _prepBrief: string | null = null;
+            // Find the matching session that HAS a prep file (skip sessions with only live/summary)
             for (const s of sessions) {
               const sTopic = (s.topic || "").toLowerCase();
               if (sTopic && (titleLower.includes(sTopic) || sTopic.includes(titleLower))) {
-                _prepBrief = s.files?.prep || null;
-                break;
+                if (s.files?.prep) {
+                  _prepBrief = s.files.prep;
+                  break; // Found a match WITH prep — use it
+                }
+                // Topic matches but no prep — keep looking for one that has it
               }
             }
             return { ...e, _prepBrief };
