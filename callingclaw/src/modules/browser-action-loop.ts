@@ -49,6 +49,9 @@ export class BrowserActionLoop {
   private eventBus?: EventBus;
   private _aborted = false;
   private _running = false;
+  // Snapshot diff: track baseline for incremental updates
+  private _baselineSnapshot = "";
+  private _previousSnapshot = "";
 
   get running() { return this._running; }
 
@@ -81,6 +84,8 @@ export class BrowserActionLoop {
 
     this._aborted = false;
     this._running = true;
+    this._baselineSnapshot = "";
+    this._previousSnapshot = "";
 
     if (!this.browser.connected) {
       this._running = false;
@@ -94,9 +99,11 @@ export class BrowserActionLoop {
     let lastSnapshot = "";
 
     try {
-      // Initial snapshot
+      // Initial snapshot — becomes the baseline for subsequent diffs
       this.emit("browser_loop.snapshot", { phase: "initial" });
       lastSnapshot = await this.browser.snapshot();
+      this._baselineSnapshot = lastSnapshot;
+      this._previousSnapshot = lastSnapshot;
       this.emit("browser_loop.snapshot_done", {
         phase: "initial",
         length: lastSnapshot.length,
@@ -123,7 +130,7 @@ export class BrowserActionLoop {
         });
 
         const modelStart = performance.now();
-        const action = await this.decideNextAction(goal, lastSnapshot, steps, opts.context);
+        const action = await this.decideNextAction(goal, lastSnapshot, this._previousSnapshot, steps, opts.context);
         const modelMs = Math.round(performance.now() - modelStart);
 
         if (this._aborted) {
@@ -170,6 +177,7 @@ export class BrowserActionLoop {
         });
 
         const execStart = performance.now();
+        this._previousSnapshot = lastSnapshot; // track for diff
         lastSnapshot = await this.executeAction(action);
         const execMs = Math.round(performance.now() - execStart);
 
@@ -211,16 +219,25 @@ export class BrowserActionLoop {
   private async decideNextAction(
     goal: string,
     snapshot: string,
+    previousSnapshot: string,
     previousSteps: string[],
     extraContext?: string,
   ): Promise<BrowserAction> {
-    const prompt = this.buildPrompt(goal, snapshot, previousSteps, extraContext);
+    const prompt = this.buildPrompt(goal, snapshot, previousSnapshot, previousSteps, extraContext);
     return await this.callModel(prompt);
   }
 
+  /**
+   * Build the model prompt with snapshot diff support.
+   *
+   * On step 1: sends the full snapshot (baseline).
+   * On step 2+: sends the FULL current snapshot + a compact diff showing what changed.
+   * The diff helps Haiku focus on what's new without reading the entire tree again.
+   */
   private buildPrompt(
     goal: string,
     snapshot: string,
+    previousSnapshot: string,
     previousSteps: string[],
     extraContext?: string,
   ): string {
@@ -233,6 +250,15 @@ export class BrowserActionLoop {
       ? snapshot.slice(0, 6000) + "\n... (truncated)"
       : snapshot;
 
+    // Compute diff if we have a previous snapshot (step 2+)
+    let diffSection = "";
+    if (previousSnapshot && previousSnapshot !== snapshot && previousSteps.length > 0) {
+      const diff = this.computeSnapshotDiff(previousSnapshot, snapshot);
+      if (diff) {
+        diffSection = `\n## What Changed (since last action)\n${diff}\n`;
+      }
+    }
+
     return `You are a browser automation agent. You control a browser via an accessibility tree with @ref IDs.
 
 ## Goal
@@ -241,7 +267,7 @@ ${goal}
 ${extraContext ? `## Context\n${extraContext}\n` : ""}
 ## Previous Steps
 ${stepsText}
-
+${diffSection}
 ## Current Page (Accessibility Tree)
 ${snap}
 
@@ -256,19 +282,56 @@ ${snap}
 - fail: Goal cannot be achieved. Params: { "reason": "what went wrong" }
 
 ## Rules
-1. Elements in the snapshot have [ref=eNNN] IDs. Use the bare ID (e.g. "e123") in the ref field — do NOT include @ prefix.
-2. If you see a button or link that matches the goal, click it.
-3. If the page shows a waiting/loading state, use "wait" and check again next turn.
-4. If you see confirmation that the goal is achieved (e.g., you're in a meeting, the file is open, etc.), respond with "done".
-5. If something went wrong and the goal can't be achieved (e.g., error message, access denied, dead end), respond with "fail".
-6. Be precise — pick the exact ref from the snapshot. Don't guess refs that aren't shown.
-7. When filling forms, look for the input field ref in the tree, not the label.
-8. After clicking a button, the page may change — you'll see the new snapshot next turn.
-9. IMPORTANT: If a dialog/popup is blocking (e.g. notification permission, cookie consent), ALWAYS dismiss it first with pressKey Escape, or click "Block", "Not now", "Dismiss" before attempting other actions. If clicking doesn't dismiss it, try pressKey Escape.
-10. If clicking an element repeatedly (3+ times) doesn't produce any change, try a different approach: pressKey Escape, scroll, or try a different element.
+1. Elements have @eNNN refs. Use bare ID (e.g. "e123") — no @ prefix.
+2. Check "What Changed" first — it shows what's new since your last action.
+3. If page is loading/waiting, use "wait". If goal is confirmed, use "done". If stuck, use "fail".
+4. Be precise — pick exact refs from the snapshot. Don't guess.
+5. Dismiss blocking dialogs first (pressKey Escape, or click "Block"/"Dismiss").
+6. If 3+ clicks on same element → try different approach.
 
-Respond with JSON only (no markdown, no explanation outside JSON):
-{"action":"<action_name>","ref":"<ref ID without @ prefix>","text":"<text or omit>","direction":"<up/down or omit>","reason":"<brief explanation>"}`;
+Respond with JSON only:
+{"action":"...","ref":"...","text":"...","direction":"...","reason":"..."}`;
+  }
+
+  /**
+   * Compute a compact line-level diff between two accessibility tree snapshots.
+   * Returns only added (+) and removed (-) lines, capped at 30 lines.
+   * Returns null if snapshots are identical or diff is empty.
+   */
+  private computeSnapshotDiff(prev: string, curr: string): string | null {
+    const prevLines = prev.split("\n");
+    const currLines = curr.split("\n");
+
+    // Quick check: if identical, no diff
+    if (prev === curr) return null;
+
+    // Set-based diff: find added and removed lines
+    const prevSet = new Set(prevLines.map(l => l.trim()).filter(Boolean));
+    const currSet = new Set(currLines.map(l => l.trim()).filter(Boolean));
+
+    const added: string[] = [];
+    const removed: string[] = [];
+
+    for (const line of currSet) {
+      if (!prevSet.has(line)) added.push(`+ ${line}`);
+    }
+    for (const line of prevSet) {
+      if (!currSet.has(line)) removed.push(`- ${line}`);
+    }
+
+    if (added.length === 0 && removed.length === 0) return null;
+
+    // Cap output to prevent token explosion
+    const maxLines = 30;
+    const diffLines: string[] = [];
+    for (const r of removed.slice(0, maxLines / 2)) diffLines.push(r);
+    for (const a of added.slice(0, maxLines / 2)) diffLines.push(a);
+
+    if (removed.length + added.length > maxLines) {
+      diffLines.push(`... (${removed.length} removed, ${added.length} added total)`);
+    }
+
+    return diffLines.join("\n");
   }
 
   // ── LLM API Call (reuses TranscriptAuditor's pattern) ──
