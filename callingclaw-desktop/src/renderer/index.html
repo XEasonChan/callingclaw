@@ -1387,19 +1387,27 @@ function buildMeetingListHTML() {
     html += '</div></div>';
   }
 
-  // Upcoming meetings — exclude any that already have a meetingFiles entry (prep card, active, or completed)
-  var knownTopics = {};
-  var knownCalIds = {};
-  for (var pid in S.meetingFiles) {
-    var pd = S.meetingFiles[pid];
-    if (pd.topic) knownTopics[pd.topic] = true;
-    if (pd.calendarEventId) knownCalIds[pd.calendarEventId] = true;
+  // Upcoming meetings — only exclude those with an active prep card DOM element
+  // (prep cards are -wrap elements rendered separately above the meeting list)
+  var activePrepTopics = {};
+  var activePrepCalIds = {};
+  var listEl = document.getElementById('meeting-list');
+  if (listEl) {
+    var wraps = listEl.querySelectorAll('[id$="-wrap"]');
+    for (var wi = 0; wi < wraps.length; wi++) {
+      var wid = wraps[wi].id.replace('-wrap', '');
+      var wd = S.meetingFiles[wid];
+      if (wd) {
+        if (wd.topic) activePrepTopics[wd.topic] = true;
+        if (wd.calendarEventId) activePrepCalIds[wd.calendarEventId] = true;
+      }
+    }
   }
   var upcoming = S.meetings.filter(function(e) {
     if (new Date(e.start?.dateTime || e.start?.date) <= now - 3600000) return false;
-    // Skip if this calendar event already has a meetingFiles entry (any status)
-    if (knownTopics[e.summary]) return false;
-    if (e.id && knownCalIds[e.id]) return false;
+    // Skip if this calendar event has an active prep card visible in the DOM
+    if (activePrepTopics[e.summary]) return false;
+    if (e.id && activePrepCalIds[e.id]) return false;
     return true;
   });
   if (upcoming.length > 0) {
