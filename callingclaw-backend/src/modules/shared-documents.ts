@@ -96,6 +96,17 @@ export function saveSessions(index: SessionsIndex): void {
   Bun.write(SESSIONS_PATH, JSON.stringify(index, null, 2)).catch(() => {});
 }
 
+/**
+ * Optional MeetingDB sync callback.
+ * Set by callingclaw.ts at startup to keep SQLite in sync with sessions.json.
+ */
+let _dbSyncFn: ((session: MeetingSession) => void) | null = null;
+
+/** Register the MeetingDB sync function (call once at startup) */
+export function setMeetingDBSync(fn: (session: MeetingSession) => void) {
+  _dbSyncFn = fn;
+}
+
 /** Register or update a meeting session */
 export function upsertSession(session: Partial<MeetingSession> & { meetingId: string }): MeetingSession {
   const index = readSessions();
@@ -117,6 +128,12 @@ export function upsertSession(session: Partial<MeetingSession> & { meetingId: st
   // Keep last 50 sessions
   if (index.sessions.length > 50) index.sessions = index.sessions.slice(0, 50);
   saveSessions(index);
+
+  // Sync to MeetingDB (SQLite) if registered
+  if (_dbSyncFn && existing) {
+    try { _dbSyncFn(existing); } catch {}
+  }
+
   return existing;
 }
 

@@ -59,8 +59,22 @@ const taskStore = new TaskStore(eventBus);
 
 // Meeting database (SQLite) — replaces sessions.json for metadata
 import { MeetingDB } from "./modules/meeting-db";
+import { setMeetingDBSync } from "./modules/shared-documents";
 const meetingDB = new MeetingDB();
 console.log(`[Init] MeetingDB: ${meetingDB.stats().totalMeetings} meetings, ${meetingDB.stats().totalFiles} files`);
+
+// Sync sessions.json → MeetingDB on every upsertSession() call
+setMeetingDBSync((session) => {
+  meetingDB.upsert({
+    id: session.meetingId,
+    topic: session.topic || "Meeting",
+    start_time: (session as any).startTime || (session as any).createdAt || null,
+    end_time: (session as any).endTime || null,
+    status: session.status || "active",
+    calendar_id: (session as any).calendarEventId || null,
+    meet_url: (session as any).meetUrl || null,
+  });
+});
 
 // Wire calendar auth error detection → EventBus + OpenClaw notification
 calendar.onAuthError = (error: string) => {
