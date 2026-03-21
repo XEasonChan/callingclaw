@@ -2100,7 +2100,16 @@ function routeWsEvent(msg) {
       var card = document.getElementById(pData.meetingId);
       if (card) {
         if (msg.data.title) { var t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pData.topic = msg.data.title; }
-        if (msg.data.startTime) { var mt = card.querySelector('.meet-time'); if (mt) mt.textContent = new Date(msg.data.startTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + message; pData.startTime = msg.data.startTime; }
+        if (msg.data.startTime) {
+          pData.startTime = msg.data.startTime;
+          var sd = new Date(msg.data.startTime);
+          var mt = card.querySelector('.meet-time');
+          if (mt) mt.textContent = sd.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + (msg.data.endTime ? ' - ' + new Date(msg.data.endTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : '') + ' · ' + message;
+          var dn = card.querySelector('.meet-date-num');
+          if (dn) { dn.textContent = sd.getDate(); dn.style.color = ''; }
+          var ds = card.querySelector('.meet-date-sub');
+          if (ds) ds.textContent = sd.toLocaleDateString('zh-CN', {month:'short'}) + ' · ' + ['日','一','二','三','四','五','六'][sd.getDay()];
+        }
         if (msg.data.meetUrl) {
           pData.meetUrl = msg.data.meetUrl;
           var actions = card.querySelector('.meet-actions');
