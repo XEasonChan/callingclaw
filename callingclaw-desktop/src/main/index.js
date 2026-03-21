@@ -507,27 +507,55 @@ async function checkEnvironment() {
     checks.openclaw = { ok: false };
   }
 
-  // Google Calendar — check if GOOGLE_REFRESH_TOKEN is in .env (primary method)
+  // ── Daemon & config: try filesystem first, fallback to HTTP API ──
   const daemonDir = daemon.getDaemonDir();
   const envPath = path.join(daemonDir, '.env');
-  try {
-    if (fs.existsSync(envPath)) {
+  const daemonDirExists = fs.existsSync(daemonDir);
+  const envFileExists = fs.existsSync(envPath);
+
+  // If filesystem checks fail (e.g., DMG install), probe the running daemon via HTTP
+  let daemonAlive = false;
+  let calendarConnected = false;
+  let envConfigured = false;
+  if (!daemonDirExists || !envFileExists) {
+    try {
+      const http = require('http');
+      const statusJson = await new Promise((resolve, reject) => {
+        const req = http.get('http://127.0.0.1:4000/api/status', { timeout: 3000 }, (res) => {
+          let data = '';
+          res.on('data', (chunk) => data += chunk);
+          res.on('end', () => resolve(data));
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+      });
+      const status = JSON.parse(statusJson);
+      daemonAlive = status.callingclaw === 'running';
+      calendarConnected = status.calendar === 'connected';
+      // If daemon is alive, .env must be loaded (Bun auto-loads it)
+      envConfigured = daemonAlive;
+    } catch {}
+  }
+
+  // Google Calendar — check .env file or live daemon status
+  if (envFileExists) {
+    try {
       const envContent = fs.readFileSync(envPath, 'utf-8');
       const hasRefreshToken = envContent.includes('GOOGLE_REFRESH_TOKEN=') &&
-        !envContent.match(/GOOGLE_REFRESH_TOKEN=\s*$/m); // not empty
+        !envContent.match(/GOOGLE_REFRESH_TOKEN=\s*$/m);
       checks.googleCredentials = { ok: hasRefreshToken };
-    } else {
-      checks.googleCredentials = { ok: false };
+    } catch {
+      checks.googleCredentials = { ok: calendarConnected };
     }
-  } catch {
-    checks.googleCredentials = { ok: false };
+  } else {
+    checks.googleCredentials = { ok: calendarConnected };
   }
 
   // CallingClaw daemon directory
-  checks.daemonDir = { ok: fs.existsSync(daemonDir), path: daemonDir };
+  checks.daemonDir = { ok: daemonDirExists || daemonAlive, path: daemonDir };
 
   // .env file
-  checks.envFile = { ok: fs.existsSync(envPath), path: envPath };
+  checks.envFile = { ok: envFileExists || envConfigured, path: envPath };
 
   return checks;
 }
