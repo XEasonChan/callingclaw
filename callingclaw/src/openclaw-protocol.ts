@@ -429,6 +429,104 @@ export function parseOC009(raw: string): OC009_Response {
 }
 
 // ══════════════════════════════════════════════════════════════
+// OC-010: Multimodal Timeline Processing
+// Trigger: Post-meeting, after KeyFrameStore.finalize()
+// OpenClaw reads saved frames + transcript → structured action items with visual references
+// ══════════════════════════════════════════════════════════════
+
+export interface OC010_Request {
+  id: "OC-010";
+  meetingId: string;
+  meetingDir: string;
+  topic: string;
+  duration: string;
+  frameCount: number;
+  transcriptEntries: number;
+  priorityFrameCount: number;
+  timelineFile: string;
+  notesFilePath?: string;
+}
+
+export interface OC010_Action {
+  action: string;
+  referenceFrame?: string;
+  targetFrame?: string;
+  targetPage?: string;
+  fileHint?: string;
+  designNote?: string;
+  currentState?: string;
+  desiredState?: string;
+}
+
+export interface OC010_Response {
+  actions: OC010_Action[];
+  summary?: string;
+}
+
+export const OC010_PROMPT = (req: OC010_Request) =>
+  `A meeting just ended. A visual timeline with ${req.frameCount} screenshots and ${req.transcriptEntries} transcript entries has been saved.
+
+## Your Task
+Read the timeline and screenshots, then create structured action items with visual references.
+
+## Files
+- Timeline: ${req.timelineFile}
+- Screenshot frames: ${req.meetingDir}/frames/
+${req.notesFilePath ? `- Meeting notes: ${req.notesFilePath}` : ""}
+- Topic: ${req.topic}
+- Duration: ${req.duration}
+${req.priorityFrameCount > 0 ? `- Priority frames: ${req.priorityFrameCount} (marked with ⭐ in timeline — READ THESE FIRST)` : ""}
+
+## Instructions
+1. Read the timeline.md file first for an overview.
+2. Read the priority-tagged (⭐) screenshot frames — these are moments when the user pointed at something or requested a change.
+3. For each change request or action item found in the transcript:
+   - Identify which screenshot shows the TARGET page/UI (the thing that needs changing)
+   - Identify which screenshot shows the REFERENCE design (what it should look like, if any)
+   - Note the URL as a file path hint (e.g., localhost:4000/settings → src/renderer/settings.html)
+   - Describe the CURRENT state (what the screenshot shows now)
+   - Describe the DESIRED state (what the user wants it to become)
+
+## Output Format
+Return a JSON array of actions:
+\`\`\`json
+[
+  {
+    "action": "human-readable description of what to change",
+    "referenceFrame": "filename of the design reference screenshot (if any)",
+    "targetFrame": "filename of the screenshot showing what needs to change",
+    "targetPage": "which page/component is affected",
+    "fileHint": "likely source file path based on URL",
+    "currentState": "what it looks like now (from targetFrame)",
+    "desiredState": "what the user wants it to look like (from referenceFrame or transcript)",
+    "designNote": "any additional design context from the conversation"
+  }
+]
+\`\`\`
+
+If no visual change requests were found, return an empty array with a summary of the meeting's key visual moments.`;
+
+export function parseOC010(raw: string): OC010_Response {
+  try {
+    // Try to extract JSON array
+    const arrayMatch = raw.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      const actions = JSON.parse(arrayMatch[0]);
+      if (Array.isArray(actions)) {
+        return { actions, summary: undefined };
+      }
+    }
+    // Try to extract JSON object with actions field
+    const objMatch = raw.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      const obj = JSON.parse(objMatch[0]);
+      if (obj.actions) return { actions: obj.actions, summary: obj.summary };
+    }
+  } catch {}
+  return { actions: [], summary: raw.slice(0, 1000) };
+}
+
+// ══════════════════════════════════════════════════════════════
 // Protocol Index
 // ══════════════════════════════════════════════════════════════
 
@@ -442,6 +540,7 @@ export const OPENCLAW_PROTOCOL = {
   "OC-007": { name: "Meeting Vision Push", prompt: OC007_PROMPT, parse: parseOC007 },
   "OC-008": { name: "Computer Use Delegation", prompt: OC008_PROMPT, parse: parseOC008 },
   "OC-009": { name: "Follow-up Fallback", prompt: OC009_PROMPT, parse: parseOC009 },
+  "OC-010": { name: "Multimodal Timeline Processing", prompt: OC010_PROMPT, parse: parseOC010 },
 } as const;
 
 export type OpenClawProtocolId = keyof typeof OPENCLAW_PROTOCOL;
