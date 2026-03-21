@@ -104,10 +104,16 @@ describe("executeAction", () => {
     expect(result.returncode).not.toBe(0);
   });
 
-  test("screenshot returns deprecated error", async () => {
+  test("screenshot uses screencapture CLI", async () => {
     const result = await executeAction("screenshot", {});
-    expect(result.ok).toBe(false);
-    expect(result.error).toContain("capture providers");
+    // May fail without Screen Recording permission, but should not throw
+    expect(result.action).toBe("screenshot");
+    // Either succeeds with image or fails with permission error
+    if (result.ok) {
+      expect(result.image).toBeTruthy();
+    } else {
+      expect(result.error).toContain("screencapture");
+    }
   });
 
   test("unknown action returns error", async () => {

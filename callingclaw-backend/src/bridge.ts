@@ -120,7 +120,8 @@ export async function executeAction(
         const cmd = button === "double" ? `dc:${x},${y}`
           : button === "right" ? `rc:${x},${y}`
           : `c:${x},${y}`;
-        await run(["cliclick", cmd]);
+        const clickProc = await run(["cliclick", cmd]);
+        if (clickProc.exitCode !== 0) { result.ok = false; result.error = clickProc.stderr || `cliclick exited ${clickProc.exitCode}`; }
         result.position = [x, y];
         break;
       }
@@ -128,7 +129,8 @@ export async function executeAction(
       case "type": {
         const text = params.text || "";
         const escaped = text.replace(/"/g, '\\"');
-        await run(["osascript", "-e", `tell application "System Events" to keystroke "${escaped}"`]);
+        const typeProc = await run(["osascript", "-e", `tell application "System Events" to keystroke "${escaped}"`]);
+        if (typeProc.exitCode !== 0) { result.ok = false; result.error = typeProc.stderr || "osascript keystroke failed"; }
         result.typed = text.length;
         break;
       }
@@ -136,7 +138,8 @@ export async function executeAction(
       case "key": {
         const key = params.key || "";
         const script = buildKeystrokeScript(key);
-        await run(["osascript", "-e", script]);
+        const keyProc = await run(["osascript", "-e", script]);
+        if (keyProc.exitCode !== 0) { result.ok = false; result.error = keyProc.stderr || "osascript key failed"; }
         result.key = key;
         break;
       }
@@ -156,13 +159,15 @@ export async function executeAction(
 
       case "mouse_move": {
         const { x = 0, y = 0 } = params;
-        await run(["cliclick", `m:${x},${y}`]);
+        const moveProc = await run(["cliclick", `m:${x},${y}`]);
+        if (moveProc.exitCode !== 0) { result.ok = false; result.error = moveProc.stderr || "cliclick move failed"; }
         break;
       }
 
       case "drag": {
         const { startX = 0, startY = 0, endX = 0, endY = 0 } = params;
-        await run(["cliclick", `dd:${startX},${startY}`, `du:${endX},${endY}`]);
+        const dragProc = await run(["cliclick", `dd:${startX},${startY}`, `du:${endX},${endY}`]);
+        if (dragProc.exitCode !== 0) { result.ok = false; result.error = dragProc.stderr || "cliclick drag failed"; }
         break;
       }
 
@@ -213,9 +218,25 @@ return "not_found"`;
       }
 
       case "screenshot": {
-        // Deprecated: use BrowserCaptureProvider or DesktopCaptureProvider
-        result.ok = false;
-        result.error = "Screenshot moved to Bun side. Use capture providers.";
+        // Take screenshot via screencapture CLI (fallback for callers still using bridge)
+        const tmpPath = `/tmp/callingclaw-screenshot-${Date.now()}.png`;
+        const ssProc = await run(["screencapture", "-x", "-t", "png", tmpPath]);
+        if (ssProc.exitCode === 0) {
+          try {
+            const file = Bun.file(tmpPath);
+            const buf = await file.arrayBuffer();
+            const b64 = Buffer.from(buf).toString("base64");
+            result.image = b64;
+            // Clean up temp file
+            await Bun.$`rm -f ${tmpPath}`.nothrow().quiet();
+          } catch (e: any) {
+            result.ok = false;
+            result.error = `Screenshot capture succeeded but read failed: ${e.message}`;
+          }
+        } else {
+          result.ok = false;
+          result.error = "screencapture failed — check Screen Recording permission";
+        }
         break;
       }
 
@@ -274,9 +295,17 @@ export class NativeBridge implements InputBridge {
           console.warn(`[Bridge] Action failed: ${action} — ${result.error}`);
         }
         // Emit action_result for any listeners
-        const msg: BridgeMessage = { type: "action_result", payload: result, ts: Date.now() };
+        const resultMsg: BridgeMessage = { type: "action_result", payload: result, ts: Date.now() };
         const listeners = this.handlers.get("action_result") || [];
-        for (const fn of listeners) fn(msg);
+        for (const fn of listeners) fn(resultMsg);
+
+        // Screenshot actions also emit a "screenshot" event for backward compat
+        // (callers like claude_agent.ts and automation-tools.ts listen for this)
+        if (action === "screenshot" && result.image) {
+          const ssMsg: BridgeMessage = { type: "screenshot", payload: { image: result.image }, ts: Date.now() };
+          const ssListeners = this.handlers.get("screenshot") || [];
+          for (const fn of ssListeners) fn(ssMsg);
+        }
       });
       return true;
     }
