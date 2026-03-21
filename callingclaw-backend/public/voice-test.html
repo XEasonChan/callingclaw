@@ -367,52 +367,61 @@
       const select = document.getElementById('meeting-select');
       const statusEl = document.getElementById('meeting-prep-status');
       try {
-        // 1. Fetch calendar events
-        const evtRes = await fetch(`${API}/api/calendar/events`);
-        const evtData = await evtRes.json();
-        const events = Array.isArray(evtData) ? evtData : (evtData.events || []);
+        // 1. Fetch from ALL sources in parallel
+        const [evtRes, notesRes] = await Promise.all([
+          fetch(`${API}/api/calendar/events`).then(r => r.json()).catch(() => ({ events: [] })),
+          fetch(`${API}/api/meeting/notes`).then(r => r.json()).catch(() => ({ files: [] })),
+        ]);
 
-        // 2. Fetch manifest for meetingId mapping
-        let manifest = null;
-        try {
-          const mRes = await fetch(`${API}/api/shared/manifest`);
-          manifest = await mRes.json();
-        } catch {}
+        const calEvents = Array.isArray(evtRes) ? evtRes : (evtRes.events || []);
+        const noteFiles = Array.isArray(notesRes) ? notesRes : (notesRes.files || []);
 
-        // 3. Build meeting list with prep brief status
-        meetingList = events.map(function(e) {
+        // 2. Build meeting list from calendar events
+        const seen = new Set(); // dedup by title
+        meetingList = [];
+
+        for (const e of calEvents) {
           const summary = e.summary || e.title || 'Untitled';
-          const start = e.start?.dateTime || e.start || e.startTime || '';
-          const meetingId = e.meetingId || null;
-          // Try to find meetingId from manifest
-          let mid = meetingId;
-          if (!mid && manifest && manifest.sessions) {
-            const sess = manifest.sessions.find(function(s) {
-              return s.topic === summary || s.meetUrl === (e.hangoutLink || e.meetLink);
-            });
-            if (sess) mid = sess.meetingId;
-          }
-          return {
+          meetingList.push({
             id: e.id,
             summary: summary,
-            start: start,
+            start: e.start?.dateTime || e.start || e.startTime || '',
             end: e.end?.dateTime || e.end || e.endTime || '',
             hangoutLink: e.hangoutLink || e.meetLink || null,
-            meetingId: mid,
-            hasPrepBrief: false, // will check below
-          };
-        });
-
-        // 4. Check which meetings have prep briefs
-        for (const m of meetingList) {
-          if (m.meetingId) {
-            try {
-              const pRes = await fetch(`${API}/api/shared/file?path=${encodeURIComponent(m.meetingId + '_prep.md')}`);
-              const pData = await pRes.json();
-              if (pData && pData.content) m.hasPrepBrief = true;
-            } catch {}
-          }
+            meetingId: e.meetingId || null,
+            hasPrepBrief: false,
+            source: 'calendar',
+            noteFile: null,
+          });
+          seen.add(summary.toLowerCase());
         }
+
+        // 3. Add meetings from notes that aren't already in calendar
+        // Note filename format: YYYY-MM-DD_HHMM_Title.md
+        for (const f of noteFiles) {
+          const fname = typeof f === 'string' ? f : (f.name || f.filename || '');
+          const m = fname.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_(.+)\.md$/);
+          if (!m) continue;
+          const date = m[1], hour = m[2], min = m[3], title = m[4].replace(/_/g, ' ');
+          if (seen.has(title.toLowerCase())) continue; // skip duplicates
+          seen.add(title.toLowerCase());
+          meetingList.push({
+            id: null,
+            summary: title,
+            start: `${date}T${hour}:${min}:00`,
+            end: '',
+            hangoutLink: null,
+            meetingId: null,
+            hasPrepBrief: false,
+            source: 'notes',
+            noteFile: fname,
+          });
+        }
+
+        // 4. Sort by date (newest first)
+        meetingList.sort(function(a, b) {
+          return (b.start || '').localeCompare(a.start || '');
+        });
 
         // 5. Render dropdown
         select.innerHTML = '<option value="">No meeting — free conversation</option>';
@@ -421,8 +430,8 @@
           opt.value = i;
           const timeStr = m.start ? new Date(m.start).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
           const dateStr = m.start ? new Date(m.start).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
-          const prepIcon = m.hasPrepBrief ? ' ✅' : '';
-          opt.textContent = `${dateStr} ${timeStr} — ${m.summary}${prepIcon}`;
+          const srcTag = m.source === 'notes' ? ' 📝' : ' 📅';
+          opt.textContent = `${dateStr} ${timeStr} — ${m.summary}${srcTag}`;
           select.appendChild(opt);
         });
 
@@ -445,25 +454,35 @@
       }
 
       const m = meetingList[idx];
-      if (m.meetingId && m.hasPrepBrief) {
-        preview.style.display = '';
-        preview.textContent = 'Loading prep brief...';
+      preview.style.display = '';
+      preview.textContent = 'Loading...';
+
+      // Try loading content: prep brief (by meetingId) → note file → nothing
+      let content = null;
+
+      // 1. Try prep brief by meetingId
+      if (m.meetingId) {
         try {
           const r = await fetch(`${API}/api/shared/file?path=${encodeURIComponent(m.meetingId + '_prep.md')}`);
           const d = await r.json();
-          if (d && d.content) {
-            selectedMeetingBrief = d.content;
-            // Show first 500 chars as preview
-            preview.textContent = d.content.slice(0, 500) + (d.content.length > 500 ? '...' : '');
-          } else {
-            preview.textContent = 'No prep brief found.';
-          }
-        } catch (e) {
-          preview.textContent = 'Failed to load: ' + e.message;
-        }
+          if (d && d.content) content = d.content;
+        } catch {}
+      }
+
+      // 2. Try meeting note file
+      if (!content && m.noteFile) {
+        try {
+          const r = await fetch(`${API}/api/meeting/notes/${encodeURIComponent(m.noteFile)}`);
+          const d = await r.json();
+          if (d && (d.content || d.text)) content = d.content || d.text;
+        } catch {}
+      }
+
+      if (content) {
+        selectedMeetingBrief = content;
+        preview.textContent = content.slice(0, 500) + (content.length > 500 ? '...' : '');
       } else {
-        preview.style.display = '';
-        preview.textContent = m.meetingId ? 'No prep brief generated yet.' : 'No meeting ID — prep brief unavailable.';
+        preview.textContent = 'No meeting notes or prep brief available.';
       }
     }
 
