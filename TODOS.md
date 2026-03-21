@@ -7,6 +7,7 @@
 **Why:** Without this event, the user has to manually refresh to see the meeting summary. This breaks the "consistent file asset" mental model — prep appears automatically but summary doesn't.
 **Depends on:** Backend WS event bus, summary generation pipeline
 **Added:** 2026-03-19
+**Completed:** v2.5.x (2026-03-21) — Implemented in callingclaw.ts: `eventBus.emit("meeting.summary_ready", { filepath, title, timestamp })`. Desktop renderer and meeting-tools.ts both consume this event.
 
 ## Frontend: Generalize tabbed side panel for multi-doc contexts
 **Priority:** P2

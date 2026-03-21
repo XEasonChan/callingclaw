@@ -105,4 +105,27 @@ Meeting deliverables should render identically on both surfaces:
 | 4     | Post-meeting — summary + todo confirmation     | Planned     |
 | 5     | Execution tracking — OpenClaw progress         | Planned     |
 
-⠀
+---
+
+## v2.5 Architecture Decisions (2026-03-20/21)
+
+### Audio: AudioWorklet + Ring Buffer Playback
+ScriptProcessor was deprecated and caused chunk-boundary pops. Switched to:
+- Capture: AudioWorklet via Blob URL (Electron file:// compatible)
+- Playback: AudioWorklet ring buffer (gapless, no scheduling complexity)
+- Dual AudioContext: native rate capture + 24kHz playback
+
+### Voice: Provider Capability Matrix
+Each provider declares explicit capabilities (interruption, resume, native tools, audio formats, session limits). Prevents runtime surprises when switching providers.
+
+### Voice: Heard Transcript Truncation
+On user interrupt, calculate what was actually heard (heardRatio = elapsed/total duration) and write correction entry. Prevents multi-turn confusion from AI referencing unheard content.
+
+### Tools: Fast/Slow Dispatch
+Slow tools (browser_action, computer_action) return "Working on it" immediately, execute async, inject result via context. Prevents blocking the voice thread.
+
+### Context: Meeting Lifecycle Cleanup
+All modules now properly reset on meeting.started and unsubscribe listeners on meeting.ended. SharedContext.off() method added. Prevents cross-session state leaks.
+
+### Meeting: Multimodal Timeline
+KeyFrameStore persists screenshots + transcript to disk during meetings. OC-010 protocol sends timeline to OpenClaw for visual action extraction.

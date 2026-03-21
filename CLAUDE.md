@@ -1,45 +1,56 @@
-# CallingClaw — Frontend / Desktop Agent
+# CallingClaw — AI Meeting Room
 
-> You are the **Frontend Engineer**. You own the Electron desktop shell, renderer UI, and static web config pages.
+> Real-time voice AI for meetings. Joins Google Meet/Zoom, listens, speaks, takes notes, controls the computer.
 
-## Your Scope
+## Architecture
 
-### Files You OWN (read + write)
-- `callingclaw-desktop/src/main/index.js` — Electron main process
-- `callingclaw-desktop/src/main/daemon-supervisor.js` — Backend daemon lifecycle
-- `callingclaw-desktop/src/main/permission-checker.js` — macOS TCC permission checks
-- `callingclaw-desktop/src/preload/index.js` — Context bridge (IPC)
-- `callingclaw-desktop/src/renderer/**` — All renderer HTML/CSS/JS
-- `callingclaw-desktop/assets/**` — Icons, images
-- `callingclaw-desktop/package.json` — Electron build config
-- `callingclaw/public/**` — Static config web UI
-
-### Files You READ ONLY (never modify)
-- `callingclaw/src/**` — Backend + AI agents own all server-side TypeScript
-- `callingclaw/python_sidecar/**` — Backend agent owns the Python sidecar
-
-## Current Priority Tasks
-
-### P0
-- [ ] Onboarding wizard — connect to `/api/onboarding/ready` and guide user through setup
-- [ ] Skill installation — one-click write to `~/.claude/commands/callingclaw.md`
-
-### P1
-- [ ] Meeting dashboard — real-time transcript + action items via EventBus WebSocket
-- [ ] Permission flow — use `/api/onboarding/permissions` for guided macOS permission setup
-
-### P2
-- [ ] Tray menu quick actions — join meeting, toggle voice, screenshot
-- [ ] Overlay window — floating meeting controls
+```
+callingclaw-backend/     Bun backend — AI orchestration, voice, meeting lifecycle
+callingclaw-desktop/     Electron desktop app — UI, audio bridge, tray
+Callingclaw-landing/     Landing page (Vercel)
+docs/                    Architecture decisions, PRD
+test/                    E2E test fixtures
+```
 
 ## Tech Stack
-- **Electron 35+** with contextIsolation
-- **Vanilla HTML/CSS/JS** renderer (no framework)
-- **IPC**: `contextBridge.exposeInMainWorld` in preload
-- **Backend API**: `http://localhost:4000` (REST) + `ws://localhost:4000/ws/events` (EventBus)
+
+- **Runtime:** Bun (backend), Electron 35+ (desktop)
+- **Voice:** OpenAI Realtime API / xAI Grok Realtime (switchable)
+- **AI:** Claude via OpenRouter (analysis), Haiku (fast classification), Gemini Flash (vision)
+- **Audio:** AudioWorklet capture + playback ring buffer, BlackHole routing for Meet
+- **Context:** 5-layer model (see callingclaw-backend/CONTEXT-ENGINEERING.md)
+
+## Quick Start
+
+```bash
+cd callingclaw-backend && bun install && bun run src/callingclaw.ts
+cd callingclaw-desktop && npm install && npm start
+```
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `callingclaw-backend/src/callingclaw.ts` | Main entry, module wiring |
+| `callingclaw-backend/src/ai_gateway/realtime_client.ts` | Multi-provider Realtime WS client |
+| `callingclaw-backend/src/modules/voice.ts` | Voice module (audio state machine, heard transcript) |
+| `callingclaw-backend/src/config_server.ts` | HTTP API + WebSocket server |
+| `callingclaw-backend/src/voice-persona.ts` | Context engineering layers |
+| `callingclaw-desktop/src/renderer/audio-bridge.js` | AudioWorklet capture + playback |
+| `callingclaw-desktop/src/renderer/index.html` | Desktop UI (vanilla JS) |
+| `callingclaw-desktop/src/main/index.js` | Electron main process |
+
+## Development
+
+- Backend: `cd callingclaw-backend && bun --hot run src/callingclaw.ts`
+- Desktop: `cd callingclaw-desktop && npm start -- --dev`
+- Build DMG: `cd callingclaw-desktop && xattr -cr . && npm run build`
+- Tests: `cd callingclaw-backend && bun test`
 
 ## Rules
-- Use Electron APIs, not Node.js directly in renderer
-- All backend communication goes through IPC → main process → fetch(localhost:4000)
-- Do NOT modify files outside your ownership scope
-- You work on branch `dev/frontend`. Rebase onto `main` when notified.
+
+- Use Bun, not Node.js (backend)
+- Vanilla JS in Electron renderer (no TypeScript in HTML files)
+- Audio: always 24kHz PCM16 mono
+- Context: follow 5-layer model in CONTEXT-ENGINEERING.md
+- Strip xattrs before DMG build (iCloud resource fork issue)

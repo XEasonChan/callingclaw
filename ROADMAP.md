@@ -1,11 +1,30 @@
 # CallingClaw Roadmap
 
-## v3.0 — 消灭 Python Sidecar (Branch: `refactor/electron-consolidation`)
+## Completed in v2.5 (2026-03-21)
 
-> **状态：调研完成，待决策。** 音频方案需先做 spike 测试。
+- Grok (xAI) voice integration — switchable provider with capability matrix
+- AudioWorklet capture + ring buffer playback (replaced ScriptProcessor)
+- 5-layer context engineering model with token budget management
+- Audio state machine: idle → listening → thinking → speaking → interrupted
+- Heard transcript truncation on user interrupt
+- Fast/slow tool dispatch (fast inline <1s, slow async with filler)
+- VoiceTracer: 9 per-turn timing metrics
+- Provider/voice selector in Electron status bar
+- Mic device selector (auto-skip virtual devices)
+- 11 context lifecycle fixes (SharedContext.off(), cross-session leak prevention)
+- Multimodal meeting timeline (KeyFrameStore + OC-010 protocol)
+- meeting.summary_ready WebSocket event for desktop notification
+- Haiku-based title/time extraction (replaced OpenClaw sendTask)
+- Scheduler dedup (prevent flooding repeated join messages)
 
-### 目标
-消灭 Python sidecar，解决 WebSocket 频繁断连的根本问题。
+---
+
+## v3.0 — Eliminate Python Sidecar
+
+> **Status: Partially done.** AUDIO_SOURCE=electron mode works (AudioWorklet captures/plays via Electron). Python sidecar still used for meet_bridge BlackHole routing. Screenshot moved to Electron desktopCapturer.
+
+### Goal
+Fully eliminate Python sidecar. Audio pipeline is the last remaining piece.
 
 ### 推荐方案：A — 保留 Bun + 消灭 Python
 Bun 继续做 AI 编排/API，硬件 I/O 移到 Electron。
@@ -131,15 +150,31 @@ Electron main process
 
 ---
 
-## v2.x — 当前版本维护
+## v3.0+ Outlook
 
-### v2.2.4 (当前)
+- [ ] Eliminate Python sidecar entirely (BlackHole meet_bridge is the last piece)
+- [ ] Migrate from file:// to app:// custom protocol in Electron (AudioWorklet, CSP)
+- [ ] Haiku context compression for meeting instructions (~300 token target)
+- [ ] Generalize tabbed side panel for multi-doc contexts (when second use case appears)
+- [ ] Onboarding wizard — connect to `/api/onboarding/ready`
+- [ ] Overlay window — floating meeting controls
+- [ ] End-to-end integration test (full meeting lifecycle)
+
+## v2.x — Previous Releases
+
+### v2.5.3 (current)
+- Grok voice + AudioWorklet + 5-layer context + provider matrix
+- Audio state machine + heard transcript + fast/slow dispatch
+- VoiceTracer + multimodal timeline + 11 lifecycle fixes
+
+### v2.4.16
+- Talk Locally audio race fix
+- Settings crash fix
+- Haiku title/time extraction
+- Scheduler dedup
+
+### v2.2.4
 - Desktop Meeting Hub
-- Talk Locally 完整会议栈
-- OpenClaw `/callingclaw prepare` 命令
-- Sidecar 稳定性修复
-
-### 近期 TODO
-- [ ] 会议卡片持久化 bug（renderMeetings 覆盖 prep card）
-- [ ] 音频管道端到端可靠性
-- [ ] Hackathon demo 准备 (2026-03-22)
+- Talk Locally full meeting stack
+- OpenClaw `/callingclaw prepare` command
+- Sidecar stability fixes
