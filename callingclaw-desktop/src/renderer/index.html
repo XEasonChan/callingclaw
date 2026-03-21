@@ -1518,11 +1518,17 @@ function renderPastMeetingsHTML() {
   for (var id in S.meetingFiles) {
     if (S.meetingFiles[id].status === 'ended') endedIds[id] = true;
   }
-  // Merge: manifest sessions + ended meetingFiles
+  // Merge: manifest sessions + ended meetingFiles — ONLY past sessions
   var pastItems = [];
+  var now = new Date();
   for (var si = 0; si < sessions.length; si++) {
     var sess = sessions[si];
-    pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sess.date || sess.startTime });
+    var sessDate = sess.date || sess.startTime;
+    // Skip future sessions (they show in "Coming up" or as active prep cards)
+    if (sessDate && new Date(sessDate) > now) { if (sess.meetingId) endedIds[sess.meetingId] = false; continue; }
+    // Skip sessions that are still preparing (shown as active prep cards)
+    if (sess.status === 'preparing' || sess.status === 'active') { if (sess.meetingId) endedIds[sess.meetingId] = false; continue; }
+    pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sessDate });
     if (sess.meetingId) endedIds[sess.meetingId] = false; // Don't duplicate
   }
   for (var eid in endedIds) {
