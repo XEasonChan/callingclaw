@@ -19,25 +19,12 @@ export function recoveryRoutes(services: Services): RouteHandler {
         return Response.json(result, { headers });
       }
 
-      // POST /api/recovery/sidecar — Restart the Python sidecar
+      // POST /api/recovery/sidecar — REMOVED (Python sidecar eliminated)
       if (url.pathname === "/api/recovery/sidecar" && req.method === "POST") {
-        try {
-          // Kill existing sidecar
-          await Bun.$`pkill -f "python.*python_sidecar/main.py"`.quiet().nothrow();
-          await new Promise(r => setTimeout(r, 1000));
-          // Bridge will auto-reconnect when new sidecar starts
-          const pythonBin = process.env.PYTHON_PATH || "/opt/miniconda3/bin/python3";
-          const pythonPath = `${import.meta.dir}/../../python_sidecar/main.py`;
-          Bun.spawn([pythonBin, pythonPath], {
-            stdout: "inherit",
-            stderr: "inherit",
-            env: { ...process.env, BRIDGE_PORT: String(CONFIG.bridgePort) },
-          });
-          services.eventBus.emit("recovery.sidecar", { success: true });
-          return Response.json({ success: true, detail: "Python sidecar restarted" }, { headers });
-        } catch (e: any) {
-          return Response.json({ success: false, detail: e.message }, { status: 500, headers });
-        }
+        return Response.json({
+          success: true,
+          detail: "Python sidecar removed in v2.6.0. NativeBridge handles input actions directly.",
+        }, { headers });
       }
 
       // POST /api/recovery/voice — Restart voice session

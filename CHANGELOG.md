@@ -3,16 +3,27 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [2.5.5] - 2026-03-21
+## [2.6.1] - 2026-03-21
+
+### Added
+- **NativeBridge** — direct osascript + cliclick execution for mouse/keyboard actions, replacing Python sidecar WebSocket bridge
+- **InputBridge interface** — typed interface for dependency injection; all consumers depend on interface, not implementation
 
 ### Changed
+- **Architecture: Python sidecar eliminated** — no more WebSocket server on port 4001, no reconnect loops, no Python process. `bridge.ready` is always true.
 - **Voice persona: depth-matching** — replaced rigid "under 3 sentences" cap with depth-matching response style ("insightful advisor, not cheerleader"); confirmations stay brief, strategy questions get substantive analysis with tradeoffs
-- **Granular memory search** — `searchMemory` now splits by bullet points (`- **xxx**:`), not just headings; returns specific bullets instead of entire 80-line sections
+- **Granular memory search** — `searchMemory` now splits by bullet points, not just headings; match-centered excerpts + heading re-emission for interleaved results
+- Audio config calls are now no-ops — AudioWorklet + SwitchAudioSource handle all audio routing
 
 ### Fixed
-- **Brief injection logging** — logs item ID, key point count, and warns when voice is not connected instead of silently failing
-- **Memory search: match-centered excerpts** — when a matching chunk exceeds 400 chars and the keyword appears late, excerpt now centers on the first keyword hit instead of always truncating from the start
-- **Memory search: heading context for interleaved results** — re-emits heading before each chunk to prevent wrong-section attribution when results from the same heading are non-contiguous
+- **Brief injection logging** — logs item ID, key point count, and warns when voice is not connected
+- **Screenshot backward compat** — `bridge.sendAction("screenshot")` uses screencapture CLI + emits "screenshot" event for existing callers
+- **Exit code checking** — non-zero osascript/cliclick exits correctly reported as failures
+
+### Removed
+- **Python sidecar** (`python_sidecar/main.py`, `requirements.txt`) — 552 lines of Python deleted
+- `bridgePort` and `pythonSidecar` config entries
+- Python process spawn and lifecycle management from `callingclaw.ts`
 
 ## [2.5.3] - 2026-03-21
 
