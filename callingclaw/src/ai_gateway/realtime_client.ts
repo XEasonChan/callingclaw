@@ -29,6 +29,15 @@ import { CONFIG } from "../config";
 
 export type VoiceProviderName = "openai" | "grok";
 
+export interface ProviderCapabilities {
+  supportsInterruption: boolean;
+  supportsResume: boolean;
+  supportsNativeTools: boolean;
+  supportsTranscription: boolean;
+  audioFormats: string[];       // e.g. ["pcm16"]
+  maxSessionMinutes: number;    // e.g. 30 for Grok, 120 for OpenAI
+}
+
 export interface RealtimeProviderConfig {
   name: VoiceProviderName;
   url: string;
@@ -42,6 +51,8 @@ export interface RealtimeProviderConfig {
     voice: string;
     vad: { threshold: number; prefix_padding_ms: number; silence_duration_ms: number };
   }): Record<string, any>;
+  /** Explicit capability declaration for this provider */
+  capabilities: ProviderCapabilities;
 }
 
 export interface RealtimeTool {
@@ -63,6 +74,14 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   },
   // OpenAI → normalized: no mapping needed (these ARE the canonical names)
   eventMap: {},
+  capabilities: {
+    supportsInterruption: true,
+    supportsResume: false,
+    supportsNativeTools: true,
+    supportsTranscription: true,
+    audioFormats: ["pcm16"],
+    maxSessionMinutes: 120,
+  },
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
@@ -92,6 +111,14 @@ export const GROK_PROVIDER: RealtimeProviderConfig = {
   },
   // Grok event names → normalized (OpenAI-compatible) names
   // Only 3 audio output events differ; everything else is identical
+  capabilities: {
+    supportsInterruption: true,
+    supportsResume: false,
+    supportsNativeTools: true,  // web_search, x_search
+    supportsTranscription: true, // grok-2-audio
+    audioFormats: ["pcm16", "pcmu", "pcma"],
+    maxSessionMinutes: 30,
+  },
   eventMap: {
     "response.output_audio.delta": "response.audio.delta",
     "response.output_audio.done": "response.audio.done",
@@ -208,6 +235,10 @@ export class RealtimeClient {
 
   get providerName(): VoiceProviderName {
     return this._provider.name;
+  }
+
+  get capabilities(): ProviderCapabilities {
+    return this._provider.capabilities;
   }
 
   addTool(tool: RealtimeTool) {

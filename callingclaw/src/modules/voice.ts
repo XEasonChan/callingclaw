@@ -10,9 +10,11 @@
 // All event names are normalized by RealtimeClient — VoiceModule
 // uses the same handlers regardless of provider.
 
-import { RealtimeClient, type RealtimeTool, type VoiceProviderName, type ContextItem } from "../ai_gateway/realtime_client";
+import { RealtimeClient, type RealtimeTool, type VoiceProviderName, type ContextItem, type ProviderCapabilities } from "../ai_gateway/realtime_client";
 import type { SharedContext } from "./shared-context";
 import { CONFIG } from "../config";
+
+export type AudioState = "idle" | "listening" | "speaking" | "interrupted" | "thinking";
 
 export interface VoiceModuleOptions {
   context: SharedContext;
@@ -32,6 +34,18 @@ export class VoiceModule {
   private _allTools: RealtimeTool[] = [];  // Full tool set (immutable reference)
   private _provider: VoiceProviderName = "openai";
 
+  // Audio state machine
+  private _audioState: AudioState = "idle";
+  private _audioStateTs: number = 0;
+
+  // Heard transcript tracking (interruption truncation)
+  private _currentResponseAudioSamples = 0;  // Total samples received from provider
+  private _currentResponseStartTime = 0;      // When first audio chunk arrived
+  private _currentResponseTranscript = "";     // Accumulated transcript for heard tracking
+
+  // External callback for speech-started (registered via onSpeechStarted())
+  private _onSpeechStarted?: () => void;
+
   get connected() {
     return this.client.connected;
   }
@@ -39,6 +53,30 @@ export class VoiceModule {
   /** Which voice provider is currently active */
   get provider(): VoiceProviderName {
     return this._provider;
+  }
+
+  /** Provider capability flags (interruption, native tools, etc.) */
+  get capabilities(): ProviderCapabilities {
+    return this.client.capabilities;
+  }
+
+  /** Current audio state (idle, listening, speaking, interrupted, thinking) */
+  get audioState(): AudioState {
+    return this._audioState;
+  }
+
+  /** Timestamp of the last audio state transition */
+  get audioStateTimestamp(): number {
+    return this._audioStateTs;
+  }
+
+  private _setAudioState(state: AudioState) {
+    if (this._audioState !== state) {
+      const prev = this._audioState;
+      this._audioState = state;
+      this._audioStateTs = Date.now();
+      console.log(`[Voice] Audio state: ${prev} → ${state}`);
+    }
   }
 
   constructor(options: VoiceModuleOptions) {
@@ -63,6 +101,89 @@ export class VoiceModule {
   }
 
   private setupEventHandlers() {
+    // ── Audio State: Session ready → listening ──
+    this.client.on("session.updated", () => {
+      this._setAudioState("listening");
+    });
+
+    // ── Audio State + Interruption: User starts speaking ──
+    this.client.on("input_audio_buffer.speech_started", () => {
+      // Heard transcript truncation: calculate what user actually heard
+      if (this._audioState === "speaking" &&
+          this._currentResponseAudioSamples > 0 &&
+          this._currentResponseStartTime > 0) {
+        this._setAudioState("interrupted");
+
+        const elapsedMs = Date.now() - this._currentResponseStartTime;
+        const totalDurationMs = (this._currentResponseAudioSamples / 24000) * 1000;
+        // heardRatio: how much of the audio timeline elapsed before interrupt
+        // Account for 150ms initial buffer latency
+        const heardRatio = Math.min(1, Math.max(0, (elapsedMs - 150) / totalDurationMs));
+
+        if (heardRatio < 0.95 && this._currentResponseTranscript) {
+          const heardLength = Math.floor(this._currentResponseTranscript.length * heardRatio);
+          const heardText = this._currentResponseTranscript.slice(0, heardLength);
+
+          if (heardText.length > 0) {
+            // Check if the full transcript was already written to context
+            const recent = this.context.getRecentTranscript(5);
+            const lastAssistant = recent.filter(e => e.role === "assistant").pop();
+            if (lastAssistant && lastAssistant.text === this._currentResponseTranscript) {
+              // Add a correction entry noting what was actually heard
+              this.context.addTranscript({
+                role: "system",
+                text: `[HEARD] AI was interrupted. User heard: "${heardText.slice(0, 100)}..."`,
+                ts: Date.now(),
+              });
+            }
+            console.log(`[Voice] Interrupt: heard ${Math.round(heardRatio * 100)}% of response (${heardText.length}/${this._currentResponseTranscript.length} chars)`);
+          }
+        }
+      }
+
+      // Cancel in-progress AI response
+      this.client.sendEvent("response.cancel", {});
+
+      // Fire external speech-started callback
+      if (this._onSpeechStarted) this._onSpeechStarted();
+    });
+
+    // ── Audio State: Response created → thinking ──
+    this.client.on("response.created", () => {
+      this._setAudioState("thinking");
+      // Reset heard-transcript counters for new response
+      this._currentResponseAudioSamples = 0;
+      this._currentResponseStartTime = 0;
+      this._currentResponseTranscript = "";
+    });
+
+    // ── Audio State + Heard Tracking: Audio streaming → speaking ──
+    this.client.on("response.audio.delta", (event) => {
+      // Track audio samples for heard-ratio calculation
+      // event.delta is base64 PCM16, each sample is 2 bytes
+      const b64len = (event.delta || "").length;
+      const samples = Math.round(b64len * 3 / 4 / 2);
+      this._currentResponseAudioSamples += samples;
+      if (!this._currentResponseStartTime) this._currentResponseStartTime = Date.now();
+
+      // First audio chunk → transition to speaking
+      if (this._audioState !== "speaking") {
+        this._setAudioState("speaking");
+      }
+    });
+
+    // ── Audio State: Response audio done → listening ──
+    this.client.on("response.audio.done", () => {
+      this._setAudioState("listening");
+    });
+
+    this.client.on("response.done", () => {
+      // Only go to listening if we're not already idle (disconnected)
+      if (this._audioState !== "idle") {
+        this._setAudioState("listening");
+      }
+    });
+
     // ── Live Transcript: User speech ──
     // Event name is the same for both providers
     this.client.on("conversation.item.input_audio_transcription.completed", (event) => {
@@ -83,6 +204,8 @@ export class VoiceModule {
     // Grok: response.output_audio_transcript.* → normalized to response.audio_transcript.*
     this.client.on("response.audio_transcript.delta", (event) => {
       this._transcriptBuffer += event.delta || "";
+      // Accumulate for heard-ratio tracking (separate from _transcriptBuffer which resets)
+      this._currentResponseTranscript += event.delta || "";
     });
 
     this.client.on("response.audio_transcript.done", (event) => {
@@ -258,6 +381,7 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    */
   stop() {
     this.client.disconnect();
+    this._setAudioState("idle");
   }
 
   /**
@@ -290,11 +414,10 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   /**
    * Register handler for user speech interruption.
    * Called when VAD detects user started speaking — cancel AI response + stop playback.
+   * The actual interrupt logic (response.cancel, heard-transcript truncation, state machine)
+   * runs in setupEventHandlers(); this just registers the external callback.
    */
   onSpeechStarted(handler: () => void) {
-    this.client.on("input_audio_buffer.speech_started", () => {
-      this.client.sendEvent("response.cancel", {});
-      handler();
-    });
+    this._onSpeechStarted = handler;
   }
 }
