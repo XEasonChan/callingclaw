@@ -3,6 +3,21 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.2] - 2026-03-21
+
+### Added
+- **Provider Capability Matrix** — `ProviderCapabilities` interface with `supportsInterruption`, `supportsResume`, `supportsNativeTools`, `supportsTranscription`, `audioFormats`, `maxSessionMinutes` per provider
+- **Audio State Machine** — `AudioState` type (idle/listening/thinking/speaking/interrupted) with logged transitions wired to Realtime API events
+- **Heard Transcript Truncation** — on interrupt, calculates `heardRatio` and writes `[HEARD]` correction entry to prevent multi-turn confusion
+- **Logical Session Resume** — `_replayTranscriptContext()` replays conversation as proper `conversation.item.create` messages after reconnect (not instruction text)
+- **Fast/Slow Tool Dispatch** — `SLOW_TOOLS` set: slow tools (browser_action, computer_action, etc.) return "Working on it" immediately, execute async, inject result via context
+- **Voice-Path Tracing** — `VoiceTracer` tracks 9 metrics per turn (userSpeechStart → ttsPlaybackEnd), 50-turn history, `getAverages()` for dashboards
+- **Typed Event Schema** — `AudioFrame`, `TextFrame`, `ContextFrame`, `ToolEvent`, `SessionEvent`, `AudioStateEvent` typed interfaces decoupling business logic from provider JSON
+
+### Fixed
+- **Audio contract mismatch** — `CONFIG.audio.sampleRate` fixed from 16000 → 24000 (matching actual provider rate), added `bitDepth`, `format`, `chunkSamples`
+- **Startup validation** — warns if audio sample rate drifts from 24000Hz
+
 ## [2.5.1] - 2026-03-20
 
 ### Fixed
