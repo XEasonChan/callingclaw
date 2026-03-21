@@ -2515,18 +2515,69 @@ async function obGrantScreen() {
 }
 
 async function obGrantMic() {
-  // Request microphone via Web API (triggers macOS permission dialog)
+  // Request microphone via Electron main process (triggers macOS TCC dialog)
+  var btn = document.getElementById('ob-mic-btn');
+  var el = document.getElementById('ob-mic-status');
+  if (btn) { btn.textContent = '请求中...'; btn.disabled = true; }
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
-    var el = document.getElementById('ob-mic-status');
-    if (el) el.innerHTML = '<span style="color:var(--green);">✓ 麦克风已授权</span>';
-    var btn = document.getElementById('ob-mic-btn');
-    if (btn) { btn.textContent = '✓ 已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; }
-    setTimeout(function() { obNext(); }, 800);
+    var result = await window.callingclaw.permissions.request('microphone');
+    if (result && result.granted) {
+      if (el) el.innerHTML = '<span style="color:var(--green);">✓ 麦克风已授权</span>';
+      if (btn) { btn.textContent = '✓ 已授权'; btn.className = 'btn btn-secondary'; }
+      // Show live volume meter to confirm mic is working
+      startMicMeter('ob-mic-status');
+      setTimeout(function() { obNext(); }, 2000);
+    } else {
+      if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ 权限被拒绝 — 请在系统设置中允许</span> <button class="btn btn-sm btn-ghost" onclick="openPerm(\'microphone\')" style="margin-left:8px;font-size:11px;">打开设置</button>';
+      if (btn) { btn.textContent = '重试'; btn.disabled = false; }
+    }
   } catch (e) {
-    var el = document.getElementById('ob-mic-status');
-    if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ 请在系统设置中允许麦克风权限，然后重启应用</span>';
+    if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ 请求失败: ' + (e.message || e) + '</span>';
+    if (btn) { btn.textContent = '重试'; btn.disabled = false; }
   }
+}
+
+// Live mic volume meter — shows green bar pulsing with audio input
+function startMicMeter(containerId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">'
+    + '<span style="color:var(--green);font-size:12px;">✓ 已授权</span>'
+    + '<div id="mic-meter-bar" style="flex:1;max-width:160px;height:6px;background:var(--surface);border-radius:3px;overflow:hidden;">'
+    + '<div id="mic-meter-fill" style="height:100%;width:0%;background:var(--green);border-radius:3px;transition:width 0.1s;"></div>'
+    + '</div>'
+    + '<span id="mic-meter-label" style="font-size:11px;color:var(--text3);min-width:20px;">0</span>'
+    + '</div>';
+  try {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+      var ctx = new AudioContext();
+      var analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      var source = ctx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      var data = new Uint8Array(analyser.frequencyBinCount);
+      var fill = document.getElementById('mic-meter-fill');
+      var label = document.getElementById('mic-meter-label');
+      var stopped = false;
+      function update() {
+        if (stopped) return;
+        analyser.getByteFrequencyData(data);
+        var sum = 0; for (var i = 0; i < data.length; i++) sum += data[i];
+        var avg = sum / data.length;
+        var pct = Math.min(100, Math.round(avg / 128 * 100));
+        if (fill) fill.style.width = pct + '%';
+        if (label) label.textContent = pct;
+        requestAnimationFrame(update);
+      }
+      update();
+      // Stop after 10 seconds to save resources
+      setTimeout(function() {
+        stopped = true;
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        ctx.close();
+      }, 10000);
+    }).catch(function() {});
+  } catch(e) {}
 }
 
 async function obGrantAccess() {
