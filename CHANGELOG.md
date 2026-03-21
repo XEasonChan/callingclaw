@@ -3,6 +3,17 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.5] - 2026-03-21
+
+### Changed
+- **Voice persona: depth-matching** — replaced rigid "under 3 sentences" cap with depth-matching response style ("insightful advisor, not cheerleader"); confirmations stay brief, strategy questions get substantive analysis with tradeoffs
+- **Granular memory search** — `searchMemory` now splits by bullet points (`- **xxx**:`), not just headings; returns specific bullets instead of entire 80-line sections
+
+### Fixed
+- **Brief injection logging** — logs item ID, key point count, and warns when voice is not connected instead of silently failing
+- **Memory search: match-centered excerpts** — when a matching chunk exceeds 400 chars and the keyword appears late, excerpt now centers on the first keyword hit instead of always truncating from the start
+- **Memory search: heading context for interleaved results** — re-emits heading before each chunk to prevent wrong-section attribution when results from the same heading are non-contiguous
+
 ## [2.5.3] - 2026-03-21
 
 ### Added

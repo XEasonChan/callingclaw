@@ -90,10 +90,10 @@ describe("Layer 0: CORE_IDENTITY", () => {
     expect(CORE_IDENTITY).not.toContain("let me look");
   });
 
-  test("includes facilitator role (drive clarity, not retrieval)", () => {
+  test("includes facilitator role (insightful advisor, not retrieval)", () => {
     const lower = CORE_IDENTITY.toLowerCase();
     expect(lower).toContain("facilitator");
-    expect(lower).toContain("clarity");
+    expect(lower).toContain("insightful advisor");
   });
 
   test("includes decision confirmation pattern", () => {
@@ -106,8 +106,16 @@ describe("Layer 0: CORE_IDENTITY", () => {
     expect(lower).toContain("specifically");
   });
 
-  test("includes response length constraint", () => {
-    expect(CORE_IDENTITY).toContain("3 sentences");
+  test("includes depth-matching response style (not fixed length)", () => {
+    const lower = CORE_IDENTITY.toLowerCase();
+    expect(lower).toContain("match depth");
+    expect(lower).toContain("tradeoffs");
+    // Must NOT contain hard "3 sentences" cap
+    expect(CORE_IDENTITY).not.toContain("Under 3 sentences");
+  });
+
+  test("explicitly bans filler phrases", () => {
+    expect(CORE_IDENTITY).toContain("Never filler");
   });
 
   test("includes silence rule for presentations", () => {
