@@ -2252,7 +2252,18 @@ async function saveKeys() {
   const o = document.getElementById('key-openai').value.trim(), r = document.getElementById('key-openrouter').value.trim();
   if (!o && !r) return;
   const body = {}; if (o) body.OPENAI_API_KEY = o; if (r) body.OPENROUTER_API_KEY = r;
-  try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch {}
+  const btn = document.querySelector('button[onclick*="saveKeys"]');
+  if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
+  try {
+    const resp = await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (resp.ok) {
+      if (btn) { btn.textContent = '✓ 已保存'; setTimeout(() => { btn.textContent = '保存'; btn.disabled = false; }, 2000); }
+    } else {
+      if (btn) { btn.textContent = '保存失败'; btn.disabled = false; }
+    }
+  } catch {
+    if (btn) { btn.textContent = '连接失败'; btn.disabled = false; }
+  }
 }
 
 // User email
@@ -2504,10 +2515,20 @@ function obPollPermission(permName, statusId, btnId, label) {
 async function obSaveKeys() {
   const openaiKey = document.getElementById('ob-key-openai')?.value?.trim();
   const openrouterKey = document.getElementById('ob-key-openrouter')?.value?.trim();
-  if (openaiKey) {
-    try { await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_api_key: openaiKey, openrouter_api_key: openrouterKey || undefined }) }); } catch {}
+  const btn = document.querySelector('#ob-step-3 .btn-primary, #ob-step-3 button[onclick*="obSaveKeys"]');
+  if (!openaiKey) { obNext(); return; }
+  if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
+  try {
+    const r = await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_api_key: openaiKey, openrouter_api_key: openrouterKey || undefined }) });
+    if (r.ok) {
+      if (btn) { btn.textContent = '✓ 已保存'; btn.className = 'btn btn-secondary'; }
+      setTimeout(() => obNext(), 800);
+    } else {
+      if (btn) { btn.textContent = '保存失败 — 重试'; btn.disabled = false; }
+    }
+  } catch (e) {
+    if (btn) { btn.textContent = '连接失败 — daemon 未启动?'; btn.disabled = false; }
   }
-  obNext();
 }
 
 async function obTestOpenClaw() {

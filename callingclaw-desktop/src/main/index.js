@@ -491,9 +491,9 @@ async function checkEnvironment() {
     checks.blackhole16ch = { ok: false };
   }
 
-  // SwitchAudioSource
+  // SwitchAudioSource — check /opt/homebrew/bin too (Electron PATH may not include it)
   try {
-    execSync('which SwitchAudioSource', { timeout: 3000 });
+    execSync('which SwitchAudioSource || test -x /opt/homebrew/bin/SwitchAudioSource', { timeout: 3000 });
     checks.switchAudioSource = { ok: true };
   } catch {
     checks.switchAudioSource = { ok: false };
@@ -507,12 +507,26 @@ async function checkEnvironment() {
     checks.openclaw = { ok: false };
   }
 
-  // CallingClaw daemon directory
+  // Google Calendar — check if GOOGLE_REFRESH_TOKEN is in .env (primary method)
   const daemonDir = daemon.getDaemonDir();
+  const envPath = path.join(daemonDir, '.env');
+  try {
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      const hasRefreshToken = envContent.includes('GOOGLE_REFRESH_TOKEN=') &&
+        !envContent.match(/GOOGLE_REFRESH_TOKEN=\s*$/m); // not empty
+      checks.googleCredentials = { ok: hasRefreshToken };
+    } else {
+      checks.googleCredentials = { ok: false };
+    }
+  } catch {
+    checks.googleCredentials = { ok: false };
+  }
+
+  // CallingClaw daemon directory
   checks.daemonDir = { ok: fs.existsSync(daemonDir), path: daemonDir };
 
   // .env file
-  const envPath = path.join(daemonDir, '.env');
   checks.envFile = { ok: fs.existsSync(envPath), path: envPath };
 
   return checks;
