@@ -1414,7 +1414,7 @@ function buildMeetingListHTML() {
       var eid = 'cal_' + (e.id || i);
       // Find associated meetingFiles data (by topic or meetUrl match)
       var mfData = findMeetingDataForEvent(e);
-      html += '<div class="meet-row clickable" onclick="openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\')" data-eid="' + eid + '">';
+      html += '<div class="meet-row clickable" onclick="openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\', \'' + esc(e._prepBrief||'') + '\')" data-eid="' + eid + '">';
       html += '<div class="meet-date"><div class="meet-date-num">' + dp.day + '</div><div class="meet-date-sub">' + dp.month + ' ' + dp.weekday + '</div></div>';
       html += '<div class="meet-info"><div class="meet-title">' + esc(e.summary || '无标题') + '</div>';
       html += '<div class="meet-time">' + fmtTime(start) + (end ? ' - ' + fmtTime(end) : '') + '</div>';
@@ -1684,19 +1684,25 @@ function openPrepPanel(meetingId) {
 
 function submitTopicFor(topic) { document.getElementById('topic-input').value = topic; submitTopic(); }
 
-async function openCalendarMeetingPanel(topic, meetUrl) {
+async function openCalendarMeetingPanel(topic, meetUrl, prepBriefFile) {
   openPanel(topic || '会议详情', '正在加载会议信息...');
-  // Find meetingId from manifest — match by meetUrl first (most reliable), then topic substring
+  // Extract meetingId from _prepBrief filename (e.g. "cc_xxx_prep.md" → "cc_xxx")
   var meetingId = null;
-  var manifest = await fetchManifestCached();
-  if (manifest && manifest.sessions) {
-    var session = null;
-    if (meetUrl) session = manifest.sessions.find(function(s) { return s.meetUrl === meetUrl; });
-    if (!session) session = manifest.sessions.find(function(s) { return s.topic === topic; });
-    if (!session && topic) session = manifest.sessions.find(function(s) { return s.topic && s.topic.includes(topic.slice(0, 20)); });
-    if (session) meetingId = session.meetingId;
+  if (prepBriefFile && prepBriefFile.endsWith('_prep.md')) {
+    meetingId = prepBriefFile.replace('_prep.md', '');
   }
-  // Also check meetingFiles for any entry matching by topic or meetUrl
+  // Fallback: find meetingId from manifest sessions
+  if (!meetingId) {
+    var manifest = await fetchManifestCached();
+    if (manifest && manifest.sessions) {
+      var session = null;
+      if (meetUrl) session = manifest.sessions.find(function(s) { return s.meetUrl === meetUrl; });
+      if (!session) session = manifest.sessions.find(function(s) { return s.topic === topic; });
+      if (!session && topic) session = manifest.sessions.find(function(s) { return s.topic && s.topic.includes(topic.slice(0, 20)); });
+      if (session) meetingId = session.meetingId;
+    }
+  }
+  // Fallback: check meetingFiles for any entry matching by topic or meetUrl
   if (!meetingId) {
     for (var mid in S.meetingFiles) {
       var mf = S.meetingFiles[mid];

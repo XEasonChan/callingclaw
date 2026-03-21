@@ -528,7 +528,7 @@ app.whenReady().then(async () => {
   }
 
   // Resolve the CallingClaw daemon directory (sibling to this Electron app)
-  const daemonDir = path.resolve(__dirname, '..', '..', '..', 'callingclaw');
+  const daemonDir = path.resolve(__dirname, '..', '..', '..', 'callingclaw-backend');
 
   // Initialize subsystems
   daemon = new DaemonSupervisor({ daemonDir, isDev: IS_DEV });
