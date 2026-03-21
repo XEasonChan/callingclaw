@@ -26,6 +26,15 @@
 **Depends on:** 当前 Blob URL 方案功能验证通过
 **Added:** 2026-03-20
 
+## Backend: Migrate meet_joiner.ts from osascript to Playwright
+**Priority:** P1
+**Owner:** Backend agent
+**Context:** meet_joiner.ts currently uses 20+ osascript-based Chrome JS injection calls to join Google Meet — running shell-escaped AppleScript that executes JavaScript in Chrome's active tab. This is the most fragile code in the codebase: timing-dependent, breaks if Chrome UI changes, and the string escaping is unmaintainable. Playwright (already integrated) handles all of this natively via CDP with proper selectors, waits, and error handling. The playwright-browser.test.ts already demonstrates Meet join via Playwright with device selection and settings configuration.
+**Why:** The osascript join flow is the #2 fragility source after the sidecar itself. Now that the sidecar is eliminated (NativeBridge), the osascript→Playwright migration is the next reliability win.
+**What to change:** (1) Replace `Bun.$`osascript...`` calls in joinGoogleMeet() with PlaywrightCLI.execute() calls (2) Use Playwright selectors instead of JS injection for button clicks, device selection (3) Keep Zoom flow as-is (uses native app, not browser) (4) Update tests
+**Depends on:** NativeBridge migration (must be stable first)
+**Added:** 2026-03-21
+
 ## Voice: Haiku context compression for meeting instructions
 **Priority:** P2
 **Owner:** Backend agent
