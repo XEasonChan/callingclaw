@@ -36,7 +36,7 @@ try {
 export const CONFIG = {
   // Server
   port: parseInt(process.env.PORT || "4000"),
-  bridgePort: parseInt(process.env.BRIDGE_PORT || "4001"),
+  // bridgePort removed — Python sidecar eliminated in v2.6.0
 
   // Voice provider selection: "openai" | "grok" (A/B testing)
   voiceProvider: (process.env.VOICE_PROVIDER || "openai") as "openai" | "grok",
@@ -131,11 +131,8 @@ export const CONFIG = {
     cliPath: process.env.PEEKABOO_PATH || "peekaboo",
   },
 
-  // Python sidecar — set AUDIO_SOURCE=electron to disable sidecar launch
-  // When disabled, Electron handles audio via /ws/audio-bridge and automation via IPC osascript
-  pythonSidecar: {
-    enabled: (process.env.AUDIO_SOURCE || "sidecar") !== "electron",
-  },
+  // Python sidecar REMOVED in v2.6.0 — NativeBridge handles all input actions
+  // Audio: Electron AudioWorklet, Input: osascript + cliclick, Screenshots: screencapture + CDP
 
   // User identity
   userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",

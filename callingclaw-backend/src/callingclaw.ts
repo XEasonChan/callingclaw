@@ -742,31 +742,11 @@ startConfigServer({
   meetingDB,
 });
 
-// ── 8. Launch Python Sidecar (optional — disabled when AUDIO_SOURCE=electron) ──
-
-const pythonPath = `${import.meta.dir}/../python_sidecar/main.py`;
-const pythonFile = Bun.file(pythonPath);
-let sidecarProc: ReturnType<typeof Bun.spawn> | null = null;
-
-if (!CONFIG.pythonSidecar.enabled) {
-  console.log("[Init] Python sidecar DISABLED (AUDIO_SOURCE=electron)");
-  console.log("[Init] Audio via /ws/audio-bridge, automation via Electron IPC");
-} else if (await pythonFile.exists()) {
-  console.log("[Init] Launching Python sidecar...");
-  const pythonBin = process.env.PYTHON_PATH || "/opt/miniconda3/bin/python3";
-  console.log(`[Init] Using Python: ${pythonBin}`);
-  sidecarProc = Bun.spawn([pythonBin, pythonPath], {
-    stdout: "inherit",
-    stderr: "inherit",
-    env: {
-      ...process.env,
-      BRIDGE_PORT: String(CONFIG.bridgePort),
-    },
-  });
-} else {
-  console.warn("[Init] Python sidecar not found at", pythonPath);
-  console.warn("[Init] Running in API-only mode (no hardware control)");
-}
+// ── 8. Python Sidecar REMOVED — NativeBridge handles all input actions ──
+// Audio: Electron AudioWorklet + SwitchAudioSource
+// Input: osascript + cliclick (via NativeBridge)
+// Screenshots: screencapture CLI + Chrome CDP
+console.log("[Init] NativeBridge active (no Python sidecar)");
 
 process.on("SIGINT", async () => {
   console.log("\n[Shutdown] Stopping CallingClaw...");
@@ -792,7 +772,6 @@ process.on("SIGINT", async () => {
 
   transcriptAuditor.deactivate();
   contextRetriever.deactivate();
-  if (sidecarProc) sidecarProc.kill();
   bridge.stop();
   voice.stop();
   playwrightCli.stop();
@@ -806,7 +785,7 @@ console.log(`
 ║                                                      ║
 ║  Config UI:  http://localhost:${CONFIG.port}               ║
 ║  Events WS:  ws://localhost:${CONFIG.port}/ws/events       ║
-║  Bridge WS:  ws://localhost:${CONFIG.bridgePort}                ║
+║  Input:      NativeBridge (osascript + cliclick)  ║
 ║                                                      ║
 ║  Modules: Voice ✓  ComputerUse ✓  Calendar ✓        ║
 ║  Context: SharedContext ✓  ContextSync ✓  Meeting ✓  ║
