@@ -22,6 +22,7 @@ import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState, injectMeetingBrief } from "./voice-persona";
 import { KeyFrameStore } from "./modules/key-frame-store";
+import { OpenClawDispatcher } from "./openclaw-dispatcher";
 // OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
 // ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
 import { startConfigServer } from "./config_server";
@@ -77,6 +78,7 @@ await taskStore.load();
 
 const contextSync = new ContextSync();
 const openclawBridge = new OpenClawBridge();
+const dispatcher = new OpenClawDispatcher(openclawBridge);
 
 const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
 
@@ -621,6 +623,7 @@ const toolDeps = {
   meeting,
   get voice() { return voice; }, // Lazy — voice created below
   openclawBridge,
+  dispatcher,
   meetingPrepSkill,
   contextSync,
   contextRetriever,

@@ -5,6 +5,7 @@ import type { ToolModule } from "./types";
 import type { ContextSync } from "../modules/context-sync";
 import type { ContextRetriever } from "../modules/context-retriever";
 import type { OpenClawBridge } from "../openclaw_bridge";
+import type { OpenClawDispatcher } from "../openclaw-dispatcher";
 import type { EventBus } from "../modules/event-bus";
 import { OC002_PROMPT, parseOC002, type OC002_Request } from "../openclaw-protocol";
 import { detectLanguage } from "../prompt-constants";
@@ -13,11 +14,12 @@ export interface AIToolDeps {
   contextSync: ContextSync;
   contextRetriever?: ContextRetriever;
   openclawBridge: OpenClawBridge;
+  dispatcher?: OpenClawDispatcher;
   eventBus: EventBus;
 }
 
 export function aiTools(deps: AIToolDeps): ToolModule {
-  const { contextSync, contextRetriever, openclawBridge, eventBus } = deps;
+  const { contextSync, contextRetriever, openclawBridge, dispatcher, eventBus } = deps;
 
   const isUsableOpenClawAnswer = (answer: string) => {
     const normalized = answer.trim().toLowerCase();
@@ -93,21 +95,33 @@ export function aiTools(deps: AIToolDeps): ToolModule {
             // Quick search found nothing — auto-escalate to thorough
           }
 
-          // Path B: Thorough — delegate to OpenClaw via OC-002 (2-15s)
-          console.log(`[RecallContext] Delegating to OpenClaw: "${query.slice(0, 80)}"`);
-          const req: OC002_Request = {
-            id: "OC-002",
-            query,
-            localContext: localResult || undefined,
-            language: detectLanguage(query),
-          };
-          const raw = await openclawBridge.sendTask(OC002_PROMPT(req));
-          const { answer } = parseOC002(raw);
-          if (isUsableOpenClawAnswer(answer)) {
-            return `[OpenClaw recall]\n${answer}`;
+          // Path B: Thorough — three-channel dispatch (subprocess first, gateway fallback)
+          console.log(`[RecallContext] Dispatching thorough recall: "${query.slice(0, 80)}"`);
+
+          if (dispatcher) {
+            // Use dispatcher: subprocess (3-5s) with haiku, falls back to gateway
+            const dispatchResult = await dispatcher.recallThorough(query);
+            console.log(`[RecallContext] Dispatch: channel=${dispatchResult.channel}, ${dispatchResult.durationMs}ms, fallback=${dispatchResult.fallback}`);
+            if (isUsableOpenClawAnswer(dispatchResult.result)) {
+              return `[Recall via ${dispatchResult.channel}]\n${dispatchResult.result}`;
+            }
+          } else {
+            // Legacy path: direct Gateway call via OC-002
+            const req: OC002_Request = {
+              id: "OC-002",
+              query,
+              localContext: localResult || undefined,
+              language: detectLanguage(query),
+            };
+            const raw = await openclawBridge.sendTask(OC002_PROMPT(req));
+            const { answer } = parseOC002(raw);
+            if (isUsableOpenClawAnswer(answer)) {
+              return `[OpenClaw recall]\n${answer}`;
+            }
           }
+
           if (localResult) {
-            console.warn(`[RecallContext] OpenClaw returned no usable answer, falling back to local memory for "${query.slice(0, 80)}"`);
+            console.warn(`[RecallContext] Thorough recall returned no usable answer, falling back to local memory for "${query.slice(0, 80)}"`);
             return `[Memory recall]\n${localResult}`;
           }
           return "I couldn't retrieve reliable context for that just now. Please try rephrasing the question or give me one more keyword to search.";
