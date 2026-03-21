@@ -9,7 +9,7 @@
     "build": "electron-builder --mac",
     "pack": "electron-builder --dir"
   },
-  "author": "Tanka",
+  "author": "Andrew Chan",
   "license": "PRIVATE",
   "devDependencies": {
     "electron": "^35.7.5",

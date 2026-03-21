@@ -390,4 +390,4 @@ kill $(lsof -t -i :4000)
 
 ## License
 
-Private — © 2026 Tanka / Andrew Chan
+Private — © 2026 Andrew Chan
