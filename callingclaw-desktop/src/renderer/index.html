@@ -1387,20 +1387,19 @@ function buildMeetingListHTML() {
     html += '</div></div>';
   }
 
-  // Upcoming meetings — exclude any that already have a prep card showing above
-  var prepTopics = {};
+  // Upcoming meetings — exclude any that already have a meetingFiles entry (prep card, active, or completed)
+  var knownTopics = {};
+  var knownCalIds = {};
   for (var pid in S.meetingFiles) {
     var pd = S.meetingFiles[pid];
-    if (pd.status === 'preparing' || pd.prep.status === 'loading') {
-      if (pd.topic) prepTopics[pd.topic] = true;
-      if (pd.calendarEventId) prepTopics['__eid__' + pd.calendarEventId] = true;
-    }
+    if (pd.topic) knownTopics[pd.topic] = true;
+    if (pd.calendarEventId) knownCalIds[pd.calendarEventId] = true;
   }
   var upcoming = S.meetings.filter(function(e) {
     if (new Date(e.start?.dateTime || e.start?.date) <= now - 3600000) return false;
-    // Skip if this calendar event already has a prep card
-    if (prepTopics[e.summary]) return false;
-    if (e.id && prepTopics['__eid__' + e.id]) return false;
+    // Skip if this calendar event already has a meetingFiles entry (any status)
+    if (knownTopics[e.summary]) return false;
+    if (e.id && knownCalIds[e.id]) return false;
     return true;
   });
   if (upcoming.length > 0) {
