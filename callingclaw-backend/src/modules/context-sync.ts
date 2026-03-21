@@ -226,8 +226,12 @@ export class ContextSync {
 
   /**
    * Search OpenClaw's MEMORY.md locally by keywords.
-   * Returns relevant sections (fast, <100ms, no external call).
+   * Returns relevant **paragraphs** (fast, <100ms, no external call).
    * Used by the recall_context tool's "quick" path.
+   *
+   * Splits by BULLET POINTS (- **xxx**:) not just headings, so a giant section
+   * like "CallingClaw 2.0" returns only the specific bullet that matches,
+   * not the entire 80-line block.
    */
   searchMemory(query: string): string {
     if (!this.openclawMemory) return "";
@@ -235,47 +239,83 @@ export class ContextSync {
     const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
     if (keywords.length === 0) return "";
 
+    // ── Split into granular chunks: heading sections + individual bullet points ──
+    // A "chunk" is either:
+    //   - A heading line (## / ###) + its first non-bullet paragraph (if short)
+    //   - A single bullet point (- **xxx**: ...) which may span multiple lines
+    //   - A table row or short paragraph between headings
+    const chunks: Array<{ heading: string; text: string }> = [];
     const lines = this.openclawMemory.split("\n");
-    const scoredSections: Array<{ heading: string; content: string; score: number }> = [];
 
     let currentHeading = "";
-    let currentLines: string[] = [];
+    let currentChunkLines: string[] = [];
 
-    const flushSection = () => {
-      if (currentLines.length === 0) return;
-      const content = currentLines.join("\n");
-      const lower = (currentHeading + " " + content).toLowerCase();
-      let score = 0;
-      for (const kw of keywords) {
-        // Count occurrences of each keyword
-        const matches = lower.split(kw).length - 1;
-        score += matches;
+    const flushChunk = () => {
+      const text = currentChunkLines.join("\n").trim();
+      if (text) {
+        chunks.push({ heading: currentHeading, text });
       }
-      if (score > 0) {
-        scoredSections.push({ heading: currentHeading, content, score });
-      }
+      currentChunkLines = [];
     };
 
     for (const line of lines) {
+      // New heading → flush + update heading
       if (line.match(/^#{1,3}\s/)) {
-        flushSection();
+        flushChunk();
         currentHeading = line;
-        currentLines = [];
-      } else {
-        currentLines.push(line);
+        continue;
+      }
+
+      // New bold bullet point (- **xxx**:) → flush previous chunk, start new one
+      if (line.match(/^-\s+\*\*/)) {
+        flushChunk();
+        currentChunkLines.push(line);
+        continue;
+      }
+
+      // Continuation of current chunk (indented lines, sub-bullets, plain text)
+      currentChunkLines.push(line);
+    }
+    flushChunk();
+
+    // ── Score each chunk by keyword hits ──
+    const scored: Array<{ heading: string; text: string; score: number; uniqueHits: number }> = [];
+
+    for (const chunk of chunks) {
+      const lower = (chunk.heading + " " + chunk.text).toLowerCase();
+      let score = 0;
+      let uniqueHits = 0;
+      for (const kw of keywords) {
+        const matches = lower.split(kw).length - 1;
+        if (matches > 0) {
+          score += matches;
+          uniqueHits++;
+        }
+      }
+      if (score > 0) {
+        // Boost chunks where more distinct keywords match (relevance > frequency)
+        scored.push({ ...chunk, score: score + uniqueHits * 2, uniqueHits });
       }
     }
-    flushSection();
 
-    // Sort by relevance, take top 3 sections
-    scoredSections.sort((a, b) => b.score - a.score);
-    const topSections = scoredSections.slice(0, 3);
+    // Sort by relevance, take top 5 chunks (more granular = more results OK)
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, 5);
 
-    if (topSections.length === 0) return "";
+    if (top.length === 0) return "";
 
-    return topSections
-      .map((s) => `${s.heading}\n${s.content.slice(0, 1500)}`)
-      .join("\n\n");
+    // Group by heading for readability, cap each chunk at 400 chars
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const chunk of top) {
+      if (!seen.has(chunk.heading) && chunk.heading) {
+        seen.add(chunk.heading);
+        result.push(chunk.heading);
+      }
+      result.push(chunk.text.slice(0, 400));
+    }
+
+    return result.join("\n").slice(0, 2000);
   }
 
   /**
