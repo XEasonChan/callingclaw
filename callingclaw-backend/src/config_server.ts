@@ -1172,12 +1172,20 @@ export function startConfigServer(services: Services) {
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
               // Layer 2: inject meeting brief via conversation.item.create
-              injectMeetingBrief(services.realtime, prepResult.brief);
-              console.log("[Meeting] Layer 2 meeting brief injected");
+              const itemId = injectMeetingBrief(services.realtime, prepResult.brief);
+              if (itemId) {
+                console.log(`[Meeting] ✅ Layer 2 meeting brief injected (${prepResult.brief.keyPoints?.length || 0} key points, item: ${itemId})`);
+              } else {
+                console.warn("[Meeting] ⚠️ Layer 2 brief injection returned false — voice may not be connected");
+              }
+            } else {
+              console.warn("[Meeting] ⚠️ Voice not connected — brief generated but NOT injected. Will inject when voice starts.");
             }
           } catch (e: any) {
-            console.warn("[Meeting] Prep brief failed (continuing without):", e.message);
+            console.warn("[Meeting] ❌ Prep brief failed (continuing without):", e.message);
           }
+        } else {
+          console.warn(`[Meeting] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, openClaw=${services.openclawBridge?.connected ?? false}. Voice AI will have no meeting context.`);
         }
 
         // Step 2: Configure audio + screen capture mode BEFORE joining
@@ -1943,13 +1951,20 @@ STEP-BY-STEP FLOW:
             const prepResult = await prepareMeeting(services.meetingPrepSkill, topic, undefined, undefined, meetingId);
             prepBrief = prepResult.brief;
             if (services.realtime.connected) {
-              // Layer 2: inject brief via conversation.item.create
-              injectMeetingBrief(services.realtime, prepResult.brief);
-              console.log("[TalkLocally] Layer 2 meeting brief injected");
+              const itemId = injectMeetingBrief(services.realtime, prepResult.brief);
+              if (itemId) {
+                console.log(`[TalkLocally] ✅ Layer 2 brief injected (${prepResult.brief.keyPoints?.length || 0} key points, item: ${itemId})`);
+              } else {
+                console.warn("[TalkLocally] ⚠️ Brief injection returned false");
+              }
+            } else {
+              console.warn("[TalkLocally] ⚠️ Voice not connected — brief generated but NOT injected");
             }
           } catch (e: any) {
-            console.warn("[TalkLocally] Prep brief failed (continuing without):", e.message);
+            console.warn("[TalkLocally] ❌ Prep brief failed (continuing without):", e.message);
           }
+        } else {
+          console.warn(`[TalkLocally] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, openClaw=${services.openclawBridge?.connected ?? false}`);
         }
 
         // Step 3: Start meeting recording (transcript)

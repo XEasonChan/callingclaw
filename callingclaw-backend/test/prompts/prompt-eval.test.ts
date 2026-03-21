@@ -65,10 +65,10 @@ describe("Prompt Eval: CORE_IDENTITY behavior", () => {
     if (SKIP_REASON) console.log(`[Prompt Eval] Skipped: ${SKIP_REASON}`);
   });
 
-  test.skipIf(!!SKIP_REASON)("responds concisely (under 3 sentences) for simple questions", async () => {
-    const response = await chat(CORE_IDENTITY, "What is TypeScript?");
+  test.skipIf(!!SKIP_REASON)("matches depth to question — concise for confirmations", async () => {
+    const response = await chat(CORE_IDENTITY, "Is TypeScript a superset of JavaScript? Yes or no.");
     const sentences = countSentences(response);
-    expect(sentences).toBeLessThanOrEqual(4); // Allow 1 sentence grace
+    expect(sentences).toBeLessThanOrEqual(3); // Confirmation = brief
     expect(response.length).toBeLessThan(500);
   });
 

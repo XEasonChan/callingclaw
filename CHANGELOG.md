@@ -3,17 +3,22 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [2.6.0] - 2026-03-21
+## [2.6.1] - 2026-03-21
 
 ### Added
 - **NativeBridge** — direct osascript + cliclick execution for mouse/keyboard actions, replacing Python sidecar WebSocket bridge
 - **InputBridge interface** — typed interface for dependency injection; all consumers depend on interface, not implementation
-- **17 new tests** — full unit test coverage for NativeBridge action execution (click, type, key, scroll, drag, run_command, find_and_click)
 
 ### Changed
 - **Architecture: Python sidecar eliminated** — no more WebSocket server on port 4001, no reconnect loops, no Python process. `bridge.ready` is always true.
-- Audio config calls (`bridge.send("config", ...)`) are now no-ops — AudioWorklet + SwitchAudioSource handle all audio routing
-- Sidecar recovery endpoint (`/api/recovery/sidecar`) returns informational message instead of restarting Python
+- **Voice persona: depth-matching** — replaced rigid "under 3 sentences" cap with depth-matching response style ("insightful advisor, not cheerleader"); confirmations stay brief, strategy questions get substantive analysis with tradeoffs
+- **Granular memory search** — `searchMemory` now splits by bullet points, not just headings; match-centered excerpts + heading re-emission for interleaved results
+- Audio config calls are now no-ops — AudioWorklet + SwitchAudioSource handle all audio routing
+
+### Fixed
+- **Brief injection logging** — logs item ID, key point count, and warns when voice is not connected
+- **Screenshot backward compat** — `bridge.sendAction("screenshot")` uses screencapture CLI + emits "screenshot" event for existing callers
+- **Exit code checking** — non-zero osascript/cliclick exits correctly reported as failures
 
 ### Removed
 - **Python sidecar** (`python_sidecar/main.py`, `requirements.txt`) — 552 lines of Python deleted
