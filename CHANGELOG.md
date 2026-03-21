@@ -3,6 +3,23 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.6.0] - 2026-03-21
+
+### Added
+- **NativeBridge** — direct osascript + cliclick execution for mouse/keyboard actions, replacing Python sidecar WebSocket bridge
+- **InputBridge interface** — typed interface for dependency injection; all consumers depend on interface, not implementation
+- **17 new tests** — full unit test coverage for NativeBridge action execution (click, type, key, scroll, drag, run_command, find_and_click)
+
+### Changed
+- **Architecture: Python sidecar eliminated** — no more WebSocket server on port 4001, no reconnect loops, no Python process. `bridge.ready` is always true.
+- Audio config calls (`bridge.send("config", ...)`) are now no-ops — AudioWorklet + SwitchAudioSource handle all audio routing
+- Sidecar recovery endpoint (`/api/recovery/sidecar`) returns informational message instead of restarting Python
+
+### Removed
+- **Python sidecar** (`python_sidecar/main.py`, `requirements.txt`) — 552 lines of Python deleted
+- `bridgePort` and `pythonSidecar` config entries
+- Python process spawn and lifecycle management from `callingclaw.ts`
+
 ## [2.5.3] - 2026-03-21
 
 ### Added
