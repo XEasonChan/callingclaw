@@ -1592,7 +1592,8 @@ STEP-BY-STEP FLOW:
               `**不写文件 + 不调 API = Desktop 看不到！**`,
             ].join("\n");
 
-            await services.openclawBridge.sendTask(taskPrompt);
+            // Use isolated session to avoid history pollution from Memdex cron, old meetings, etc.
+            await services.openclawBridge.sendTaskIsolated(taskPrompt);
           } catch (e: any) {
             services.eventBus.emit("meeting.prep_progress", {
               meetingId, step: "error", message: `OpenClaw 处理失败: ${e.message}`,

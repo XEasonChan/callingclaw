@@ -197,6 +197,65 @@ export class OpenClawBridge {
     });
   }
 
+  /**
+   * Send a task in an ISOLATED session (no history pollution).
+   * Used for meeting prep delegation — avoids Memdex cron, old meetings, etc.
+   * Spawns a fresh sub-agent session, sends the task, waits for completion.
+   */
+  async sendTaskIsolated(taskText: string, opts?: { model?: string; onDelta?: (text: string) => void }): Promise<string> {
+    if (!this._connected) {
+      try { await this.connect(); } catch {
+        return "OpenClaw is not running.";
+      }
+    }
+
+    try {
+      // Spawn isolated session
+      const spawnResult = await this.request("sessions_spawn", {
+        message: taskText,
+        model: opts?.model || "claude-sonnet-4-6",
+        sessionTarget: "isolated",
+      });
+
+      const childKey = spawnResult?.childSessionKey;
+      if (!childKey) return "Failed to spawn isolated session";
+
+      console.log(`[OpenClaw] Spawned isolated session: ${childKey}`);
+
+      // Wait for the session to complete (poll via sessions_history)
+      const startTime = Date.now();
+      const TIMEOUT = 5 * 60 * 1000; // 5 min
+
+      while (Date.now() - startTime < TIMEOUT) {
+        await new Promise(r => setTimeout(r, 3000)); // poll every 3s
+
+        try {
+          const history = await this.request("sessions_history", {
+            sessionKey: childKey,
+            messageLimit: 1,
+          });
+
+          // Check if the last message is from assistant (task complete)
+          const msgs = history?.messages || [];
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg?.role === "assistant") {
+            const text = this.extractMessageText(lastMsg);
+            if (text) {
+              console.log(`[OpenClaw] Isolated task complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+              return text;
+            }
+          }
+        } catch {
+          // Session might still be processing
+        }
+      }
+
+      return "OpenClaw isolated task timed out (5 minutes).";
+    } catch (e: any) {
+      return `OpenClaw isolated session error: ${e.message}`;
+    }
+  }
+
   private handleChatEvent(payload: any) {
     if (!payload) return;
 
