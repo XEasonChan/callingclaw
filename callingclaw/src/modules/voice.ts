@@ -13,6 +13,8 @@
 import { RealtimeClient, type RealtimeTool, type VoiceProviderName, type ContextItem, type ProviderCapabilities } from "../ai_gateway/realtime_client";
 import type { SharedContext } from "./shared-context";
 import { CONFIG } from "../config";
+import { VoiceTracer, type VoiceTurnTrace } from "./voice-trace";
+import type { AudioStateEvent, ToolEvent, SessionEvent } from "../ai_gateway/voice-events";
 
 export type AudioState = "idle" | "listening" | "speaking" | "interrupted" | "thinking";
 
@@ -52,6 +54,9 @@ export class VoiceModule {
   private _currentResponseStartTime = 0;      // When first audio chunk arrived
   private _currentResponseTranscript = "";     // Accumulated transcript for heard tracking
 
+  // Voice path tracing (observability)
+  private _tracer = new VoiceTracer();
+
   // External callback for speech-started (registered via onSpeechStarted())
   private _onSpeechStarted?: () => void;
 
@@ -78,6 +83,9 @@ export class VoiceModule {
   get audioStateTimestamp(): number {
     return this._audioStateTs;
   }
+
+  /** Voice path tracer for observability metrics */
+  get tracer(): VoiceTracer { return this._tracer; }
 
   private _setAudioState(state: AudioState) {
     if (this._audioState !== state) {
@@ -117,6 +125,14 @@ export class VoiceModule {
 
     // ── Audio State + Interruption: User starts speaking ──
     this.client.on("input_audio_buffer.speech_started", () => {
+      // Trace: mark interruption if AI was speaking, then start new turn
+      if (this._audioState === "speaking") {
+        this._tracer.mark('interruptionTime');
+        this._tracer.endTurn();
+      }
+      this._tracer.startTurn();
+      this._tracer.mark('userSpeechStart');
+
       // Heard transcript truncation: calculate what user actually heard
       if (this._audioState === "speaking" &&
           this._currentResponseAudioSamples > 0 &&
@@ -157,9 +173,15 @@ export class VoiceModule {
       if (this._onSpeechStarted) this._onSpeechStarted();
     });
 
+    // ── Trace: User stops speaking ──
+    this.client.on("input_audio_buffer.speech_stopped", () => {
+      this._tracer.mark('userSpeechEnd');
+    });
+
     // ── Audio State: Response created → thinking ──
     this.client.on("response.created", () => {
       this._setAudioState("thinking");
+      this._tracer.mark('modelFirstToken');
       // Reset heard-transcript counters for new response
       this._currentResponseAudioSamples = 0;
       this._currentResponseStartTime = 0;
@@ -177,16 +199,24 @@ export class VoiceModule {
 
       // First audio chunk → transition to speaking
       if (this._audioState !== "speaking") {
+        this._tracer.mark('modelFirstAudio');
+        this._tracer.mark('ttsPlaybackStart');
         this._setAudioState("speaking");
       }
     });
 
     // ── Audio State: Response audio done → listening ──
     this.client.on("response.audio.done", () => {
+      this._tracer.mark('ttsPlaybackEnd');
+      this._tracer.endTurn();
       this._setAudioState("listening");
     });
 
-    this.client.on("response.done", () => {
+    this.client.on("response.done", (event: any) => {
+      // Track token usage for observability
+      if (event?.usage) {
+        this._tracer.recordTokens(event.usage.input_tokens || 0, event.usage.output_tokens || 0);
+      }
       // Only go to listening if we're not already idle (disconnected)
       if (this._audioState !== "idle") {
         this._setAudioState("listening");
@@ -245,6 +275,7 @@ export class VoiceModule {
       }
 
       console.log(`[Voice] Tool call: ${name}`, args);
+      this._tracer.recordTool(name);
 
       // Record in transcript
       this.context.addTranscript({

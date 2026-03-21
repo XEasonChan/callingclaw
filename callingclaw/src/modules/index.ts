@@ -4,6 +4,7 @@
 export { SharedContext } from "./shared-context";
 export { AuthModule } from "./auth";
 export { VoiceModule } from "./voice";
+export { VoiceTracer, type VoiceTurnTrace } from "./voice-trace";
 export { VisionModule } from "./vision";
 export { ComputerUseModule } from "./computer-use";
 export { MeetingModule } from "./meeting";

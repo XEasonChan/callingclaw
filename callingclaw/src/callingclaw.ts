@@ -102,6 +102,7 @@ const meetingScheduler = new MeetingScheduler({
   calendar,
   openclawBridge,
   eventBus,
+  meetingPrepSkill,
 });
 
 const postMeetingDelivery = new PostMeetingDelivery({

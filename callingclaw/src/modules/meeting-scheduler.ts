@@ -18,6 +18,7 @@
 import type { GoogleCalendarClient, CalendarEvent } from "../mcp_client/google_cal";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
+import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { OC003_PROMPT, parseOC003, type OC003_Request } from "../openclaw-protocol";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
@@ -43,18 +44,21 @@ export class MeetingScheduler {
   private openclawBridge: OpenClawBridge;
   private eventBus: EventBus;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private scheduled = new Map<string, ScheduledMeeting>(); // calendarEventId → info
-  private _everScheduled = new Set<string>(); // ALL event IDs ever scheduled (persistent dedup)
+  private scheduled = new Map<string, ScheduledMeeting>(); // fingerprint → info
+  private _everScheduled = new Set<string>(); // ALL fingerprints ever scheduled (persistent dedup)
   private _active = false;
+  private meetingPrepSkill: MeetingPrepSkill | null = null;
 
   constructor(opts: {
     calendar: GoogleCalendarClient;
     openclawBridge: OpenClawBridge;
     eventBus: EventBus;
+    meetingPrepSkill?: MeetingPrepSkill;
   }) {
     this.calendar = opts.calendar;
     this.openclawBridge = opts.openclawBridge;
     this.eventBus = opts.eventBus;
+    this.meetingPrepSkill = opts.meetingPrepSkill || null;
   }
 
   get active() { return this._active; }
@@ -115,8 +119,10 @@ export class MeetingScheduler {
         // Skip events already past or too far in the future
         if (startMs < now - 60_000 || startMs > cutoff) continue;
 
-        // Use Google Calendar event ID (stable across polls) with fallback
-        const eventId = event.id || `${event.meetLink}_${event.start}`;
+        // Stable fingerprint: meetLink + date (NOT event.id — Google returns
+        // different IDs across polls for the same event, causing duplicate crons)
+        const normalizedDate = new Date(event.start).toISOString().split("T")[0];
+        const eventId = `${event.meetLink}_${normalizedDate}`;
 
         // Skip if already scheduled (current session OR any past session)
         if (this.scheduled.has(eventId) || this._everScheduled.has(eventId)) continue;
@@ -147,6 +153,9 @@ export class MeetingScheduler {
             meetUrl: event.meetLink,
             joinAt: joinAtISO,
           });
+
+          // Trigger pre-meeting research (OC-001) in the background
+          this.triggerMeetingPrep(event);
         }
       }
 
@@ -224,6 +233,34 @@ export class MeetingScheduler {
       meetLink: meetUrl,
     };
     return this.registerCronJob(event, joinAtISO);
+  }
+
+  /**
+   * Trigger OC-001 meeting prep in the background.
+   * Non-blocking — fires and logs result, does not block cron registration.
+   */
+  private triggerMeetingPrep(event: CalendarEvent): void {
+    if (!this.meetingPrepSkill) {
+      console.warn("[MeetingScheduler] No meetingPrepSkill — skipping pre-meeting research");
+      return;
+    }
+
+    const attendees = event.attendees || [];
+    console.log(`[MeetingScheduler] Triggering meeting prep for "${event.summary}"`);
+
+    this.meetingPrepSkill
+      .generate(event.summary, undefined, attendees)
+      .then((brief) => {
+        console.log(`[MeetingScheduler] Meeting prep ready: "${event.summary}" — ${brief.keyPoints.length} key points`);
+        this.eventBus.emit("scheduler.prep_ready", {
+          summary: event.summary,
+          meetUrl: event.meetLink,
+          keyPoints: brief.keyPoints,
+        });
+      })
+      .catch((e: any) => {
+        console.error(`[MeetingScheduler] Meeting prep failed for "${event.summary}":`, e.message);
+      });
   }
 
   /** Load scheduled meetings cache from disk */
