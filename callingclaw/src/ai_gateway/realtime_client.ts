@@ -448,6 +448,7 @@ export class RealtimeClient {
         // (items sent before session is configured may be rejected)
         const replayHandler = () => {
           this._replayContextQueue();
+          this._replayTranscriptContext();
         };
         // One-shot listener: replay once after session is configured
         const existingHandlers = this.handlers.get("session.updated") || [];
@@ -616,6 +617,33 @@ export class RealtimeClient {
           content: [{ type: "input_text", text: item.text }],
         },
       });
+    }
+  }
+
+  /**
+   * Replay recent transcript as conversation items after a reconnect.
+   * Unlike stuffing transcript into instructions, this preserves proper
+   * conversation structure (user/assistant roles) so the model can
+   * distinguish who said what and maintain coherent turn-taking.
+   */
+  private _replayTranscriptContext() {
+    if (this._transcriptContext.length === 0) return;
+
+    console.log(`[Realtime] Replaying ${this._transcriptContext.length} transcript entries after reconnect`);
+    for (const entry of this._transcriptContext) {
+      // Parse "[role] text" format produced by updateTranscriptContext()
+      const match = entry.match(/^\[(\w+)\]\s(.+)/s);
+      if (match) {
+        const [, role, text] = match;
+        const mappedRole = role === "assistant" ? "assistant" : "user";
+        this.sendEvent("conversation.item.create", {
+          item: {
+            type: "message",
+            role: mappedRole,
+            content: [{ type: "input_text", text }],
+          },
+        });
+      }
     }
   }
 

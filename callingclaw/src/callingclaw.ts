@@ -3,6 +3,12 @@
 // Dedicated machine: CallingClaw owns its own screen, audio, and browser.
 
 import { CONFIG } from "./config";
+
+// Validate audio config matches provider expectations
+if (CONFIG.audio.sampleRate !== 24000) {
+  console.warn(`[Init] Audio sample rate ${CONFIG.audio.sampleRate}Hz != 24000Hz (provider expectation)`);
+}
+
 import { PythonBridge } from "./bridge";
 import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";

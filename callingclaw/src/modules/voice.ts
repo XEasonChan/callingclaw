@@ -16,6 +16,15 @@ import { CONFIG } from "../config";
 
 export type AudioState = "idle" | "listening" | "speaking" | "interrupted" | "thinking";
 
+/** Tools that are too slow to await inline — dispatched async to avoid blocking voice thread */
+const SLOW_TOOLS = new Set([
+  "browser_action",
+  "computer_action",
+  "take_screenshot",
+  "open_file",
+  "share_screen",
+]);
+
 export interface VoiceModuleOptions {
   context: SharedContext;
   systemInstructions?: string;
@@ -244,23 +253,50 @@ export class VoiceModule {
         ts: Date.now(),
       });
 
-      let result = "No handler registered";
-      if (this.onToolCall) {
-        try {
-          result = await this.onToolCall(name, args, call_id);
-        } catch (e: any) {
-          result = `Error: ${e.message}`;
+      if (SLOW_TOOLS.has(name)) {
+        // Slow tool — acknowledge immediately, don't block voice thread
+        this.client.submitToolResult(call_id, "Working on it. I'll let you know when done.");
+
+        // Execute async — inject result when ready
+        if (this.onToolCall) {
+          this.onToolCall(name, args, call_id).then((result) => {
+            this.injectContext(`[DONE] ${name}: ${result.slice(0, 200)}`);
+            this.context.addTranscript({
+              role: "system",
+              text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
+              ts: Date.now(),
+            });
+            console.log(`[Voice] Slow tool ${name} completed async`);
+          }).catch((e: any) => {
+            this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
+            this.context.addTranscript({
+              role: "system",
+              text: `[Tool Result] ${name}: Error: ${e.message}`,
+              ts: Date.now(),
+            });
+            console.error(`[Voice] Slow tool ${name} failed:`, e.message);
+          });
         }
+      } else {
+        // Fast tool — await inline (existing behavior)
+        let result = "No handler registered";
+        if (this.onToolCall) {
+          try {
+            result = await this.onToolCall(name, args, call_id);
+          } catch (e: any) {
+            result = `Error: ${e.message}`;
+          }
+        }
+
+        this.client.submitToolResult(call_id, result);
+
+        // Record result in transcript
+        this.context.addTranscript({
+          role: "system",
+          text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
+          ts: Date.now(),
+        });
       }
-
-      this.client.submitToolResult(call_id, result);
-
-      // Record result in transcript
-      this.context.addTranscript({
-        role: "system",
-        text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
-        ts: Date.now(),
-      });
     });
   }
 

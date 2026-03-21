@@ -108,11 +108,15 @@ export const CONFIG = {
     ssimThreshold: 0.95,
   },
 
-  // Audio
+  // Audio — Canonical format for ALL CallingClaw audio paths.
+  // All input sources (mic, BlackHole, system audio) MUST be normalized
+  // to this format before sending to any provider.
   audio: {
-    sampleRate: 16000,
-    channels: 1,
-    chunkMs: 20,
+    sampleRate: 24000,    // Hz — OpenAI/Grok Realtime native rate
+    channels: 1,          // mono
+    bitDepth: 16,         // PCM16
+    format: "pcm16",      // encoding identifier
+    chunkSamples: 4096,   // samples per processing chunk (~170ms)
   },
 
   // Automation Layers
