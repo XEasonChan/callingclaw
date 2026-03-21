@@ -3,6 +3,17 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.5.3] - 2026-03-21
+
+### Added
+- **Multimodal Meeting Timeline** — KeyFrameStore persists screenshots + transcript to disk during meetings; OC-010 protocol sends timeline to OpenClaw for visual action extraction
+- **Three-Channel OpenClaw Dispatcher** — local / subprocess / gateway routing for OpenClaw tasks
+- **Snapshot Diff in BrowserActionLoop** — sends only changed regions to reduce vision API cost
+- **KeyFrameStore** — screenshot dedup + priority frame detection + resize for efficient storage
+
+### Changed
+- Directory restructure: `callingclaw/` → `callingclaw-backend/`
+
 ## [2.5.2] - 2026-03-21
 
 ### Added
