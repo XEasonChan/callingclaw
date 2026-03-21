@@ -1,6 +1,6 @@
 {
   "name": "callingclaw-desktop",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "CallingClaw Desktop \u2014 Electron shell for the CallingClaw AI meeting assistant",
   "main": "src/main/index.js",
   "scripts": {
