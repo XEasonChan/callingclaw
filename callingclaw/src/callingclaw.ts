@@ -21,6 +21,8 @@ import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState, injectMeetingBrief } from "./voice-persona";
+import { KeyFrameStore } from "./modules/key-frame-store";
+import { OpenClawDispatcher } from "./openclaw-dispatcher";
 // OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
 // ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
 import { startConfigServer } from "./config_server";
@@ -76,6 +78,7 @@ await taskStore.load();
 
 const contextSync = new ContextSync();
 const openclawBridge = new OpenClawBridge();
+const dispatcher = new OpenClawDispatcher(openclawBridge);
 
 const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
 
@@ -177,10 +180,18 @@ let _meetingVisionBuffer: string[] = [];
 const browserCapture = new BrowserCaptureProvider();
 // Desktop Capture Provider (screencapture CLI) — used by ComputerUseModule
 const desktopCapture = new DesktopCaptureProvider();
+// KeyFrameStore — persists meeting screenshots to disk for multimodal timeline
+const keyFrameStore = new KeyFrameStore();
 
 const vision = new VisionModule({
   context,
   browserCapture,
+  // Hook: persist every CDP frame to disk via KeyFrameStore (dedup + resize handled internally)
+  onFrameCapture: (image, metadata) => {
+    if (keyFrameStore.active) {
+      keyFrameStore.saveFrame(image, metadata).catch(() => {});
+    }
+  },
   onScreenDescription: (description, _screenshot) => {
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
@@ -220,6 +231,14 @@ eventBus.on("meeting.started", (data) => {
   resetContextInjectionState();
   // Reset transcript from previous meeting to prevent context leakage
   context.resetTranscript();
+  // Start KeyFrameStore for multimodal timeline (screenshots saved to disk)
+  keyFrameStore.start(activeMeetingId).catch((e) => {
+    console.error(`[Init] KeyFrameStore start failed: ${e.message}`);
+  });
+  // Wire transcript events to KeyFrameStore
+  context.on("transcript", (entry) => {
+    if (keyFrameStore.active) keyFrameStore.saveTranscript(entry);
+  });
   if (!vision.isMeetingMode) {
     vision.startMeetingVision(1000);
     console.log("[Init] Meeting vision auto-started");
@@ -359,7 +378,36 @@ eventBus.on("voice.stopped", () => {
   }
 });
 
-eventBus.on("meeting.ended", () => {
+eventBus.on("meeting.ended", async () => {
+  // Finalize multimodal timeline before clearing meeting state
+  const meetTopic = meetingPrepSkill.currentBrief?.topic || "Meeting";
+  if (keyFrameStore.active) {
+    const timeline = await keyFrameStore.finalize(meetTopic).catch(() => null);
+    if (timeline) {
+      console.log(`[Init] Timeline finalized: ${timeline.frameCount} frames, ${timeline.priorityFrameCount} priority → ${timeline.meetingDir}`);
+      // OC-010: Send timeline to OpenClaw for visual action extraction (async, non-blocking)
+      if (openclawBridge.connected) {
+        import("./openclaw-protocol").then(({ OC010_PROMPT }) => {
+          const req = {
+            id: "OC-010" as const,
+            meetingId: timeline.meetingId,
+            meetingDir: timeline.meetingDir,
+            topic: meetTopic,
+            duration: `${Math.round(timeline.durationMs / 60000)}min`,
+            frameCount: timeline.frameCount,
+            transcriptEntries: timeline.transcriptEntries,
+            priorityFrameCount: timeline.priorityFrameCount,
+            timelineFile: timeline.timelineFile,
+          };
+          openclawBridge.sendTask(OC010_PROMPT(req)).catch((e) => {
+            console.warn(`[Init] OC-010 timeline processing failed: ${e.message}`);
+          });
+        });
+      }
+    }
+    await keyFrameStore.stop();
+  }
+
   activeMeetingId = null;
   stopMeetingVisionAndFlush("Meeting ended");
 
@@ -575,6 +623,7 @@ const toolDeps = {
   meeting,
   get voice() { return voice; }, // Lazy — voice created below
   openclawBridge,
+  dispatcher,
   meetingPrepSkill,
   contextSync,
   contextRetriever,

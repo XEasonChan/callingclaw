@@ -28,6 +28,8 @@ export interface VisionModuleOptions {
   browserCapture: BrowserCaptureProvider;
   analysisIntervalMs?: number;
   onScreenDescription?: (description: string, screenshot: string) => void;
+  /** KeyFrameStore for persisting meeting screenshots to disk */
+  onFrameCapture?: (image: string, metadata: { url?: string; title?: string; description?: string }) => void;
 }
 
 const CAPTURE_INTERVAL_MS = 1000;         // 1s screenshot frequency
@@ -48,11 +50,13 @@ export class VisionModule {
   private _lastUrl = "";
   private _lastTitle = "";
   private _onScreenDescription?: (description: string, screenshot: string) => void;
+  private _onFrameCapture?: (image: string, metadata: { url?: string; title?: string; description?: string }) => void;
 
   constructor(options: VisionModuleOptions) {
     this.context = options.context;
     this.browserCapture = options.browserCapture;
     this._onScreenDescription = options.onScreenDescription;
+    this._onFrameCapture = options.onFrameCapture;
 
     // Gemini Flash via OpenRouter
     this.visionClient = new OpenAI({
@@ -159,6 +163,13 @@ export class VisionModule {
       // 2. Always update SharedContext with latest screenshot
       //    (even if we skip Gemini — the raw image is still fresh)
       this.context.updateScreen(image, this.context.screen.description, url, title);
+
+      // 2b. Persist frame to disk via KeyFrameStore (if active)
+      //     This runs BEFORE Gemini analysis — pure I/O, no AI gating.
+      //     KeyFrameStore handles its own dedup internally.
+      if (this._onFrameCapture) {
+        this._onFrameCapture(image, { url, title, description: this._lastDescription });
+      }
 
       // 3. Change detection: URL or title changed?
       const urlChanged = url !== this._lastUrl && this._lastUrl !== "";
