@@ -155,7 +155,7 @@
 <body>
   <div class="header">
     <a class="back" href="/">← Panel</a>
-    <h1>Voice Test</h1>
+    <h1>Voice Test / Talk Locally</h1>
     <span class="badge" id="status-badge">Disconnected</span>
     <span class="badge" id="ws-badge">WS: --</span>
   </div>
@@ -179,6 +179,27 @@
           <select id="voice-select">
             <!-- Populated dynamically by rebuildVoiceList() -->
           </select>
+        </div>
+
+        <!-- Session Mode -->
+        <div class="control-group">
+          <div class="control-label">Mode</div>
+          <select id="mode-select" onchange="onModeChange()">
+            <option value="test">Voice Test (minimal context)</option>
+            <option value="local" selected>Talk Locally (full AI memory)</option>
+          </select>
+        </div>
+
+        <!-- Meeting Context -->
+        <div class="control-group" id="meeting-context-group">
+          <div class="control-label">
+            Meeting Context
+            <span id="meeting-prep-status" style="font-size: 11px; font-weight: 400; color: var(--text3);"></span>
+          </div>
+          <select id="meeting-select" onchange="onMeetingChange()">
+            <option value="">No meeting — free conversation</option>
+          </select>
+          <div id="meeting-brief-preview" style="display:none; margin-top: 8px; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; color: var(--text2); max-height: 120px; overflow-y: auto; line-height: 1.5;"></div>
         </div>
 
         <!-- Instructions -->
@@ -332,7 +353,127 @@
       });
       // Enumerate mic devices
       enumerateMics();
+      // Load meeting list for Talk Locally mode
+      loadMeetingList();
+      // Set initial mode UI
+      onModeChange();
     });
+
+    // ── Meeting list + context loading ──
+    let meetingList = []; // { id, summary, start, end, hangoutLink, meetingId, hasPrepBrief }
+    let selectedMeetingBrief = null; // cached prep markdown
+
+    async function loadMeetingList() {
+      const select = document.getElementById('meeting-select');
+      const statusEl = document.getElementById('meeting-prep-status');
+      try {
+        // 1. Fetch calendar events
+        const evtRes = await fetch(`${API}/api/calendar/events`);
+        const evtData = await evtRes.json();
+        const events = Array.isArray(evtData) ? evtData : (evtData.events || []);
+
+        // 2. Fetch manifest for meetingId mapping
+        let manifest = null;
+        try {
+          const mRes = await fetch(`${API}/api/shared/manifest`);
+          manifest = await mRes.json();
+        } catch {}
+
+        // 3. Build meeting list with prep brief status
+        meetingList = events.map(function(e) {
+          const summary = e.summary || e.title || 'Untitled';
+          const start = e.start?.dateTime || e.start || e.startTime || '';
+          const meetingId = e.meetingId || null;
+          // Try to find meetingId from manifest
+          let mid = meetingId;
+          if (!mid && manifest && manifest.sessions) {
+            const sess = manifest.sessions.find(function(s) {
+              return s.topic === summary || s.meetUrl === (e.hangoutLink || e.meetLink);
+            });
+            if (sess) mid = sess.meetingId;
+          }
+          return {
+            id: e.id,
+            summary: summary,
+            start: start,
+            end: e.end?.dateTime || e.end || e.endTime || '',
+            hangoutLink: e.hangoutLink || e.meetLink || null,
+            meetingId: mid,
+            hasPrepBrief: false, // will check below
+          };
+        });
+
+        // 4. Check which meetings have prep briefs
+        for (const m of meetingList) {
+          if (m.meetingId) {
+            try {
+              const pRes = await fetch(`${API}/api/shared/file?path=${encodeURIComponent(m.meetingId + '_prep.md')}`);
+              const pData = await pRes.json();
+              if (pData && pData.content) m.hasPrepBrief = true;
+            } catch {}
+          }
+        }
+
+        // 5. Render dropdown
+        select.innerHTML = '<option value="">No meeting — free conversation</option>';
+        meetingList.forEach(function(m, i) {
+          const opt = document.createElement('option');
+          opt.value = i;
+          const timeStr = m.start ? new Date(m.start).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
+          const dateStr = m.start ? new Date(m.start).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
+          const prepIcon = m.hasPrepBrief ? ' ✅' : '';
+          opt.textContent = `${dateStr} ${timeStr} — ${m.summary}${prepIcon}`;
+          select.appendChild(opt);
+        });
+
+        statusEl.textContent = meetingList.length + ' meetings';
+      } catch (e) {
+        statusEl.textContent = 'Failed to load';
+        console.warn('[VoiceTest] Meeting list failed:', e);
+      }
+    }
+
+    async function onMeetingChange() {
+      const select = document.getElementById('meeting-select');
+      const preview = document.getElementById('meeting-brief-preview');
+      const idx = parseInt(select.value);
+      selectedMeetingBrief = null;
+
+      if (isNaN(idx) || !meetingList[idx]) {
+        preview.style.display = 'none';
+        return;
+      }
+
+      const m = meetingList[idx];
+      if (m.meetingId && m.hasPrepBrief) {
+        preview.style.display = '';
+        preview.textContent = 'Loading prep brief...';
+        try {
+          const r = await fetch(`${API}/api/shared/file?path=${encodeURIComponent(m.meetingId + '_prep.md')}`);
+          const d = await r.json();
+          if (d && d.content) {
+            selectedMeetingBrief = d.content;
+            // Show first 500 chars as preview
+            preview.textContent = d.content.slice(0, 500) + (d.content.length > 500 ? '...' : '');
+          } else {
+            preview.textContent = 'No prep brief found.';
+          }
+        } catch (e) {
+          preview.textContent = 'Failed to load: ' + e.message;
+        }
+      } else {
+        preview.style.display = '';
+        preview.textContent = m.meetingId ? 'No prep brief generated yet.' : 'No meeting ID — prep brief unavailable.';
+      }
+    }
+
+    function onModeChange() {
+      const mode = document.getElementById('mode-select').value;
+      const meetingGroup = document.getElementById('meeting-context-group');
+      meetingGroup.style.display = mode === 'test' ? 'none' : '';
+      // Update button label
+      document.getElementById('btn-start').textContent = mode === 'local' ? 'Start Talk Locally' : 'Start Voice Session';
+    }
 
     // ── Load config ──
     (async () => {
@@ -547,9 +688,10 @@
         ws.onopen = () => {
           updateBadge('ws-badge', 'WS: Connected', true);
 
-          // Read provider + voice selection
+          // Read provider + voice + mode selection
           const provider = document.getElementById('provider-select').value;
           const voice = document.getElementById('voice-select').value;
+          const mode = document.getElementById('mode-select').value;
 
           // Push voice config (provider-aware)
           if (provider === 'openai') {
@@ -558,9 +700,47 @@
               body: JSON.stringify({ openai_voice: voice })
             }).catch(() => {});
           }
-          // For Grok, voice is sent via the start command (server reads it from session config)
 
-          // Send start command with instructions + provider + voice
+          // Get selected meeting topic for context injection
+          const meetingIdx = parseInt(document.getElementById('meeting-select').value);
+          const selectedMeeting = (!isNaN(meetingIdx) && meetingList[meetingIdx]) ? meetingList[meetingIdx] : null;
+          const topic = selectedMeeting ? selectedMeeting.summary : null;
+
+          // In Talk Locally mode, also start a voice session via REST for full context
+          if (mode === 'local') {
+            fetch(`${API}/api/voice/session/start`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: 'local',
+                transport: 'browser',
+                topic: topic,
+                provider: provider,
+                voice: voice,
+              })
+            }).then(r => r.json()).then(d => {
+              addTranscript('system', 'Talk Locally session: ' + (d.ok ? 'started' : d.error || 'failed')
+                + (topic ? ' — topic: ' + topic : '')
+                + (d.provider ? ' (' + d.provider + ')' : ''));
+              // If we have a meeting brief, inject it after session is ready
+              if (selectedMeetingBrief && selectedMeeting?.meetingId) {
+                // The backend's injectMeetingBrief is called via the join flow.
+                // For Talk Locally via browser, we inject it as a text message.
+                setTimeout(function() {
+                  if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                      type: 'inject_context',
+                      text: '[会议准备资料]\n\n' + selectedMeetingBrief.slice(0, 4000),
+                    }));
+                    addTranscript('system', 'Meeting prep injected (' + selectedMeetingBrief.length + ' chars)');
+                  }
+                }, 2000); // Wait for session to be fully established
+              }
+            }).catch(e => {
+              addTranscript('system', 'Session start failed: ' + e.message);
+            });
+          }
+
+          // Send WS start command with instructions + provider + voice
           const instructions = document.getElementById('instructions').value.trim();
           ws.send(JSON.stringify({
             type: 'start',
@@ -637,6 +817,11 @@
     // ── Stop session ──
     function stopSession() {
       sessionActive = false;
+      // In Talk Locally mode, also stop the backend voice session
+      var mode = document.getElementById('mode-select').value;
+      if (mode === 'local') {
+        fetch(`${API}/api/voice/session/stop`, { method: 'POST' }).catch(() => {});
+      }
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'stop' }));
         ws.close();
