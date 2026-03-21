@@ -1,7 +1,7 @@
 // CallingClaw 2.0 — Route types
 // Shared interfaces for all route modules
 
-import type { PythonBridge } from "../bridge";
+import type { InputBridge } from "../bridge";
 import type { VoiceModule } from "../modules/voice";
 import type { GoogleCalendarClient } from "../mcp_client/google_cal";
 import type { SharedContext } from "../modules/shared-context";
@@ -21,7 +21,7 @@ import type { MeetingScheduler } from "../modules/meeting-scheduler";
 import type { PostMeetingDelivery } from "../modules/post-meeting-delivery";
 
 export interface Services {
-  bridge: PythonBridge;
+  bridge: InputBridge;
   realtime: VoiceModule;
   calendar: GoogleCalendarClient;
   context: SharedContext;

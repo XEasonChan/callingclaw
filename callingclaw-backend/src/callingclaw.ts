@@ -9,7 +9,7 @@ if (CONFIG.audio.sampleRate !== 24000) {
   console.warn(`[Init] Audio sample rate ${CONFIG.audio.sampleRate}Hz != 24000Hz (provider expectation)`);
 }
 
-import { PythonBridge } from "./bridge";
+import { NativeBridge } from "./bridge";
 import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
@@ -48,7 +48,7 @@ console.log(`
 
 // ── 1. Core Infrastructure ──────────────────────────────────────
 
-const bridge = new PythonBridge();
+const bridge = new NativeBridge();
 bridge.start();
 
 const context = new SharedContext();
