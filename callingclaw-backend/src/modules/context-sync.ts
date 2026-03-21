@@ -304,15 +304,35 @@ export class ContextSync {
 
     if (top.length === 0) return "";
 
-    // Group by heading for readability, cap each chunk at 400 chars
-    const seen = new Set<string>();
+    // Group by heading for readability, with match-centered excerpts.
+    // Always re-emit heading before each chunk to prevent wrong-section attribution
+    // when results from the same heading are interleaved (e.g., A1, B1, A2).
+    let lastHeading = "";
     const result: string[] = [];
     for (const chunk of top) {
-      if (!seen.has(chunk.heading) && chunk.heading) {
-        seen.add(chunk.heading);
+      if (chunk.heading && chunk.heading !== lastHeading) {
+        lastHeading = chunk.heading;
         result.push(chunk.heading);
       }
-      result.push(chunk.text.slice(0, 400));
+
+      // Match-centered excerpt: if chunk > 400 chars, center on the first keyword hit
+      let excerpt = chunk.text;
+      if (excerpt.length > 400) {
+        const lower = excerpt.toLowerCase();
+        let firstHit = -1;
+        for (const kw of keywords) {
+          const idx = lower.indexOf(kw);
+          if (idx !== -1 && (firstHit === -1 || idx < firstHit)) firstHit = idx;
+        }
+        if (firstHit > 200) {
+          // Start 200 chars before the match, take 400 chars
+          const start = Math.max(0, firstHit - 200);
+          excerpt = "…" + excerpt.slice(start, start + 400);
+        } else {
+          excerpt = excerpt.slice(0, 400);
+        }
+      }
+      result.push(excerpt);
     }
 
     return result.join("\n").slice(0, 2000);
