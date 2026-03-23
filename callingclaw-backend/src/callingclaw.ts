@@ -626,6 +626,7 @@ eventBus.on("retriever.searching", (data) => {
 // ── 4. Meeting Module (before voice, since tools need it) ──────
 
 const meeting = new MeetingModule(context);
+meeting.openclawBridge = openclawBridge; // Delegate summary/extraction to OpenClaw for richer context
 
 // Build tool definitions + handlers from domain-specific modules
 // Uses a mutable deps object so voice/meeting refs resolve lazily via closures
