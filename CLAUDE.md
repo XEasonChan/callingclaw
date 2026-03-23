@@ -36,6 +36,7 @@ cd callingclaw-desktop && npm install && npm start
 | `callingclaw-backend/src/modules/voice.ts` | Voice module (audio state machine, heard transcript) |
 | `callingclaw-backend/src/config_server.ts` | HTTP API + WebSocket server |
 | `callingclaw-backend/src/voice-persona.ts` | Context engineering layers |
+| `callingclaw-backend/src/native-bridge.ts` | NativeBridge (osascript + cliclick, replaced Python sidecar) |
 | `callingclaw-desktop/src/renderer/audio-bridge.js` | AudioWorklet capture + playback |
 | `callingclaw-desktop/src/renderer/index.html` | Desktop UI (vanilla JS) |
 | `callingclaw-desktop/src/main/index.js` | Electron main process |

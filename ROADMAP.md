@@ -17,14 +17,29 @@
 - Haiku-based title/time extraction (replaced OpenClaw sendTask)
 - Scheduler dedup (prevent flooding repeated join messages)
 
+## Completed in v2.6-v2.7 (2026-03-21/23)
+
+- Python sidecar eliminated — NativeBridge (osascript + cliclick) replaces 552 lines of Python
+- Voice persona depth-matching — insightful advisor style, not rigid sentence caps
+- Granular memory search — bullet-point splitting, match-centered excerpts
+- Meeting delegation to OpenClaw — isolated sessions prevent context pollution
+- Meeting summary/extraction via OpenClaw — no longer direct OpenAI
+- Past mistakes/lessons surfaced in meeting prep and summary
+- Grok API Key UI in Desktop Settings
+- New desktop icon with macOS-style rounded corners
+- Audio entitlements for macOS mic permission dialog
+- Daemon directory fallback for DMG installs
+- Multiple onboarding, settings, and calendar fixes
+- Reuse existing session on repeated join of same Meet URL
+
 ---
 
-## v3.0 — Eliminate Python Sidecar
+## v3.0 — Post-Sidecar Improvements
 
-> **Status: Partially done.** AUDIO_SOURCE=electron mode works (AudioWorklet captures/plays via Electron). Python sidecar still used for meet_bridge BlackHole routing. Screenshot moved to Electron desktopCapturer.
+> **Status: Python sidecar fully eliminated in v2.6.1.** NativeBridge (osascript + cliclick) replaced all Python functionality. Remaining items below are further improvements.
 
 ### Goal
-Fully eliminate Python sidecar. Audio pipeline is the last remaining piece.
+~~Fully eliminate Python sidecar.~~ **DONE (v2.6.1).** NativeBridge replaced all Python sidecar functionality. Remaining focus: Playwright migration for meet_joiner, further reliability improvements.
 
 ### 推荐方案：A — 保留 Bun + 消灭 Python
 Bun 继续做 AI 编排/API，硬件 I/O 移到 Electron。
@@ -152,7 +167,7 @@ Electron main process
 
 ## v3.0+ Outlook
 
-- [ ] Eliminate Python sidecar entirely (BlackHole meet_bridge is the last piece)
+- [x] ~~Eliminate Python sidecar entirely~~ — **DONE (v2.6.1)** NativeBridge replaced all Python
 - [ ] Migrate from file:// to app:// custom protocol in Electron (AudioWorklet, CSP)
 - [ ] Haiku context compression for meeting instructions (~300 token target)
 - [ ] Generalize tabbed side panel for multi-doc contexts (when second use case appears)
@@ -162,7 +177,12 @@ Electron main process
 
 ## v2.x — Previous Releases
 
-### v2.5.3 (current)
+### v2.7.3 (current)
+- Python sidecar eliminated, NativeBridge, voice persona depth-matching
+- Meeting delegation to OpenClaw, Grok API Key UI, new desktop icon
+- Daemon directory fallback, audio entitlements, onboarding/settings fixes
+
+### v2.5.3
 - Grok voice + AudioWorklet + 5-layer context + provider matrix
 - Audio state machine + heard transcript + fast/slow dispatch
 - VoiceTracer + multimodal timeline + 11 lifecycle fixes

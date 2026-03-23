@@ -129,3 +129,19 @@ All modules now properly reset on meeting.started and unsubscribe listeners on m
 
 ### Meeting: Multimodal Timeline
 KeyFrameStore persists screenshots + transcript to disk during meetings. OC-010 protocol sends timeline to OpenClaw for visual action extraction.
+
+---
+
+## v2.6-v2.7 Architecture Decisions (2026-03-21/23)
+
+### Python Sidecar Elimination (v2.6.1)
+Replaced the Python sidecar (PyAudio + WebSocket bridge on port 4001) with NativeBridge — direct osascript + cliclick execution from Bun. Eliminated 552 lines of Python, a WebSocket server, and constant reconnect loops. Audio now fully handled by Electron AudioWorklet.
+
+### Meeting Delegation to OpenClaw (v2.6.4+)
+Meeting prep and summary generation now delegated to isolated OpenClaw sessions via `sendTaskIsolated()`. Prevents context pollution between concurrent tasks. Each delegation gets a unique session key.
+
+### Voice Persona Depth-Matching (v2.6.1)
+Replaced rigid "under 3 sentences" response cap with depth-matching: brief confirmations stay brief, strategy questions get substantive analysis with tradeoffs. More natural conversation flow.
+
+### Daemon Directory Fallback (v2.7.2)
+DMG installations can't find the backend directory via relative path from Electron. Added HTTP API fallback: if filesystem checks fail, probe the running daemon at localhost:4000.

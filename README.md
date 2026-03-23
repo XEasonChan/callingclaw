@@ -2,7 +2,7 @@
 
 > AI meeting room that joins Google Meet/Zoom as a real participant. Listens, speaks, takes notes, controls the computer — like a sharp team member who never forgets.
 
-**v2.5.3** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
+**v2.7.3** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -65,8 +65,6 @@
 | **macOS** | 13+ (Ventura) | — |
 | **Bun** | 1.3+ | `curl -fsSL https://bun.sh/install \| bash` |
 | **Node.js** | 18+ | `brew install node` (for Electron) |
-| **Python** | 3.10+ | `brew install python3` or use system Python |
-| **PortAudio** | — | `brew install portaudio` |
 
 ### For Meeting Audio (Google Meet / Zoom)
 
@@ -117,23 +115,14 @@ cp .env.example .env
 # Edit .env — fill in your API keys (see table above)
 ```
 
-### 3. Python Sidecar (optional — for Meet audio bridge)
-
-```bash
-cd callingclaw-backend
-pip3 install -r requirements.txt
-```
-
-> Skip this if you only use Talk Locally (direct mic mode). The Python sidecar is only needed for Google Meet / Zoom audio routing.
-
-### 4. Desktop App
+### 3. Desktop App
 
 ```bash
 cd callingclaw-desktop
 npm install
 ```
 
-### 5. Verify Installation
+### 4. Verify Installation
 
 ```bash
 # Start backend
@@ -142,7 +131,7 @@ bun run src/callingclaw.ts
 
 # In another terminal — check health
 curl http://localhost:4000/api/status
-# Should return: {"callingclaw":"running","version":"2.5.3",...}
+# Should return: {"callingclaw":"running","version":"2.7.3",...}
 ```
 
 ---
@@ -298,7 +287,7 @@ callingclaw/
 ├── CHANGELOG.md                  # Release history
 ├── ROADMAP.md                    # Future plans
 ├── TODOS.md                      # Tracked work items
-└── VERSION                       # Current version (2.5.3)
+└── VERSION                       # Current version (2.7.3)
 ```
 
 ---
@@ -382,6 +371,7 @@ kill $(lsof -t -i :4000)
 | Deep Reasoning | Claude Opus (via OpenClaw) |
 | Audio Capture | AudioWorklet (PCM16, 24kHz) |
 | Audio Playback | AudioWorklet Ring Buffer |
+| NativeBridge | osascript + cliclick (replaced Python sidecar) |
 | Browser Automation | Playwright CLI |
 | Database | SQLite (bun:sqlite) |
 | Calendar | Google Calendar REST API |
