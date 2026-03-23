@@ -2621,12 +2621,28 @@ STEP-BY-STEP FLOW:
         stdout: "ignore", stderr: "ignore",
       });
 
-      // ffmpeg reads raw PCM from stdin, plays to system default output via CoreAudio
-      ffmpegProc = Bun.spawn([
+      // Discover BlackHole 2ch device index for audiotoolbox
+      let bh2chIndex = -1;
+      try {
+        const listProc = Bun.spawnSync([
+          "ffmpeg", "-hide_banner", "-y", "-f", "lavfi", "-i", "anullsrc", "-t", "0.01",
+          "-f", "audiotoolbox", "-list_devices", "true", "-",
+        ]);
+        const listing = new TextDecoder().decode(listProc.stderr);
+        const match = listing.match(/\[(\d+)\]\s+BlackHole 2ch/);
+        if (match) bh2chIndex = parseInt(match[1]);
+        console.log(`[Audio] BlackHole 2ch audiotoolbox index: ${bh2chIndex}`);
+      } catch {}
+
+      // ffmpeg reads raw PCM from stdin, outputs DIRECTLY to BlackHole 2ch via CoreAudio
+      const ffArgs = [
         "ffmpeg", "-hide_banner", "-loglevel", "error",
         "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0",
-        "-f", "audiotoolbox", "-",
-      ], {
+        "-f", "audiotoolbox",
+        ...(bh2chIndex >= 0 ? ["-audio_device_index", String(bh2chIndex)] : []),
+        "-",
+      ];
+      ffmpegProc = Bun.spawn(ffArgs, {
         stdin: "pipe",
         stdout: "ignore",
         stderr: "pipe",
