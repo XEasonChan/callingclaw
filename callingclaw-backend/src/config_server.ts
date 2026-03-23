@@ -1484,6 +1484,7 @@ STEP-BY-STEP FLOW:
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
+                    "Connection": "close",
                     Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
                   },
                   body: JSON.stringify({
@@ -1495,7 +1496,7 @@ STEP-BY-STEP FLOW:
                     max_tokens: 100,
                     temperature: 0,
                   }),
-                  signal: AbortSignal.timeout(5000),
+                  signal: AbortSignal.timeout(10000),
                 });
                 const llmData = await llmResp.json() as any;
                 const content = llmData.choices?.[0]?.message?.content || "";
@@ -1727,13 +1728,13 @@ STEP-BY-STEP FLOW:
                   const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
                   const llmResp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
+                    headers: { "Content-Type": "application/json", "Connection": "close", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
                     body: JSON.stringify({
                       model: CONFIG.analysis?.model || "anthropic/claude-haiku-4-5",
                       messages: [{ role: "user", content: `Extract meeting info. Current: ${now.toISOString()} (${tzName})\nInput: "${body.topic}"\nJSON only: {"title":"concise title same language max 40 chars","startTime":"ISO8601 or null","duration":minutes_or_60}` }],
                       max_tokens: 100, temperature: 0,
                     }),
-                    signal: AbortSignal.timeout(5000),
+                    signal: AbortSignal.timeout(10000),
                   });
                   const llmData = await llmResp.json() as any;
                   const content = llmData.choices?.[0]?.message?.content || "";
