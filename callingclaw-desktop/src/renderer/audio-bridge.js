@@ -9,8 +9,8 @@
 //     AI audio → base64 → PCM16 → PlaybackWorklet(ring buffer) → Speaker
 //
 //   Meet Bridge:
-//     BlackHole 2ch → AudioWorklet → PCM16 24kHz → base64 → WS → Grok/OpenAI
-//     AI audio → base64 → PCM16 → PlaybackWorklet(ring buffer) → BlackHole 16ch → Meet mic
+//     BlackHole 16ch (Meet speaker) → AudioWorklet → PCM16 24kHz → base64 → WS → Grok/OpenAI
+//     AI audio → base64 → PCM16 → PlaybackWorklet(ring buffer) → BlackHole 2ch → Meet mic
 //
 // Key improvements over v2:
 //   - AudioWorklet ring buffer for playback (gapless, no scheduling, no pops)
@@ -119,14 +119,17 @@ var ElectronAudioBridge = (function() {
 
   function findBlackHoleDevices() {
     return enumerateAudioDevices().then(function(devs) {
-      var bh2ch = devs.inputs.find(function(d) { return d.label.includes('BlackHole 2ch'); });
-      var bh16ch = devs.outputs.find(function(d) { return d.label.includes('BlackHole 16ch'); });
+      // Meet mic = BlackHole 2ch (Meet only reads first 2 channels)
+      // Meet speaker = BlackHole 16ch (captures meeting audio for AI)
+      // So: AI playback → BlackHole 2ch (output), AI capture → BlackHole 16ch (input)
+      var bh16chIn = devs.inputs.find(function(d) { return d.label.includes('BlackHole 16ch'); });
+      var bh2chOut = devs.outputs.find(function(d) { return d.label.includes('BlackHole 2ch'); });
       return {
-        capture: bh2ch || null,
-        playback: bh16ch || null,
-        captureId: bh2ch ? bh2ch.deviceId : null,
-        playbackId: bh16ch ? bh16ch.deviceId : null,
-        available: !!(bh2ch && bh16ch),
+        capture: bh16chIn || null,    // Capture Meet audio FROM BlackHole 16ch
+        playback: bh2chOut || null,   // Play AI voice TO BlackHole 2ch → Meet mic
+        captureId: bh16chIn ? bh16chIn.deviceId : null,
+        playbackId: bh2chOut ? bh2chOut.deviceId : null,
+        available: !!(bh16chIn && bh2chOut),
       };
     });
   }

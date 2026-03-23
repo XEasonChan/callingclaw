@@ -1046,6 +1046,10 @@ function handleMeetingEvent(event) {
     case 'meeting.started':
       if (data.meetingId && !S.activeMeetingId) S.activeMeetingId = data.meetingId;
       addMpActivity('done', '已加入会议');
+      // Auto-start audio bridge when meeting starts (even if join was triggered externally)
+      if (!_audioBridgeWs || _audioBridgeWs.readyState !== WebSocket.OPEN) {
+        startAudioBridge('meet_bridge');
+      }
       break;
     case 'meeting.ended':
       addMpActivity('done', '会议已结束');
@@ -2075,6 +2079,18 @@ function routeWsEvent(msg) {
   // Dashboard-level events (meeting lifecycle → refresh calendar/status)
   if (eventType === 'meeting.started' || eventType === 'meeting.ended' || eventType === 'meeting.agenda') {
     setTimeout(refreshAll, 500);
+  }
+
+  // Auto-start audio bridge when meeting is joining (regardless of how join was triggered)
+  if (eventType === 'meeting.joining' || eventType === 'meeting.started') {
+    if (!_audioBridgeWs || _audioBridgeWs.readyState !== WebSocket.OPEN) {
+      console.log('[AudioBridge] Auto-starting for meeting event:', eventType);
+      startAudioBridge('meet_bridge');
+    }
+  }
+  // Stop audio bridge when meeting ends
+  if (eventType === 'meeting.ended') {
+    stopAudioBridge();
   }
 
   // ── Route to unified meeting panel if active ──
