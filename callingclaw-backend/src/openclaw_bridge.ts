@@ -199,61 +199,48 @@ export class OpenClawBridge {
 
   /**
    * Send a task in an ISOLATED session (no history pollution).
-   * Used for meeting prep delegation — avoids Memdex cron, old meetings, etc.
-   * Spawns a fresh sub-agent session, sends the task, waits for completion.
+   * Uses chat.send with a unique session key so the task runs in a fresh context,
+   * not polluted by Memdex cron, old meetings, etc.
    */
-  async sendTaskIsolated(taskText: string, opts?: { model?: string; onDelta?: (text: string) => void }): Promise<string> {
-    if (!this._connected) {
+  async sendTaskIsolated(taskText: string): Promise<string> {
+    if (!this._connected || !this.sessionKey) {
       try { await this.connect(); } catch {
         return "OpenClaw is not running.";
       }
     }
 
-    try {
-      // Spawn isolated session
-      const spawnResult = await this.request("sessions_spawn", {
+    // Generate a unique isolated session key
+    const isolatedKey = `agent:main:callingclaw-prep:${Date.now().toString(36)}`;
+    console.log(`[OpenClaw] Sending task to isolated session: ${isolatedKey}`);
+
+    return new Promise<string>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.chatResolve = null;
+        console.warn(`[OpenClaw] Isolated task timed out (5 min)`);
+        resolve("OpenClaw task timed out (5 minutes).");
+      }, TASK_TIMEOUT);
+
+      this.chatResolve = (text: string) => {
+        clearTimeout(timeout);
+        console.log(`[OpenClaw] Isolated task complete`);
+        resolve(text);
+      };
+
+      const idempotencyKey = crypto.randomUUID();
+      this.request("chat.send", {
+        sessionKey: isolatedKey,
         message: taskText,
-        model: opts?.model || "claude-sonnet-4-6",
-        sessionTarget: "isolated",
+        idempotencyKey,
+        deliver: false,
+      }).catch((err) => {
+        clearTimeout(timeout);
+        this.chatResolve = null;
+        console.error(`[OpenClaw] Isolated task error: ${err.message}`);
+        // Fallback: try main session
+        console.log(`[OpenClaw] Falling back to main session`);
+        this.sendTask(taskText).then(resolve);
       });
-
-      const childKey = spawnResult?.childSessionKey;
-      if (!childKey) return "Failed to spawn isolated session";
-
-      console.log(`[OpenClaw] Spawned isolated session: ${childKey}`);
-
-      // Wait for the session to complete (poll via sessions_history)
-      const startTime = Date.now();
-      const TIMEOUT = 5 * 60 * 1000; // 5 min
-
-      while (Date.now() - startTime < TIMEOUT) {
-        await new Promise(r => setTimeout(r, 3000)); // poll every 3s
-
-        try {
-          const history = await this.request("sessions_history", {
-            sessionKey: childKey,
-            messageLimit: 1,
-          });
-
-          // Check if the last message is from assistant (task complete)
-          const msgs = history?.messages || [];
-          const lastMsg = msgs[msgs.length - 1];
-          if (lastMsg?.role === "assistant") {
-            const text = this.extractMessageText(lastMsg);
-            if (text) {
-              console.log(`[OpenClaw] Isolated task complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
-              return text;
-            }
-          }
-        } catch {
-          // Session might still be processing
-        }
-      }
-
-      return "OpenClaw isolated task timed out (5 minutes).";
-    } catch (e: any) {
-      return `OpenClaw isolated session error: ${e.message}`;
-    }
+    });
   }
 
   private handleChatEvent(payload: any) {
