@@ -198,49 +198,12 @@ export class OpenClawBridge {
   }
 
   /**
-   * Send a task in an ISOLATED session (no history pollution).
-   * Uses chat.send with a unique session key so the task runs in a fresh context,
-   * not polluted by Memdex cron, old meetings, etc.
+   * Send a task via the main OpenClaw session (same as sendTask).
+   * All CallingClaw tasks use the same session — no isolated sessions.
+   * Kept as alias for backward compat with callers using sendTaskIsolated().
    */
   async sendTaskIsolated(taskText: string): Promise<string> {
-    if (!this._connected || !this.sessionKey) {
-      try { await this.connect(); } catch {
-        return "OpenClaw is not running.";
-      }
-    }
-
-    // Generate a unique isolated session key
-    const isolatedKey = `agent:main:callingclaw-prep:${Date.now().toString(36)}`;
-    console.log(`[OpenClaw] Sending task to isolated session: ${isolatedKey}`);
-
-    return new Promise<string>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.chatResolve = null;
-        console.warn(`[OpenClaw] Isolated task timed out (5 min)`);
-        resolve("OpenClaw task timed out (5 minutes).");
-      }, TASK_TIMEOUT);
-
-      this.chatResolve = (text: string) => {
-        clearTimeout(timeout);
-        console.log(`[OpenClaw] Isolated task complete`);
-        resolve(text);
-      };
-
-      const idempotencyKey = crypto.randomUUID();
-      this.request("chat.send", {
-        sessionKey: isolatedKey,
-        message: taskText,
-        idempotencyKey,
-        deliver: false,
-      }).catch((err) => {
-        clearTimeout(timeout);
-        this.chatResolve = null;
-        console.error(`[OpenClaw] Isolated task error: ${err.message}`);
-        // Fallback: try main session
-        console.log(`[OpenClaw] Falling back to main session`);
-        this.sendTask(taskText).then(resolve);
-      });
-    });
+    return this.sendTask(taskText);
   }
 
   private handleChatEvent(payload: any) {

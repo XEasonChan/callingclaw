@@ -249,8 +249,17 @@ export class GoogleCalendarClient {
     }
   }
 
+  private _listErrorCount = 0;
+
   async listUpcomingEvents(maxResults = 10): Promise<CalendarEvent[]> {
     if (!this._connected) return [];
+
+    // Back off after repeated failures (stop log flooding)
+    if (this._listErrorCount >= 3) {
+      // Only retry every 10th call after 3 consecutive failures
+      this._listErrorCount++;
+      if (this._listErrorCount % 10 !== 0) return [];
+    }
 
     try {
       const data = await this.calendarFetch(
@@ -263,6 +272,7 @@ export class GoogleCalendarClient {
           })
       );
 
+      this._listErrorCount = 0; // Reset on success
       return (data.items || []).map((item: any) => ({
         id: item.id || "",
         summary: item.summary || "(no title)",
@@ -277,7 +287,12 @@ export class GoogleCalendarClient {
         meetLink: item.hangoutLink || item.conferenceData?.entryPoints?.[0]?.uri || undefined,
       }));
     } catch (e: any) {
-      console.error("[Calendar] listUpcomingEvents error:", e.message);
+      this._listErrorCount++;
+      if (this._listErrorCount <= 3) {
+        console.error("[Calendar] listUpcomingEvents error:", e.message);
+      } else if (this._listErrorCount === 4) {
+        console.error("[Calendar] listUpcomingEvents repeated failures — suppressing logs (will retry periodically)");
+      }
       return [];
     }
   }
