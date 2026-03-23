@@ -56,13 +56,16 @@ ${req.userContext || "(no additional context)"}${attendeeSection}
 ## What to Include
 
 1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in the user's preferred language.
-2. **keyPoints**: 5-8 bullet points covering the main topics to discuss.
+2. **keyPoints**: 5-8 bullet points covering the main topics to discuss. **Must include at least 1 item prefixed with "⚠️ 历史教训:" if MEMORY.md contains relevant past mistakes, failures, or lessons learned for this topic.**
 3. **architectureDecisions**: For each major technical decision, explain WHAT was decided and WHY.
-4. **expectedQuestions**: 3-5 questions that might come up, with suggested answers.
-5. **previousContext**: If there were previous meetings on this topic, summarize key outcomes and open items.
+4. **expectedQuestions**: 3-5 questions that might come up, with suggested answers. **Include questions about past failures and how to avoid them.**
+5. **previousContext**: If there were previous meetings on this topic, summarize key outcomes, open items, **and any mistakes or failures that occurred.**
 6. **filePaths**: All relevant local files with absolute paths. Suggest action: "open" / "scroll" / "present".
 7. **browserUrls**: All relevant web URLs (GitHub, deployed apps, Figma, docs).
 8. **folderPaths**: Key project directories the user might want to show.
+
+## CRITICAL: Surface Past Mistakes
+Search MEMORY.md "Lessons Learned" section and daily memory files for past mistakes, failures, and debugging experiences related to this topic. These learnings MUST be surfaced — put them in keyPoints (prefixed "⚠️ 历史教训:") and expectedQuestions. The goal: ensure the same errors are never repeated.
 
 ## Output Format
 Return ONLY valid JSON matching this exact structure:
