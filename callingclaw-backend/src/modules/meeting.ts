@@ -102,12 +102,12 @@ export class MeetingModule {
       if (this._openclawBridge?.connected) {
         // Delegate to OpenClaw — it has MEMORY.md, project context, knows the people
         text = await this._openclawBridge.sendTaskIsolated(
-          `从以下会议 transcript 中提取 action items、决策和跟进事项。\n` +
-          `结合你的 MEMORY.md 和项目知识来判断 assignee 和优先级。\n` +
-          `**特别重要：检查 MEMORY.md 的 Lessons Learned，如果有与当前讨论相关的过去犯错或失败，\n` +
-          `把预防措施作为 action item 加入（type: "action_item", text: "⚠️ 防止重复: ..."）。**\n` +
-          `只返回 JSON: {"items": [{"type": "todo"|"decision"|"action_item", "text": "...", "assignee": "..."}]}\n\n` +
-          `Transcript (最近 50 条):\n${transcript}`
+          `Extract action items, decisions, and follow-ups from this meeting transcript.\n` +
+          `Use your MEMORY.md and project knowledge to determine assignees and priorities.\n` +
+          `**CRITICAL: Check MEMORY.md Lessons Learned for past mistakes or failures related to topics discussed.\n` +
+          `Add prevention items (type: "action_item", text: "⚠️ Prevent repeat: ...") for relevant past failures.**\n` +
+          `Return ONLY JSON: {"items": [{"type": "todo"|"decision"|"action_item", "text": "...", "assignee": "..."}]}\n\n` +
+          `Transcript (last 50 entries):\n${transcript}`
         );
       } else if (CONFIG.openrouter.apiKey) {
         // Fallback: direct LLM call
@@ -169,16 +169,16 @@ export class MeetingModule {
         // Delegate to OpenClaw — richest context available
         console.log("[Meeting] Generating summary via OpenClaw (full context)...");
         text = await this._openclawBridge.sendTaskIsolated(
-          `请根据以下会议 transcript 和笔记生成结构化的会议总结。\n` +
-          `结合你的 MEMORY.md 和项目知识来丰富总结内容。\n\n` +
-          `**特别重要：从 MEMORY.md 的 Lessons Learned 中找出与本次会议讨论内容相关的过去犯错和失败。\n` +
-          `在 keyPoints 中加入 "⚠️ 历史教训: ..." 条目，在 followUps 中加入防止重复犯错的预防措施。\n` +
-          `这样确保每次会议总结都能传递过去的 learning，避免同样的错误再次发生。**\n\n` +
-          `只返回 JSON:\n` +
-          `{"title":"会议标题","participants":["参与者"],"keyPoints":["要点","⚠️ 历史教训: ..."],"actionItems":[{"task":"任务","assignee":"负责人","deadline":"截止日期"}],"decisions":["决策"],"followUps":["跟进事项","防止重复: ..."]}\n\n` +
-          `会议时长: ${duration}\n\n` +
+          `Generate a structured meeting summary from this transcript and notes.\n` +
+          `Use your MEMORY.md and project knowledge to enrich the summary.\n\n` +
+          `**CRITICAL: Search MEMORY.md Lessons Learned for past mistakes and failures related to this meeting's topics.\n` +
+          `Add "⚠️ Past lesson:" items in keyPoints. Add prevention measures in followUps.\n` +
+          `This ensures every summary carries forward past learnings so the same errors are never repeated.**\n\n` +
+          `Return ONLY JSON:\n` +
+          `{"title":"string","participants":["names"],"keyPoints":["points","⚠️ Past lesson: ..."],"actionItems":[{"task":"string","assignee":"name","deadline":"date"}],"decisions":["items"],"followUps":["items","Prevent repeat: ..."]}\n\n` +
+          `Duration: ${duration}\n\n` +
           `Transcript:\n${transcript}\n\n` +
-          `已有笔记:\n${JSON.stringify(notes)}`
+          `Existing notes:\n${JSON.stringify(notes)}`
         );
       } else if (CONFIG.openrouter.apiKey) {
         // Fallback: direct LLM call
