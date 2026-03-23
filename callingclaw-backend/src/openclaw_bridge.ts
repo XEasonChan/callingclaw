@@ -198,12 +198,45 @@ export class OpenClawBridge {
   }
 
   /**
-   * Send a task via the main OpenClaw session (same as sendTask).
-   * All CallingClaw tasks use the same session — no isolated sessions.
-   * Kept as alias for backward compat with callers using sendTaskIsolated().
+   * Send a task via a dedicated CallingClaw session (not main, not cron).
+   * Fixed session key: agent:main:callingclaw — all CallingClaw tasks share this.
    */
   async sendTaskIsolated(taskText: string): Promise<string> {
-    return this.sendTask(taskText);
+    if (!this._connected || !this.sessionKey) {
+      try { await this.connect(); } catch {
+        return "OpenClaw is not running.";
+      }
+    }
+
+    const callingclawSession = "agent:main:callingclaw";
+
+    return new Promise<string>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.chatResolve = null;
+        console.warn(`[OpenClaw] CallingClaw session task timed out (5 min)`);
+        resolve("OpenClaw task timed out (5 minutes).");
+      }, TASK_TIMEOUT);
+
+      this.chatResolve = (text: string) => {
+        clearTimeout(timeout);
+        console.log(`[OpenClaw] CallingClaw session task complete`);
+        resolve(text);
+      };
+
+      const idempotencyKey = crypto.randomUUID();
+      console.log(`[OpenClaw] Sending task to ${callingclawSession}`);
+      this.request("chat.send", {
+        sessionKey: callingclawSession,
+        message: taskText,
+        idempotencyKey,
+        deliver: false,
+      }).catch((err) => {
+        clearTimeout(timeout);
+        this.chatResolve = null;
+        console.error(`[OpenClaw] CallingClaw session error: ${err.message}`);
+        resolve(`OpenClaw error: ${err.message}`);
+      });
+    });
   }
 
   private handleChatEvent(payload: any) {
