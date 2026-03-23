@@ -49,14 +49,15 @@ async function switchAudioToBlackHole(): Promise<SavedAudioDevices | null> {
     const saved = await getCurrentAudioDevices();
     console.log(`[Audio] Saving current devices — output: "${saved.output}", input: "${saved.input}"`);
 
-    // Switch system defaults to BlackHole
-    // Input (mic) → BlackHole 16ch: captures Meet audio for AI to hear
-    // Output (speaker) → BlackHole 2ch: AI voice plays here → Meet mic reads it
-    // NOTE: Meet only reads first 2 channels, so mic MUST be 2ch!
-    await Bun.$`SwitchAudioSource -s "BlackHole 16ch" -t input`.quiet();
-    await Bun.$`SwitchAudioSource -s "BlackHole 2ch" -t output`.quiet();
-
-    console.log("[Audio] ✅ System audio switched to BlackHole (mic→16ch, speaker→2ch)");
+    // DO NOT change system output — Electron AudioWorklet uses setSinkId() to target
+    // BlackHole 2ch directly. Changing system output breaks other apps' audio.
+    // Only change system input so Playwright Chrome inherits it as default mic.
+    // (Though Chrome Meet uses its own device picker, this is a safety fallback.)
+    //
+    // Audio routing (all via Electron AudioWorklet, not system defaults):
+    //   AI voice → AudioWorklet setSinkId(BlackHole 2ch) → Meet mic (2ch, readable)
+    //   Meet speaker → BlackHole 16ch → AudioWorklet capture → AI hears meeting
+    console.log("[Audio] System audio NOT changed (Electron AudioWorklet handles routing via setSinkId)");
     return saved;
   } catch (e: any) {
     console.error("[Audio] Failed to switch audio devices:", e.message);
