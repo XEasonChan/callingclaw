@@ -356,6 +356,20 @@ export class PlaywrightCLIClient {
 
         if (state.includes("in_meeting")) {
           log("Joined!");
+
+          // ── Post-join: ensure mic is unmuted (Meet may auto-mute on entry) ──
+          if (!muteMic) {
+            await this.wait(1500);
+            const micState = await this.evaluate(`() => {
+              const muteBtn = document.querySelector('[aria-label*="Turn on microphone"], [aria-label*="打开麦克风"]');
+              if (muteBtn) { muteBtn.click(); return 'unmuted_after_join'; }
+              const alreadyOn = document.querySelector('[aria-label*="Turn off microphone"], [aria-label*="关闭麦克风"]');
+              if (alreadyOn) return 'already_on';
+              return 'mic_button_not_found';
+            }`);
+            log(`Post-join mic: ${micState}`);
+          }
+
           return { success: true, summary: "Joined meeting — camera off, mic on (BlackHole)", steps, state: "in_meeting" };
         }
         if (state.includes("waiting_room")) {
