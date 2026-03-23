@@ -2605,15 +2605,57 @@ STEP-BY-STEP FLOW:
     },
   });
 
+  // ── Direct audio playback to BlackHole 16ch via ffmpeg (no Electron needed) ──
+  // Spawns a persistent ffmpeg process that accepts raw PCM on stdin and outputs to BlackHole.
+  // This is the fallback when no Electron AudioBridge client is connected.
+  let ffmpegProc: ReturnType<typeof Bun.spawn> | null = null;
+  let ffmpegReady = false;
+
+  function ensureFFmpegPlayback() {
+    if (ffmpegProc && !ffmpegProc.killed) return;
+    try {
+      // Switch system output to BlackHole 16ch for AI voice → Meet mic
+      // (SwitchAudioSource may already have done this during join)
+      Bun.spawn(["SwitchAudioSource", "-s", "BlackHole 16ch", "-t", "output"], {
+        stdout: "ignore", stderr: "ignore",
+      });
+
+      // ffplay reads raw PCM from stdin, plays to system default output (BlackHole 16ch)
+      ffmpegProc = Bun.spawn([
+        "ffplay", "-hide_banner", "-loglevel", "error", "-nodisp",
+        "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0",
+      ], {
+        stdin: "pipe",
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+      ffmpegReady = true;
+      console.log("[Audio] Direct playback via ffplay → BlackHole 16ch (system output)");
+      ffmpegProc.exited.then(() => { ffmpegProc = null; ffmpegReady = false; });
+    } catch (e: any) {
+      console.warn("[Audio] ffplay not available for direct playback:", e.message);
+    }
+  }
+
   // ── Forward AI audio output to browser voice test clients + Electron audio bridge ──
   services.realtime.onAudioOutput((base64Pcm) => {
     for (const ws of browserVoiceClients) {
       try { ws.send(JSON.stringify({ type: "audio", audio: base64Pcm })); } catch {}
     }
-    // Same audio to Electron AudioBridge (uses Python bridge protocol: audio_playback)
+    // Electron AudioBridge clients
     const abMsg = JSON.stringify({ type: "audio_playback", payload: { audio: base64Pcm } });
     for (const ws of audioBridgeClients) {
       try { ws.send(abMsg); } catch {}
+    }
+    // Fallback: direct playback via ffplay when no audio bridge clients
+    if (audioBridgeClients.size === 0) {
+      if (!ffmpegReady) ensureFFmpegPlayback();
+      if (ffmpegProc && ffmpegProc.stdin) {
+        try {
+          const pcmBuf = Buffer.from(base64Pcm, "base64");
+          ffmpegProc.stdin.write(pcmBuf);
+        } catch {}
+      }
     }
   });
 
