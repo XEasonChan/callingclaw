@@ -754,6 +754,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         <div class="setup-group"><h4>API 密钥</h4>
           <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
             <div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="key-openai" placeholder="sk-..."></div>
+            <div class="input-group"><div class="input-label">Grok (xAI) API Key</div><input class="input-field" type="password" id="key-xai" placeholder="xai-..."></div>
             <div class="input-group"><div class="input-label">OpenRouter API Key (可选)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
             <button class="btn btn-sm btn-primary" onclick="saveKeys()">保存密钥</button>
           </div>
@@ -2272,9 +2273,9 @@ async function scanGoogleCreds() {
 async function reqPerm(name) { await window.callingclaw.permissions.request(name); setTimeout(runAllChecks, 1000); }
 function openPerm(name) { window.callingclaw.permissions.openSettings(name); }
 async function saveKeys() {
-  const o = document.getElementById('key-openai').value.trim(), r = document.getElementById('key-openrouter').value.trim();
-  if (!o && !r) return;
-  const body = {}; if (o) body.OPENAI_API_KEY = o; if (r) body.OPENROUTER_API_KEY = r;
+  const o = document.getElementById('key-openai').value.trim(), x = document.getElementById('key-xai').value.trim(), r = document.getElementById('key-openrouter').value.trim();
+  if (!o && !x && !r) return;
+  const body = {}; if (o) body.OPENAI_API_KEY = o; if (x) body.XAI_API_KEY = x; if (r) body.OPENROUTER_API_KEY = r;
   const btn = document.querySelector('button[onclick*="saveKeys"]');
   if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
   try {

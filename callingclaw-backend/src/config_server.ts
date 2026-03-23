@@ -409,6 +409,9 @@ export function startConfigServer(services: Services) {
             openai: CONFIG.openai.apiKey
               ? `sk-...${CONFIG.openai.apiKey.slice(-4)}`
               : "",
+            xai: CONFIG.grok.apiKey
+              ? `xai-...${CONFIG.grok.apiKey.slice(-4)}`
+              : "",
             anthropic: CONFIG.anthropic.apiKey
               ? `sk-ant-...${CONFIG.anthropic.apiKey.slice(-4)}`
               : "",
@@ -439,6 +442,7 @@ export function startConfigServer(services: Services) {
             envContent += `\n${envKey}=${value}`;
           }
           if (envKey === "OPENAI_API_KEY") CONFIG.openai.apiKey = value;
+          if (envKey === "XAI_API_KEY") CONFIG.grok.apiKey = value;
           if (envKey === "ANTHROPIC_API_KEY") CONFIG.anthropic.apiKey = value;
           if (envKey === "OPENROUTER_API_KEY") CONFIG.openrouter.apiKey = value;
         }
