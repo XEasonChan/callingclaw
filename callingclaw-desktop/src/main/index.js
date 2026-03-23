@@ -569,8 +569,16 @@ app.whenReady().then(async () => {
     app.dock.setIcon(dockIcon);
   }
 
-  // Resolve the CallingClaw daemon directory (sibling to this Electron app)
-  const daemonDir = path.resolve(__dirname, '..', '..', '..', 'callingclaw-backend');
+  // Resolve the CallingClaw daemon directory
+  // Priority: 1) sibling to source (dev mode), 2) well-known iCloud path, 3) home directory
+  const fs = require('fs');
+  const candidates = [
+    path.resolve(__dirname, '..', '..', '..', 'callingclaw-backend'),  // dev: sibling
+    path.join(require('os').homedir(), 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'CallingClaw 2.0', 'callingclaw-backend'),  // iCloud
+    path.join(require('os').homedir(), 'callingclaw-backend'),  // home fallback
+  ];
+  const daemonDir = candidates.find(d => fs.existsSync(d)) || candidates[0];
+  console.log(`[Init] Daemon directory: ${daemonDir} (exists: ${fs.existsSync(daemonDir)})`);
 
   // Initialize subsystems
   daemon = new DaemonSupervisor({ daemonDir, isDev: IS_DEV });
