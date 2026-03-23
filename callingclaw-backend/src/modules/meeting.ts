@@ -3,7 +3,6 @@
 // Consumes: SharedContext (transcript)
 // Produces: meeting notes, action items, post-meeting markdown file
 
-import OpenAI from "openai";
 import type { SharedContext, MeetingNote } from "./shared-context";
 import { CONFIG, SHARED_NOTES_DIR } from "../config";
 import { registerNotesFile, listAllNoteFiles, readNoteFile as readSharedNoteFile } from "./shared-documents";
@@ -11,6 +10,34 @@ import { registerNotesFile, listAllNoteFiles, readNoteFile as readSharedNoteFile
 const NOTES_DIR = SHARED_NOTES_DIR;
 // Legacy directory kept for backward compatibility reads
 const LEGACY_NOTES_DIR = `${import.meta.dir}/../../meeting_notes`;
+
+/** Call OpenRouter (or OpenAI as fallback) for chat completions */
+async function llmChat(model: string, messages: Array<{role: string; content: string}>, maxTokens = 2000): Promise<string> {
+  // Prefer OpenRouter (works with any model, single key)
+  if (CONFIG.openrouter.apiKey) {
+    const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0 }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const data = await resp.json() as any;
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return data.choices?.[0]?.message?.content || "";
+  }
+  // Fallback to direct OpenAI
+  if (CONFIG.openai.apiKey) {
+    const { default: OpenAI } = await import("openai");
+    const openai = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+    const resp = await openai.chat.completions.create({
+      model: model.replace("anthropic/", "").replace("openai/", ""),
+      messages: messages as any,
+      max_tokens: maxTokens,
+    });
+    return resp.choices[0]?.message?.content || "";
+  }
+  throw new Error("No API key configured (OpenRouter or OpenAI)");
+}
 
 export interface MeetingSummary {
   title: string;
@@ -24,14 +51,12 @@ export interface MeetingSummary {
 
 export class MeetingModule {
   private context: SharedContext;
-  private openai: OpenAI;
   private _meetingStartTime: number | null = null;
   private _extractionTimer: Timer | null = null;
   private _transcriptHandler: ((entry: any) => void) | null = null;
 
   constructor(context: SharedContext) {
     this.context = context;
-    this.openai = new OpenAI({ apiKey: CONFIG.openai.apiKey });
   }
 
   /**
@@ -85,29 +110,28 @@ export class MeetingModule {
    * Use GPT-4o to extract action items from recent transcript
    */
   async extractActionItems(): Promise<MeetingNote[]> {
-    if (!CONFIG.openai.apiKey) return [];
+    if (!CONFIG.openrouter.apiKey && !CONFIG.openai.apiKey) return [];
 
     const transcript = this.context.getTranscriptText(50);
     if (!transcript) return [];
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_tokens: 500,
-        messages: [
+      const text = await llmChat(
+        CONFIG.analysis?.model || "anthropic/claude-haiku-4-5",
+        [
           {
             role: "system",
             content: `Extract action items, decisions, and follow-ups from this meeting transcript.
-Return JSON array: [{"type": "todo"|"decision"|"action_item", "text": "...", "assignee": "..."}]
+Return JSON: {"items": [{"type": "todo"|"decision"|"action_item", "text": "...", "assignee": "..."}]}
 Only include items NOT already captured. Be concise.`,
           },
           { role: "user", content: transcript },
         ],
-        response_format: { type: "json_object" },
-      });
+        500,
+      );
 
-      const text = response.choices[0]?.message?.content || "{}";
-      const parsed = JSON.parse(text);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch?.[0] || "{}");
       const items = parsed.items || parsed.action_items || [];
 
       for (const item of items) {
@@ -139,12 +163,12 @@ Only include items NOT already captured. Be concise.`,
       ? `${Math.round((Date.now() - this._meetingStartTime) / 60000)} minutes`
       : "unknown";
 
-    if (!CONFIG.openai.apiKey) {
+    if (!CONFIG.openrouter.apiKey && !CONFIG.openai.apiKey) {
       return {
         title: "Meeting",
         duration,
         participants: [],
-        keyPoints: ["OpenAI API key not configured"],
+        keyPoints: ["No API key configured (OpenRouter or OpenAI)"],
         actionItems: [],
         decisions: [],
         followUps: [],
@@ -152,10 +176,10 @@ Only include items NOT already captured. Be concise.`,
     }
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
-        max_tokens: 2000,
-        messages: [
+      // Use Claude Sonnet via OpenRouter for high-quality summaries (cheaper than GPT-4o)
+      const text = await llmChat(
+        "anthropic/claude-sonnet-4-6",
+        [
           {
             role: "system",
             content: `Generate a structured meeting summary from this transcript and notes.
@@ -168,11 +192,11 @@ Be thorough — this will be used for ongoing project tracking.`,
             content: `Duration: ${duration}\n\nTranscript:\n${transcript}\n\nExisting notes:\n${JSON.stringify(notes)}`,
           },
         ],
-        response_format: { type: "json_object" },
-      });
+        2000,
+      );
 
-      const text = response.choices[0]?.message?.content || "{}";
-      const summary = JSON.parse(text) as MeetingSummary;
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const summary = JSON.parse(jsonMatch?.[0] || "{}") as MeetingSummary;
       summary.duration = duration;
 
       console.log("[Meeting] Summary generated");
