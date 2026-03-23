@@ -2620,20 +2620,21 @@ STEP-BY-STEP FLOW:
         stdout: "ignore", stderr: "ignore",
       });
 
-      // ffplay reads raw PCM from stdin, plays to system default output (BlackHole 16ch)
+      // ffmpeg reads raw PCM from stdin, plays to system default output via CoreAudio
       ffmpegProc = Bun.spawn([
-        "ffplay", "-hide_banner", "-loglevel", "error", "-nodisp",
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
         "-f", "s16le", "-ar", "24000", "-ac", "1", "-i", "pipe:0",
+        "-f", "audiotoolbox", "-",
       ], {
         stdin: "pipe",
         stdout: "ignore",
-        stderr: "ignore",
+        stderr: "pipe",
       });
       ffmpegReady = true;
-      console.log("[Audio] Direct playback via ffplay → BlackHole 16ch (system output)");
+      console.log("[Audio] Direct playback via ffmpeg audiotoolbox → BlackHole 16ch (system output)");
       ffmpegProc.exited.then(() => { ffmpegProc = null; ffmpegReady = false; });
     } catch (e: any) {
-      console.warn("[Audio] ffplay not available for direct playback:", e.message);
+      console.warn("[Audio] ffmpeg not available for direct playback:", e.message);
     }
   }
 
@@ -2647,7 +2648,7 @@ STEP-BY-STEP FLOW:
     for (const ws of audioBridgeClients) {
       try { ws.send(abMsg); } catch {}
     }
-    // Fallback: direct playback via ffplay when no audio bridge clients
+    // Fallback: direct playback via ffmpeg when no audio bridge clients
     if (audioBridgeClients.size === 0) {
       if (!ffmpegReady) ensureFFmpegPlayback();
       if (ffmpegProc && ffmpegProc.stdin) {
