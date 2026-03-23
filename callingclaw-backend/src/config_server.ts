@@ -1235,8 +1235,8 @@ export function startConfigServer(services: Services) {
           const result = await services.playwrightCli.joinGoogleMeet(validated.url, {
             muteCamera: true,
             muteMic: false, // Mic ON for BlackHole bridge
-            micDevice: "BlackHole 16ch",
-            speakerDevice: "BlackHole 2ch",
+            micDevice: "BlackHole 2ch",      // Meet mic: 2ch (Meet only reads first 2 channels)
+            speakerDevice: "BlackHole 16ch",  // Meet speaker: 16ch (AI captures meeting audio)
             onStep: (step) => services.eventBus.emit("meeting.join_step", { step }),
           });
           joinSuccess = result.success;
@@ -1394,8 +1394,8 @@ export function startConfigServer(services: Services) {
             displayName,
             muteCamera: true,    // Camera OFF
             muteMic: false,      // Mic ON — needed for BlackHole audio bridge
-            micDevice: "BlackHole 16ch",
-            speakerDevice: "BlackHole 2ch",
+            micDevice: "BlackHole 2ch",      // Meet mic: 2ch (Meet only reads first 2 channels)
+            speakerDevice: "BlackHole 16ch",  // Meet speaker: 16ch (AI captures meeting audio)
             onStep: (step) => services.eventBus.emit("browser_loop.step", { step, method: "eval" }),
           });
 
@@ -2605,8 +2605,9 @@ STEP-BY-STEP FLOW:
     },
   });
 
-  // ── Direct audio playback to BlackHole 16ch via ffmpeg (no Electron needed) ──
-  // Spawns a persistent ffmpeg process that accepts raw PCM on stdin and outputs to BlackHole.
+  // ── Direct audio playback to BlackHole 2ch via ffmpeg (no Electron needed) ──
+  // Spawns a persistent ffmpeg process that accepts raw PCM on stdin → system output (BlackHole 2ch).
+  // Meet mic reads from BlackHole 2ch (2 channels — Meet only uses first 2).
   // This is the fallback when no Electron AudioBridge client is connected.
   let ffmpegProc: ReturnType<typeof Bun.spawn> | null = null;
   let ffmpegReady = false;
@@ -2614,9 +2615,9 @@ STEP-BY-STEP FLOW:
   function ensureFFmpegPlayback() {
     if (ffmpegProc && !ffmpegProc.killed) return;
     try {
-      // Switch system output to BlackHole 16ch for AI voice → Meet mic
-      // (SwitchAudioSource may already have done this during join)
-      Bun.spawn(["SwitchAudioSource", "-s", "BlackHole 16ch", "-t", "output"], {
+      // Switch system output to BlackHole 2ch for AI voice → Meet mic
+      // Meet only reads first 2 channels, so 2ch is required (not 16ch!)
+      Bun.spawn(["SwitchAudioSource", "-s", "BlackHole 2ch", "-t", "output"], {
         stdout: "ignore", stderr: "ignore",
       });
 
@@ -2631,7 +2632,7 @@ STEP-BY-STEP FLOW:
         stderr: "pipe",
       });
       ffmpegReady = true;
-      console.log("[Audio] Direct playback via ffmpeg audiotoolbox → BlackHole 16ch (system output)");
+      console.log("[Audio] Direct playback via ffmpeg audiotoolbox → BlackHole 2ch (system output)");
       ffmpegProc.exited.then(() => { ffmpegProc = null; ffmpegReady = false; });
     } catch (e: any) {
       console.warn("[Audio] ffmpeg not available for direct playback:", e.message);

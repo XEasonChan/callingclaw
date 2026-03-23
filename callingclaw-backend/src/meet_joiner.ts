@@ -50,8 +50,9 @@ async function switchAudioToBlackHole(): Promise<SavedAudioDevices | null> {
     console.log(`[Audio] Saving current devices — output: "${saved.output}", input: "${saved.input}"`);
 
     // Switch system defaults to BlackHole
-    // Input (mic) → BlackHole 16ch: AI voice output feeds into Meet's mic
-    // Output (speaker) → BlackHole 2ch: Meet audio captured by AI
+    // Input (mic) → BlackHole 16ch: captures Meet audio for AI to hear
+    // Output (speaker) → BlackHole 2ch: AI voice plays here → Meet mic reads it
+    // NOTE: Meet only reads first 2 channels, so mic MUST be 2ch!
     await Bun.$`SwitchAudioSource -s "BlackHole 16ch" -t input`.quiet();
     await Bun.$`SwitchAudioSource -s "BlackHole 2ch" -t output`.quiet();
 
