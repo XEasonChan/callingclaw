@@ -1137,10 +1137,12 @@ export function startConfigServer(services: Services) {
           }, { status: 400, headers });
         }
 
-        // Generate stable meetingId for session tracking
-        const { generateMeetingId: genId, upsertSession: upsertSess } = await import("./modules/shared-documents");
-        const meetingId = genId();
-        upsertSess({ meetingId, topic: body.instructions?.slice(0, 200) || "Meeting", meetUrl: validated.url, status: "active" });
+        // Reuse existing session for the same Meet URL, or create new one
+        const { generateMeetingId: genId, upsertSession: upsertSess, readSessions } = await import("./modules/shared-documents");
+        const existingSessions = readSessions().sessions || [];
+        const existing = existingSessions.find((s: any) => s.meetUrl === validated.url && s.status !== "ended");
+        const meetingId = existing?.meetingId || genId();
+        upsertSess({ meetingId, topic: existing?.topic || body.instructions?.slice(0, 200) || "Meeting", meetUrl: validated.url, status: "active" });
 
         // Step 1: Start OpenAI Realtime voice session (if not already running)
         let voiceStarted = false;
