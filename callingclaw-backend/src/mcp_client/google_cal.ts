@@ -174,13 +174,14 @@ export class GoogleCalendarClient {
   private async refreshAccessToken(): Promise<void> {
     const res = await fetch(TOKEN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Connection: "close" },
       body: new URLSearchParams({
         client_id: this.clientId,
         client_secret: this.clientSecret,
         refresh_token: this.refreshToken,
         grant_type: "refresh_token",
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -216,24 +217,36 @@ export class GoogleCalendarClient {
     return this.accessToken;
   }
 
-  /** Make an authenticated request to the Google Calendar API */
-  private async calendarFetch(path: string, options: RequestInit = {}): Promise<any> {
+  /** Make an authenticated request to the Google Calendar API.
+   *  Includes timeout + retry on socket close (Bun fetch keep-alive issue). */
+  private async calendarFetch(path: string, options: RequestInit = {}, retry = 1): Promise<any> {
     const token = await this.getToken();
-    const res = await fetch(`${CALENDAR_API}${path}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
+    try {
+      const res = await fetch(`${CALENDAR_API}${path}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Connection": "close", // Avoid keep-alive socket reuse issues
+          ...options.headers,
+        },
+        signal: AbortSignal.timeout(15000), // 15s timeout
+      });
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Calendar API error (${res.status}): ${err}`);
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Calendar API error (${res.status}): ${err}`);
+      }
+
+      return res.json();
+    } catch (e: any) {
+      // Retry once on socket close errors (Bun keep-alive issue)
+      if (retry > 0 && (e.message?.includes("socket") || e.message?.includes("closed unexpectedly"))) {
+        console.warn("[Calendar] Socket closed, retrying...");
+        return this.calendarFetch(path, options, retry - 1);
+      }
+      throw e;
     }
-
-    return res.json();
   }
 
   async listUpcomingEvents(maxResults = 10): Promise<CalendarEvent[]> {
