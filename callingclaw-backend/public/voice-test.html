@@ -208,7 +208,7 @@
             System Instructions
             <span class="collapsible-toggle" id="instr-toggle" onclick="toggleInstructions()">expand</span>
           </div>
-          <textarea id="instructions" rows="3" placeholder="System instructions for the voice AI...">You are CallingClaw, an AI assistant. Speak naturally and concisely in the user's language. You can help with scheduling, screen control, and meeting tasks.</textarea>
+          <textarea id="instructions" rows="3" placeholder="Leave empty to use production CORE_IDENTITY prompt..."></textarea>
           <div id="instr-full" style="display:none; margin-top: 8px;">
             <button class="btn btn-ghost" onclick="updateInstructions()">Update Instructions</button>
             <span id="instr-status" style="font-size: 11px; color: var(--text3); margin-left: 8px;"></span>
@@ -764,14 +764,16 @@
             });
           }
 
-          // Send WS start command with instructions + provider + voice
-          const instructions = document.getElementById('instructions').value.trim();
-          ws.send(JSON.stringify({
-            type: 'start',
-            instructions: instructions || undefined,
-            provider: provider,
-            voice: voice,
-          }));
+          // Send WS start command — but skip if Talk Locally mode already started via REST
+          if (mode !== 'local') {
+            const instructions = document.getElementById('instructions').value.trim();
+            ws.send(JSON.stringify({
+              type: 'start',
+              instructions: instructions || undefined,
+              provider: provider,
+              voice: voice,
+            }));
+          }
         };
 
         ws.onmessage = (event) => {
