@@ -873,11 +873,17 @@ export class PlaywrightCLIClient {
       throw new Error("Browser session was stopped. Call start() to reconnect.");
     }
 
-    // Auto-start on first use (lazy initialization — avoids opening Chrome at startup)
-    // Only start() can launch Chrome; callers should use start() explicitly or evaluateIfConnected()
-    if (!this._connected && !subcommand.startsWith("open")) {
-      console.log(`[PlaywrightCLI] Not connected — auto-starting for: ${subcommand.slice(0, 40)}`);
-      await this.start(); // start() now reconnects without new tabs if session exists
+    // Auto-start on first use — but ONLY for navigate/open commands.
+    // eval commands should NOT trigger auto-start (avoids about:blank tab spam
+    // from AdmissionMonitor polling when session is disconnected).
+    if (!this._connected) {
+      if (subcommand.startsWith("eval")) {
+        throw new Error("Not connected — eval requires active session");
+      }
+      if (!subcommand.startsWith("open")) {
+        console.log(`[PlaywrightCLI] Not connected — auto-starting for: ${subcommand.slice(0, 40)}`);
+        await this.start();
+      }
     }
 
     const quotedCmd = CMD.includes(" ") ? `"${CMD}"` : CMD;
