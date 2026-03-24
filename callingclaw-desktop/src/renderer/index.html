@@ -1593,7 +1593,7 @@ function renderPastMeetingsHTML() {
         if (item.files.prep && mfd.prep.status === 'idle') mfd.prep.status = 'done';
         if (item.files.notes) { if (!mfd.filePaths) mfd.filePaths = {}; mfd.filePaths.notes = item.files.notes; }
         if (item.files.summary && mfd.summary.status === 'idle') mfd.summary.status = 'done';
-        if (item.files.live) { if (!mfd.filePaths) mfd.filePaths = {}; mfd.filePaths.notes = item.files.live; }
+        // Note: do NOT map live log to notes — they are different types
       }
       // Fallback: try loading prep file to detect if it exists (async, updates badge later)
       if (mid && mfd.prep.status === 'idle' && !mfd._prepChecked) {
@@ -1645,12 +1645,14 @@ async function openPastMeetingPanel(meetingId) {
   // Load both files
   var prepContent = await loadMeetingFile(meetingId, 'prep');
   var summaryContent = await loadMeetingFile(meetingId, 'summary');
+  // Filter out live log content mistakenly loaded as summary
+  if (summaryContent && summaryContent.includes('Live Meeting Log:')) summaryContent = null;
   var md = '# ' + esc(title) + '\n\n';
   if (prepContent) {
-    md += '## 📋 会前调研\n\n' + prepContent + '\n\n';
+    md += prepContent + '\n\n';
   }
   if (summaryContent) {
-    md += '## 📝 会议总结\n\n' + summaryContent + '\n\n';
+    md += '---\n\n## 📝 会议总结\n\n' + summaryContent + '\n\n';
   }
   if (!prepContent && !summaryContent) {
     md += '> 暂无会议文件。\n';
