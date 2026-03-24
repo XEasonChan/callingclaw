@@ -1226,12 +1226,15 @@ async function refreshAll() {
   // Normalize calendar events — API returns flat start/end strings + meetLink,
   // but rendering code expects { start: { dateTime }, hangoutLink }
   const rawMeetings = Array.isArray(evts) ? evts : (evts?.events || []);
-  S.meetings = rawMeetings.map(e => ({
-    ...e,
-    start: typeof e.start === 'string' ? { dateTime: e.start } : e.start,
-    end: typeof e.end === 'string' ? { dateTime: e.end } : e.end,
-    hangoutLink: e.hangoutLink || e.meetLink || null,
-  }));
+  // Only update meetings if we got real data (avoid clearing on API failure/empty)
+  if (rawMeetings.length > 0 || (evts && evts.connected)) {
+    S.meetings = rawMeetings.map(e => ({
+      ...e,
+      start: typeof e.start === 'string' ? { dateTime: e.start } : e.start,
+      end: typeof e.end === 'string' ? { dateTime: e.end } : e.end,
+      hangoutLink: e.hangoutLink || e.meetLink || null,
+    }));
+  }
   S.notes = Array.isArray(notes) ? notes : (notes?.files || []);
   S.tasks = Array.isArray(tasks) ? tasks : (tasks?.tasks || []);
   // Sync manifest sessions into meetingFiles data model for past meetings
@@ -1442,10 +1445,16 @@ function buildMeetingListHTML() {
     }
     html += '</div>';
   } else if (!activeMeeting) {
-    if (!S.calendarConnected) {
-      html += '<div class="empty fade-in"><p style="color:var(--muted);">Google Calendar disconnected — check OAuth token in Settings</p></div>';
-    } else {
-      html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
+    // Only show "no meetings" if there are also no active prep cards in the DOM
+    var hasActivePrepCards = document.querySelectorAll('[id$="-wrap"]').length > 0;
+    // Also check meetingFiles for any preparing/active entries
+    var hasPreparing = Object.values(S.meetingFiles).some(function(d) { return d.status === 'preparing' || d.prep?.status === 'loading'; });
+    if (!hasActivePrepCards && !hasPreparing) {
+      if (!S.calendarConnected) {
+        html += '<div class="empty fade-in"><p style="color:var(--muted);">Google Calendar disconnected — check OAuth token in Settings</p></div>';
+      } else {
+        html += '<div class="empty fade-in"><p>No upcoming meetings. Use the input above to prepare a topic.</p></div>';
+      }
     }
   }
 
@@ -1579,11 +1588,31 @@ function renderPastMeetingsHTML() {
       mfd.status = mfd.status || 'ended';
       mfd.meetUrl = mfd.meetUrl || item.meetUrl || null;
       mfd.startTime = mfd.startTime || item.date || null;
-      // Detect prep/notes/summary from manifest files field
+      // Detect prep/notes/summary from manifest files field OR sessions.json
       if (item.files) {
         if (item.files.prep && mfd.prep.status === 'idle') mfd.prep.status = 'done';
-        if (item.files.notes && !mfd.filePaths) mfd.filePaths = { notes: item.files.notes };
+        if (item.files.notes) { if (!mfd.filePaths) mfd.filePaths = {}; mfd.filePaths.notes = item.files.notes; }
         if (item.files.summary && mfd.summary.status === 'idle') mfd.summary.status = 'done';
+        if (item.files.live) { if (!mfd.filePaths) mfd.filePaths = {}; mfd.filePaths.notes = item.files.live; }
+      }
+      // Fallback: try loading prep file to detect if it exists (async, updates badge later)
+      if (mid && mfd.prep.status === 'idle' && !mfd._prepChecked) {
+        mfd._prepChecked = true;
+        loadMeetingFile(mid, 'prep').then(function(content) {
+          if (content) {
+            mfd.prep.status = 'done';
+            mfd.prep.content = content;
+            // Re-render the badge if card exists
+            var card = document.querySelector('[onclick*="' + mid + '"]');
+            if (card) {
+              var filesDiv = card.querySelector('.meet-files');
+              if (!filesDiv) {
+                var infoDiv = card.querySelector('.meet-info');
+                if (infoDiv) infoDiv.insertAdjacentHTML('beforeend', '<div class="meet-files" onclick="event.stopPropagation()"><span class="meet-file done" onclick="openMeetingFileInPanel(\'' + mid + '\', \'prep\')"><span class="meet-file-icon">📋</span> Prep</span></div>');
+              }
+            }
+          }
+        }).catch(function(){});
       }
     }
     var mfData = mid ? S.meetingFiles[mid] : null;
