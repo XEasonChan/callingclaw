@@ -47,3 +47,4 @@ coverage/
 excalidraw.log
 .collaborator
 .gstack/
+.claude/worktrees/
