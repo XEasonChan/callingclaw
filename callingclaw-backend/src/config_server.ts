@@ -1878,12 +1878,16 @@ STEP-BY-STEP FLOW:
         }, { headers });
       }
 
-      // DELETE /api/meeting/:id — Remove a meeting session from the list
+      // DELETE /api/meeting/:id — Remove a meeting session from sessions.json + MeetingDB
       if (url.pathname.startsWith("/api/meeting/") && req.method === "DELETE") {
         const meetingId = url.pathname.split("/").pop();
         if (meetingId) {
           const { deleteSession } = await import("./modules/shared-documents");
           deleteSession(meetingId);
+          // Also delete from MeetingDB (SQLite)
+          if (services.meetingDB) {
+            try { services.meetingDB.delete(meetingId); } catch {}
+          }
           return Response.json({ ok: true, deleted: meetingId }, { headers });
         }
         return Response.json({ error: "meetingId required" }, { status: 400, headers });

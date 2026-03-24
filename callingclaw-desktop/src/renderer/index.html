@@ -1824,6 +1824,9 @@ async function leaveMeeting() {
 
 async function deleteMeeting(meetingId) {
   if (!meetingId) return;
+  var data = S.meetingFiles[meetingId];
+  var topic = data ? data.topic : meetingId;
+  if (!confirm('确定删除会议 "' + topic + '"？\n\n此操作将从列表中移除，不影响已生成的文件。')) return;
   try {
     await fetch(API + '/api/meeting/' + meetingId, { method: 'DELETE' });
     // Remove from local state
@@ -1831,6 +1834,8 @@ async function deleteMeeting(meetingId) {
     // Remove card from DOM
     var wrap = document.getElementById(meetingId + '-wrap');
     if (wrap) wrap.remove();
+    var row = document.querySelector('[onclick*="' + meetingId + '"]');
+    if (row) row.closest('.meet-row')?.remove();
     // Refresh list
     refreshAll();
   } catch (e) {

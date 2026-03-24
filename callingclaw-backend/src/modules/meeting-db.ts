@@ -336,6 +336,12 @@ export class MeetingDB {
     });
   }
 
+  /** Delete a meeting and its files from the database */
+  delete(meetingId: string) {
+    this.db.run("DELETE FROM meeting_files WHERE meeting_id = ?", meetingId);
+    this.db.run("DELETE FROM meetings WHERE id = ?", meetingId);
+  }
+
   /** Get meetings as manifest format (compatible with existing frontend) */
   getManifest() {
     const meetings = this.listMeetings(50);
@@ -351,13 +357,26 @@ export class MeetingDB {
         calendarEventId: m.calendar_id,
         meetUrl: m.meet_url,
         createdAt: m.created_at,
-        files: {
-          prep: m.files.find(f => f.type === "prep")?.path || null,
-          notes: m.files.find(f => f.type === "notes")?.path || null,
-          summary: m.files.find(f => f.type === "summary")?.path || null,
-          live: m.files.find(f => f.type === "live")?.path || null,
-          transcript: m.files.find(f => f.type === "transcript")?.path || null,
-        },
+        files: (() => {
+          const dbPrep = m.files.find(f => f.type === "prep")?.path || null;
+          const dbNotes = m.files.find(f => f.type === "notes")?.path || null;
+          const dbSummary = m.files.find(f => f.type === "summary")?.path || null;
+          const dbLive = m.files.find(f => f.type === "live")?.path || null;
+          // Fallback: check disk for convention-based files
+          const { existsSync } = require("fs");
+          const { resolve } = require("path");
+          const checkDisk = (suffix: string) => {
+            const p = resolve(SHARED_DIR, m.id + suffix);
+            return existsSync(p) ? m.id + suffix : null;
+          };
+          return {
+            prep: dbPrep || checkDisk("_prep.md"),
+            notes: dbNotes || checkDisk("_notes.md"),
+            summary: dbSummary || checkDisk("_summary.md"),
+            live: dbLive || checkDisk("_live.md"),
+            transcript: null,
+          };
+        })(),
       })),
     };
   }
