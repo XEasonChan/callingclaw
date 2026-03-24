@@ -184,6 +184,7 @@ export class OpenClawBridge {
       };
 
       const idempotencyKey = crypto.randomUUID();
+      this._pendingSessionKey = this.sessionKey;
       this.request("chat.send", {
         sessionKey: this.sessionKey,
         message: taskText,
@@ -224,6 +225,7 @@ export class OpenClawBridge {
       };
 
       const idempotencyKey = crypto.randomUUID();
+      this._pendingSessionKey = callingclawSession;
       console.log(`[OpenClaw] Sending task to ${callingclawSession}`);
       this.request("chat.send", {
         sessionKey: callingclawSession,
@@ -239,8 +241,18 @@ export class OpenClawBridge {
     });
   }
 
+  // Track which session we're waiting for a response from
+  private _pendingSessionKey: string | null = null;
+
   private handleChatEvent(payload: any) {
     if (!payload) return;
+
+    // Ignore events from other sessions (prevents cron announce contamination)
+    const eventSession = payload.sessionKey || payload.session || null;
+    if (this._pendingSessionKey && eventSession && eventSession !== this._pendingSessionKey) {
+      // Not our session — skip
+      return;
+    }
 
     // Stream delta — forward to activity feed for real-time visibility
     if (payload.state === "delta") {
@@ -257,6 +269,7 @@ export class OpenClawBridge {
       if (this.chatResolve) {
         this.chatResolve(text || "(no response)");
         this.chatResolve = null;
+        this._pendingSessionKey = null;
       }
       return;
     }
@@ -266,6 +279,7 @@ export class OpenClawBridge {
       if (this.chatResolve) {
         this.chatResolve(`OpenClaw error: ${payload.errorMessage || "aborted"}`);
         this.chatResolve = null;
+        this._pendingSessionKey = null;
       }
     }
   }
