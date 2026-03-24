@@ -382,14 +382,19 @@
 
         for (const e of calEvents) {
           const summary = e.summary || e.title || 'Untitled';
+          // Extract meetingId from _prepBrief filename (e.g. "cc_xxx_prep.md" → "cc_xxx")
+          let meetingId = e.meetingId || null;
+          if (!meetingId && e._prepBrief && e._prepBrief.endsWith('_prep.md')) {
+            meetingId = e._prepBrief.replace('_prep.md', '');
+          }
           meetingList.push({
             id: e.id,
             summary: summary,
             start: e.start?.dateTime || e.start || e.startTime || '',
             end: e.end?.dateTime || e.end || e.endTime || '',
             hangoutLink: e.hangoutLink || e.meetLink || null,
-            meetingId: e.meetingId || null,
-            hasPrepBrief: false,
+            meetingId: meetingId,
+            hasPrepBrief: !!e._prepBrief,
             source: 'calendar',
             noteFile: null,
           });
