@@ -137,6 +137,19 @@ export function upsertSession(session: Partial<MeetingSession> & { meetingId: st
   return existing;
 }
 
+/** Delete a meeting session by meetingId */
+export function deleteSession(meetingId: string): boolean {
+  const index = readSessions();
+  const before = index.sessions.length;
+  index.sessions = index.sessions.filter(s => s.meetingId !== meetingId);
+  if (index.sessions.length < before) {
+    saveSessions(index);
+    console.log(`[Sessions] Deleted: ${meetingId}`);
+    return true;
+  }
+  return false;
+}
+
 /** Find session by meetingId */
 export function findSession(meetingId: string): MeetingSession | undefined {
   return readSessions().sessions.find(s => s.meetingId === meetingId);

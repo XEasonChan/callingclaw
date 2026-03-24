@@ -1599,8 +1599,10 @@ function renderPastMeetingsHTML() {
     // File attachments for past meetings
     html += renderMeetingFileAttachments(mfData, item.topic, item.meetUrl);
     html += '</div>';
+    html += '<div class="meet-actions" onclick="event.stopPropagation()" style="display:flex;gap:4px;align-items:center;">';
     html += '<span class="meet-badge" style="background:var(--surface);color:var(--text3);">已结束</span>';
-    html += '</div>';
+    html += '<button class="btn btn-sm btn-ghost" onclick="deleteMeeting(\'' + esc(mid) + '\')" style="font-size:11px;color:var(--text3);padding:2px 6px;" title="删除">✕</button>';
+    html += '</div></div>';
   }
   html += '</div>';
   return html;
@@ -1789,6 +1791,22 @@ async function joinMeeting(url) {
 async function leaveMeeting() {
   try { await fetch(API + '/api/meeting/leave', { method: 'POST' }); } catch {}
   setTimeout(refreshAll, 2000);
+}
+
+async function deleteMeeting(meetingId) {
+  if (!meetingId) return;
+  try {
+    await fetch(API + '/api/meeting/' + meetingId, { method: 'DELETE' });
+    // Remove from local state
+    delete S.meetingFiles[meetingId];
+    // Remove card from DOM
+    var wrap = document.getElementById(meetingId + '-wrap');
+    if (wrap) wrap.remove();
+    // Refresh list
+    refreshAll();
+  } catch (e) {
+    console.error('[Delete]', e);
+  }
 }
 
 // Talk Locally — full meeting intelligence stack (parallel startup + instant UI)

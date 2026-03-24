@@ -42,6 +42,23 @@ import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
 
+/** Fetch with retry on ECONNRESET/socket errors (Bun fetch + proxy instability) */
+async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fetch(url, options);
+    } catch (e: any) {
+      if (i < retries && (e.message?.includes("ECONNRESET") || e.message?.includes("socket") || e.message?.includes("closed"))) {
+        console.warn(`[Fetch] Retry ${i + 1}/${retries} for ${url.slice(0, 60)}... (${e.message})`);
+        await new Promise(r => setTimeout(r, 500 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("unreachable");
+}
+
 import type { MeetingScheduler } from "./modules/meeting-scheduler";
 import type { PostMeetingDelivery } from "./modules/post-meeting-delivery";
 
@@ -1480,7 +1497,7 @@ STEP-BY-STEP FLOW:
               try {
                 const now = new Date();
                 const tzOffset = now.toLocaleString("en-US", { timeZoneName: "short" }).split(" ").pop();
-                const llmResp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+                const llmResp = await fetchWithRetry(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -1552,6 +1569,9 @@ STEP-BY-STEP FLOW:
               try { calEvent = typeof calResult === "string" ? JSON.parse(calResult) : calResult; } catch { calEvent = {}; }
               meetUrl = calEvent.meetLink || calEvent.hangoutLink || null;
               calEventId = calEvent.id || null;
+
+              // Update session with extracted title, time, and meet URL
+              upsertSession({ meetingId, topic: title, meetUrl: meetUrl || undefined, status: "ready", startTime, calendarEventId: calEventId });
 
               services.eventBus.emit("meeting.prep_progress", {
                 meetingId, step: "calendar_ready",
@@ -1726,7 +1746,7 @@ STEP-BY-STEP FLOW:
                 try {
                   const now = new Date();
                   const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                  const llmResp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+                  const llmResp = await fetchWithRetry(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Connection": "close", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
                     body: JSON.stringify({
@@ -1856,6 +1876,17 @@ STEP-BY-STEP FLOW:
           valid: !!validated,
           ...(validated || {}),
         }, { headers });
+      }
+
+      // DELETE /api/meeting/:id — Remove a meeting session from the list
+      if (url.pathname.startsWith("/api/meeting/") && req.method === "DELETE") {
+        const meetingId = url.pathname.split("/").pop();
+        if (meetingId) {
+          const { deleteSession } = await import("./modules/shared-documents");
+          deleteSession(meetingId);
+          return Response.json({ ok: true, deleted: meetingId }, { headers });
+        }
+        return Response.json({ error: "meetingId required" }, { status: 400, headers });
       }
 
       // POST /api/meeting/leave — Leave current meeting + generate follow-up report
