@@ -2364,8 +2364,9 @@ STEP-BY-STEP FLOW:
         try {
           const content = await readSharedFile(filePath);
           return Response.json({ path: filePath, content }, { headers });
-        } catch (e: any) {
-          return Response.json({ error: e.message }, { status: 404, headers });
+        } catch {
+          // Return 200 with null content instead of 404 (avoids console noise in Desktop)
+          return Response.json({ path: filePath, content: null }, { headers });
         }
       }
 
