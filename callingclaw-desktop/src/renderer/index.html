@@ -1531,7 +1531,7 @@ function renderPastMeetingsHTML() {
   for (var id in S.meetingFiles) {
     if (S.meetingFiles[id].status === 'ended') endedIds[id] = true;
   }
-  // Merge: manifest sessions + ended meetingFiles — ONLY past sessions
+  // Merge: manifest sessions + ended meetingFiles — past sessions by TIME (not status)
   var pastItems = [];
   var now = new Date();
   for (var si = 0; si < sessions.length; si++) {
@@ -1539,9 +1539,10 @@ function renderPastMeetingsHTML() {
     var sessDate = sess.date || sess.startTime;
     // Skip future sessions (they show in "Coming up" or as active prep cards)
     if (sessDate && new Date(sessDate) > now) { if (sess.meetingId) endedIds[sess.meetingId] = false; continue; }
-    // Skip sessions that are still preparing (shown as active prep cards)
-    if (sess.status === 'preparing' || sess.status === 'active') { if (sess.meetingId) endedIds[sess.meetingId] = false; continue; }
-    pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sessDate });
+    // Skip sessions currently being prepped (active prep card visible in DOM)
+    var hasActiveCard = document.getElementById(sess.meetingId + '-wrap');
+    if (hasActiveCard) { if (sess.meetingId) endedIds[sess.meetingId] = false; continue; }
+    pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sessDate, files: sess.files });
     if (sess.meetingId) endedIds[sess.meetingId] = false; // Don't duplicate
   }
   for (var eid in endedIds) {
@@ -1572,12 +1573,18 @@ function renderPastMeetingsHTML() {
     var item = pastItems[pi];
     var mid = item.meetingId || '';
     // Ensure meetingFiles entry exists for this session
-    if (mid && !S.meetingFiles[mid]) {
+    if (mid) {
       var mfd = getMeetingData(mid);
-      mfd.topic = item.topic || '';
-      mfd.status = 'ended';
-      mfd.meetUrl = item.meetUrl || null;
-      mfd.startTime = item.date || null;
+      if (!mfd.topic) mfd.topic = item.topic || '';
+      mfd.status = mfd.status || 'ended';
+      mfd.meetUrl = mfd.meetUrl || item.meetUrl || null;
+      mfd.startTime = mfd.startTime || item.date || null;
+      // Detect prep/notes/summary from manifest files field
+      if (item.files) {
+        if (item.files.prep && mfd.prep.status === 'idle') mfd.prep.status = 'done';
+        if (item.files.notes && !mfd.filePaths) mfd.filePaths = { notes: item.files.notes };
+        if (item.files.summary && mfd.summary.status === 'idle') mfd.summary.status = 'done';
+      }
     }
     var mfData = mid ? S.meetingFiles[mid] : null;
     var dateParts = item.date ? fmtDateParts(item.date) : null;
