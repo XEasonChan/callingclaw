@@ -3,6 +3,16 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.11] - 2026-03-25
+
+### Added
+- **DMG 内置工具** — cliclick + SwitchAudioSource 打包到 `resources/bin`，不再依赖 Homebrew 安装
+- **Known Gotchas 表** — CLAUDE.md 新增 10 条 bug 记忆，防止重复踩坑
+
+### Fixed
+- **afterPack xattr hook** — iCloud 在 packaging 和 codesign 之间重新添加 resource fork，afterPack.js 自动清理
+- **permission-checker 语法错误** — getBundleInfo/getDefaultOutputDevice 方法移到 class 内部
+
 ## [2.7.10] - 2026-03-25
 
 ### Added
