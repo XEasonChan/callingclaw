@@ -276,7 +276,7 @@ callingclaw/
 │   ├── src/renderer/             # Renderer (HTML, JS, audio-bridge)
 │   ├── src/preload/              # Context bridge
 │   └── assets/                   # Icons
-├── Callingclaw-landing/          # Landing page (Vercel)
+├── callingclaw-landing/          # Landing page (Vercel)
 ├── docs/                         # PRD, architecture decisions
 ├── CLAUDE.md                     # Project guide for AI agents
 ├── CHANGELOG.md                  # Release history

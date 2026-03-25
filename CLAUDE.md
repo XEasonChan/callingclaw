@@ -7,9 +7,7 @@
 ```
 callingclaw-backend/     Bun backend — AI orchestration, voice, meeting lifecycle
 callingclaw-desktop/     Electron desktop app — UI, audio bridge, tray
-Callingclaw-landing/     Landing page (Vercel)
-docs/                    Architecture decisions, PRD
-test/                    E2E test fixtures
+callingclaw-landing/     Landing page (Vercel)
 ```
 
 ## Tech Stack
