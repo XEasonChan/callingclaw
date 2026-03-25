@@ -1541,7 +1541,9 @@ function renderPastMeetingsHTML() {
     if (S.meetingFiles[id].status === 'ended') endedIds[id] = true;
   }
   // Merge: manifest sessions + ended meetingFiles — past sessions by TIME (not status)
+  // Deduplicate by topic+meetUrl: keep the session with the most data (calendarEventId > files > first)
   var pastItems = [];
+  var pastDedup = {}; // key: topic → best pastItem index
   var now = new Date();
   for (var si = 0; si < sessions.length; si++) {
     var sess = sessions[si];
@@ -1551,13 +1553,30 @@ function renderPastMeetingsHTML() {
     // Skip sessions currently being prepped (active prep card visible in DOM)
     var hasActiveCard = document.getElementById(sess.meetingId + '-wrap');
     if (hasActiveCard) { if (sess.meetingId) endedIds[sess.meetingId] = false; continue; }
-    pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sessDate, files: sess.files });
+    // Deduplicate: if same topic already added, keep the one with more data
+    var dedupKey = (sess.topic || '') + '|' + (sess.meetUrl || '');
+    if (dedupKey in pastDedup) {
+      var existingIdx = pastDedup[dedupKey];
+      var existingItem = pastItems[existingIdx];
+      // Prefer session with calendarEventId, then startTime, then more files
+      var existingScore = (existingItem.calendarEventId ? 4 : 0) + (existingItem.date ? 2 : 0) + (existingItem.files && Object.keys(existingItem.files).length || 0);
+      var newScore = (sess.calendarEventId ? 4 : 0) + (sessDate ? 2 : 0) + (sess.files && Object.keys(sess.files).length || 0);
+      if (newScore > existingScore) {
+        pastItems[existingIdx] = { meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sessDate, files: sess.files, calendarEventId: sess.calendarEventId };
+      }
+    } else {
+      pastDedup[dedupKey] = pastItems.length;
+      pastItems.push({ meetingId: sess.meetingId, topic: sess.topic, meetUrl: sess.meetUrl, date: sessDate, files: sess.files, calendarEventId: sess.calendarEventId });
+    }
     if (sess.meetingId) endedIds[sess.meetingId] = false; // Don't duplicate
   }
   for (var eid in endedIds) {
     if (endedIds[eid]) {
       var d = S.meetingFiles[eid];
-      pastItems.push({ meetingId: eid, topic: d.topic, meetUrl: d.meetUrl, date: d.startTime });
+      var edKey = (d.topic || '') + '|' + (d.meetUrl || '');
+      if (!(edKey in pastDedup)) {
+        pastItems.push({ meetingId: eid, topic: d.topic, meetUrl: d.meetUrl, date: d.startTime });
+      }
     }
   }
   // Fallback: if no manifest sessions but we have notes, show notes as flat list
@@ -2211,7 +2230,11 @@ function routeWsEvent(msg) {
         }
         if (msg.data.calendarEventId && !pData.calendarEventId) {
           pData.calendarEventId = msg.data.calendarEventId;
-          S.meetings.unshift({ id: msg.data.calendarEventId, summary: pData.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
+          // Only add to S.meetings if not already present (prevent duplicates from calendar poll)
+          var alreadyInMeetings = S.meetings.some(function(m) { return m.id === msg.data.calendarEventId; });
+          if (!alreadyInMeetings) {
+            S.meetings.unshift({ id: msg.data.calendarEventId, summary: pData.topic, start: { dateTime: msg.data.startTime }, end: { dateTime: msg.data.endTime }, hangoutLink: msg.data.meetUrl });
+          }
         }
       }
       if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(pData.meetingId);

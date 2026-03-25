@@ -108,6 +108,20 @@ meetingPrepSkill.onLiveNote((note, topic) => {
   }
 });
 
+// Forward prep-ready to EventBus — frontend gets instant notification when prep file is saved
+meetingPrepSkill.onPrepReady((brief, meetingId, filePath) => {
+  Bun.file(filePath).text().then((mdContent) => {
+    eventBus.emit("meeting.prep_ready", {
+      meetingId, topic: brief.topic, filePath, mdContent,
+    });
+  }).catch(() => {
+    // File was just written — emit without content, frontend will fetch via API
+    eventBus.emit("meeting.prep_ready", {
+      meetingId, topic: brief.topic, filePath,
+    });
+  });
+});
+
 // Load OpenClaw's MEMORY.md at startup (non-blocking)
 contextSync.loadOpenClawMemory().then((ok) => {
   if (ok) console.log("[Init] OpenClaw MEMORY.md loaded into ContextSync");
