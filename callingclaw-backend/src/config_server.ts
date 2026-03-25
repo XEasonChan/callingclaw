@@ -1925,6 +1925,21 @@ STEP-BY-STEP FLOW:
           generatedAt: Date.now(),
         };
 
+        // Mark session as ended + attach summary file via SessionManager
+        if (services.sessionManager) {
+          const activeSessions = services.sessionManager.list({ status: "active" });
+          const activeSession = activeSessions[0]; // most recent
+          if (activeSession) {
+            if (filepath) {
+              try {
+                const summaryContent = await Bun.file(filepath).text();
+                await services.sessionManager.attachSummary(activeSession.meetingId, summaryContent);
+              } catch {}
+            }
+            services.sessionManager.markEnded(activeSession.meetingId);
+          }
+        }
+
         services.eventBus.emit("meeting.ended", followUp);
         services.eventBus.endCorrelation();
 
@@ -2085,6 +2100,21 @@ STEP-BY-STEP FLOW:
           pendingConfirmation: true,
           generatedAt: Date.now(),
         };
+
+        // Mark session as ended + attach summary via SessionManager
+        if (services.sessionManager) {
+          const activeSessions = services.sessionManager.list({ status: "active" });
+          const activeSession = activeSessions[0];
+          if (activeSession) {
+            if (filepath) {
+              try {
+                const summaryContent = await Bun.file(filepath).text();
+                await services.sessionManager.attachSummary(activeSession.meetingId, summaryContent);
+              } catch {}
+            }
+            services.sessionManager.markEnded(activeSession.meetingId);
+          }
+        }
 
         services.eventBus.emit("meeting.ended", followUp);
         services.eventBus.endCorrelation();

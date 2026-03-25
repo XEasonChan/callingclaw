@@ -1696,7 +1696,7 @@ function renderPastMeetingsHTML() {
     html += '</div>';
     html += '<div class="meet-actions" onclick="event.stopPropagation()" style="display:flex;gap:4px;align-items:center;">';
     html += '<span class="meet-badge" style="background:var(--surface);color:var(--text3);">已结束</span>';
-    html += '<button class="btn btn-sm btn-ghost" onclick="deleteMeeting(\'' + esc(mid) + '\')" style="font-size:11px;color:var(--text3);padding:2px 6px;" title="删除">✕</button>';
+    html += '<button class="btn btn-sm btn-ghost" onclick="deleteMeeting(\'' + esc(mid) + '\')" style="font-size:11px;color:var(--text3);padding:2px 6px;line-height:1;display:flex;align-items:center;justify-content:center;" title="删除">✕</button>';
     html += '</div></div>';
   }
   html += '</div>';
@@ -1895,7 +1895,6 @@ async function deleteMeeting(meetingId) {
   var data = S.meetingFiles[meetingId];
   var topic = data ? data.topic : meetingId;
   var confirmed = await ccConfirm({
-    icon: '🗑',
     title: '删除会议',
     body: '确定删除 "<strong>' + esc(topic) + '</strong>"？<br><span style="color:var(--text3);font-size:12px;">此操作将从列表中移除，不影响已生成的文件。</span>',
     confirmText: '删除',
