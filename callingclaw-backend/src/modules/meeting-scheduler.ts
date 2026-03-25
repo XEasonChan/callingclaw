@@ -251,7 +251,7 @@ export class MeetingScheduler {
       return;
     }
 
-    // Check if there's already a session for this meeting (delegate flow already handles prep)
+    // Check if there's already a session for this meeting (e.g. from delegate flow)
     const sessions = readSessions().sessions;
     const existing = sessions.find(s =>
       s.status !== "ended" && (
@@ -259,21 +259,29 @@ export class MeetingScheduler {
         (s.calendarEventId && event.id && s.calendarEventId === event.id)
       )
     );
-    if (existing) {
-      console.log(`[MeetingScheduler] Skipping prep for "${event.summary}" — session ${existing.meetingId} already exists (status: ${existing.status})`);
+
+    // If session exists AND already has a prep file, skip entirely
+    if (existing?.files?.prep) {
+      console.log(`[MeetingScheduler] Skipping prep for "${event.summary}" — session ${existing.meetingId} already has prep`);
       return;
     }
 
     const attendees = event.attendees || [];
-    const meetingId = generateMeetingId();
+    // Reuse existing meetingId if delegate already created a session (prevents duplicate sessions)
+    const meetingId = existing?.meetingId || generateMeetingId();
 
-    // Create session entry immediately so frontend shows "preparing" state
+    if (existing) {
+      console.log(`[MeetingScheduler] Reusing session ${meetingId} for prep (delegate created, no prep yet)`);
+    }
+
+    // Create/update session entry so frontend shows "preparing" state
     upsertSession({
       meetingId,
       topic: event.summary,
       meetUrl: event.meetLink,
       startTime: event.start,
-      status: "preparing",
+      status: existing ? existing.status : "preparing",
+      ...(existing?.calendarEventId ? { calendarEventId: existing.calendarEventId } : {}),
     });
 
     this.eventBus.emit("meeting.agenda", {
