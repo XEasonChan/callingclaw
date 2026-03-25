@@ -3,6 +3,18 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.10] - 2026-03-25
+
+### Added
+- **权限预检** — Talk Locally / Join Meeting 前检查麦克风权限，denied 则弹 ccConfirm 引导用户开启
+- **BlackHole 扬声器检测** — direct 模式检测系统默认输出是否为 BlackHole，警告用户切换
+- **Bundle ID 提示** — dev 模式启动时 console 提醒 TCC 权限与 production 不通用
+- **Landing page 更新** + logo 压缩
+
+### Fixed
+- **Onboarding 步骤映射** — step 2 现在正确检查麦克风（之前错误检查辅助功能），step 3 检查辅助功能，step 6 Summary 包含麦克风状态
+- **checkAll() 缺少麦克风** — 两种模式都需要 getUserMedia()，麦克风加入必须权限列表
+
 ## [2.7.9] - 2026-03-25
 
 ### Added
