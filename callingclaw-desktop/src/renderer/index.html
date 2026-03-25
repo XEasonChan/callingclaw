@@ -1869,6 +1869,9 @@ async function openCalendarMeetingPanel(topic, meetUrl, prepBriefFile) {
 
 async function joinMeeting(url) {
   if (!url) return;
+  // Pre-flight: mic permission needed for BlackHole capture
+  var preflight = await preflightAudioCheck('meet_bridge');
+  if (!preflight.ok) return;
   try {
     var r = await fetch(API + '/api/meeting/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url }) });
     var data = await r.json();
@@ -1918,11 +1921,63 @@ async function deleteMeeting(meetingId) {
   }
 }
 
+// ── Pre-flight audio check (mic permission + speaker device) ──
+async function preflightAudioCheck(mode) {
+  // 1. Check mic permission via main process
+  try {
+    var perms = await window.callingclaw.permissions.check();
+    if (!perms.microphone || !perms.microphone.granted) {
+      if (perms.microphone && perms.microphone.canRequest) {
+        var result = await window.callingclaw.permissions.request('microphone');
+        if (!result.granted) {
+          await ccConfirm({
+            icon: '🎤', title: '需要麦克风权限',
+            body: 'CallingClaw 需要麦克风权限才能进行语音交互。<br><br>请前往 <b>系统设置 → 隐私与安全性 → 麦克风</b>，找到 CallingClaw 并开启。',
+            confirmText: '打开设置', confirmClass: 'btn-primary',
+          });
+          window.callingclaw.permissions.openSettings('microphone');
+          return { ok: false, reason: 'mic_denied' };
+        }
+      } else {
+        await ccConfirm({
+          icon: '🎤', title: '麦克风权限被拒绝',
+          body: '麦克风权限之前被拒绝，macOS 不允许再次弹窗。<br><br>请前往 <b>系统设置 → 隐私与安全性 → 麦克风</b>，找到 CallingClaw 并开启。<br><br><span style="font-size:12px;color:var(--text3);">提示：开发模式和正式版的权限是分开的（不同 Bundle ID），请确认授权的是正确的应用。</span>',
+          confirmText: '打开设置', confirmClass: 'btn-primary',
+        });
+        window.callingclaw.permissions.openSettings('microphone');
+        return { ok: false, reason: 'mic_denied' };
+      }
+    }
+  } catch (e) { console.warn('[preflight] Permission check failed:', e); }
+
+  // 2. Check system default speaker (direct mode only)
+  if (mode === 'direct') {
+    try {
+      var defaultOut = await window.callingclaw.audio.getDefaultOutput();
+      if (defaultOut && defaultOut.isBlackHole) {
+        var proceed = await ccConfirm({
+          icon: '🔇', title: '系统扬声器是 BlackHole',
+          body: '当前系统默认输出设备是 <b>' + esc(defaultOut.name) + '</b>。<br><br>Talk Locally 模式下 AI 的声音会播到 BlackHole 而不是你的扬声器，你将听不到 AI 说话。<br><br>请切换系统输出到真实扬声器（MacBook 扬声器或耳机），然后再试。',
+          confirmText: '我已切换，继续', confirmClass: 'btn-primary',
+        });
+        if (!proceed) return { ok: false, reason: 'blackhole_speaker' };
+      }
+    } catch (e) { console.warn('[preflight] Default output check failed:', e); }
+  }
+
+  return { ok: true };
+}
+
 // Talk Locally — full meeting intelligence stack (parallel startup + instant UI)
 var _spMicRAF = null; // mic level animation frame handle
 async function startLocalTalk(topic) {
   if (localTalkStarting) return;
   if (typeof ElectronAudioBridge !== 'undefined' && ElectronAudioBridge.getStatus().running) return; // double-start guard
+
+  // Pre-flight: check mic permission + speaker device
+  var preflight = await preflightAudioCheck('direct');
+  if (!preflight.ok) return;
+
   localTalkStarting = true;
   localTalkTopic = topic || 'Local Conversation';
 
@@ -2056,6 +2111,15 @@ function startAudioBridge(mode) {
   if (typeof ElectronAudioBridge === 'undefined') {
     console.warn('[AudioBridge] audio-bridge.js not loaded');
     return;
+  }
+  // Non-blocking audio device guard
+  if (mode === 'direct' && window.callingclaw && window.callingclaw.audio) {
+    window.callingclaw.audio.getDefaultOutput().then(function(out) {
+      if (out && out.isBlackHole) {
+        console.warn('[AudioBridge] System default output is ' + out.name + ' — AI audio may not be heard');
+        addMpActivity('warn', '⚠ 系统扬声器是 ' + out.name + '，AI 声音可能听不到');
+      }
+    }).catch(function() {});
   }
   // Connect WS to Bun for audio relay
   try {
@@ -2828,10 +2892,16 @@ function obRestart() {
 async function obCheckStep() {
   obStopPolling();
   try {
+    // Step 1: Screen Recording
     if (obStep === 1) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-screen-status'), btn = document.getElementById('ob-screen-btn'); if (perms.screenRecording.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权屏幕录制'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantScreen; } }
-    if (obStep === 2) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-access-status'), btn = document.getElementById('ob-access-btn'); if (perms.accessibility.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权辅助功能'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantAccess; } }
-    if (obStep === 4) { const info = await window.callingclaw.skill.check(); const el = document.getElementById('ob-skill-status'), btn = document.getElementById('ob-skill-btn'); let html = ''; if (info.openclawConnected) html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> OpenClaw Gateway 已连接</div>'; else html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> OpenClaw Gateway 未运行 — 请先启动 OpenClaw</div>'; if (info.skillInstalled) { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装</div>'; btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot" style="background:var(--text3);width:8px;height:8px;"></div> /callingclaw 技能未安装</div>'; } el.innerHTML = html; }
-    if (obStep === 5) { const [perms, skill, env] = await Promise.all([window.callingclaw.permissions.check(), window.callingclaw.skill.check(), window.callingclaw.env.check()]); document.getElementById('ob-summary').innerHTML = [{ ok: perms.screenRecording.granted, label: '屏幕录制' }, { ok: perms.accessibility.granted, label: '辅助功能' }, { ok: env.envFile?.ok, label: 'AI 引擎 (API Keys)' }, { ok: skill.openclawConnected, label: 'OpenClaw Gateway' }, { ok: skill.skillInstalled, label: '/callingclaw 技能', optional: true }, { ok: env.blackhole2ch?.ok, label: '音频桥接 (BlackHole)', optional: true }].map(i => `<div style="margin-bottom:8px;font-size:15px;display:flex;align-items:center;gap:8px;"><span style="color:${i.ok ? 'var(--green)' : (i.optional ? 'var(--text3)' : 'var(--accent)')};font-weight:600;width:16px;text-align:center;">${i.ok ? '&#10003;' : (i.optional ? '-' : '&#10007;')}</span> ${i.label}</div>`).join(''); }
+    // Step 2: Microphone
+    if (obStep === 2) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-mic-status'), btn = document.getElementById('ob-mic-btn'); if (perms.microphone && perms.microphone.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要授权'; btn.textContent = '授权麦克风'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantMic; } }
+    // Step 3: Accessibility
+    if (obStep === 3) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-access-status'), btn = document.getElementById('ob-access-btn'); if (perms.accessibility.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权辅助功能'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantAccess; } }
+    // Step 5: OpenClaw
+    if (obStep === 5) { const info = await window.callingclaw.skill.check(); const el = document.getElementById('ob-skill-status'), btn = document.getElementById('ob-skill-btn'); let html = ''; if (info.openclawConnected) html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> OpenClaw Gateway 已连接</div>'; else html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> OpenClaw Gateway 未运行 — 请先启动 OpenClaw</div>'; if (info.skillInstalled) { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装</div>'; btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot" style="background:var(--text3);width:8px;height:8px;"></div> /callingclaw 技能未安装</div>'; } el.innerHTML = html; }
+    // Step 6: Summary
+    if (obStep === 6) { const [perms, skill, env] = await Promise.all([window.callingclaw.permissions.check(), window.callingclaw.skill.check(), window.callingclaw.env.check()]); document.getElementById('ob-summary').innerHTML = [{ ok: perms.screenRecording.granted, label: '屏幕录制' }, { ok: perms.microphone?.granted, label: '麦克风' }, { ok: perms.accessibility.granted, label: '辅助功能' }, { ok: env.envFile?.ok, label: 'AI 引擎 (API Keys)' }, { ok: skill.openclawConnected, label: 'OpenClaw Gateway' }, { ok: skill.skillInstalled, label: '/callingclaw 技能', optional: true }, { ok: env.blackhole2ch?.ok, label: '音频桥接 (BlackHole)', optional: true }].map(i => `<div style="margin-bottom:8px;font-size:15px;display:flex;align-items:center;gap:8px;"><span style="color:${i.ok ? 'var(--green)' : (i.optional ? 'var(--text3)' : 'var(--accent)')};font-weight:600;width:16px;text-align:center;">${i.ok ? '&#10003;' : (i.optional ? '-' : '&#10007;')}</span> ${i.label}</div>`).join(''); }
   } catch {}
 }
 

@@ -310,6 +310,14 @@ function setupIPC() {
     permissionChecker.openSystemSettings(panel);
   });
 
+  ipcMain.handle('permissions:bundleInfo', () => {
+    return permissionChecker.getBundleInfo();
+  });
+
+  ipcMain.handle('audio:getDefaultOutput', () => {
+    return permissionChecker.getDefaultOutputDevice();
+  });
+
   // Environment checks
   ipcMain.handle('env:check', async () => {
     return await checkEnvironment();
@@ -583,6 +591,8 @@ app.whenReady().then(async () => {
   // Initialize subsystems
   daemon = new DaemonSupervisor({ daemonDir, isDev: IS_DEV });
   permissionChecker = new PermissionChecker();
+  const bundleInfo = permissionChecker.getBundleInfo();
+  if (bundleInfo.warning) console.warn(`[Permissions] ${bundleInfo.warning}`);
 
   setupIPC();
   createTray();
