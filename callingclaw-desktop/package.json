@@ -16,6 +16,7 @@
     "electron-builder": "^26.0.0"
   },
   "build": {
+    "afterPack": "build/afterPack.js",
     "appId": "com.tanka.callingclaw",
     "productName": "CallingClaw",
     "mac": {
