@@ -3,6 +3,15 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.9] - 2026-03-25
+
+### Added
+- **自定义确认弹窗** — `ccConfirm()` 通用组件，毛玻璃背景 + scale 动画 + 品牌色按钮，替代系统 `confirm()`
+
+### Fixed
+- **删除会议即时刷新** — 删除后同时清理 `S.meetingFiles` 和 `S.manifest.sessions`，调用 `renderMeetings()` 即时移除，不再需要刷新页面
+- **Scheduler 重复 session** — `triggerMeetingPrep()` 按 meetUrl/calendarEventId 检查已有 session，避免日历轮询重复创建
+
 ## [2.7.8] - 2026-03-25
 
 ### Added
