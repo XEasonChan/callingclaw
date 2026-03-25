@@ -1893,6 +1893,13 @@ STEP-BY-STEP FLOW:
         if (services.playwrightCli?.isAdmissionMonitoring) {
           services.playwrightCli.stopAdmissionMonitor();
         }
+
+        // Mark session ended FIRST (before summary which may fail)
+        if (services.sessionManager) {
+          const activeSessions = services.sessionManager.list({ status: "active" });
+          if (activeSessions[0]) services.sessionManager.markEnded(activeSessions[0].meetingId);
+        }
+
         const summary = await services.meeting.generateSummary();
         const filepath = await services.meeting.exportToMarkdown(summary);
         services.meeting.stopRecording();
@@ -1925,18 +1932,14 @@ STEP-BY-STEP FLOW:
           generatedAt: Date.now(),
         };
 
-        // Mark session as ended + attach summary file via SessionManager
-        if (services.sessionManager) {
-          const activeSessions = services.sessionManager.list({ status: "active" });
-          const activeSession = activeSessions[0]; // most recent
-          if (activeSession) {
-            if (filepath) {
-              try {
-                const summaryContent = await Bun.file(filepath).text();
-                await services.sessionManager.attachSummary(activeSession.meetingId, summaryContent);
-              } catch {}
-            }
-            services.sessionManager.markEnded(activeSession.meetingId);
+        // Attach summary to session (already marked ended above)
+        if (services.sessionManager && filepath) {
+          const endedSessions = services.sessionManager.list({ status: "ended" });
+          if (endedSessions[0]) {
+            try {
+              const summaryContent = await Bun.file(filepath).text();
+              await services.sessionManager.attachSummary(endedSessions[0].meetingId, summaryContent);
+            } catch {}
           }
         }
 
@@ -2068,9 +2071,24 @@ STEP-BY-STEP FLOW:
         }
         services.context.clearBrowserContext();
 
-        // Generate summary + export markdown
-        const summary = await services.meeting.generateSummary();
-        const filepath = await services.meeting.exportToMarkdown(summary);
+        // Mark session ended FIRST (before summary which may fail)
+        if (services.sessionManager) {
+          const activeSessions = services.sessionManager.list({ status: "active" });
+          const activeSession = activeSessions[0];
+          if (activeSession) {
+            services.sessionManager.markEnded(activeSession.meetingId);
+          }
+        }
+
+        // Generate summary + export markdown (may fail if no transcript)
+        let summary: any = { topic: "", decisions: [], actionItems: [], keyPoints: [] };
+        let filepath = "";
+        try {
+          summary = await services.meeting.generateSummary();
+          filepath = await services.meeting.exportToMarkdown(summary);
+        } catch (e: any) {
+          console.warn("[TalkLocally/Stop] Summary generation failed:", e.message);
+        }
         services.meeting.stopRecording();
 
         // Create tasks from action items
@@ -2101,18 +2119,15 @@ STEP-BY-STEP FLOW:
           generatedAt: Date.now(),
         };
 
-        // Mark session as ended + attach summary via SessionManager
-        if (services.sessionManager) {
-          const activeSessions = services.sessionManager.list({ status: "active" });
-          const activeSession = activeSessions[0];
-          if (activeSession) {
-            if (filepath) {
-              try {
-                const summaryContent = await Bun.file(filepath).text();
-                await services.sessionManager.attachSummary(activeSession.meetingId, summaryContent);
-              } catch {}
-            }
-            services.sessionManager.markEnded(activeSession.meetingId);
+        // Attach summary to session if available (session already marked ended above)
+        if (services.sessionManager && filepath) {
+          const activeSessions = services.sessionManager.list({ status: "ended" });
+          const endedSession = activeSessions[0];
+          if (endedSession) {
+            try {
+              const summaryContent = await Bun.file(filepath).text();
+              await services.sessionManager.attachSummary(endedSession.meetingId, summaryContent);
+            } catch {}
           }
         }
 
