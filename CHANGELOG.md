@@ -3,6 +3,17 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.8] - 2026-03-25
+
+### Added
+- **Prep 即时通知** — `onPrepReady` 回调机制，`savePrepBrief()` 完成后立即通过 EventBus 发送 `meeting.prep_ready`，前端延迟从 ~5min 降至 <1s
+- **权限文档** — `callingclaw-desktop/docs/permissions.md`：4 项 TCC 权限、BlackHole 设备、Entitlements、音频链路权限依赖图、排查表
+
+### Fixed
+- **防止重复会议 session** — `triggerMeetingPrep()` 按 meetUrl/calendarEventId 匹配已有 session，避免日历轮询重复创建
+- **Scheduler 事件名错误** — 改 `scheduler.prep_ready` → 由 `onPrepReady` 回调统一发 `meeting.prep_ready`，前端不再漏接
+- **Scheduler 缺少 meetingId** — `triggerMeetingPrep()` 现在生成 meetingId 并传入 `generate()`，前端可正确匹配会议卡片
+
 ## [2.7.7] - 2026-03-25
 
 ### Added
