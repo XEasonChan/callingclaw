@@ -36,6 +36,10 @@
         {
           "from": "resources/bun",
           "to": "bun"
+        },
+        {
+          "from": "resources/bin",
+          "to": "bin"
         }
       ]
     },

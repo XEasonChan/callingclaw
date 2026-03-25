@@ -77,8 +77,8 @@ class DaemonSupervisor extends EventEmitter {
         env: {
           ...process.env,
           AUDIO_SOURCE: 'electron',
-          // Ensure Bun can find its own runtime
-          PATH: `${path.dirname(bunPath)}:${process.env.PATH}`,
+          // Ensure Bun can find its own runtime + bundled CLI tools (cliclick, SwitchAudioSource)
+          PATH: `${path.dirname(bunPath)}:${path.join(process.resourcesPath || '', 'bin')}:${process.env.PATH}`,
         },
       });
 
