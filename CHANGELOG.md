@@ -3,6 +3,15 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.7] - 2026-03-25
+
+### Added
+- **Prep Recovery** — automatic recovery of stuck/missing meeting preps during poll cycle
+  - Case A: detects prep files already on disk but not indexed (OpenClaw wrote file, never called prep-result)
+  - Case B: regenerates stale sessions (>12 min) via OpenClaw with dedup guard (`_prepInFlight`)
+  - Single-task serialization — only regenerates one prep at a time to respect OpenClaw bridge constraints
+- **Prep Recovery tests** — 9 unit tests covering no-op, disk recovery, young/stale thresholds, bridge disconnect, failure handling
+
 ## [2.6.1] - 2026-03-21
 
 ### Added
