@@ -20,7 +20,7 @@ import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { OC003_PROMPT, parseOC003, type OC003_Request } from "../openclaw-protocol";
-import { readSessions, upsertSession, getMeetingFilePath } from "./shared-documents";
+import { readSessions, upsertSession, getMeetingFilePath, generateMeetingId } from "./shared-documents";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { homedir } from "os";
@@ -251,18 +251,47 @@ export class MeetingScheduler {
       return;
     }
 
+    // Check if there's already a session for this meeting (delegate flow already handles prep)
+    const sessions = readSessions().sessions;
+    const existing = sessions.find(s =>
+      s.status !== "ended" && (
+        (s.meetUrl && event.meetLink && s.meetUrl === event.meetLink) ||
+        (s.calendarEventId && event.id && s.calendarEventId === event.id)
+      )
+    );
+    if (existing) {
+      console.log(`[MeetingScheduler] Skipping prep for "${event.summary}" — session ${existing.meetingId} already exists (status: ${existing.status})`);
+      return;
+    }
+
     const attendees = event.attendees || [];
-    console.log(`[MeetingScheduler] Triggering meeting prep for "${event.summary}"`);
+    const meetingId = generateMeetingId();
+
+    // Create session entry immediately so frontend shows "preparing" state
+    upsertSession({
+      meetingId,
+      topic: event.summary,
+      meetUrl: event.meetLink,
+      startTime: event.start,
+      status: "preparing",
+    });
+
+    this.eventBus.emit("meeting.agenda", {
+      meetingId,
+      topic: event.summary,
+      title: event.summary,
+      meetUrl: event.meetLink,
+      startTime: event.start,
+      prepStatus: "processing",
+    });
+
+    console.log(`[MeetingScheduler] Triggering meeting prep for "${event.summary}" (${meetingId})`);
 
     this.meetingPrepSkill
-      .generate(event.summary, undefined, attendees)
+      .generate(event.summary, undefined, attendees, meetingId)
       .then((brief) => {
         console.log(`[MeetingScheduler] Meeting prep ready: "${event.summary}" — ${brief.keyPoints.length} key points`);
-        this.eventBus.emit("scheduler.prep_ready", {
-          summary: event.summary,
-          meetUrl: event.meetLink,
-          keyPoints: brief.keyPoints,
-        });
+        // NOTE: meeting.prep_ready is emitted by onPrepReady callback (wired in callingclaw.ts)
       })
       .catch((e: any) => {
         console.error(`[MeetingScheduler] Meeting prep failed for "${event.summary}":`, e.message);
@@ -343,12 +372,7 @@ export class MeetingScheduler {
         .generate(s.topic, undefined, undefined, s.meetingId)
         .then((brief) => {
           console.log(`[PrepRecovery] Regenerated: "${s.topic}" — ${brief.keyPoints.length} key points`);
-          this.eventBus.emit("meeting.prep_ready", {
-            meetingId: s.meetingId,
-            topic: s.topic,
-            filePath: prepPath,
-            recovered: true,
-          });
+          // NOTE: meeting.prep_ready is emitted by onPrepReady callback (wired in callingclaw.ts)
         })
         .catch((e: any) => {
           console.error(`[PrepRecovery] Regeneration failed for "${s.topic}":`, e.message);

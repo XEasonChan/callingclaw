@@ -20,7 +20,7 @@
 
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { CalendarAttendee } from "../mcp_client/google_cal";
-import { savePrepBrief, startLiveLog, appendToLiveLog, stopLiveLog } from "../modules/shared-documents";
+import { savePrepBrief, startLiveLog, appendToLiveLog, stopLiveLog, generateMeetingId } from "../modules/shared-documents";
 import { OC001_PROMPT, parseOC001, type OC001_Request } from "../openclaw-protocol";
 
 // ── Meeting Prep Brief Structure ──
@@ -77,6 +77,7 @@ export class MeetingPrepSkill {
   private bridge: OpenClawBridge;
   private _currentBrief: MeetingPrepBrief | null = null;
   private _onLiveNote?: (note: string, topic: string) => void;
+  private _onPrepReady?: (brief: MeetingPrepBrief, meetingId: string, filePath: string) => void;
   private _liveLogPath: string | null = null;
 
   constructor(bridge: OpenClawBridge) {
@@ -91,6 +92,11 @@ export class MeetingPrepSkill {
   /** Register a callback for when a live note is added (for EventBus forwarding) */
   onLiveNote(callback: (note: string, topic: string) => void) {
     this._onLiveNote = callback;
+  }
+
+  /** Register a callback for when prep brief is saved to disk (for EventBus forwarding) */
+  onPrepReady(callback: (brief: MeetingPrepBrief, meetingId: string, filePath: string) => void) {
+    this._onPrepReady = callback;
   }
 
   get currentBrief(): MeetingPrepBrief | null {
@@ -137,13 +143,16 @@ export class MeetingPrepSkill {
     console.log(`[MeetingPrep] Brief ready: ${brief.keyPoints.length} key points, ${brief.filePaths.length} files, ${brief.browserUrls.length} URLs`);
 
     // Persist prep brief to shared directory (non-blocking)
-    // Pass meetingId so the file is saved with the same ID the frontend expects
-    savePrepBrief(brief, meetingId).catch((e: any) => {
+    // Fire onPrepReady callback after save so EventBus can notify frontend immediately
+    const actualId = meetingId || generateMeetingId();
+    savePrepBrief(brief, actualId).then((filePath) => {
+      this._onPrepReady?.(brief, actualId, filePath);
+    }).catch((e: any) => {
       console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
     });
 
-    // Start a live log file for this meeting
-    startLiveLog(topic, meetingId).then((logPath) => {
+    // Start a live log file for this meeting (use actualId, not raw meetingId which may be undefined)
+    startLiveLog(topic, actualId).then((logPath) => {
       this._liveLogPath = logPath;
       console.log(`[MeetingPrep] Live log started: ${logPath}`);
     }).catch((e: any) => {
