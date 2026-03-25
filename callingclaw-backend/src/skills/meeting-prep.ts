@@ -79,9 +79,15 @@ export class MeetingPrepSkill {
   private _onLiveNote?: (note: string, topic: string) => void;
   private _onPrepReady?: (brief: MeetingPrepBrief, meetingId: string, filePath: string) => void;
   private _liveLogPath: string | null = null;
+  private _sessionManager: import("../modules/session-manager").SessionManager | null = null;
 
   constructor(bridge: OpenClawBridge) {
     this.bridge = bridge;
+  }
+
+  /** Inject SessionManager for atomic file+session updates */
+  setSessionManager(sm: import("../modules/session-manager").SessionManager) {
+    this._sessionManager = sm;
   }
 
   /** Get the current live log file path (for external writers) */
@@ -143,21 +149,36 @@ export class MeetingPrepSkill {
     console.log(`[MeetingPrep] Brief ready: ${brief.keyPoints.length} key points, ${brief.filePaths.length} files, ${brief.browserUrls.length} URLs`);
 
     // Persist prep brief to shared directory (non-blocking)
-    // Fire onPrepReady callback after save so EventBus can notify frontend immediately
-    const actualId = meetingId || generateMeetingId();
-    savePrepBrief(brief, actualId).then((filePath) => {
-      this._onPrepReady?.(brief, actualId, filePath);
-    }).catch((e: any) => {
-      console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
-    });
-
-    // Start a live log file for this meeting (use actualId, not raw meetingId which may be undefined)
-    startLiveLog(topic, actualId).then((logPath) => {
-      this._liveLogPath = logPath;
-      console.log(`[MeetingPrep] Live log started: ${logPath}`);
-    }).catch((e: any) => {
-      console.warn(`[MeetingPrep] Failed to start live log: ${e.message}`);
-    });
+    // Use SessionManager if available (atomic file + session update), fallback to legacy
+    const actualId = meetingId || (this._sessionManager ? this._sessionManager.generateId() : generateMeetingId());
+    if (this._sessionManager) {
+      const { renderPrepBriefMarkdown } = await import("../modules/shared-documents");
+      const md = renderPrepBriefMarkdown(brief);
+      this._sessionManager.attachPrep(actualId, md, brief.topic).then((filePath) => {
+        this._onPrepReady?.(brief, actualId, filePath);
+      }).catch((e: any) => {
+        console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
+      });
+      // Attach live log (does NOT change status — just creates the file)
+      this._sessionManager.attachLiveLog(actualId, topic).then((logPath) => {
+        this._liveLogPath = logPath;
+        console.log(`[MeetingPrep] Live log started: ${logPath}`);
+      }).catch((e: any) => {
+        console.warn(`[MeetingPrep] Failed to start live log: ${e.message}`);
+      });
+    } else {
+      // Legacy fallback
+      savePrepBrief(brief, actualId).then((filePath) => {
+        this._onPrepReady?.(brief, actualId, filePath);
+      }).catch((e: any) => {
+        console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
+      });
+      startLiveLog(topic, actualId).then((logPath) => {
+        this._liveLogPath = logPath;
+      }).catch((e: any) => {
+        console.warn(`[MeetingPrep] Failed to start live log: ${e.message}`);
+      });
+    }
 
     return brief;
   }

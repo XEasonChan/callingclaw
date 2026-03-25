@@ -59,20 +59,23 @@ const taskStore = new TaskStore(eventBus);
 
 // Meeting database (SQLite) — replaces sessions.json for metadata
 import { MeetingDB } from "./modules/meeting-db";
-import { setMeetingDBSync } from "./modules/shared-documents";
 const meetingDB = new MeetingDB();
 console.log(`[Init] MeetingDB: ${meetingDB.stats().totalMeetings} meetings, ${meetingDB.stats().totalFiles} files`);
 
-// Sync sessions.json → MeetingDB on every upsertSession() call
-setMeetingDBSync((session) => {
+// SessionManager — single entry point for ALL session mutations
+import { SessionManager } from "./modules/session-manager";
+const sessionManager = new SessionManager(eventBus);
+
+// Sync sessions.json → MeetingDB on every SessionManager mutation
+sessionManager.setDBSync((session) => {
   meetingDB.upsert({
     id: session.meetingId,
     topic: session.topic || "Meeting",
-    start_time: (session as any).startTime || (session as any).createdAt || null,
-    end_time: (session as any).endTime || null,
+    start_time: session.startTime || session.createdAt || null,
+    end_time: session.endTime || null,
     status: session.status || "active",
-    calendar_id: (session as any).calendarEventId || null,
-    meet_url: (session as any).meetUrl || null,
+    calendar_id: session.calendarEventId || null,
+    meet_url: session.meetUrl || null,
   });
 });
 
@@ -95,6 +98,7 @@ const openclawBridge = new OpenClawBridge();
 const dispatcher = new OpenClawDispatcher(openclawBridge);
 
 const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
+meetingPrepSkill.setSessionManager(sessionManager);
 
 // Track active meeting ID for live log event emission
 let activeMeetingId: string | null = null;
@@ -134,6 +138,7 @@ const meetingScheduler = new MeetingScheduler({
   openclawBridge,
   eventBus,
   meetingPrepSkill,
+  sessionManager,
 });
 
 const postMeetingDelivery = new PostMeetingDelivery({
@@ -755,6 +760,7 @@ startConfigServer({
   meetingScheduler,
   postMeetingDelivery,
   meetingDB,
+  sessionManager,
 });
 
 // ── 8. Python Sidecar REMOVED — NativeBridge handles all input actions ──

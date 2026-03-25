@@ -51,17 +51,20 @@ export class MeetingScheduler {
   private _prepInFlight = new Set<string>(); // meetingIds currently being regenerated (dedup guard)
   private _active = false;
   private meetingPrepSkill: MeetingPrepSkill | null = null;
+  private sessionManager: import("./session-manager").SessionManager | null = null;
 
   constructor(opts: {
     calendar: GoogleCalendarClient;
     openclawBridge: OpenClawBridge;
     eventBus: EventBus;
     meetingPrepSkill?: MeetingPrepSkill;
+    sessionManager?: import("./session-manager").SessionManager;
   }) {
     this.calendar = opts.calendar;
     this.openclawBridge = opts.openclawBridge;
     this.eventBus = opts.eventBus;
     this.meetingPrepSkill = opts.meetingPrepSkill || null;
+    this.sessionManager = opts.sessionManager || null;
   }
 
   get active() { return this._active; }
@@ -251,38 +254,30 @@ export class MeetingScheduler {
       return;
     }
 
-    // Check if there's already a session for this meeting (e.g. from delegate flow)
-    const sessions = readSessions().sessions;
-    const existing = sessions.find(s =>
-      s.status !== "ended" && (
-        (s.meetUrl && event.meetLink && s.meetUrl === event.meetLink) ||
-        (s.calendarEventId && event.id && s.calendarEventId === event.id)
-      )
-    );
+    // Use SessionManager for dedup — finds existing session by meetUrl/calendarEventId or creates new
+    if (!this.sessionManager) {
+      console.warn("[MeetingScheduler] No sessionManager — skipping prep");
+      return;
+    }
 
     // If session exists AND already has a prep file, skip entirely
+    const existingByUrl = event.meetLink ? this.sessionManager.findByMeetUrl(event.meetLink) : null;
+    const existingByCal = event.id ? this.sessionManager.findByCalendarEventId(event.id) : null;
+    const existing = existingByUrl || existingByCal;
     if (existing?.files?.prep) {
       console.log(`[MeetingScheduler] Skipping prep for "${event.summary}" — session ${existing.meetingId} already has prep`);
       return;
     }
 
     const attendees = event.attendees || [];
-    // Reuse existing meetingId if delegate already created a session (prevents duplicate sessions)
-    const meetingId = existing?.meetingId || generateMeetingId();
-
-    if (existing) {
-      console.log(`[MeetingScheduler] Reusing session ${meetingId} for prep (delegate created, no prep yet)`);
-    }
-
-    // Create/update session entry so frontend shows "preparing" state
-    upsertSession({
-      meetingId,
+    // findOrCreate: reuses existing meetingId if delegate already created a session
+    const session = this.sessionManager.findOrCreate({
       topic: event.summary,
       meetUrl: event.meetLink,
+      calendarEventId: event.id,
       startTime: event.start,
-      status: existing ? existing.status : "preparing",
-      ...(existing?.calendarEventId ? { calendarEventId: existing.calendarEventId } : {}),
     });
+    const meetingId = session.meetingId;
 
     this.eventBus.emit("meeting.agenda", {
       meetingId,
@@ -344,11 +339,12 @@ export class MeetingScheduler {
         if (await file.exists()) {
           const md = await file.text();
           if (md.length > 50) { // Non-trivial content
-            upsertSession({
-              meetingId: s.meetingId,
-              status: "ready",
-              files: { prep: s.meetingId + "_prep.md" },
-            });
+            if (this.sessionManager) {
+              this.sessionManager.registerFile(s.meetingId, "prep", s.meetingId + "_prep.md");
+              this.sessionManager.markReady(s.meetingId);
+            } else {
+              upsertSession({ meetingId: s.meetingId, status: "ready", files: { prep: s.meetingId + "_prep.md" } });
+            }
             this.eventBus.emit("meeting.prep_ready", {
               meetingId: s.meetingId,
               topic: s.topic,

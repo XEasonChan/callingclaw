@@ -66,9 +66,7 @@ export function safeFilename(topic: string): string {
 
 function isoNow(): string { return new Date().toISOString(); }
 
-/** Generate a stable meetingId at request time.
- * Format: cc_{timestamp}_{random} — always available before calendar creation.
- * CalendarEventId is linked later in sessions.json after calendar succeeds. */
+/** @deprecated Use SessionManager.generateId() instead */
 export function generateMeetingId(): string {
   const ts = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 6);
@@ -107,7 +105,7 @@ export function setMeetingDBSync(fn: (session: MeetingSession) => void) {
   _dbSyncFn = fn;
 }
 
-/** Register or update a meeting session */
+/** @deprecated Use SessionManager methods instead (create/markReady/markActive/markEnded/update) */
 export function upsertSession(session: Partial<MeetingSession> & { meetingId: string }): MeetingSession {
   const index = readSessions();
   let existing = index.sessions.find(s => s.meetingId === session.meetingId);
@@ -169,8 +167,8 @@ export async function updateManifest(_mutate?: any): Promise<any> {
 // ── Prep Brief Persistence ──
 
 /**
+ * @deprecated Use SessionManager.attachPrep() instead
  * Save a MeetingPrepBrief using meetingId-based filename.
- * Path: ~/.callingclaw/shared/{meetingId}_prep.md
  */
 export async function savePrepBrief(brief: MeetingPrepBrief, meetingId?: string): Promise<string> {
   const id = meetingId || generateMeetingId();
@@ -190,7 +188,7 @@ export async function savePrepBrief(brief: MeetingPrepBrief, meetingId?: string)
   return filePath;
 }
 
-function renderPrepBriefMarkdown(brief: MeetingPrepBrief): string {
+export function renderPrepBriefMarkdown(brief: MeetingPrepBrief): string {
   const p: string[] = [];
   const time = new Date(brief.generatedAt).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -367,7 +365,7 @@ export async function saveHtml(markdown: string, title: string, meetingId: strin
 // ── Live Log Management ──
 
 /**
- * Start a live log file for a meeting. Returns the log filepath.
+ * @deprecated Use SessionManager.attachLiveLog() instead
  */
 export async function startLiveLog(topic: string, meetingId?: string): Promise<string> {
   const id = meetingId || generateMeetingId();
@@ -405,7 +403,7 @@ export function appendToLiveLog(filepath: string, entry: string, eventBus?: Even
 }
 
 /**
- * Stop the live log: mark as inactive in manifest and add footer.
+ * @deprecated Use SessionManager.closeLiveLog() + markEnded() instead
  */
 export async function stopLiveLog(filepath: string, meetingId?: string): Promise<void> {
   try {

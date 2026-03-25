@@ -128,9 +128,6 @@ export function meetingRoutes(services: Services): RouteHandler {
           voiceStarted = true;
         }
 
-        // Generate stable meetingId for session tracking
-        const meetingId = generateMeetingId();
-
         // Look up calendar event to get attendees
         let meetAttendees: any[] = [];
         let calEvent: any = null;
@@ -142,7 +139,10 @@ export function meetingRoutes(services: Services): RouteHandler {
         }
 
         const meetTopic = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
-        upsertSession({ meetingId, topic: meetTopic, meetUrl: validated.url, status: "active" });
+        // Use SessionManager for dedup + session creation
+        const session = services.sessionManager!.findOrCreate({ topic: meetTopic, meetUrl: validated.url });
+        const meetingId = session.meetingId;
+        services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
 
         // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
         let prepBrief: any = null;
@@ -415,7 +415,7 @@ STEP-BY-STEP FLOW:
         const workspace = services.context.workspace;
         const syncBrief = services.contextSync?.getBrief();
         const calendarEvents = await services.calendar.listUpcomingEvents(3).catch(() => []);
-        const prepMeetingId = generateMeetingId();
+        const prepMeetingId = services.sessionManager!.generateId();
 
         // Generate structured meeting prep brief via OpenClaw (if available)
         let prepBriefData: any = null;

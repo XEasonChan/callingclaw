@@ -15,6 +15,7 @@ export { ContextSync } from "./context-sync";
 export { TranscriptAuditor, AUDITOR_MANAGED_TOOLS } from "./transcript-auditor";
 export { BrowserActionLoop } from "./browser-action-loop";
 export { MeetingScheduler } from "./meeting-scheduler";
+export { SessionManager } from "./session-manager";
 export { PostMeetingDelivery } from "./post-meeting-delivery";
 export { ContextRetriever } from "./context-retriever";
 export * from "./shared-documents";

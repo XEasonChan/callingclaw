@@ -35,6 +35,7 @@ export interface MeetingToolDeps {
   context: SharedContext;
   contextSync: ContextSync;
   postMeetingDelivery: PostMeetingDelivery;
+  sessionManager?: import("../modules/session-manager").SessionManager;
   /** Called when the meeting ends externally (host ended, kicked, etc.) */
   autoLeaveMeeting: () => void;
   /** Returns the current waiting room abort controller, and allows setting it */
@@ -168,8 +169,10 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           // ── Step 2: Generate meeting prep brief with attendee context ──
           const meetTopic = calEvent?.summary || context.workspace?.topic || `Meeting at ${args.meet_url}`;
-          const toolMeetingId = generateMeetingId();
-          upsertSession({ meetingId: toolMeetingId, topic: meetTopic, meetUrl: args.meet_url, status: "active" });
+          const toolSession = deps.sessionManager?.findOrCreate({ topic: meetTopic, meetUrl: args.meet_url })
+            || { meetingId: generateMeetingId() };
+          const toolMeetingId = toolSession.meetingId;
+          deps.sessionManager?.markActive(toolMeetingId, { meetUrl: args.meet_url });
           let prepResult: Awaited<ReturnType<typeof prepareMeeting>> | null = null;
           if (openclawBridge.connected) {
             try {

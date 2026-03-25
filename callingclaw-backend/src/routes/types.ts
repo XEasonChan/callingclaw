@@ -39,6 +39,7 @@ export interface Services {
   playwrightCli?: PlaywrightCLIClient;
   meetingScheduler?: MeetingScheduler;
   postMeetingDelivery?: PostMeetingDelivery;
+  sessionManager?: import("../modules/session-manager").SessionManager;
 }
 
 export interface RouteHandler {
