@@ -108,7 +108,6 @@ class PermissionChecker {
       shell.openExternal(url);
     }
   }
-}
 
   // ── Bundle ID Info (dev vs prod TCC mismatch) ───────────────
 
