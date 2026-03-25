@@ -20,6 +20,7 @@ import type { OpenClawBridge } from "../openclaw_bridge";
 import type { EventBus } from "./event-bus";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { OC003_PROMPT, parseOC003, type OC003_Request } from "../openclaw-protocol";
+import { readSessions, upsertSession, getMeetingFilePath } from "./shared-documents";
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { homedir } from "os";
@@ -27,6 +28,7 @@ import { homedir } from "os";
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LOOKAHEAD_MS = 2 * 60 * 60 * 1000; // 2 hours ahead
 const PREP_LEAD_MS = 2 * 60 * 1000; // Join 2 min before meeting start
+const PREP_STALE_MS = 12 * 60 * 1000; // 12 min — after OpenClaw's 10-min timeout, safe to retry
 const CALLINGCLAW_API = "http://localhost:4000";
 const SCHEDULED_CACHE_PATH = resolve(homedir(), ".callingclaw", "scheduled-meetings.json");
 
@@ -46,6 +48,7 @@ export class MeetingScheduler {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private scheduled = new Map<string, ScheduledMeeting>(); // fingerprint → info
   private _everScheduled = new Set<string>(); // ALL fingerprints ever scheduled (persistent dedup)
+  private _prepInFlight = new Set<string>(); // meetingIds currently being regenerated (dedup guard)
   private _active = false;
   private meetingPrepSkill: MeetingPrepSkill | null = null;
 
@@ -169,6 +172,9 @@ export class MeetingScheduler {
       if (newScheduled > 0) {
         console.log(`[MeetingScheduler] ${newScheduled} new meeting(s) scheduled, ${this.scheduled.size} total tracked`);
       }
+
+      // Check for stuck/missing preps and recover them
+      await this.recoverStalePreps();
     } catch (e: any) {
       console.error("[MeetingScheduler] Poll error:", e.message);
     }
@@ -261,6 +267,99 @@ export class MeetingScheduler {
       .catch((e: any) => {
         console.error(`[MeetingScheduler] Meeting prep failed for "${event.summary}":`, e.message);
       });
+  }
+
+  /**
+   * Recover stale meeting preps — called at end of each poll().
+   *
+   * Handles two cases:
+   *   A) File on disk but session stuck on "preparing" → index it + emit event
+   *   B) No file and session stale (>12 min) → regenerate via OpenClaw
+   *
+   * Guards:
+   *   - _prepInFlight set prevents duplicate regeneration
+   *   - Only processes upcoming meetings (startTime within 2h or no startTime)
+   *   - Skips if OpenClaw bridge is disconnected
+   */
+  async recoverStalePreps(): Promise<void> {
+    const sessions = readSessions().sessions;
+    const now = Date.now();
+
+    for (const s of sessions) {
+      // Only recover sessions in "preparing" state
+      if (s.status !== "preparing") continue;
+
+      // Only recover upcoming meetings (within 2h, or no startTime — could be Talk Locally)
+      if (s.startTime) {
+        const startMs = new Date(s.startTime).getTime();
+        if (isNaN(startMs) || startMs < now - 60_000 || startMs > now + LOOKAHEAD_MS) continue;
+      }
+
+      // Already being recovered by a previous cycle
+      if (this._prepInFlight.has(s.meetingId)) continue;
+
+      const prepPath = getMeetingFilePath(s.meetingId, "prep");
+
+      // Case A: File exists on disk but session never got updated
+      // (OpenClaw wrote the file but never called /api/meeting/prep-result)
+      try {
+        const file = Bun.file(prepPath);
+        if (await file.exists()) {
+          const md = await file.text();
+          if (md.length > 50) { // Non-trivial content
+            upsertSession({
+              meetingId: s.meetingId,
+              status: "ready",
+              files: { prep: s.meetingId + "_prep.md" },
+            });
+            this.eventBus.emit("meeting.prep_ready", {
+              meetingId: s.meetingId,
+              topic: s.topic,
+              filePath: prepPath,
+              mdContent: md,
+              recovered: true,
+            });
+            console.log(`[PrepRecovery] Indexed existing file: "${s.topic}" (${s.meetingId})`);
+            continue;
+          }
+        }
+      } catch { /* file doesn't exist or unreadable — proceed to Case B */ }
+
+      // Case B: No file on disk — check if stale enough to regenerate
+      const updatedAt = new Date(s.updatedAt).getTime();
+      if (isNaN(updatedAt) || now - updatedAt < PREP_STALE_MS) {
+        // Still young — OpenClaw might still be working
+        continue;
+      }
+
+      // Stale session — regenerate if we have the tools
+      if (!this.meetingPrepSkill || !this.openclawBridge.connected) continue;
+
+      console.log(`[PrepRecovery] Regenerating stale prep: "${s.topic}" (${s.meetingId}, stale ${Math.round((now - updatedAt) / 60000)}min)`);
+      this._prepInFlight.add(s.meetingId);
+
+      // Fire regeneration (non-blocking — don't block poll for other meetings)
+      this.meetingPrepSkill
+        .generate(s.topic, undefined, undefined, s.meetingId)
+        .then((brief) => {
+          console.log(`[PrepRecovery] Regenerated: "${s.topic}" — ${brief.keyPoints.length} key points`);
+          this.eventBus.emit("meeting.prep_ready", {
+            meetingId: s.meetingId,
+            topic: s.topic,
+            filePath: prepPath,
+            recovered: true,
+          });
+        })
+        .catch((e: any) => {
+          console.error(`[PrepRecovery] Regeneration failed for "${s.topic}":`, e.message);
+        })
+        .finally(() => {
+          this._prepInFlight.delete(s.meetingId);
+        });
+
+      // Only regenerate one at a time (OpenClawBridge is single-task)
+      break;
+    }
   }
 
   /** Load scheduled meetings cache from disk */
