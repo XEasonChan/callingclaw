@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('callingclaw', {
     check: () => ipcRenderer.invoke('permissions:check'),
     request: (perm) => ipcRenderer.invoke('permissions:request', perm),
     openSettings: (panel) => ipcRenderer.invoke('permissions:openSettings', panel),
+    bundleInfo: () => ipcRenderer.invoke('permissions:bundleInfo'),
   },
 
   // ── Environment ────────────────────────────────────────────
@@ -69,6 +70,7 @@ contextBridge.exposeInMainWorld('callingclaw', {
   // ── Audio ─────────────────────────────────────────────────
   audio: {
     listDevices: () => ipcRenderer.invoke('audio:listDevices'),
+    getDefaultOutput: () => ipcRenderer.invoke('audio:getDefaultOutput'),
   },
 
   // ── App Info ───────────────────────────────────────────────

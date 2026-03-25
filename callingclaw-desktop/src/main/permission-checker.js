@@ -2,19 +2,21 @@
 // Permission Checker — macOS TCC permission detection & guidance
 // ═══════════════════════════════════════════════════════════════
 
-const { systemPreferences, shell } = require('electron');
+const { systemPreferences, shell, app } = require('electron');
 const { execSync } = require('child_process');
+const fs = require('fs');
 
 class PermissionChecker {
   // ── Check Required Permissions (onboarding) ────────────────
-  // Microphone is NOT required for onboarding — BlackHole virtual
-  // audio doesn't need TCC mic authorization. Mic is only needed
-  // for "direct mode" (real microphone, no meeting).
+  // Microphone is required for BOTH modes:
+  //   - meet_bridge: getUserMedia(BlackHole 16ch) triggers TCC
+  //   - direct: getUserMedia(real mic) triggers TCC
 
   async checkAll() {
     return {
       screenRecording: this.checkScreenRecording(),
       accessibility: this.checkAccessibility(),
+      microphone: await this.checkMicrophone(),
     };
   }
 
@@ -105,6 +107,50 @@ class PermissionChecker {
     if (url) {
       shell.openExternal(url);
     }
+  }
+}
+
+  // ── Bundle ID Info (dev vs prod TCC mismatch) ───────────────
+
+  getBundleInfo() {
+    return {
+      bundleId: app.isPackaged ? 'com.tanka.callingclaw' : 'com.github.electron',
+      isPackaged: app.isPackaged,
+      warning: !app.isPackaged
+        ? 'Dev mode: TCC permissions are tied to com.github.electron, not com.tanka.callingclaw. Permissions granted here won\'t carry to the production DMG.'
+        : null,
+    };
+  }
+
+  // ── System Default Output Device ───────────────────────────
+
+  getDefaultOutputDevice() {
+    // Try SwitchAudioSource first (most reliable)
+    const sasPaths = ['/opt/homebrew/bin/SwitchAudioSource', '/usr/local/bin/SwitchAudioSource'];
+    for (const p of sasPaths) {
+      if (fs.existsSync(p)) {
+        try {
+          const name = execSync(`"${p}" -c -t output`, { timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim();
+          return { name, isBlackHole: name.includes('BlackHole') };
+        } catch {}
+      }
+    }
+    // Fallback: parse system_profiler
+    try {
+      const output = execSync('system_profiler SPAudioDataType 2>/dev/null', { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+      const lines = output.split('\n');
+      let currentDevice = null;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Device names are indented lines ending with ':'
+        const deviceMatch = line.match(/^\s{4,8}(\S.+?):\s*$/);
+        if (deviceMatch) { currentDevice = deviceMatch[1]; continue; }
+        if (line.includes('Default Output Device: Yes') && currentDevice) {
+          return { name: currentDevice, isBlackHole: currentDevice.includes('BlackHole') };
+        }
+      }
+    } catch {}
+    return { name: null, isBlackHole: false };
   }
 }
 
