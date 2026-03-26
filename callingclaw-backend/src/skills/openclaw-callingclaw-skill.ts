@@ -92,7 +92,99 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         const url = parts[1];
         if (!url) return { success: false, error: "Usage: /callingclaw join <meeting-url>" };
         const instructions = parts.slice(2).join(" ") || undefined;
-        return await apiPost("/api/meeting/join", { url, instructions });
+        const joinResult = await apiPost("/api/meeting/join", { url, instructions });
+        // Handle auth-required response: try auto-applying OpenClaw's Google OAuth first
+        if (!joinResult.success && joinResult.data?.needsAuth) {
+          console.log("[CallingClaw Skill] Meeting join requires Google auth — attempting auto-setup from OpenClaw OAuth...");
+          // Step 1: Try to apply OpenClaw's existing Google credentials
+          const scanResult = await apiGet("/api/google/scan");
+          if (scanResult.data?.found) {
+            const applyResult = await apiPost("/api/google/apply", {});
+            if (applyResult.success) {
+              console.log("[CallingClaw Skill] Google OAuth applied from OpenClaw credentials");
+            }
+          }
+          // Step 2: Open Chrome for Google sign-in (required for Meet)
+          const loginResult = await apiPost("/api/google/chrome-login", {});
+          if (loginResult.success) {
+            return {
+              success: false,
+              error: "Google sign-in required",
+              data: {
+                needsAuth: true,
+                message: "Please sign into your Google account in the Chrome window that just opened. " +
+                  "After signing in, run /callingclaw join again.",
+                calendarStatus: scanResult.data?.found
+                  ? "Calendar OAuth applied from OpenClaw credentials ✓"
+                  : "Calendar OAuth not found — run /callingclaw google-auth to set up",
+              },
+            };
+          }
+          return joinResult;
+        }
+        return joinResult;
+      }
+
+      case "google-auth": {
+        // Google OAuth setup for CallingClaw
+        // Priority: 1) Reuse OpenClaw's existing OAuth  2) Fallback to CallingClaw's own OAuth link
+        //
+        // OpenClaw stores Google credentials at:
+        //   ~/.openclaw/workspace/google-credentials.json
+        //   ~/.openclaw/workspace/google-token.json
+        //
+        // CallingClaw scans these paths automatically via /api/google/scan.
+        // If found, /api/google/apply writes them to CallingClaw's .env and connects calendar.
+        // If NOT found, user must run the OAuth flow: bun scripts/ts/google-auth.ts
+
+        // Step 1: Scan for existing credentials (OpenClaw, gcloud, etc.)
+        const scanResult = await apiGet("/api/google/scan");
+        if (scanResult.data?.found) {
+          // Auto-apply from OpenClaw's existing OAuth
+          const applyResult = await apiPost("/api/google/apply", {});
+          if (applyResult.success) {
+            return {
+              success: true,
+              data: {
+                message: "Google OAuth applied from OpenClaw credentials",
+                calendar: applyResult.data?.connected ? "connected ✓" : "not connected",
+                source: scanResult.data?.sources,
+                nextStep: "Chrome Google sign-in is separate. Run: /callingclaw google-chrome-login",
+              },
+            };
+          }
+        }
+
+        // Step 2: No existing credentials — guide user to generate
+        return {
+          success: false,
+          error: "No Google OAuth credentials found",
+          data: {
+            message: "Google Calendar OAuth not configured. Two options:",
+            options: [
+              "1. If you have OpenClaw with Google Calendar: run 'openclaw configure' and enable Google Calendar, then run /callingclaw google-auth again",
+              "2. Generate CallingClaw's own OAuth token: cd callingclaw-backend && bun scripts/ts/google-auth.ts",
+            ],
+            scannedPaths: scanResult.data?.sources || [],
+            chromeNote: "Chrome Google sign-in (for Meet) is separate from Calendar OAuth. After setting up Calendar, run: /callingclaw google-chrome-login",
+          },
+        };
+      }
+
+      case "google-chrome-login": {
+        // Open Chrome for Google sign-in (required for Meet joining)
+        const loginResult = await apiPost("/api/google/chrome-login", {});
+        if (loginResult.success) {
+          return {
+            success: true,
+            data: {
+              message: "Chrome opened to Google sign-in page. Please sign in with your Google account.",
+              pollUrl: "/api/google/chrome-login/check",
+              note: "After signing in, run /callingclaw join <url> to join a meeting.",
+            },
+          };
+        }
+        return loginResult;
       }
 
       case "leave":
@@ -233,6 +325,8 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw recover sidecar      — Kill + restart Python sidecar",
               "/callingclaw recover voice        — Restart voice session",
               "/callingclaw recover all          — Reset all subsystems",
+              "/callingclaw google-auth          — Setup Google OAuth (reuse OpenClaw's, or generate new)",
+              "/callingclaw google-chrome-login   — Open Chrome to sign in with Google (for Meet)",
             ],
             sharedDir: "~/.callingclaw/shared/",
             sharedSubdirs: {
@@ -312,7 +406,30 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     "context_sharing",
     "self_recovery",
     "shared_documents",
+    "google_auth",
   ],
+
+  // ── Google OAuth Strategy ──
+  // Priority 1: Reuse OpenClaw's existing Google OAuth credentials
+  //   - Scans ~/.openclaw/workspace/google-credentials.json + google-token.json
+  //   - If found, auto-applies to CallingClaw .env → calendar connected
+  // Priority 2: Fallback to CallingClaw's own OAuth flow
+  //   - User runs: bun scripts/ts/google-auth.ts
+  //   - Generates CallingClaw-specific refresh token
+  // Chrome Google Sign-in (for Meet):
+  //   - Separate from Calendar OAuth — requires browser cookie auth
+  //   - /callingclaw google-chrome-login opens Chrome to accounts.google.com
+  //   - User signs in once, cookies persist in Chrome profile
+  googleOAuth: {
+    strategy: "openclaw_first",
+    scanPaths: [
+      "~/.openclaw/workspace/google-credentials.json",
+      "~/.openclaw/workspace/google-token.json",
+      "~/.config/gcloud/application_default_credentials.json",
+      "~/.callingclaw/google-credentials.json",
+    ],
+    fallbackScript: "bun scripts/ts/google-auth.ts",
+  },
   endpoint: "http://localhost:4000",
   healthCheck: "http://localhost:4000/api/recovery/health",
 
