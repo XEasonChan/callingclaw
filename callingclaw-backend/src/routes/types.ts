@@ -19,6 +19,7 @@ import type { BrowserActionLoop } from "../modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { MeetingScheduler } from "../modules/meeting-scheduler";
 import type { PostMeetingDelivery } from "../modules/post-meeting-delivery";
+import type { ChromeLauncher } from "../chrome-launcher";
 
 export interface Services {
   bridge: InputBridge;
@@ -37,6 +38,7 @@ export interface Services {
   transcriptAuditor?: TranscriptAuditor;
   browserLoop?: BrowserActionLoop;
   playwrightCli?: PlaywrightCLIClient;
+  chromeLauncher?: ChromeLauncher;
   meetingScheduler?: MeetingScheduler;
   postMeetingDelivery?: PostMeetingDelivery;
   sessionManager?: import("../modules/session-manager").SessionManager;

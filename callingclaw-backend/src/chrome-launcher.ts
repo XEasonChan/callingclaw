@@ -50,6 +50,9 @@ const AUDIO_INIT_SCRIPT = `
     captureActive: false,
     captureChunks: 0,
     captureMaxAmp: 0,
+    triedReceiverIdx: 0,
+    captureSource: null,
+    captureWorklet: null,
   };
 
   var origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
@@ -135,18 +138,36 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   }
 
   // ── Capture remote audio (from meeting participants) ──
+  // Cycles through audio receivers by index. If amp=0 after 5s,
+  // disconnects and tries the NEXT receiver (not the same one).
   function setupCapture(pc) {
     if (cc.captureActive) return;
     var receivers = pc.getReceivers();
-    var audioRecv = receivers.find(function(r) { return r.track && r.track.kind === 'audio' && !r.track.muted && r.track.readyState === 'live'; })
-      || receivers.find(function(r) { return r.track && r.track.kind === 'audio' && r.track.readyState === 'live'; });
-    if (!audioRecv) return;
+    var audioRecvs = receivers.filter(function(r) { return r.track && r.track.kind === 'audio' && r.track.readyState === 'live'; });
+    if (audioRecvs.length === 0) return;
 
+    // Sort: prefer unmuted first, then by index
+    audioRecvs.sort(function(a, b) { return (a.track.muted ? 1 : 0) - (b.track.muted ? 1 : 0); });
+
+    // Pick receiver at current triedReceiverIdx (wraps around)
+    var idx = cc.triedReceiverIdx % audioRecvs.length;
+    var audioRecv = audioRecvs[idx];
     var track = audioRecv.track;
+
+    console.log('[CC-Audio] Trying receiver ' + idx + '/' + audioRecvs.length + ' (track: ' + track.id.substring(0, 10) + ', muted=' + track.muted + ')');
+
+    // Disconnect previous capture if any
+    if (cc.captureSource) { try { cc.captureSource.disconnect(); } catch(e) {} }
+    if (cc.captureWorklet) { try { cc.captureWorklet.disconnect(); } catch(e) {} }
+
     var stream = new MediaStream([track]);
     var source = captureCtx.createMediaStreamSource(stream);
     var worklet = new AudioWorkletNode(captureCtx, 'pcm-processor');
     source.connect(worklet);
+    cc.captureSource = source;
+    cc.captureWorklet = worklet;
+    cc.captureChunks = 0;
+    cc.captureMaxAmp = 0;
 
     worklet.port.onmessage = function(e) {
       cc.captureChunks++;
@@ -168,18 +189,26 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(int16) }));
     };
 
-    // Self-check: if maxAmp stays 0 after 5s, try next receiver
+    // Track mute/unmute events
+    track.onmute = function() { console.log('[CC-Audio] Track MUTED → will retry next receiver'); };
+    track.onunmute = function() { console.log('[CC-Audio] Track UNMUTED'); };
+
+    // Self-check: if maxAmp stays 0 after 5s, disconnect and try NEXT receiver
     setTimeout(function() {
-      if (cc.captureMaxAmp === 0 && cc.captureChunks > 100) {
-        console.log('[CC-Audio] Self-check: maxAmp=0, re-scanning receivers...');
+      if (cc.captureMaxAmp === 0 && cc.captureChunks > 50) {
+        console.log('[CC-Audio] Self-check FAILED: amp=0 on receiver ' + idx + ', cycling to next...');
+        try { source.disconnect(); } catch(e) {}
+        try { worklet.disconnect(); } catch(e) {}
         cc.captureActive = false;
-        cc.captureChunks = 0;
+        cc.triedReceiverIdx++;
         setupCapture(pc);
+      } else if (cc.captureMaxAmp > 0) {
+        console.log('[CC-Audio] Self-check PASSED: maxAmp=' + cc.captureMaxAmp + ' on receiver ' + idx);
       }
     }, 5000);
 
     cc.captureActive = true;
-    console.log('[CC-Audio] Capture active (track: ' + track.id.substring(0, 10) + ', muted=' + track.muted + ')');
+    console.log('[CC-Audio] Capture active (receiver ' + idx + ', track: ' + track.id.substring(0, 10) + ', muted=' + track.muted + ')');
   }
 
   // ── WebSocket to backend ──
@@ -385,6 +414,446 @@ export class ChromeLauncher {
     } catch {
       return { error: "evaluate_failed" };
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Google Meet Join (replaces playwright-cli joinGoogleMeet)
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Join a Google Meet meeting using the Playwright library page directly.
+   * Eliminates playwright-cli coexistence conflict (launchPersistentContext holds Chrome).
+   */
+  async joinGoogleMeet(
+    url: string,
+    opts?: {
+      displayName?: string;
+      muteCamera?: boolean;
+      muteMic?: boolean;
+      onStep?: (step: string) => void;
+    },
+  ): Promise<{ success: boolean; summary: string; steps: string[]; state: "in_meeting" | "waiting_room" | "failed" }> {
+    if (!this._page) return { success: false, summary: "No page — call launch() first", steps: [], state: "failed" };
+
+    const page = this._page;
+    const displayName = opts?.displayName || "CallingClaw";
+    const muteCamera = opts?.muteCamera ?? true;
+    const muteMic = opts?.muteMic ?? false;
+    const steps: string[] = [];
+    const log = (msg: string) => { steps.push(msg); opts?.onStep?.(msg); console.log(`[MeetJoin] ${msg}`); };
+
+    try {
+      // Step 1: Navigate
+      log("Navigating...");
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(3000);
+
+      // Step 2: Dismiss + detect + configure
+      log("Detecting + configuring...");
+      const configResult = await page.evaluate(`(() => {
+        var R = { state: 'unknown', config: [], hasJoinBtn: false };
+
+        // 1. Dismiss blocking dialogs
+        var dismiss = ['got it', 'dismiss', 'continue without', 'not now', 'block', 'deny'];
+        document.querySelectorAll('button, [role="button"]').forEach(function(b) {
+          var t = (b.textContent || '').trim().toLowerCase();
+          if (dismiss.some(function(d) { return t === d || t.includes(d); })) b.click();
+        });
+
+        // 2. Detect page state
+        var body = document.body.innerText || '';
+        var btns = Array.from(document.querySelectorAll('button'));
+        var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
+
+        if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) {
+          R.state = 'already_in'; return JSON.stringify(R);
+        }
+        if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
+          R.state = 'ended'; return JSON.stringify(R);
+        }
+        if (body.includes('not allowed') || body.includes('Check your meeting code')) {
+          R.state = 'error'; return JSON.stringify(R);
+        }
+
+        // 3. Handle "Switch here"
+        var switchBtn = btns.find(function(b) { return ['Switch here', '切换到这里'].indexOf(b.textContent.trim()) !== -1; });
+        if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; return JSON.stringify(R); }
+
+        // 4. Camera OFF
+        ${muteCamera ? `
+        var camOff = document.querySelector('[aria-label="Turn off camera"], [aria-label="关闭摄像头"]');
+        if (camOff) { camOff.click(); R.config.push('cam:off'); }
+        else R.config.push('cam:already_off');
+        ` : `R.config.push('cam:skip');`}
+
+        // 5. Mic
+        ${muteMic ? `
+        var micOff = document.querySelector('[aria-label="Turn off microphone"], [aria-label="关闭麦克风"]');
+        if (micOff) { micOff.click(); R.config.push('mic:muted'); }
+        ` : `
+        var micOn = document.querySelector('[aria-label="Turn on microphone"], [aria-label="打开麦克风"]');
+        if (micOn) { micOn.click(); R.config.push('mic:on'); }
+        else R.config.push('mic:already_on');
+        `}
+
+        // 6. Set display name
+        var nameInput = document.querySelector('input[aria-label="Your name"], input[placeholder*="name"]');
+        if (nameInput && (!nameInput.value || nameInput.value === 'Guest')) {
+          var s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          if (s && s.set) { s.set.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); R.config.push('name:set'); }
+        }
+
+        // 7. Check if join button exists
+        var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+        for (var i = 0; i < btns.length; i++) {
+          if (joinTargets.indexOf(btns[i].textContent.trim()) !== -1) { R.hasJoinBtn = true; break; }
+        }
+
+        R.state = R.hasJoinBtn ? 'ready_to_join' : (btnTexts.length > 0 ? 'no_join_button' : 'loading');
+        return JSON.stringify(R);
+      })()`);
+
+      let parsed: any;
+      try { parsed = JSON.parse(configResult); } catch { parsed = { state: "parse_error" }; }
+      log(`State: ${parsed.state} config=[${(parsed.config || []).join(',')}]`);
+
+      if (parsed.state === "already_in") {
+        return { success: true, summary: "Already in meeting", steps, state: "in_meeting" };
+      }
+      if (parsed.state === "ended") {
+        return { success: false, summary: "Meeting has ended", steps, state: "failed" };
+      }
+      if (parsed.state === "error") {
+        return { success: false, summary: "Cannot access meeting", steps, state: "failed" };
+      }
+
+      // Retry if loading
+      if (parsed.state === "loading" || parsed.state === "no_join_button") {
+        log("Page loading — retrying in 2s...");
+        await page.waitForTimeout(2000);
+        const retry = await page.evaluate(`(() => {
+          var btns = Array.from(document.querySelectorAll('button'));
+          for (var i = 0; i < btns.length; i++) {
+            if (['Join now','Ask to join','Join','加入会议','请求加入'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
+          }
+          return 'still_no_button';
+        })()`);
+        log(`Retry: ${retry}`);
+        if (String(retry).includes("still_no_button")) {
+          return { success: false, summary: "Join button not found after retry", steps, state: "failed" };
+        }
+      }
+
+      // Step 3: Click join button
+      if (parsed.state !== "switch_here") {
+        log("Clicking join...");
+        const joinResult = await page.evaluate(`(() => {
+          var btns = Array.from(document.querySelectorAll('button'));
+          var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+          for (var i = 0; i < btns.length; i++) {
+            var t = btns[i].textContent.trim();
+            if (joinTargets.indexOf(t) !== -1) {
+              if (btns[i].disabled) { btns[i].disabled = false; btns[i].removeAttribute('disabled'); }
+              btns[i].click();
+              return 'joined:' + t;
+            }
+          }
+          return 'no_join_button';
+        })()`);
+        log(`Join: ${joinResult}`);
+        if (String(joinResult).includes("no_join_button")) {
+          return { success: false, summary: "Join button disappeared", steps, state: "failed" };
+        }
+      }
+
+      // Step 4: Verify join state (poll up to 20s)
+      log("Verifying join state...");
+      await page.waitForTimeout(2000);
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const state = await page.evaluate(`(() => {
+          if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) return 'in_meeting';
+          var t = document.body.innerText;
+          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人')) return 'waiting_room';
+          return 'loading';
+        })()`);
+
+        if (String(state).includes("in_meeting")) {
+          log("Joined!");
+
+          // Post-join: ensure mic is unmuted
+          if (!muteMic) {
+            await page.waitForTimeout(1500);
+            const micState = await page.evaluate(`(() => {
+              var muteBtn = document.querySelector('[aria-label*="Turn on microphone"], [aria-label*="打开麦克风"]');
+              if (muteBtn) { muteBtn.click(); return 'unmuted_after_join'; }
+              var alreadyOn = document.querySelector('[aria-label*="Turn off microphone"], [aria-label*="关闭麦克风"]');
+              if (alreadyOn) return 'already_on';
+              return 'mic_button_not_found';
+            })()`);
+            log(`Post-join mic: ${micState}`);
+          }
+
+          return { success: true, summary: "Joined meeting — camera off, mic on", steps, state: "in_meeting" };
+        }
+        if (String(state).includes("waiting_room")) {
+          log("In waiting room");
+          return { success: false, summary: "In waiting room — waiting for host", steps, state: "waiting_room" };
+        }
+        if (attempt < 5) await page.waitForTimeout(3000);
+      }
+
+      return { success: false, summary: "Could not confirm join state", steps, state: "failed" };
+
+    } catch (err: any) {
+      log(`Error: ${err.message}`);
+      return { success: false, summary: `Error: ${err.message}`, steps, state: "failed" };
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Admission Monitor (replaces playwright-cli admission monitor)
+  // ══════════════════════════════════════════════════════════════
+
+  private _admissionInterval: ReturnType<typeof setInterval> | null = null;
+  private _admittedSet = new Set<string>();
+  private _meetingEndCallback: (() => void) | null = null;
+
+  /**
+   * Monitor for attendee admission requests in Google Meet.
+   * Uses Playwright library page.evaluate() directly (no playwright-cli).
+   */
+  startAdmissionMonitor(
+    attendeeNames: string[],
+    intervalMs = 3000,
+    onFallback?: (instruction: string) => Promise<void>,
+  ): void {
+    if (!this._page) return;
+    if (this._admissionInterval) this.stopAdmissionMonitor();
+    this._admittedSet.clear();
+
+    const admitAll = attendeeNames.length === 0;
+    const page = this._page;
+    console.log(`[MeetAdmit] Monitoring (${intervalMs}ms)${admitAll ? " admit-all" : ` for ${attendeeNames.length}: ${attendeeNames.join(", ")}`}`);
+
+    let consecutiveFailures = 0;
+
+    this._admissionInterval = setInterval(async () => {
+      try {
+        // Check if meeting has ended
+        if (this._meetingEndCallback) {
+          try {
+            const ended = await this._checkMeetingEndedLib();
+            if (ended) {
+              console.log("[MeetAdmit] Meeting ended detected — triggering cleanup");
+              const cb = this._meetingEndCallback;
+              this._meetingEndCallback = null;
+              this.stopAdmissionMonitor();
+              cb();
+              return;
+            }
+          } catch {}
+        }
+
+        // L1: Pure JS eval
+        const result = await this._admitEvalLib();
+
+        if (result.startsWith("admitted:")) {
+          consecutiveFailures = 0;
+          this._recordAdmitted(result.slice(9));
+          await page.waitForTimeout(500);
+          await this._dismissAdmitConfirmationLib();
+          return;
+        }
+
+        if (result.startsWith("opened_")) {
+          consecutiveFailures = 0;
+          console.log(`[MeetAdmit] ${result} → chaining Step B...`);
+          await page.waitForTimeout(800);
+          const step2 = await this._admitEvalLib();
+          if (step2.startsWith("admitted:")) {
+            this._recordAdmitted(step2.slice(9));
+            await page.waitForTimeout(500);
+            await this._dismissAdmitConfirmationLib();
+          } else {
+            await page.waitForTimeout(600);
+            const step3 = await this._admitEvalLib();
+            if (step3.startsWith("admitted:")) {
+              this._recordAdmitted(step3.slice(9));
+              await page.waitForTimeout(500);
+              await this._dismissAdmitConfirmationLib();
+            } else {
+              console.log(`[MeetAdmit] Panel open but Admit button not found after 2 retries`);
+            }
+          }
+          return;
+        }
+
+        if (result === "has_notification_no_button") {
+          consecutiveFailures++;
+          console.log(`[MeetAdmit] Notification visible but no button (${consecutiveFailures}/3)`);
+        } else {
+          consecutiveFailures = 0;
+        }
+
+        // Fallback
+        if (consecutiveFailures >= 3 && onFallback) {
+          consecutiveFailures = 0;
+          console.log("[MeetAdmit] L1 failed 3x → automation fallback...");
+          const names = admitAll ? "all pending participants" : attendeeNames.join(", ");
+          onFallback(
+            `In Google Meet, someone is asking to join the meeting. ` +
+            `Click the green admit notification or open the People panel, then click "Admit" to let in: ${names}`
+          ).catch((e) => console.warn("[MeetAdmit] Fallback failed:", e.message));
+        }
+      } catch {}
+    }, intervalMs);
+  }
+
+  private async _admitEvalLib(): Promise<string> {
+    if (!this._page) return "none";
+    return String(await this._page.evaluate(`(() => {
+      var all = Array.from(document.querySelectorAll('button, [role="button"], div[tabindex]'));
+
+      // Step B: Individual "Admit" first
+      var admit = all.find(function(b) {
+        var t = (b.textContent || '').trim();
+        return t === 'Admit' || t === '准许';
+      });
+      if (admit) { admit.click(); return 'admitted:' + admit.textContent.trim().substring(0, 60); }
+
+      // Step B2: "Admit all" fallback
+      var admitAll = all.find(function(b) {
+        var t = (b.textContent || '').trim();
+        return t === 'Admit all' || t === '全部准许';
+      });
+      if (admitAll) { admitAll.click(); return 'admitted:' + admitAll.textContent.trim().substring(0, 60); }
+
+      // Step A: Green notification
+      var notif = all.find(function(b) {
+        var t = (b.textContent || '').replace(/\\s+/g, ' ').trim();
+        return t.includes('Admit') && t.includes('guest');
+      });
+      if (notif) { notif.click(); return 'opened_admit_panel:' + notif.textContent.trim().substring(0, 60); }
+
+      // "View all"
+      var viewAll = all.find(function(b) {
+        var t = (b.textContent || '').trim();
+        return t === 'View all' || t === '查看全部';
+      });
+      if (viewAll) { viewAll.click(); return 'opened_view_all'; }
+
+      // Detect join notification → open People panel
+      var body = document.body.innerText;
+      var hasNotif = body.includes('wants to join') || body.includes('asking to join') ||
+        body.includes('请求加入') || body.includes('想加入') || body.includes('Someone wants to join');
+      if (hasNotif) {
+        var peopleBtn = all.find(function(b) {
+          var a = (b.getAttribute('aria-label') || '');
+          return a === 'People' || a.includes('Show everyone') || a.includes('参与者');
+        });
+        if (peopleBtn) { peopleBtn.click(); return 'opened_people_panel'; }
+        return 'has_notification_no_button';
+      }
+
+      return 'none';
+    })()`));
+  }
+
+  private async _dismissAdmitConfirmationLib(): Promise<void> {
+    if (!this._page) return;
+    const page = this._page;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await page.evaluate(`(() => {
+          var all = Array.from(document.querySelectorAll('button, [role="button"], [role="dialog"] button, div[role="alertdialog"] button'));
+          var confirmBtn = all.find(function(b) {
+            var t = (b.textContent || '').trim();
+            return t === 'Admit all' || t === '全部准许' || t === 'Confirm' || t === '确认' || t === 'OK' || t === '确定';
+          });
+          if (confirmBtn) { confirmBtn.click(); return 'confirmed'; }
+          return 'no_dialog';
+        })()`);
+        if (String(result).includes("confirmed")) {
+          console.log(`[MeetAdmit] Confirmation dialog dismissed (attempt ${attempt + 1})`);
+          return;
+        }
+      } catch {}
+      await page.waitForTimeout(500 + attempt * 300);
+    }
+  }
+
+  private async _checkMeetingEndedLib(): Promise<boolean> {
+    if (!this._page) return false;
+    const result = await this._page.evaluate(`(() => {
+      if (!location.hostname.includes('meet.google.com')) return 'ended';
+      var leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
+      var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
+      var text = document.body.innerText || '';
+      var endedSignals = [
+        'This meeting has ended', '会议已结束', '會議已結束',
+        'You were removed from the meeting', '您已被移出会议',
+        'Your meeting code has expired', '会议代码已过期',
+        'Return to home screen', '返回主屏幕',
+        'The meeting has ended for everyone', '所有人的会议已结束',
+        'You left the meeting', '你已退出会议', '您已離開會議',
+        'Rejoin', '重新加入',
+      ];
+      var hasEndedText = endedSignals.some(function(s) { return text.includes(s); });
+      if (hasEndedText) return 'ended';
+      var videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
+      if (!leaveBtn && !callControls && !videoGrid) return 'ended';
+      return 'active';
+    })()`);
+    return result === "ended";
+  }
+
+  private _recordAdmitted(text: string) {
+    const names = text.split(",").map(n => n.trim()).filter(Boolean);
+    for (const name of names) {
+      if (!this._admittedSet.has(name)) {
+        this._admittedSet.add(name);
+        console.log(`[MeetAdmit] ✅ Admitted: ${name}`);
+      }
+    }
+  }
+
+  stopAdmissionMonitor(): string[] {
+    if (this._admissionInterval) {
+      clearInterval(this._admissionInterval);
+      this._admissionInterval = null;
+    }
+    this._meetingEndCallback = null;
+    const admitted = [...this._admittedSet];
+    console.log(`[MeetAdmit] Monitor stopped. Admitted ${admitted.length} attendees.`);
+    return admitted;
+  }
+
+  get isAdmissionMonitoring(): boolean {
+    return this._admissionInterval !== null;
+  }
+
+  onMeetingEnd(callback: () => void): void {
+    this._meetingEndCallback = callback;
+    if (!this._admissionInterval) {
+      console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
+      this._admissionInterval = setInterval(async () => {
+        try {
+          const ended = await this._checkMeetingEndedLib();
+          if (ended) {
+            console.log("[MeetEnd] Meeting ended detected — triggering cleanup");
+            const cb = this._meetingEndCallback;
+            this._meetingEndCallback = null;
+            this.stopAdmissionMonitor();
+            if (cb) cb();
+          }
+        } catch {}
+      }, 3000);
+    }
+  }
+
+  clearMeetingEndCallback(): void {
+    this._meetingEndCallback = null;
   }
 
   /** Clean shutdown */

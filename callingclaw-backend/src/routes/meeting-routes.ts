@@ -183,21 +183,19 @@ export function meetingRoutes(services: Services): RouteHandler {
         });
 
         // Step 3: Join the meeting
-        // Primary: Playwright fast-join (deterministic JS eval, no AI model)
+        // Primary: ChromeLauncher (Playwright library — single Chrome, no CLI conflict)
+        // Secondary: playwright-cli (legacy, if ChromeLauncher not available)
         // Fallback: MeetJoiner (osascript, legacy)
         let joinSuccess = false;
         let joinState: "in_meeting" | "waiting_room" | "failed" = "failed";
         let joinSummary = "";
         let joinMethod = "meetjoiner";
 
-        if (services.playwrightCli && validated.platform === "google_meet") {
-          // Ensure playwright-cli is started (connects to Chrome launched by ChromeLauncher)
-          if (!services.playwrightCli.connected) {
-            try { await services.playwrightCli.start(); } catch {}
-          }
-          console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
-          joinMethod = "playwright_eval";
-          const result = await services.playwrightCli.joinGoogleMeet(validated.url, {
+        if (services.chromeLauncher && validated.platform === "google_meet") {
+          // Preferred: ChromeLauncher handles join + audio (no playwright-cli needed)
+          console.log("[Meeting] Using ChromeLauncher join (Playwright library, no CLI conflict)...");
+          joinMethod = "chromelauncher";
+          const result = await services.chromeLauncher.joinGoogleMeet(validated.url, {
             muteCamera: true,
             muteMic: false, // Mic ON for audio injection
             onStep: (step) => services.eventBus.emit("meeting.join_step", { step }),
@@ -206,7 +204,31 @@ export function meetingRoutes(services: Services): RouteHandler {
           joinState = result.state;
           joinSummary = result.summary;
 
-          // Step 3b: Activate audio pipeline after joining
+          // Activate audio pipeline after joining
+          if (joinSuccess) {
+            try {
+              const pipelineResult = await services.chromeLauncher.activateAudioPipeline();
+              console.log("[Meeting] ✅ Audio pipeline activated:", pipelineResult);
+            } catch (e: any) {
+              console.warn("[Meeting] Audio pipeline activation failed:", e.message);
+            }
+          }
+        } else if (services.playwrightCli && validated.platform === "google_meet") {
+          // Fallback: playwright-cli (legacy path, may conflict with ChromeLauncher)
+          if (!services.playwrightCli.connected) {
+            try { await services.playwrightCli.start(); } catch {}
+          }
+          console.log("[Meeting] Using playwright-cli fast-join (legacy path)...");
+          joinMethod = "playwright_eval";
+          const result = await services.playwrightCli.joinGoogleMeet(validated.url, {
+            muteCamera: true,
+            muteMic: false,
+            onStep: (step) => services.eventBus.emit("meeting.join_step", { step }),
+          });
+          joinSuccess = result.success;
+          joinState = result.state;
+          joinSummary = result.summary;
+
           if (joinSuccess && services.chromeLauncher) {
             try {
               const pipelineResult = await services.chromeLauncher.activateAudioPipeline();
@@ -257,23 +279,36 @@ export function meetingRoutes(services: Services): RouteHandler {
 
         // If stuck in waiting_room, keep polling in background until admitted (up to 5 min)
         // This runs AFTER the HTTP response is sent — non-blocking
-        if (joinState === "waiting_room" && services.playwrightCli?.connected) {
+        const hasPageAccess = services.chromeLauncher?.page || services.playwrightCli?.connected;
+        if (joinState === "waiting_room" && hasPageAccess) {
           console.log("[Meeting] In waiting room — background poll until admitted (max 5min)...");
           (async () => {
             for (let i = 0; i < 60; i++) { // 60 × 5s = 5 minutes
               await new Promise(r => setTimeout(r, 5000));
               try {
-                const check = await services.playwrightCli!.evaluate(`() => {
-                  const leave = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
-                  const controls = document.querySelector('[aria-label="Call controls"]');
+                const evalFn = `(() => {
+                  var leave = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
+                  var controls = document.querySelector('[aria-label="Call controls"]');
                   if (leave || controls) return 'in_meeting';
-                  const text = document.body.innerText;
+                  var text = document.body.innerText;
                   if (text.includes('removed') || text.includes('kicked') || text.includes('denied')) return 'rejected';
                   return 'waiting';
-                }`);
+                })()`;
+                const check = services.chromeLauncher?.page
+                  ? String(await services.chromeLauncher.page.evaluate(evalFn))
+                  : await services.playwrightCli!.evaluate(evalFn);
                 if (check.includes("in_meeting")) {
                   console.log("[Meeting] Admitted from waiting room! Triggering meeting.started...");
                   emitMeetingStarted();
+                  // Activate audio pipeline now that we're in the meeting
+                  if (services.chromeLauncher) {
+                    try {
+                      const pipelineResult = await services.chromeLauncher.activateAudioPipeline();
+                      console.log("[Meeting] ✅ Audio pipeline activated (post-admit):", pipelineResult);
+                    } catch (e: any) {
+                      console.warn("[Meeting] Audio pipeline activation failed:", e.message);
+                    }
+                  }
                   break;
                 }
                 if (check.includes("rejected")) {
@@ -289,8 +324,18 @@ export function meetingRoutes(services: Services): RouteHandler {
 
         // Start admission monitor regardless (in_meeting or waiting_room)
         // — monitors OTHER participants asking to join
-        if ((joinState === "in_meeting" || joinState === "waiting_room") && services.playwrightCli?.connected) {
-          const names = meetAttendees.filter((a: any) => !a.self).map((a: any) => a.displayName || a.email);
+        // Prefer ChromeLauncher (Playwright library) over playwright-cli to avoid coexistence conflict
+        const names = meetAttendees.filter((a: any) => !a.self).map((a: any) => a.displayName || a.email);
+        if ((joinState === "in_meeting" || joinState === "waiting_room") && services.chromeLauncher?.page) {
+          services.chromeLauncher.startAdmissionMonitor(
+            names,
+            3000,
+            async (instruction: string) => {
+              await services.automationRouter.execute(instruction);
+            },
+          );
+          console.log(`[Meeting] Admission monitor started via ChromeLauncher (${names.length} attendees)`);
+        } else if ((joinState === "in_meeting" || joinState === "waiting_room") && services.playwrightCli?.connected) {
           services.playwrightCli.startAdmissionMonitor(
             names,
             3000,
@@ -298,7 +343,7 @@ export function meetingRoutes(services: Services): RouteHandler {
               await services.automationRouter.execute(instruction);
             },
           );
-          console.log(`[Meeting] Admission monitor started (${names.length} attendees)`);
+          console.log(`[Meeting] Admission monitor started via playwright-cli (${names.length} attendees)`);
         }
 
         // ── Pre-meeting agenda: emit for user confirmation ──
@@ -323,7 +368,7 @@ export function meetingRoutes(services: Services): RouteHandler {
           voice: voiceStarted ? "connected" : "failed",
           audio_mode: "meet_bridge",
           attendees: attendeeNames.length > 0 ? attendeeNames.join(", ") : null,
-          admissionMonitor: (joinState === "in_meeting" || joinState === "waiting_room") && services.playwrightCli?.connected
+          admissionMonitor: (joinState === "in_meeting" || joinState === "waiting_room") && (services.chromeLauncher?.page || services.playwrightCli?.connected)
             ? `active (${attendeeNames.length} attendees, 3s interval)` : null,
           prepBrief: prepBrief ? {
             topic: prepBrief.topic,
@@ -494,8 +539,11 @@ STEP-BY-STEP FLOW:
 
       // POST /api/meeting/leave — Leave current meeting + generate follow-up report
       if (url.pathname === "/api/meeting/leave" && req.method === "POST") {
-        // Stop admission monitor + meeting-end watcher
-        if (services.playwrightCli?.isAdmissionMonitoring) {
+        // Stop admission monitor + meeting-end watcher (ChromeLauncher or playwright-cli)
+        if (services.chromeLauncher?.isAdmissionMonitoring) {
+          services.chromeLauncher.stopAdmissionMonitor();
+          services.chromeLauncher.clearMeetingEndCallback();
+        } else if (services.playwrightCli?.isAdmissionMonitoring) {
           services.playwrightCli.stopAdmissionMonitor();
         }
         services.playwrightCli?.clearMeetingEndCallback();
