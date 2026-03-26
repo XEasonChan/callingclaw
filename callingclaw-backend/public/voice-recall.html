@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CallingClaw — Recall.ai Output Media</title>
+  <style>
+    body { background: #000; color: #0f0; font-family: monospace; padding: 20px; font-size: 13px; }
+    .status { margin-bottom: 10px; }
+    .log { white-space: pre-wrap; max-height: 80vh; overflow-y: auto; font-size: 11px; opacity: 0.7; }
+  </style>
+</head>
+<body>
+<!--
+  CallingClaw — Recall.ai Output Media Webpage
+
+  This page runs INSIDE Recall.ai's cloud container (headless browser).
+  It connects BACK to CallingClaw backend via Cloudflare Tunnel for AI voice.
+
+  Audio flow:
+    Meeting participants speak
+      → Recall grants this page getUserMedia() (meeting audio)
+      → AudioWorklet captures PCM16 24kHz
+      → WebSocket → CallingClaw backend (via Tunnel)
+      → backend → Grok/OpenAI Realtime API
+      → AI responds with audio
+      → WebSocket → this page
+      → AudioContext playback → Recall captures page audio
+      → Meeting participants hear AI
+
+  This page is a stripped-down version of voice-test.html:
+    - No UI controls (runs unattended in headless browser)
+    - Auto-starts on load
+    - Auto-reconnects WebSocket
+    - Minimal DOM (Recall captures audio, not visuals)
+-->
+
+<div class="status" id="status">Initializing...</div>
+<div class="log" id="log"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Config ──
+  // Backend URL comes from query param or defaults to same origin
+  // In Recall container: ?backend=wss://your-tunnel.example.com
+  var params = new URLSearchParams(location.search);
+  var backendBase = params.get('backend') || location.origin.replace('http', 'ws');
+  var WS_URL = backendBase.replace(/\/$/, '') + '/ws/voice-test';
+  var WORKLET_URL = (params.get('backend') || location.origin).replace('ws://', 'http://').replace('wss://', 'https://') + '/pcm-processor-worklet.js';
+  var SAMPLE_RATE = 24000;
+
+  // ── State ──
+  var ws = null;
+  var captureCtx = null;
+  var playbackCtx = null;
+  var micStream = null;
+  var playbackWorklet = null;
+  var sessionActive = false;
+  var reconnectTimer = null;
+
+  var statusEl = document.getElementById('status');
+  var logEl = document.getElementById('log');
+
+  function log(msg) {
+    var ts = new Date().toISOString().substr(11, 8);
+    logEl.textContent += '[' + ts + '] ' + msg + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log('[Recall-Page] ' + msg);
+  }
+
+  function setStatus(s) { statusEl.textContent = s; }
+
+  // ── Base64 codec ──
+  function audioToBase64(int16Array) {
+    var bytes = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
+    var CHUNK = 0x2000;
+    var parts = [];
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK)));
+    }
+    return btoa(parts.join(''));
+  }
+
+  function base64ToPcm16(b64) {
+    var raw = atob(b64);
+    var bytes = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return new Int16Array(bytes.buffer);
+  }
+
+  // ── Audio Setup ──
+  async function setupAudio() {
+    log('Setting up audio...');
+
+    // 1. Capture: get meeting audio via getUserMedia (Recall auto-grants permission)
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, channelCount: 1 }
+    });
+    log('getUserMedia OK — capturing meeting audio');
+
+    // 2. Capture context at native rate
+    captureCtx = new AudioContext();
+    if (captureCtx.state === 'suspended') await captureCtx.resume();
+    var captureRate = captureCtx.sampleRate;
+    log('Capture ctx: ' + captureRate + 'Hz');
+
+    // 3. Load capture worklet
+    await captureCtx.audioWorklet.addModule(WORKLET_URL);
+    var micSource = captureCtx.createMediaStreamSource(micStream);
+    var workletNode = new AudioWorkletNode(captureCtx, 'pcm-processor');
+    micSource.connect(workletNode);
+
+    // 4. Mic audio → downsample → WebSocket
+    workletNode.port.onmessage = function(e) {
+      if (!sessionActive || !ws || ws.readyState !== WebSocket.OPEN) return;
+      var int16Data = e.data;
+
+      // Downsample from native rate to 24kHz if needed
+      if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
+        var ratio = captureRate / SAMPLE_RATE;
+        var newLen = Math.round(int16Data.length / ratio);
+        var resampled = new Int16Array(newLen);
+        for (var i = 0; i < newLen; i++) {
+          resampled[i] = int16Data[Math.round(i * ratio)] || 0;
+        }
+        int16Data = resampled;
+      }
+
+      ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(int16Data) }));
+    };
+
+    // 5. Playback context at 24kHz (matches Realtime API output)
+    playbackCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    if (playbackCtx.state === 'suspended') await playbackCtx.resume();
+
+    // 6. Load playback worklet (ring buffer)
+    var playbackWorkletUrl = WORKLET_URL.replace('pcm-processor-worklet.js', 'playback-worklet.js');
+    await playbackCtx.audioWorklet.addModule(playbackWorkletUrl);
+    playbackWorklet = new AudioWorkletNode(playbackCtx, 'playback-processor');
+    playbackWorklet.connect(playbackCtx.destination); // → Recall captures this audio → meeting
+
+    log('Audio pipeline ready (capture: ' + captureRate + 'Hz, playback: 24kHz)');
+  }
+
+  // ── Playback ──
+  function playAudio(base64Pcm) {
+    if (!playbackWorklet || !playbackCtx) return;
+    if (playbackCtx.state === 'suspended') playbackCtx.resume();
+
+    var pcm16 = base64ToPcm16(base64Pcm);
+    var float32 = new Float32Array(pcm16.length);
+    for (var j = 0; j < pcm16.length; j++) {
+      float32[j] = pcm16[j] / 32768;
+    }
+
+    // Micro fade-in/out (24 samples = 1ms)
+    var FADE = 24;
+    if (float32.length > FADE * 2) {
+      for (var f = 0; f < FADE; f++) {
+        var gain = f / FADE;
+        float32[f] *= gain;
+        float32[float32.length - 1 - f] *= gain;
+      }
+    }
+
+    playbackWorklet.port.postMessage(float32, [float32.buffer]);
+  }
+
+  function interruptPlayback() {
+    if (playbackWorklet) playbackWorklet.port.postMessage('clear');
+  }
+
+  // ── WebSocket ──
+  function connectWS() {
+    if (ws && ws.readyState <= 1) return;
+
+    log('Connecting to ' + WS_URL + '...');
+    setStatus('Connecting...');
+
+    try {
+      ws = new WebSocket(WS_URL);
+    } catch (e) {
+      log('WS error: ' + e.message);
+      scheduleReconnect();
+      return;
+    }
+
+    ws.onopen = function() {
+      log('WS connected');
+      setStatus('Connected — starting voice session...');
+
+      // Auto-start voice session
+      ws.send(JSON.stringify({
+        type: 'start',
+        provider: params.get('provider') || undefined,
+        voice: params.get('voice') || undefined,
+        instructions: params.get('instructions') || undefined,
+      }));
+    };
+
+    ws.onmessage = function(e) {
+      try {
+        var data = JSON.parse(e.data);
+
+        if (data.type === 'status') {
+          sessionActive = data.voiceConnected;
+          setStatus(sessionActive ? 'AI Voice Active — listening to meeting' : 'Disconnected');
+          if (sessionActive) log('Voice session active (provider: ' + (data.provider || '?') + ')');
+        } else if (data.type === 'audio') {
+          playAudio(data.audio);
+        } else if (data.type === 'interrupt') {
+          interruptPlayback();
+        } else if (data.type === 'error') {
+          log('Error: ' + data.message);
+        }
+      } catch (err) {
+        // ignore parse errors
+      }
+    };
+
+    ws.onclose = function() {
+      sessionActive = false;
+      log('WS disconnected');
+      setStatus('Disconnected — reconnecting...');
+      scheduleReconnect();
+    };
+
+    ws.onerror = function() {
+      // onclose will fire
+    };
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function() {
+      reconnectTimer = null;
+      connectWS();
+    }, 3000);
+  }
+
+  // ── Init (auto-start on page load) ──
+  async function init() {
+    log('CallingClaw Recall.ai Output Media page');
+    log('Backend: ' + WS_URL);
+    log('Worklet: ' + WORKLET_URL);
+
+    try {
+      await setupAudio();
+      connectWS();
+    } catch (e) {
+      log('Init failed: ' + e.message);
+      setStatus('Error: ' + e.message);
+      // Retry after delay
+      setTimeout(init, 5000);
+    }
+  }
+
+  // Start immediately
+  init();
+})();
+</script>
+</body>
+</html>
