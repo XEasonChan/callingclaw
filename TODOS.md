@@ -52,3 +52,13 @@
 **What to change:** (1) Track session age in realtime_client.ts (2) At 28min mark, create new session in parallel (3) Let old session finish current response (4) Swap audio output to new session (5) Close old session. Needs concurrent WS management and context replay to new session.
 **Depends on:** WebRTC audio injection (replaceTrack approach) working first
 **Added:** 2026-03-26
+
+## Voice: Integrate Recall.ai as fallback audio transport
+**Priority:** P2
+**Owner:** Backend agent
+**Context:** Recall.ai Output Media 已验证可行——cloud-hosted bot 加入会议，运行你的网页（voice-recall.html），通过 Cloudflare Tunnel 连回 CallingClaw 后端获得完整 AI 语音能力。代码已在 `feat/recall-ai-transport` 分支（5eacdce）：recall-client.ts（REST API 客户端）+ voice-recall.html（Output Media 网页）。适合"不需要本地操作"的场景（AI 代参、跨平台 Zoom/Teams）。
+**Why:** Playwright 注入是主链路但依赖本地 Chrome + macOS。Recall.ai 提供云端 fallback：任意平台（Zoom/Teams/Meet）、无桌面依赖、$0.65/hr。两种 transport 共享 realtime_client.ts 和 voice.ts，维护成本低。
+**What to change:** (1) 合并 `feat/recall-ai-transport` 到 main (2) 在 callingclaw.ts 添加 transport 选择逻辑 (3) 配置 Cloudflare Tunnel（$0）(4) 申请 Recall.ai API key（免费 5 小时试用）(5) 添加 `/ws/recall/webhook` 端点处理 bot 状态事件
+**Depends on:** v2.7.12 Playwright 注入稳定运行、Recall.ai API key
+**Added:** 2026-03-26
+**Branch:** `feat/recall-ai-transport` (5eacdce)
