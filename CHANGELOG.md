@@ -3,6 +3,17 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.15] - 2026-03-26
+
+### Added
+- **OpenClaw OAuth 优先策略** — `/callingclaw google-auth` 自动扫描 OpenClaw 已有的 Google OAuth（`~/.openclaw/workspace/google-*.json`），找到则直接复用，无需用户重新授权
+- **`/callingclaw google-chrome-login`** — 打开 Chrome 到 Google 登录页，用户手动登录后 cookies 持久化用于 Meet 加入
+- **Join 自动 auth 恢复** — `/callingclaw join` 遇到 401 时自动尝试 OpenClaw OAuth scan + Chrome 登录引导，用户无需手动排查
+- **Onboarding Step 4: Google 帐户** — 替换已删除的 BlackHole 步骤，引导用户在 Chrome 中登录 Google（含轮询检测 + 状态反馈）
+
+### Changed
+- **Skill manifest** — 新增 `googleOAuth` 字段，文档化 OAuth 扫描路径和 fallback 策略
+
 ## [2.7.14] - 2026-03-26
 
 ### Added
