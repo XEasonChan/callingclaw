@@ -3,6 +3,18 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.14] - 2026-03-26
+
+### Added
+- **Google Auth Onboarding** — 加入会议前自动检查 Chrome Google 登录状态，未登录时返回 401 + 引导步骤
+  - `GET /api/google/auth-status` — Calendar OAuth + Chrome 登录状态
+  - `POST /api/google/chrome-login` — 打开 Chrome 到 Google 登录页
+  - `GET /api/google/chrome-login/check` — 轮询登录完成状态
+  - `ChromeLauncher.checkGoogleLogin()` — 检测 myaccount.google.com 登录态
+
+### Changed
+- **默认 Voice Provider** — 从 OpenAI (marin) 切换为 Grok (Eve)，6x 更便宜（$0.05/min vs $0.30/min），可通过 `VOICE_PROVIDER=openai` 切换回
+
 ## [2.7.13] - 2026-03-26
 
 ### Fixed
