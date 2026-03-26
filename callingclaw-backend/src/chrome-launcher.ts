@@ -29,7 +29,12 @@ import { resolve } from "path";
 import { homedir } from "os";
 import { existsSync, mkdirSync, rmSync } from "fs";
 
-const DEFAULT_PROFILE = resolve(homedir(), ".callingclaw", "browser-profile");
+// Default: use the user's main Chrome profile so Google account / cookies are available.
+// On macOS this is ~/Library/Application Support/Google/Chrome.
+// Falls back to ~/.callingclaw/browser-profile if the main profile doesn't exist.
+const CHROME_PROFILE = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
+const FALLBACK_PROFILE = resolve(homedir(), ".callingclaw", "browser-profile");
+const DEFAULT_PROFILE = existsSync(CHROME_PROFILE) ? CHROME_PROFILE : FALLBACK_PROFILE;
 const DEFAULT_PORT = 0; // 0 = random free port
 
 // ── Audio injection init script ──────────────────────────────────
@@ -53,6 +58,8 @@ const AUDIO_INIT_SCRIPT = `
     triedReceiverIdx: 0,
     captureSource: null,
     captureWorklet: null,
+    aiSpeaking: false,
+    aiSpeakingTimer: null,
   };
 
   var origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
@@ -178,6 +185,12 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
 
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
+      // ── Echo cancellation: suppress mic during AI playback ──
+      // When AI is speaking, the captured remote audio includes the AI's own voice
+      // (Meet mixes all streams). Sending this back would cause: AI hears echo →
+      // VAD triggers → self-interrupt → repeat. Suppress for 500ms after last AI audio.
+      if (cc.aiSpeaking) return;
+
       // Downsample to 24kHz if needed
       if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
         var ratio = captureRate / SAMPLE_RATE;
@@ -223,6 +236,12 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       try {
         var data = JSON.parse(e.data);
         if (data.type === 'audio' && data.audio) {
+          // ── Echo cancellation: mark AI as speaking ──
+          // Suppress captured audio during playback + 500ms tail guard
+          cc.aiSpeaking = true;
+          if (cc.aiSpeakingTimer) clearTimeout(cc.aiSpeakingTimer);
+          cc.aiSpeakingTimer = setTimeout(function() { cc.aiSpeaking = false; }, 500);
+
           var raw = atob(data.audio);
           var bytes = new Uint8Array(raw.length);
           for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
@@ -236,6 +255,8 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
           playbackNode.port.postMessage(float32, [float32.buffer]);
         } else if (data.type === 'interrupt') {
           playbackNode.port.postMessage('clear');
+          cc.aiSpeaking = false;
+          if (cc.aiSpeakingTimer) { clearTimeout(cc.aiSpeakingTimer); cc.aiSpeakingTimer = null; }
         }
       } catch(err) {}
     };
@@ -294,14 +315,45 @@ export class ChromeLauncher {
    * (it will reconnect to the existing Chrome via the port)
    */
   async launch(): Promise<{ port: number }> {
+    // If already launched, return existing port
+    if (this._context && this._page) {
+      console.log(`[ChromeLauncher] Already launched (port=${this.port}), reusing`);
+      return { port: this.port };
+    }
+
     // Dynamic import to avoid loading playwright-core at module level
     const { chromium } = await import("playwright-core");
 
-    // Clean up stale locks
+    // If using the user's main Chrome profile, we must close existing Chrome first
+    // (Chrome only allows one instance per profile)
+    const isMainChromeProfile = this.profileDir.includes("Google/Chrome");
+    if (isMainChromeProfile) {
+      try {
+        const { execSync } = await import("child_process");
+        // Check if Chrome is running
+        const ps = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf8" }).trim();
+        if (ps) {
+          console.log("[ChromeLauncher] Closing existing Chrome (need exclusive profile access)...");
+          execSync("osascript -e 'tell application \"Google Chrome\" to quit' 2>/dev/null || true");
+          await new Promise(r => setTimeout(r, 2000)); // Wait for graceful quit
+        }
+      } catch {}
+    }
+
+    // Clean up stale locks (prevents profile lock conflict)
     const locks = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
     for (const lock of locks) {
       const p = resolve(this.profileDir, lock);
       if (existsSync(p)) try { rmSync(p); } catch {}
+    }
+
+    // Only clear crash state for CallingClaw-specific profiles (NOT user's main Chrome)
+    if (!isMainChromeProfile) {
+      const crashFiles = ["Last Session", "Last Tabs", "Current Session", "Current Tabs"];
+      for (const f of crashFiles) {
+        const p = resolve(this.profileDir, f);
+        if (existsSync(p)) try { rmSync(p); } catch {}
+      }
     }
 
     // Ensure profile dir exists
@@ -320,18 +372,26 @@ export class ChromeLauncher {
         "--autoplay-policy=no-user-gesture-required",
         "--disable-infobars",
         "--disable-blink-features=AutomationControlled",
+        "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
+        "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
+        "--noerrdialogs",                         // Suppress error dialogs
         `--remote-debugging-port=${port}`,
       ],
       permissions: ["microphone", "camera"],
-      ignoreDefaultArgs: ["--mute-audio", "--enable-automation"],
+      ignoreDefaultArgs: ["--mute-audio", "--enable-automation", "--no-sandbox"],
     });
 
     // Install the audio injection init script
     await context.addInitScript(AUDIO_INIT_SCRIPT);
     console.log("[ChromeLauncher] Init script installed (getUserMedia + RTC interception)");
 
-    // Navigate to about:blank to ensure Chrome is ready
-    const page = context.pages()[0] || await context.newPage();
+    // Use first page (close any extras Chrome opened from previous session)
+    const pages = context.pages();
+    const page = pages[0] || await context.newPage();
+    // Close extra tabs that Chrome may have restored
+    for (let i = 1; i < pages.length; i++) {
+      try { await pages[i].close(); } catch {}
+    }
     await page.goto("about:blank");
 
     // Verify init script works

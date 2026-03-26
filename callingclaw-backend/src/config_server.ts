@@ -269,23 +269,31 @@ export function startConfigServer(services: Services) {
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "start") {
               // Start voice session from browser (supports provider + voice selection)
-              const instructions = data.instructions || undefined;
-              const provider = data.provider || undefined; // "openai" | "grok"
-              const voice = data.voice || undefined;
-
-              // If Grok provider selected with a specific voice, update Grok config before start
-              if (provider === "grok" && voice) {
-                CONFIG.grok.voice = voice;
-              } else if (provider === "openai" && voice) {
-                CONFIG.openai.voice = voice;
-              }
-
-              services.realtime.start(instructions, provider).then(() => {
+              // GUARD: if voice is already connected (e.g. meeting join started it),
+              // do NOT restart — just send status back. Restarting would reset
+              // the session and lose meeting context + injected brief.
+              if (services.realtime.connected) {
+                console.log("[VoiceTest] Voice already connected — skipping start, sending status");
                 ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
-                services.eventBus.emit("voice.started", { audio_mode: "browser", provider });
-              }).catch((e: any) => {
-                ws.send(JSON.stringify({ type: "error", message: e.message }));
-              });
+              } else {
+                const instructions = data.instructions || undefined;
+                const provider = data.provider || undefined; // "openai" | "grok"
+                const voice = data.voice || undefined;
+
+                // If Grok provider selected with a specific voice, update Grok config before start
+                if (provider === "grok" && voice) {
+                  CONFIG.grok.voice = voice;
+                } else if (provider === "openai" && voice) {
+                  CONFIG.openai.voice = voice;
+                }
+
+                services.realtime.start(instructions, provider).then(() => {
+                  ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
+                  services.eventBus.emit("voice.started", { audio_mode: "browser", provider });
+                }).catch((e: any) => {
+                  ws.send(JSON.stringify({ type: "error", message: e.message }));
+                });
+              }
             } else if (data.type === "stop") {
               services.realtime.stop();
               ws.send(JSON.stringify({ type: "status", voiceConnected: false }));
@@ -1164,14 +1172,15 @@ export function startConfigServer(services: Services) {
         const meetingId = session.meetingId;
         services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
 
-        // Step 1: Start OpenAI Realtime voice session (if not already running)
+        // Step 1: Start voice session (if not already running)
+        // Uses CORE_IDENTITY as system prompt; meeting context injected later via injectMeetingBrief()
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
           try {
-            const instructions = body.instructions || undefined;
-            await services.realtime.start(instructions);
+            const voiceInstructions = buildVoiceInstructions();
+            await services.realtime.start(voiceInstructions);
             voiceStarted = true;
-            console.log("[Meeting] Voice AI started for meeting");
+            console.log("[Meeting] Voice AI started with CORE_IDENTITY");
           } catch (e: any) {
             console.warn("[Meeting] Voice start failed:", e.message);
           }
