@@ -13,6 +13,7 @@ import { NativeBridge } from "./bridge";
 import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
+import { ChromeLauncher } from "./chrome-launcher";
 import { PeekabooClient } from "./mcp_client/peekaboo";
 import { ZoomSkill } from "./skills/zoom";
 import { MeetJoiner } from "./meet_joiner";
@@ -571,6 +572,12 @@ computerUse.desktopCapture = desktopCapture;
 
 // ── 2b. Automation Layers (Playwright + Peekaboo + Router) ──────
 
+// ChromeLauncher: Phase 1 — launches Chrome with addInitScript for audio injection.
+// Provides --remote-debugging-port so playwright-cli can connect in Phase 2.
+const chromeLauncher = new ChromeLauncher({
+  profileDir: CONFIG.playwright.userDataDir || undefined,
+});
+
 const playwrightCli = new PlaywrightCLIClient({
   headless: CONFIG.playwright.headless,
   profileDir: CONFIG.playwright.userDataDir || undefined,
@@ -581,8 +588,8 @@ const zoomSkill = new ZoomSkill(bridge);
 const automationRouter = new AutomationRouter(bridge, eventBus, playwrightCli, peekaboo);
 
 // Layer 2 (Playwright CLI) — lazy start, only launches Chrome when first needed
-// (avoids opening an empty Chrome window on CallingClaw startup)
-console.log("[Init] Layer 2 (Playwright CLI) ready (lazy — Chrome launches on first use)");
+// ChromeLauncher.launch() is called before first playwright-cli use (in meeting join)
+console.log("[Init] Layer 2 (Playwright + ChromeLauncher) ready (lazy start)");
 
 // Check Layer 3 (Peekaboo) availability — non-blocking
 peekaboo.checkAvailability().then((ok) => {
@@ -757,6 +764,7 @@ startConfigServer({
   transcriptAuditor,
   browserLoop,
   playwrightCli,
+  chromeLauncher,
   meetingScheduler,
   postMeetingDelivery,
   meetingDB,
@@ -796,6 +804,7 @@ process.on("SIGINT", async () => {
   bridge.stop();
   voice.stop();
   playwrightCli.stop();
+  chromeLauncher.close();
   calendar.disconnect();
   process.exit(0);
 });

@@ -161,16 +161,16 @@ export function meetingRoutes(services: Services): RouteHandler {
           }
         }
 
-        // Step 2: Configure audio bridge mode BEFORE joining (with verification)
-        const audioConfigOk = await services.bridge.sendConfigAndVerify(
-          { audio_mode: "meet_bridge", capture_system_audio: true, virtual_mic_output: true },
-          { timeoutMs: 3000, retries: 3 }
-        );
-        if (audioConfigOk) {
-          console.log("[Meeting] ✅ Audio bridge confirmed: meet_bridge");
-        } else {
-          console.error("[Meeting] ⚠️ Audio bridge config NOT confirmed — voice may not work!");
-          // Continue anyway (meeting join still useful for screen capture / notes)
+        // Step 2: Launch Chrome with audio injection (if not already running)
+        // ChromeLauncher installs addInitScript for getUserMedia interception
+        // before playwright-cli connects for DOM operations.
+        if (services.chromeLauncher && validated.platform === "google_meet") {
+          try {
+            await services.chromeLauncher.launch();
+            console.log("[Meeting] ✅ ChromeLauncher: audio injection init script installed");
+          } catch (e: any) {
+            console.warn("[Meeting] ChromeLauncher failed (continuing without audio injection):", e.message);
+          }
         }
 
         services.eventBus.emit("meeting.joining", {
@@ -186,7 +186,11 @@ export function meetingRoutes(services: Services): RouteHandler {
         let joinSummary = "";
         let joinMethod = "meetjoiner";
 
-        if (services.playwrightCli?.connected && validated.platform === "google_meet") {
+        if (services.playwrightCli && validated.platform === "google_meet") {
+          // Ensure playwright-cli is started (connects to Chrome launched by ChromeLauncher)
+          if (!services.playwrightCli.connected) {
+            try { await services.playwrightCli.start(); } catch {}
+          }
           console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
           joinMethod = "playwright_eval";
           const result = await services.playwrightCli.joinGoogleMeet(validated.url, {
@@ -197,6 +201,16 @@ export function meetingRoutes(services: Services): RouteHandler {
           joinSuccess = result.success;
           joinState = result.state;
           joinSummary = result.summary;
+
+          // Step 3b: Activate audio pipeline after joining
+          if (joinSuccess && services.chromeLauncher) {
+            try {
+              const pipelineResult = await services.chromeLauncher.activateAudioPipeline();
+              console.log("[Meeting] ✅ Audio pipeline activated:", pipelineResult);
+            } catch (e: any) {
+              console.warn("[Meeting] Audio pipeline activation failed:", e.message);
+            }
+          }
         } else {
           // Fallback: osascript MeetJoiner
           console.log("[Meeting] Using MeetJoiner (osascript fallback)...");

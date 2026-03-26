@@ -79,6 +79,7 @@ interface Services {
   transcriptAuditor?: TranscriptAuditor;
   browserLoop?: BrowserActionLoop;
   playwrightCli?: PlaywrightCLIClient;
+  chromeLauncher?: import("./chrome-launcher").ChromeLauncher;
   meetingScheduler?: MeetingScheduler;
   postMeetingDelivery?: PostMeetingDelivery;
   meetingDB?: import("./modules/meeting-db").MeetingDB;
@@ -2686,16 +2687,20 @@ STEP-BY-STEP FLOW:
   });
 
   // ── Forward AI audio output to browser voice test clients + Electron audio bridge ──
-  // Single audio path: Bun → WS → Electron AudioWorklet → BlackHole 2ch → Meet mic
-  // (ffmpeg audiotoolbox was tested but can't route through BlackHole — removed)
+  // Audio bridge clients receive raw binary PCM16 for lowest latency.
+  // Voice test clients still use JSON (legacy UI).
   services.realtime.onAudioOutput((base64Pcm) => {
     for (const ws of browserVoiceClients) {
       try { ws.send(JSON.stringify({ type: "audio", audio: base64Pcm })); } catch {}
     }
-    // Electron AudioBridge clients (the only working path for Meet audio)
-    const abMsg = JSON.stringify({ type: "audio_playback", payload: { audio: base64Pcm } });
+    // Audio bridge: send raw binary PCM16 (no base64/JSON overhead)
+    // Type byte 0x01 = audio, 0x02 = interrupt (see meet-audio-inject.js)
+    const raw = Buffer.from(base64Pcm, "base64");
+    const frame = Buffer.allocUnsafe(1 + raw.length);
+    frame[0] = 0x01; // audio frame marker
+    raw.copy(frame, 1);
     for (const ws of audioBridgeClients) {
-      try { ws.send(abMsg); } catch {}
+      try { ws.send(frame); } catch {}
     }
   });
 
@@ -2705,8 +2710,10 @@ STEP-BY-STEP FLOW:
     for (const ws of browserVoiceClients) {
       try { ws.send(msg); } catch {}
     }
+    // Audio bridge: single-byte interrupt marker (0x02)
+    const interruptFrame = Buffer.from([0x02]);
     for (const ws of audioBridgeClients) {
-      try { ws.send(msg); } catch {}
+      try { ws.send(interruptFrame); } catch {}
     }
     console.log("[Voice] Speech started — interrupted AI response");
   });
