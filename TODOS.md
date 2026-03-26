@@ -43,3 +43,12 @@
 **What to change:** voice-persona.ts 加 `compressInstructionsForMeeting(topic, fullContext)` 函数，Talk Locally 和 Meet Join 启动时调用。
 **Depends on:** OpenRouter API key（已有）、Haiku model access
 **Added:** 2026-03-20
+
+## Voice: Proactive Grok session rotation (zero-gap)
+**Priority:** P2
+**Owner:** Backend agent
+**Context:** Grok has a 30-minute session limit. Currently, when the session expires, the backend creates a new one with a ~2-3 second gap where no AI audio is generated. During this gap, the ring buffer drains and participants hear a brief silence. Proactive rotation would start a new session at ~28 minutes (before expiry), overlap with the old session for a smooth handoff, and eliminate the gap entirely.
+**Why:** Improves UX for long meetings. Current behavior is acceptable (sounds like AI is thinking), but seamless rotation would be unnoticeable.
+**What to change:** (1) Track session age in realtime_client.ts (2) At 28min mark, create new session in parallel (3) Let old session finish current response (4) Swap audio output to new session (5) Close old session. Needs concurrent WS management and context replay to new session.
+**Depends on:** WebRTC audio injection (replaceTrack approach) working first
+**Added:** 2026-03-26
