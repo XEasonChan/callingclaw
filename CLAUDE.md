@@ -17,7 +17,7 @@ test/                    E2E test fixtures
 - **Runtime:** Bun (backend), Electron 35+ (desktop)
 - **Voice:** OpenAI Realtime API / xAI Grok Realtime (switchable)
 - **AI:** Claude via OpenRouter (analysis), Haiku (fast classification), Gemini Flash (vision)
-- **Audio:** AudioWorklet capture + playback ring buffer, BlackHole routing for Meet
+- **Audio:** AudioWorklet capture + playback ring buffer, Playwright addInitScript injection for Meet (BlackHole removed v2.7.12)
 - **Context:** 5-layer model (see callingclaw-backend/CONTEXT-ENGINEERING.md)
 
 ## Key Files

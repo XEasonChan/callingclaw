@@ -192,18 +192,18 @@ export class PlaywrightCLIClient {
       displayName?: string;
       muteCamera?: boolean;
       muteMic?: boolean;
-      micDevice?: string;      // e.g. "BlackHole 16ch"
-      speakerDevice?: string;  // e.g. "BlackHole 2ch"
+      micDevice?: string;      // optional: override mic device in Meet
+      speakerDevice?: string;  // optional: override speaker device in Meet
       onStep?: (step: string) => void;
     },
   ): Promise<{ success: boolean; summary: string; steps: string[]; state: "in_meeting" | "waiting_room" | "failed" }> {
     const displayName = opts?.displayName || "CallingClaw";
     const muteCamera = opts?.muteCamera ?? true;
-    const muteMic = opts?.muteMic ?? false; // Default: mic ON (for BlackHole audio bridge)
-    // Meet mic = BlackHole 2ch (reads AI's audio output → other participants hear AI)
-    // Meet speaker = BlackHole 16ch (plays others' audio → AudioBridge captures for AI)
-    const micDevice = opts?.micDevice || "BlackHole 2ch";
-    const speakerDevice = opts?.speakerDevice || "BlackHole 16ch";
+    const muteMic = opts?.muteMic ?? false; // Default: mic ON (for audio injection)
+    // Audio injection via Playwright addInitScript replaces BlackHole virtual audio
+    // Device selection is optional — injection works with any device
+    const micDevice = opts?.micDevice || "";
+    const speakerDevice = opts?.speakerDevice || "";
     const steps: string[] = [];
     const log = (msg: string) => { steps.push(msg); opts?.onStep?.(msg); console.log(`[MeetJoin] ${msg}`); };
 

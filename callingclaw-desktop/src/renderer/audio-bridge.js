@@ -117,21 +117,9 @@ var ElectronAudioBridge = (function() {
     });
   }
 
+  // findBlackHoleDevices() removed in v2.7.12 — audio injection via Playwright addInitScript
   function findBlackHoleDevices() {
-    return enumerateAudioDevices().then(function(devs) {
-      // Meet mic = BlackHole 2ch (Meet only reads first 2 channels)
-      // Meet speaker = BlackHole 16ch (captures meeting audio for AI)
-      // So: AI playback → BlackHole 2ch (output), AI capture → BlackHole 16ch (input)
-      var bh16chIn = devs.inputs.find(function(d) { return d.label.includes('BlackHole 16ch'); });
-      var bh2chOut = devs.outputs.find(function(d) { return d.label.includes('BlackHole 2ch'); });
-      return {
-        capture: bh16chIn || null,    // Capture Meet audio FROM BlackHole 16ch
-        playback: bh2chOut || null,   // Play AI voice TO BlackHole 2ch → Meet mic
-        captureId: bh16chIn ? bh16chIn.deviceId : null,
-        playbackId: bh2chOut ? bh2chOut.deviceId : null,
-        available: !!(bh16chIn && bh2chOut),
-      };
-    });
+    return Promise.resolve({ capture: null, playback: null, captureId: null, playbackId: null, available: false });
   }
 
   // ── Start Bridge ──
