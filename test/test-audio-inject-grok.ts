@@ -168,6 +168,12 @@ async function main() {
   }));
   console.log(`[5] In meeting! gum=${state.gum} pcs=${state.pcs} states=${state.pcStates}`);
 
+  // Listen to page console for [CC-] diagnostic logs
+  page.on("console", (msg) => {
+    const text = msg.text();
+    if (text.includes("[CC-")) console.log("  " + text);
+  });
+
   // ── Step 6: Connect audio pipeline (WebSocket → Grok → back) ──
   console.log("[6] Connecting audio pipeline to backend...");
 
@@ -213,24 +219,59 @@ async function main() {
     URL.revokeObjectURL(capUrl);
 
     let captureActive = false;
+    let captureChunks = 0;
+    let captureMaxAmp = 0;
+
     function setupRemoteCapture(pc: RTCPeerConnection) {
       if (captureActive) return;
+
+      // Log all receivers
       const receivers = pc.getReceivers();
-      const audioReceiver = receivers.find(r => r.track?.kind === "audio");
+      console.log("[CC-Capture] Receivers:", receivers.length,
+        receivers.map(r => r.track?.kind + ":" + r.track?.readyState + ":" + (r.track?.enabled ? "on" : "off")).join(", "));
+
+      // Pick the UNMUTED audio receiver — muted=true tracks carry silence
+      const audioReceiver = receivers.find(r => r.track?.kind === "audio" && r.track?.readyState === "live" && !r.track?.muted)
+        || receivers.find(r => r.track?.kind === "audio" && r.track?.readyState === "live");
       if (!audioReceiver) {
-        console.log("[CC] No remote audio receiver yet");
+        console.log("[CC-Capture] No live audio receiver yet");
         return;
       }
 
-      const remoteStream = new MediaStream([audioReceiver.track!]);
+      const track = audioReceiver.track!;
+      console.log("[CC-Capture] Using track:", track.id, "enabled:", track.enabled, "muted:", track.muted, "state:", track.readyState);
+
+      // Ensure capture context is running
+      if (captureCtx.state !== "running") {
+        captureCtx.resume().then(() => console.log("[CC-Capture] AudioContext resumed:", captureCtx.state));
+      }
+      console.log("[CC-Capture] AudioContext state:", captureCtx.state, "sampleRate:", captureRate);
+
+      const remoteStream = new MediaStream([track]);
       const source = captureCtx.createMediaStreamSource(remoteStream);
       const worklet = new AudioWorkletNode(captureCtx, "pcm-processor");
       source.connect(worklet);
 
       worklet.port.onmessage = (e: MessageEvent) => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-        let int16 = e.data as Int16Array;
+        captureChunks++;
+        const int16raw = e.data as Int16Array;
 
+        // Track amplitude
+        let maxAmp = 0;
+        for (let i = 0; i < int16raw.length; i++) {
+          const abs = Math.abs(int16raw[i]);
+          if (abs > maxAmp) maxAmp = abs;
+        }
+        if (maxAmp > captureMaxAmp) captureMaxAmp = maxAmp;
+
+        // Log every 50th chunk (~5s)
+        if (captureChunks % 50 === 1) {
+          console.log("[CC-Capture] chunk#" + captureChunks + " len=" + int16raw.length + " maxAmp=" + maxAmp + " peakAmp=" + captureMaxAmp + " wsOpen=" + (ws?.readyState === WebSocket.OPEN));
+        }
+
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        let int16 = int16raw;
         // Downsample to 24kHz if needed
         if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
           const ratio = captureRate / SAMPLE_RATE;
@@ -245,19 +286,92 @@ async function main() {
         ws.send(JSON.stringify({ type: "audio", audio: audioToBase64(int16) }));
       };
 
+      // Track mute/unmute events
+      track.onmute = () => console.log("[CC-Capture] Track MUTED");
+      track.onunmute = () => console.log("[CC-Capture] Track UNMUTED");
+      track.onended = () => console.log("[CC-Capture] Track ENDED");
+
       captureActive = true;
-      console.log("[CC] Remote audio capture active (rate: " + captureRate + "Hz → 24kHz)");
+      console.log("[CC-Capture] ✅ Pipeline connected! Waiting for audio data...");
     }
 
-    // Try to set up capture on existing connected PC
+    // ── Deep diagnostic: inspect ALL tracks on ALL PCs ──
+    for (let pi = 0; pi < cc.pcs.length; pi++) {
+      const pc = cc.pcs[pi];
+      console.log("[CC-Diag] PC#" + pi + " state=" + pc.connectionState + " ice=" + pc.iceConnectionState);
+
+      try {
+        const recvs = pc.getReceivers();
+        for (let ri = 0; ri < recvs.length; ri++) {
+          const r = recvs[ri];
+          const t = r.track;
+          const hasTransform = !!(r as any).transform;
+          console.log("[CC-Diag]   Receiver#" + ri + ": kind=" + t?.kind + " state=" + t?.readyState
+            + " enabled=" + t?.enabled + " muted=" + t?.muted + " transform=" + hasTransform
+            + " id=" + (t?.id||"").substring(0,15));
+        }
+        const sndrs = pc.getSenders();
+        for (let si = 0; si < sndrs.length; si++) {
+          const s = sndrs[si];
+          const t = s.track;
+          console.log("[CC-Diag]   Sender#" + si + ": kind=" + t?.kind + " state=" + t?.readyState
+            + " id=" + (t?.id||"").substring(0,15));
+        }
+      } catch (e: any) {
+        console.log("[CC-Diag]   Error:", e.message);
+      }
+    }
+
+    // ── Approach B: use ontrack event stream (not manual MediaStream) ──
+    let ontracktriggered = false;
     for (const pc of cc.pcs) {
       if (pc.connectionState === "connected") {
+        // First try the standard getReceivers approach
         setupRemoteCapture(pc);
+
+        // ALSO: listen for track event (provides the stream directly)
+        pc.addEventListener("track", (event: any) => {
+          console.log("[CC-Track] ontrack event! kind=" + event.track?.kind + " streams=" + event.streams?.length);
+          if (event.track?.kind === "audio" && event.streams?.[0] && !ontracktriggered) {
+            ontracktriggered = true;
+            console.log("[CC-Track] Using ontrack stream directly!");
+            // Try capture with the event's stream
+            const evtCtx = new AudioContext();
+            evtCtx.resume().then(async () => {
+              const evtBlob = new Blob([CAPTURE_CODE], { type: "application/javascript" });
+              const evtUrl = URL.createObjectURL(evtBlob);
+              await evtCtx.audioWorklet.addModule(evtUrl);
+              URL.revokeObjectURL(evtUrl);
+              const evtSrc = evtCtx.createMediaStreamSource(event.streams[0]);
+              const evtWorklet = new AudioWorkletNode(evtCtx, "pcm-processor");
+              evtSrc.connect(evtWorklet);
+              let evtChunks = 0;
+              let evtMaxAmp = 0;
+              evtWorklet.port.onmessage = (e: MessageEvent) => {
+                evtChunks++;
+                const d = e.data as Int16Array;
+                for (let i = 0; i < d.length; i++) {
+                  const a = Math.abs(d[i]);
+                  if (a > evtMaxAmp) evtMaxAmp = a;
+                }
+                if (evtChunks % 50 === 1) console.log("[CC-Track] chunk#" + evtChunks + " maxAmp=" + evtMaxAmp);
+                // Also send to backend
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  let int16 = d;
+                  if (evtCtx.sampleRate !== SAMPLE_RATE && evtCtx.sampleRate > SAMPLE_RATE) {
+                    const ratio = evtCtx.sampleRate / SAMPLE_RATE;
+                    const newLen = Math.round(int16.length / ratio);
+                    const resampled = new Int16Array(newLen);
+                    for (let i = 0; i < newLen; i++) resampled[i] = int16[Math.round(i * ratio)] || 0;
+                    int16 = resampled;
+                  }
+                  ws.send(JSON.stringify({ type: "audio", audio: audioToBase64(int16) }));
+                }
+              };
+            });
+          }
+        });
       }
-      // Also listen for future track events
-      pc.addEventListener("track", () => {
-        setTimeout(() => setupRemoteCapture(pc), 500);
-      });
     }
 
     // ── WebSocket to backend ──
@@ -322,7 +436,14 @@ async function main() {
       }
     }, 3000);
 
-    (window as any).__ccPipeline = { ws: () => ws, playbackNode, captureActive: () => captureActive };
+    (window as any).__ccPipeline = {
+      ws: () => ws,
+      playbackNode,
+      captureActive: () => captureActive,
+      captureChunks: () => captureChunks,
+      captureMaxAmp: () => captureMaxAmp,
+      captureCtxState: () => captureCtx.state,
+    };
 
   }, { wsUrl: BACKEND_WS, httpUrl: BACKEND_HTTP });
 
@@ -350,8 +471,16 @@ async function main() {
       };
     }).catch(() => ({ gum: -1, pcStates: [], wsState: -1, capture: false }));
 
-    if (i % 6 === 0) { // Every 30s
-      console.log(`[${new Date().toTimeString().substring(0,8)}] pcs=${JSON.stringify(s.pcStates)} ws=${s.wsState === 1 ? "open" : s.wsState} capture=${s.capture}`);
+    if (i % 4 === 0) { // Every 20s
+      const detail = await page.evaluate(() => {
+        const p = (window as any).__ccPipeline;
+        return {
+          capChunks: p?.captureChunks?.() ?? -1,
+          capMaxAmp: p?.captureMaxAmp?.() ?? -1,
+          capCtx: p?.captureCtxState?.() ?? "?",
+        };
+      }).catch(() => ({ capChunks: -1, capMaxAmp: -1, capCtx: "err" }));
+      console.log(`[${new Date().toTimeString().substring(0,8)}] pcs=${JSON.stringify(s.pcStates)} ws=${s.wsState === 1 ? "open" : s.wsState} capture=${s.capture} chunks=${detail.capChunks} maxAmp=${detail.capMaxAmp} capCtx=${detail.capCtx}`);
     }
   }
 
