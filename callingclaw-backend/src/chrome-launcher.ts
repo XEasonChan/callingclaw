@@ -507,7 +507,7 @@ export class ChromeLauncher {
       // Step 1: Navigate
       log("Navigating...");
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(2000);
 
       // Step 2: Dismiss + detect + configure
       log("Detecting + configuring...");
@@ -938,27 +938,41 @@ export class ChromeLauncher {
     }
 
     const page = this._page;
+    const context = this._context;
 
     try {
-      // Save current URL to restore later
-      const currentUrl = page.url();
+      // FAST PATH: check Google cookies via browser context (no page navigation needed!)
+      // Google sets cookies on .google.com when signed in (SID, HSID, SSID, etc.)
+      if (context) {
+        const cookies = await context.cookies("https://accounts.google.com");
+        const hasSID = cookies.some((c: any) => c.name === "SID" || c.name === "HSID" || c.name === "SSID");
+        if (hasSID) {
+          // Extract email from SAPISID or other cookies if possible
+          const lsid = cookies.find((c: any) => c.name === "LSID");
+          const result = { loggedIn: true, email: null as string | null };
+          this._googleLoginCache = { ...result, checkedAt: Date.now() };
+          console.log("[ChromeLauncher] Google login check: logged in (cookie check, fast)");
+          return result;
+        }
+        // No Google session cookies → not logged in
+        const result = { loggedIn: false, email: null };
+        this._googleLoginCache = { ...result, checkedAt: Date.now() };
+        return result;
+      }
 
-      // Navigate to Google account page (fast check)
+      // SLOW FALLBACK: navigate to myaccount.google.com (only if context.cookies unavailable)
+      const currentUrl = page.url();
       await page.goto("https://myaccount.google.com", { waitUntil: "domcontentloaded", timeout: 10000 });
       await page.waitForTimeout(2000);
 
-      const result = await page.evaluate(`(() => {
-        // If redirected to sign-in page, not logged in
+      const evalResult = await page.evaluate(`(() => {
         if (location.hostname === 'accounts.google.com' && location.pathname.includes('/signin')) {
           return JSON.stringify({ loggedIn: false, email: null });
         }
-        // If on myaccount.google.com, we're logged in
         if (location.hostname === 'myaccount.google.com') {
-          // Try to find email from the page
           var emailEl = document.querySelector('[data-email]');
           var email = emailEl ? emailEl.getAttribute('data-email') : null;
           if (!email) {
-            // Try aria-label on profile button
             var profileBtn = document.querySelector('[aria-label*="@"]');
             if (profileBtn) {
               var match = profileBtn.getAttribute('aria-label').match(/[\\w.-]+@[\\w.-]+/);
@@ -967,16 +981,12 @@ export class ChromeLauncher {
           }
           return JSON.stringify({ loggedIn: true, email: email });
         }
-        // Unknown state
         return JSON.stringify({ loggedIn: false, email: null });
       })()`);
 
-      const parsed = JSON.parse(String(result));
-
-      // Cache the result (valid for 10 minutes)
+      const parsed = JSON.parse(String(evalResult));
       this._googleLoginCache = { loggedIn: parsed.loggedIn, email: parsed.email, checkedAt: Date.now() };
 
-      // Navigate back if we were on a different page
       if (currentUrl && currentUrl !== "about:blank" && !currentUrl.includes("google.com")) {
         await page.goto(currentUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
       }

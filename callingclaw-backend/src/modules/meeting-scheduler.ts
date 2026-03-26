@@ -133,6 +133,19 @@ export class MeetingScheduler {
         // Skip if already scheduled (current session OR any past session)
         if (this.scheduled.has(eventId) || this._everScheduled.has(eventId)) continue;
 
+        // Skip if SessionManager already has a session for this meetUrl (prevents re-scheduling
+        // when OpenClaw /callingclaw join or prepare already created the session)
+        if (this.sessionManager) {
+          const existingSessions = this.sessionManager.list();
+          const hasMeetUrlSession = existingSessions.some(s =>
+            s.meetUrl === event.meetLink && (s.status === "active" || s.status === "pending")
+          );
+          if (hasMeetUrlSession) {
+            this._everScheduled.add(eventId); // Mark as seen so we don't check again
+            continue;
+          }
+        }
+
         // Calculate when to join (2 min before start, but not in the past)
         const joinAt = Math.max(startMs - PREP_LEAD_MS, now + 30_000); // At least 30s from now
         const joinAtISO = new Date(joinAt).toISOString();
