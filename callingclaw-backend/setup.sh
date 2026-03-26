@@ -79,36 +79,12 @@ else
   info "Install from: https://www.google.com/chrome/"
 fi
 
-# ── Step 2: Install BlackHole Audio Drivers ──────────────────────
+# ── Step 2: Audio Setup (BlackHole no longer required) ───────────
+# BlackHole virtual audio was removed in v2.7.12 — audio injection
+# now uses Playwright addInitScript for browser-level audio routing.
 
-echo -e "\n${BLUE}[2/7]${NC} Checking audio drivers...\n"
-
-has_blackhole_2ch=false
-has_blackhole_16ch=false
-
-if system_profiler SPAudioDataType 2>/dev/null | grep -q "BlackHole 2ch"; then
-  has_blackhole_2ch=true
-  ok "BlackHole 2ch installed"
-else
-  warn "BlackHole 2ch not found"
-fi
-
-if system_profiler SPAudioDataType 2>/dev/null | grep -q "BlackHole 16ch"; then
-  has_blackhole_16ch=true
-  ok "BlackHole 16ch installed"
-else
-  warn "BlackHole 16ch not found"
-fi
-
-if [[ "$has_blackhole_2ch" == false ]] || [[ "$has_blackhole_16ch" == false ]]; then
-  info "Installing BlackHole audio drivers (may require password)..."
-  if [[ "$has_blackhole_2ch" == false ]]; then
-    brew install blackhole-2ch 2>/dev/null && ok "BlackHole 2ch installed" || warn "BlackHole 2ch install failed — install manually from https://existential.audio/blackhole/"
-  fi
-  if [[ "$has_blackhole_16ch" == false ]]; then
-    brew install blackhole-16ch 2>/dev/null && ok "BlackHole 16ch installed" || warn "BlackHole 16ch install failed — install manually from https://existential.audio/blackhole/"
-  fi
-fi
+echo -e "\n${BLUE}[2/7]${NC} Audio setup...\n"
+ok "Audio injection via Playwright (no virtual audio driver needed)"
 
 # ── Step 3: Install Dependencies ─────────────────────────────────
 

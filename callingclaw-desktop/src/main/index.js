@@ -439,56 +439,10 @@ function setupIPC() {
     });
   });
 
-  // ── Audio Device Enumeration (for renderer to discover BlackHole) ──
+  // ── Audio Device Enumeration ──
+  // BlackHole drivers removed in v2.7.12 — audio injection via Playwright addInitScript
   ipcMain.handle('audio:listDevices', async () => {
-    const { execSync } = require('child_process');
-    try {
-      const output = execSync('system_profiler SPAudioDataType 2>/dev/null', { timeout: 5000 }).toString();
-      return {
-        hasBlackHole2ch: output.includes('BlackHole 2ch'),
-        hasBlackHole16ch: output.includes('BlackHole 16ch'),
-        raw: output,
-      };
-    } catch {
-      return { hasBlackHole2ch: false, hasBlackHole16ch: false, raw: '' };
-    }
-  });
-
-  // ── BlackHole Driver Installation ──
-  ipcMain.handle('audio:installBlackHole', async () => {
-    const { execSync } = require('child_process');
-    // Find bundled .pkg files (production: resourcesPath, dev: relative)
-    let driversDir = path.join(process.resourcesPath || '', 'drivers');
-    if (!fs.existsSync(driversDir)) {
-      driversDir = path.join(__dirname, '..', '..', 'resources', 'drivers');
-    }
-    const pkgs = ['BlackHole2ch-0.6.1.pkg', 'BlackHole16ch-0.6.1.pkg'];
-    const results = [];
-    for (const pkg of pkgs) {
-      const pkgPath = path.join(driversDir, pkg);
-      if (!fs.existsSync(pkgPath)) {
-        results.push({ pkg, ok: false, error: 'pkg not found' });
-        continue;
-      }
-      try {
-        // open -W shows the standard macOS .pkg installer UI
-        // The .pkg handles sudo — Apple installer prompts for admin password
-        execSync(`open -W "${pkgPath}"`, { timeout: 120000 });
-        results.push({ pkg, ok: true });
-      } catch (e) {
-        results.push({ pkg, ok: false, error: e.message });
-      }
-    }
-    // Give coreaudiod a moment to pick up new devices
-    await new Promise(r => setTimeout(r, 2000));
-    // Re-check devices
-    let hasBlackHole2ch = false, hasBlackHole16ch = false;
-    try {
-      const output = execSync('system_profiler SPAudioDataType 2>/dev/null', { timeout: 5000 }).toString();
-      hasBlackHole2ch = output.includes('BlackHole 2ch');
-      hasBlackHole16ch = output.includes('BlackHole 16ch');
-    } catch {}
-    return { results, hasBlackHole2ch, hasBlackHole16ch };
+    return { hasBlackHole2ch: false, hasBlackHole16ch: false, raw: 'BlackHole removed — using Playwright audio injection' };
   });
 
   // App info

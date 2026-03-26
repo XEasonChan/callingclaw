@@ -40,10 +40,6 @@
         {
           "from": "resources/bin",
           "to": "bin"
-        },
-        {
-          "from": "resources/drivers",
-          "to": "drivers"
         }
       ]
     },

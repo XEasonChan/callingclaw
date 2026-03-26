@@ -191,9 +191,7 @@ export function meetingRoutes(services: Services): RouteHandler {
           joinMethod = "playwright_eval";
           const result = await services.playwrightCli.joinGoogleMeet(validated.url, {
             muteCamera: true,
-            muteMic: false, // Mic ON for BlackHole bridge
-            micDevice: "BlackHole 16ch",
-            speakerDevice: "BlackHole 2ch",
+            muteMic: false, // Mic ON for audio injection
             onStep: (step) => services.eventBus.emit("meeting.join_step", { step }),
           });
           joinSuccess = result.success;
@@ -349,9 +347,7 @@ export function meetingRoutes(services: Services): RouteHandler {
           const result = await services.playwrightCli.joinGoogleMeet(validated.url, {
             displayName,
             muteCamera: true,    // Camera OFF
-            muteMic: false,      // Mic ON — needed for BlackHole audio bridge
-            micDevice: "BlackHole 16ch",
-            speakerDevice: "BlackHole 2ch",
+            muteMic: false,      // Mic ON — for audio injection
             onStep: (step) => services.eventBus.emit("browser_loop.step", { step, method: "eval" }),
           });
 
