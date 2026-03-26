@@ -21,11 +21,8 @@ const CMD = existsSync(LOCAL_BIN) ? LOCAL_BIN : "playwright-cli";
 const SESSION = "callingclaw";
 const TIMEOUT_MS = 15_000;
 
-// Default: use user's main Chrome profile (has Google account + cookies).
-// Falls back to ~/.callingclaw/browser-profile if main profile doesn't exist.
-const CHROME_PROFILE_DIR = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
-const FALLBACK_PROFILE_DIR = resolve(homedir(), ".callingclaw", "browser-profile");
-const DEFAULT_PROFILE_DIR = existsSync(CHROME_PROFILE_DIR) ? CHROME_PROFILE_DIR : FALLBACK_PROFILE_DIR;
+// Dedicated CallingClaw profile — Google cookies imported from main Chrome on first launch.
+const DEFAULT_PROFILE_DIR = resolve(homedir(), ".callingclaw", "browser-profile");
 
 export class PlaywrightCLIClient {
   private _connected = false;

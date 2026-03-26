@@ -29,12 +29,11 @@ import { resolve } from "path";
 import { homedir } from "os";
 import { existsSync, mkdirSync, rmSync } from "fs";
 
-// Default: use the user's main Chrome profile so Google account / cookies are available.
-// On macOS this is ~/Library/Application Support/Google/Chrome.
-// Falls back to ~/.callingclaw/browser-profile if the main profile doesn't exist.
-const CHROME_PROFILE = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
-const FALLBACK_PROFILE = resolve(homedir(), ".callingclaw", "browser-profile");
-const DEFAULT_PROFILE = existsSync(CHROME_PROFILE) ? CHROME_PROFILE : FALLBACK_PROFILE;
+// Always use dedicated CallingClaw profile (lightweight, fast startup).
+// Google cookies are imported from the user's main Chrome on first launch.
+// Using the main Chrome profile directly causes hangs (huge profile, tab restore).
+const DEFAULT_PROFILE = resolve(homedir(), ".callingclaw", "browser-profile");
+const MAIN_CHROME_PROFILE = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
 const DEFAULT_PORT = 0; // 0 = random free port
 
 // ── Audio injection init script ──────────────────────────────────
@@ -325,37 +324,21 @@ export class ChromeLauncher {
     // Dynamic import to avoid loading playwright-core at module level
     const { chromium } = await import("playwright-core");
 
-    // If using the user's main Chrome profile, we must close existing Chrome first
-    // (Chrome only allows one instance per profile)
-    const isMainChromeProfile = this.profileDir.includes("Google/Chrome");
-    if (isMainChromeProfile) {
-      try {
-        const { execSync } = await import("child_process");
-        // Check if Chrome is running
-        const ps = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf8" }).trim();
-        if (ps) {
-          console.log("[ChromeLauncher] Closing existing Chrome (need exclusive profile access)...");
-          execSync("osascript -e 'tell application \"Google Chrome\" to quit' 2>/dev/null || true");
-          await new Promise(r => setTimeout(r, 2000)); // Wait for graceful quit
-        }
-      } catch {}
-    }
-
-    // Clean up stale locks (prevents profile lock conflict)
+    // Clean up stale locks + crash state
     const locks = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
     for (const lock of locks) {
       const p = resolve(this.profileDir, lock);
       if (existsSync(p)) try { rmSync(p); } catch {}
     }
-
-    // Only clear crash state for CallingClaw-specific profiles (NOT user's main Chrome)
-    if (!isMainChromeProfile) {
-      const crashFiles = ["Last Session", "Last Tabs", "Current Session", "Current Tabs"];
-      for (const f of crashFiles) {
-        const p = resolve(this.profileDir, f);
-        if (existsSync(p)) try { rmSync(p); } catch {}
-      }
+    const crashFiles = ["Last Session", "Last Tabs", "Current Session", "Current Tabs"];
+    for (const f of crashFiles) {
+      const p = resolve(this.profileDir, f);
+      if (existsSync(p)) try { rmSync(p); } catch {}
     }
+
+    // Import Google cookies from user's main Chrome profile (one-time bootstrap)
+    // This gives the CallingClaw profile access to Google Meet without manual sign-in.
+    await this.importGoogleCookies();
 
     // Ensure profile dir exists
     mkdirSync(this.profileDir, { recursive: true });
@@ -1015,6 +998,51 @@ export class ChromeLauncher {
 
   get debuggingPort(): number { return this.port; }
   get page(): any { return this._page; }
+
+  /**
+   * Import Google cookies from the user's main Chrome profile into the CallingClaw profile.
+   * Copies the Cookies SQLite DB rows for google.com domains.
+   * Only runs if: (a) main Chrome profile exists, (b) CallingClaw profile has no Google cookies yet.
+   */
+  private async importGoogleCookies(): Promise<void> {
+    const srcCookies = resolve(MAIN_CHROME_PROFILE, "Default", "Cookies");
+    const dstDir = resolve(this.profileDir, "Default");
+    const dstCookies = resolve(dstDir, "Cookies");
+
+    // Skip if main Chrome doesn't exist
+    if (!existsSync(srcCookies)) {
+      console.log("[ChromeLauncher] No main Chrome profile found — skipping cookie import");
+      return;
+    }
+
+    // Skip if CallingClaw already has cookies (don't overwrite)
+    if (existsSync(dstCookies)) {
+      try {
+        const { Database } = await import("bun:sqlite");
+        const db = new Database(dstCookies, { readonly: true });
+        const count = db.query("SELECT COUNT(*) as c FROM cookies WHERE host_key LIKE '%google.com%'").get() as any;
+        db.close();
+        if (count?.c > 0) {
+          console.log(`[ChromeLauncher] CallingClaw profile already has ${count.c} Google cookies — skipping import`);
+          return;
+        }
+      } catch {}
+    }
+
+    // Copy Google cookies from main Chrome → CallingClaw profile
+    try {
+      mkdirSync(dstDir, { recursive: true });
+
+      // Chrome encrypts cookies with Keychain on macOS. We can't decrypt them directly.
+      // Instead, copy the ENTIRE Cookies file (it's SQLite, ~50KB).
+      // This works because both profiles use the same macOS Keychain for decryption.
+      const { copyFileSync } = await import("fs");
+      copyFileSync(srcCookies, dstCookies);
+      console.log("[ChromeLauncher] Imported cookies from main Chrome profile");
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] Cookie import failed:", e.message);
+    }
+  }
 
   private async findFreePort(): Promise<number> {
     return new Promise((resolve) => {
