@@ -15,6 +15,8 @@ dist/
 # ── OS / IDE ──
 .DS_Store
 .idea/
+.cursor/
+.vscode/
 *.swp
 *.swo
 
@@ -48,3 +50,13 @@ excalidraw.log
 .collaborator
 .gstack/
 .claude/worktrees/
+
+# ── Claude Code / Internal ──
+.claude/
+.context/
+ref/
+
+# ── Desktop build artifacts ──
+callingclaw-desktop/resources/bun/bun
+*.dmg
+*.blockmap

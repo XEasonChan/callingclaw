@@ -516,7 +516,7 @@ export const RECALL_SCENARIOS: RecallScenario[] = [
     meetingTopic: "Team Sync",
     utterance: "Google OAuth 配置好了吗？用的什么账号？",
     expectedQuery: "CallingClaw Google OAuth configuration account",
-    expectedKeywords: ["google-credentials.json", "xeasonchantr@gmail.com", "memdex-ops"],
+    expectedKeywords: ["google-credentials.json", "user@example.com", "memdex-ops"],
     category: "infrastructure",
     urgency: "quick",
     language: "zh",

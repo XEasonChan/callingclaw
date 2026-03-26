@@ -3,7 +3,7 @@
   "description": "CallingClaw 2.0 \u2014 Voice + Vision + Computer Use AI Agent",
   "module": "src/callingclaw.ts",
   "type": "module",
-  "private": true,
+  "license": "MIT",
   "scripts": {
     "start": "bun run src/callingclaw.ts",
     "dev": "bun --hot run src/callingclaw.ts",

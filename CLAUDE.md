@@ -1,78 +1,124 @@
-# CallingClaw — AI Meeting Room
+# CLAUDE.md
 
-> Real-time voice AI for meetings. Joins Google Meet/Zoom, listens, speaks, takes notes, controls the computer.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What is CallingClaw
+
+Real-time voice AI for meetings. Joins Google Meet/Zoom as a participant, listens, speaks, takes notes, and controls the computer. macOS only.
+
+## Commands
+
+```bash
+# Setup (first time)
+./scripts/setup.sh                    # installs Bun, OpenClaw, dependencies, configures .env
+
+# Start / Stop (daily use)
+./scripts/start.sh                    # start OpenClaw + backend + desktop
+./scripts/start.sh --no-desktop       # headless mode
+./scripts/stop.sh                     # stop everything
+
+# Development
+cd callingclaw-backend && bun --hot run src/callingclaw.ts    # dev with hot reload
+cd callingclaw-desktop && npm start -- --dev                  # dev with DevTools
+cd callingclaw-backend && bun test                            # all tests
+cd callingclaw-backend && bun test test/modules/voice.test.ts # single test
+
+# Build DMG
+cd callingclaw-desktop && xattr -cr . && npm run build
+
+# Health check
+curl http://localhost:4000/api/status
+curl http://localhost:18789/healthz    # OpenClaw gateway
+```
+
+## Configuration
+
+Single `.env` file at project root (symlinked into `callingclaw-backend/`). See `.env.example` for all options.
+
+OpenClaw has its own config at `~/.openclaw/openclaw.json` — manage it via `openclaw configure`.
 
 ## Architecture
 
 ```
 callingclaw-backend/     Bun backend — AI orchestration, voice, meeting lifecycle
 callingclaw-desktop/     Electron desktop app — UI, audio bridge, tray
-Callingclaw-landing/     Landing page (Vercel)
-docs/                    Architecture decisions, PRD
-test/                    E2E test fixtures
+callingclaw-landing/     Landing page (Vercel)
 ```
 
-## Tech Stack
+### Backend: Module-Wired Pattern
 
-- **Runtime:** Bun (backend), Electron 35+ (desktop)
-- **Voice:** OpenAI Realtime API / xAI Grok Realtime (switchable)
-- **AI:** Claude via OpenRouter (analysis), Haiku (fast classification), Gemini Flash (vision)
-- **Audio:** AudioWorklet capture + playback ring buffer, Playwright addInitScript injection for Meet (BlackHole removed v2.7.12)
-- **Context:** 5-layer model (see callingclaw-backend/CONTEXT-ENGINEERING.md)
+All services instantiate once in `callingclaw.ts` and inject cross-module dependencies:
 
-## Key Files
+1. **Infrastructure** — NativeBridge (osascript+cliclick), SharedContext (central state), EventBus, TaskStore, GoogleCalendarClient
+2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Claude Sonnet), ContextRetriever (Haiku gap detection)
+3. **Meeting** — MeetingModule (recording+action items), MeetingScheduler (calendar auto-join), PostMeetingDelivery, KeyFrameStore
+4. **Skills** — MeetingPrepSkill, OpenClawBridge (System 2 deep reasoning), BrowserActionLoop (Playwright-CLI)
+5. **HTTP Server** — `config_server.ts` takes a `Services` interface, builds REST + WebSocket APIs via `Bun.serve()`
 
-| File | Purpose |
-|------|---------|
-| `callingclaw-backend/src/callingclaw.ts` | Main entry, module wiring |
-| `callingclaw-backend/src/ai_gateway/realtime_client.ts` | Multi-provider Realtime WS client |
-| `callingclaw-backend/src/modules/voice.ts` | Voice module (audio state machine, heard transcript) |
-| `callingclaw-backend/src/config_server.ts` | HTTP API + WebSocket server |
-| `callingclaw-backend/src/voice-persona.ts` | Context engineering layers |
-| `callingclaw-backend/src/native-bridge.ts` | NativeBridge (osascript + cliclick, replaced Python sidecar) |
-| `callingclaw-desktop/src/renderer/audio-bridge.js` | AudioWorklet capture + playback |
-| `callingclaw-desktop/src/renderer/index.html` | Desktop UI (vanilla JS) |
-| `callingclaw-desktop/src/main/index.js` | Electron main process |
+### Multi-Provider Voice (ai_gateway/)
 
-## Development
+`RealtimeClient` normalizes OpenAI Realtime API and Grok Voice behind a `RealtimeProviderConfig` interface. Each provider defines URL, headers, event name mapping, capabilities, and session builder. The `VoiceModule` wraps this with a state machine: `idle <-> listening <-> thinking <-> speaking` (with interruption handling that tracks "heard transcript" ratio).
 
-- Backend: `cd callingclaw-backend && bun --hot run src/callingclaw.ts`
-- Desktop: `cd callingclaw-desktop && npm start -- --dev`
-- Build DMG: `cd callingclaw-desktop && npx electron-builder --mac --config.directories.output=/tmp/cc-dist`
-  - **Must output to non-iCloud path** — iCloud re-adds resource forks between afterPack and codesign
-  - `build/afterPack.js` strips xattrs but iCloud re-adds them; `/tmp` is the reliable workaround
-  - Copy DMG from `/tmp/cc-dist/` to `dist/` after build
-- Tests: `cd callingclaw-backend && bun test`
+### 5-Layer Context Model
+
+See `callingclaw-backend/CONTEXT-ENGINEERING.md` for full details. Critical constraint: **never use `session.update` mid-meeting** (causes audio breaks). Use `conversation.item.create` for all runtime context injection.
+
+- **Layer 0** — Core identity (~250 tokens, set once via `session.update`)
+- **Layer 1** — Tool definitions (in `session.update` tools array, never in prompt text)
+- **Layer 2** — Mission context (<500 tokens, injected once via `conversation.item.create`)
+- **Layer 3** — Live context (FIFO, ~3000 tokens max, incremental `conversation.item.create`)
+- **Layer 4** — Conversation (~124K tokens, managed by Realtime API)
+
+### Tool Definitions
+
+`tool-definitions/index.ts` exports `buildAllTools(deps)` which collects tools from modular files (calendar-tools, meeting-tools, automation-tools, ai-tools). Each module returns `{ definitions, handler }`.
+
+### EventBus
+
+Event-driven integration hub (`modules/event-bus.ts`). Supports WebSocket subscribers, HTTP webhooks (HMAC-signed), and in-process listeners with glob patterns (e.g., `"meeting.*"`). Correlation IDs trace meeting lifecycle end-to-end.
+
+### Desktop: Electron Dual-Process
+
+- **Main process** (`main/index.js`) — DaemonSupervisor (spawns/manages Bun backend), PermissionChecker, window+tray management, IPC handlers
+- **Renderer** (`renderer/index.html`, vanilla JS) — communicates with backend via HTTP/WS to localhost:4000
+- **Preload** (`preload/index.js`) — contextBridge exposes `callingclaw.*` API
+- **Audio Bridge** (`renderer/audio-bridge.js`) — AudioWorklet capture+playback with ring buffer. Two modes: `direct` (local mic/speaker) and `meet_bridge` (BlackHole routing)
+
+### WebSocket Multiplexing
+
+`config_server.ts` multiplexes three WS types on one port:
+- `/ws/events` — EventBus real-time stream (Desktop UI updates)
+- `/ws/voice-test` — Browser-based voice testing
+- `/ws/audio-bridge` — Electron audio (AudioWorklet PCM chunks)
 
 ## Rules
 
-- Use Bun, not Node.js (backend)
-- Vanilla JS in Electron renderer (no TypeScript in HTML files)
-- Audio: always 24kHz PCM16 mono
-- Context: follow 5-layer model in CONTEXT-ENGINEERING.md
-- DMG build: output to /tmp, not iCloud (afterPack.js + non-iCloud output dir)
+- **Bun, not Node.js** for all backend work. Use `Bun.serve()`, `bun:sqlite`, `Bun.file`, `Bun.$` — see `callingclaw-backend/CLAUDE.md` for full Bun API guidance
+- **Vanilla JS** in Electron renderer (no TypeScript in HTML files)
+- **Audio format**: always 24kHz PCM16 mono across all audio paths
+- **Context engineering**: follow the 5-layer model; never put tool definitions in prompt text
+- `setSinkId()` must be called BEFORE `getUserMedia()` in Electron (bug #40704)
+- Shared document directories live at `~/.callingclaw/shared/` (prep, notes — accessed by backend, desktop, and OpenClaw)
+- User config: single `.env` file at project root (symlinked into backend)
+- **DMG build**: output to `/tmp`, not iCloud — `build/afterPack.js` strips xattrs but iCloud re-adds them
 
-## Known Gotchas (Bug Memory)
-
-These are bugs that have happened before. Check this section before making changes to related areas.
+## Known Gotchas
 
 | Area | Gotcha | Burned When |
 |------|--------|-------------|
-| **Desktop renderer** | NEVER use TypeScript syntax in index.html — P0 crash, happened twice | v2.4.1, v2.6.2 |
-| **DMG build** | iCloud resource forks → codesign fails. Must build to `/tmp`, not iCloud Drive | v2.7.10 |
-| **Bundle ID** | Dev mode = `com.github.electron`, prod = `com.tanka.callingclaw`. TCC permissions don't carry between them | v2.7.10 |
-| **Audio setSinkId** | `setSinkId()` MUST be called BEFORE `getUserMedia()` (Electron bug #40704) — silent audio failure | v2.5.0 |
-| **Onboarding steps** | HTML data-ob order must match obCheckStep() JS — step 2=mic, 3=accessibility, 5=openclaw, 6=summary | v2.7.10 |
+| **Desktop renderer** | NEVER use TypeScript syntax in index.html — P0 crash | v2.4.1, v2.6.2 |
+| **DMG build** | iCloud resource forks → codesign fails. Build to `/tmp` | v2.7.10 |
+| **Bundle ID** | Dev = `com.github.electron`, prod = `com.tanka.callingclaw`. TCC permissions don't carry between them | v2.7.10 |
+| **Audio setSinkId** | Must be called BEFORE `getUserMedia()` (Electron bug #40704) | v2.5.0 |
 | **Scheduler events** | Use `meeting.prep_ready` not `scheduler.prep_ready` — frontend only listens for the former | v2.7.8 |
-| **savePrepBrief** | Fire-and-forget save needs onPrepReady callback to notify frontend; without it, 5-min delay | v2.7.8 |
 | **MeetingScheduler dedup** | Must check existing sessions by meetUrl/calendarEventId before creating new ones | v2.7.9 |
-| **BlackHole speaker** | If system default output = BlackHole, direct mode AI audio goes to virtual device, user hears nothing | v2.7.10 |
+| **BlackHole speaker** | If system default output = BlackHole, direct mode AI audio goes to virtual device | v2.7.10 |
 | **getUserMedia + BlackHole** | Even virtual audio devices trigger macOS TCC mic permission — must be in checkAll() | v2.7.10 |
 | **BlackHole macOS 26** | BlackHole 0.6.1 loopback is BROKEN on macOS 26 Tahoe (0 signal). Use Playwright addInitScript audio injection instead | v2.7.11 |
-| **Meet audio receivers** | Meet creates 5+ audio receivers per PeerConnection, most are `muted=true` (silence). MUST select `track.muted===false` for the active speaker — picking first receiver gives all zeros | v2.7.11 |
+| **Meet audio receivers** | Meet creates 5+ audio receivers per PeerConnection, most are `muted=true` (silence). MUST select `track.muted===false` for the active speaker | v2.7.11 |
 | **Worklet cross-origin** | AudioWorklet.addModule() from localhost fails inside Meet page (cross-origin). MUST use Blob URL inline worklet code | v2.7.11 |
 | **Playwright CLI vs Library** | `playwright-cli` eval() cannot intercept getUserMedia (Meet caches at module load). MUST use Playwright library `addInitScript()` for pre-load injection | v2.7.11 |
 | **Meet bot detection** | Playwright Chrome must use `--disable-blink-features=AutomationControlled` + `ignoreDefaultArgs: ["--enable-automation"]` or Meet blocks joining | v2.7.11 |
-| **Audio capture self-check** | After joining Meet, MUST verify captured audio has nonzero amplitude (maxAmp > 0). If all zeros, cycle through ALL receivers trying each for 3s — the unmuted receiver may appear later after join stabilizes | v2.7.12 |
-| **Playwright lib vs CLI coexistence** | `launchPersistentContext` holds Chrome process — playwright-cli CANNOT connect to same profile simultaneously. For Meet audio injection, use Playwright library for ALL operations (join + audio), bypass playwright-cli entirely. ChromeLauncher.launch() in meeting-routes.ts conflicts with playwright-cli path | v2.7.12 |
-| **Admit monitor missing** | E2E audio injection flow (ChromeLauncher/Playwright library) does not have participant admission logic. PlaywrightCLIClient.startAdmissionMonitor() needs to be ported to Playwright library page object | v2.7.12 |
+| **Audio capture self-check** | After joining Meet, MUST verify captured audio has nonzero amplitude (maxAmp > 0). If all zeros, cycle through ALL receivers | v2.7.12 |
+| **Playwright lib vs CLI coexistence** | `launchPersistentContext` holds Chrome process — playwright-cli CANNOT connect to same profile simultaneously. Use Playwright library for ALL operations | v2.7.12 |
+| **Admit monitor missing** | E2E audio injection flow (ChromeLauncher/Playwright library) does not have participant admission logic. Needs porting from PlaywrightCLIClient | v2.7.12 |
