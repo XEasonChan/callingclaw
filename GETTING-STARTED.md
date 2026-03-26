@@ -30,11 +30,7 @@ A voice AI that joins your Google Meet/Zoom meetings, listens, speaks, takes not
 
 That's it. The setup script installs everything else (Bun, OpenClaw).
 
-**Optional** (for meeting audio bridging with Google Meet/Zoom):
-```bash
-brew install blackhole-2ch blackhole-16ch switchaudio-osx
-# Restart your Mac after installing BlackHole
-```
+**Note:** No virtual audio drivers needed. Audio injection happens at the browser level via Playwright's `addInitScript` (since v2.7.12). CallingClaw uses your main Chrome profile for Google account authentication.
 
 **Optional** (for Computer Use screen control):
 ```bash

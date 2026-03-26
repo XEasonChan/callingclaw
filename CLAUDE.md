@@ -53,7 +53,8 @@ All services instantiate once in `callingclaw.ts` and inject cross-module depend
 2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Claude Sonnet), ContextRetriever (Haiku gap detection)
 3. **Meeting** — MeetingModule (recording+action items), MeetingScheduler (calendar auto-join), PostMeetingDelivery, KeyFrameStore
 4. **Skills** — MeetingPrepSkill, OpenClawBridge (System 2 deep reasoning), BrowserActionLoop (Playwright-CLI)
-5. **HTTP Server** — `config_server.ts` takes a `Services` interface, builds REST + WebSocket APIs via `Bun.serve()`
+5. **Browser** — ChromeLauncher (Playwright library: Meet join + audio injection + admission monitor), PlaywrightCLIClient (legacy fallback)
+6. **HTTP Server** — `config_server.ts` takes a `Services` interface, builds REST + WebSocket APIs via `Bun.serve()`
 
 ### Multi-Provider Voice (ai_gateway/)
 

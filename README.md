@@ -196,11 +196,11 @@ CallingClaw uses 24kHz PCM16 mono for all audio paths. This is configured in `ca
 - Select mic device in Desktop UI or voice-test.html dropdown
 - Avoid selecting "BlackHole" as your mic — it's a virtual device with no input
 
-**Meet Bridge mode:**
-- Automatic: CallingClaw switches audio devices when joining a meeting
-- BlackHole 2ch captures Meet audio → AI hears the meeting
-- BlackHole 16ch outputs AI audio → Meeting hears the AI
-- Original audio devices restored on meeting leave
+**Meet Bridge mode (v2.7.13):**
+- Audio injection via Playwright `addInitScript` — no virtual audio drivers needed
+- AI audio → Ring buffer worklet → `getUserMedia` interception → Meet broadcasts to participants
+- Remote meeting audio → `RTCPeerConnection` receivers → AudioWorklet → Backend → AI
+- Echo cancellation suppresses mic capture during AI playback
 
 ### Google Calendar
 
@@ -282,7 +282,7 @@ callingclaw/
 ├── CHANGELOG.md                  # Release history
 ├── ROADMAP.md                    # Future plans
 ├── TODOS.md                      # Tracked work items
-└── VERSION                       # Current version (2.7.3)
+└── VERSION                       # Current version (2.7.13)
 ```
 
 ---
@@ -343,9 +343,10 @@ kill $(lsof -t -i :4000)
 3. Check browser permissions: `Microphone: Allowed` in site settings
 
 ### Meet audio not working
-1. Verify BlackHole installed: `system_profiler SPAudioDataType | grep BlackHole`
-2. Restart Mac if BlackHole was just installed
-3. Check audio routing: `SwitchAudioSource -a` should list BlackHole 2ch and 16ch
+1. Check backend status: `curl http://localhost:4000/api/status` — verify voice provider connected
+2. Ensure Chrome is using your Google account (CallingClaw uses your main Chrome profile)
+3. Check that mic is ON in Meet (audio injection requires mic permission)
+4. If AI repeats itself: echo cancellation should suppress self-hearing. Restart the meeting if issue persists
 
 ### Desktop app shows "引擎未启动"
 - Click "启动引擎" or restart the app
@@ -367,7 +368,7 @@ kill $(lsof -t -i :4000)
 | Audio Capture | AudioWorklet (PCM16, 24kHz) |
 | Audio Playback | AudioWorklet Ring Buffer |
 | NativeBridge | osascript + cliclick (replaced Python sidecar) |
-| Browser Automation | Playwright CLI |
+| Browser Automation | Playwright Library (ChromeLauncher) + CLI fallback |
 | Database | SQLite (bun:sqlite) |
 | Calendar | Google Calendar REST API |
 

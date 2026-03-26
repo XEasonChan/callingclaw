@@ -34,6 +34,7 @@
 **What to change:** (1) Replace `Bun.$`osascript...`` calls in joinGoogleMeet() with PlaywrightCLI.execute() calls (2) Use Playwright selectors instead of JS injection for button clicks, device selection (3) Keep Zoom flow as-is (uses native app, not browser) (4) Update tests
 **Depends on:** NativeBridge migration (must be stable first)
 **Added:** 2026-03-21
+**Completed:** v2.7.13 (2026-03-26) — ChromeLauncher.joinGoogleMeet() replaces both osascript and playwright-cli for Google Meet. Uses Playwright library page.evaluate() directly. MeetJoiner (osascript) retained as final fallback only.
 
 ## Voice: Haiku context compression for meeting instructions
 **Priority:** P2

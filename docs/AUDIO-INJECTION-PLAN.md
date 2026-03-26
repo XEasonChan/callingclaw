@@ -1,7 +1,8 @@
 # Audio Injection Plan — Replace BlackHole on macOS 26
 
-> BlackHole 0.6.1 loopback is broken on macOS 26 Tahoe (0 signal on both 2ch and 16ch).
-> This branch implements an alternative audio routing that bypasses BlackHole entirely.
+> **Status: IMPLEMENTED (v2.7.13)** — Full E2E audio injection via Playwright `addInitScript`. ChromeLauncher handles join + audio + admission. Echo cancellation prevents AI self-interruption.
+>
+> BlackHole 0.6.1 loopback was broken on macOS 26 Tahoe (0 signal). This architecture replaces it entirely.
 
 ## Problem
 
