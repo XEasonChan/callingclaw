@@ -10,7 +10,7 @@
     "pack": "electron-builder --dir"
   },
   "author": "Andrew Chan",
-  "license": "PRIVATE",
+  "license": "MIT",
   "devDependencies": {
     "electron": "^35.7.5",
     "electron-builder": "^26.0.0"
