@@ -17,7 +17,7 @@ test/                    E2E test fixtures
 - **Runtime:** Bun (backend), Electron 35+ (desktop)
 - **Voice:** OpenAI Realtime API / xAI Grok Realtime (switchable)
 - **AI:** Claude via OpenRouter (analysis), Haiku (fast classification), Gemini Flash (vision)
-- **Audio:** AudioWorklet capture + playback ring buffer, BlackHole routing for Meet
+- **Audio:** AudioWorklet capture + playback ring buffer, Playwright addInitScript injection for Meet (BlackHole removed v2.7.12)
 - **Context:** 5-layer model (see callingclaw-backend/CONTEXT-ENGINEERING.md)
 
 ## Key Files
@@ -68,3 +68,9 @@ These are bugs that have happened before. Check this section before making chang
 | **MeetingScheduler dedup** | Must check existing sessions by meetUrl/calendarEventId before creating new ones | v2.7.9 |
 | **BlackHole speaker** | If system default output = BlackHole, direct mode AI audio goes to virtual device, user hears nothing | v2.7.10 |
 | **getUserMedia + BlackHole** | Even virtual audio devices trigger macOS TCC mic permission — must be in checkAll() | v2.7.10 |
+| **BlackHole macOS 26** | BlackHole 0.6.1 loopback is BROKEN on macOS 26 Tahoe (0 signal). Use Playwright addInitScript audio injection instead | v2.7.11 |
+| **Meet audio receivers** | Meet creates 5+ audio receivers per PeerConnection, most are `muted=true` (silence). MUST select `track.muted===false` for the active speaker — picking first receiver gives all zeros | v2.7.11 |
+| **Worklet cross-origin** | AudioWorklet.addModule() from localhost fails inside Meet page (cross-origin). MUST use Blob URL inline worklet code | v2.7.11 |
+| **Playwright CLI vs Library** | `playwright-cli` eval() cannot intercept getUserMedia (Meet caches at module load). MUST use Playwright library `addInitScript()` for pre-load injection | v2.7.11 |
+| **Meet bot detection** | Playwright Chrome must use `--disable-blink-features=AutomationControlled` + `ignoreDefaultArgs: ["--enable-automation"]` or Meet blocks joining | v2.7.11 |
+| **Audio capture self-check** | After joining Meet, MUST verify captured audio has nonzero amplitude (maxAmp > 0). If all zeros, re-scan receivers for `muted=false` track — active speaker track can change during meeting | v2.7.11 |

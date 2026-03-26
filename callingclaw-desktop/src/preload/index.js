@@ -71,7 +71,6 @@ contextBridge.exposeInMainWorld('callingclaw', {
   audio: {
     listDevices: () => ipcRenderer.invoke('audio:listDevices'),
     getDefaultOutput: () => ipcRenderer.invoke('audio:getDefaultOutput'),
-    installBlackHole: () => ipcRenderer.invoke('audio:installBlackHole'),
   },
 
   // ── App Info ───────────────────────────────────────────────
