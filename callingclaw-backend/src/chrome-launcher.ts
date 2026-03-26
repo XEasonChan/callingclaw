@@ -301,6 +301,7 @@ export class ChromeLauncher {
   private profileDir: string;
   private _context: any = null;
   private _page: any = null;
+  private _googleLoginCache: { loggedIn: boolean; email: string | null; checkedAt: number } | null = null;
 
   constructor(opts?: { profileDir?: string }) {
     this.profileDir = opts?.profileDir || DEFAULT_PROFILE;
@@ -641,17 +642,21 @@ export class ChromeLauncher {
         if (String(state).includes("in_meeting")) {
           log("Joined!");
 
-          // Post-join: ensure mic is unmuted
+          // Post-join: ensure mic is unmuted (retry — Meet may auto-mute on entry)
           if (!muteMic) {
-            await page.waitForTimeout(1500);
-            const micState = await page.evaluate(`(() => {
-              var muteBtn = document.querySelector('[aria-label*="Turn on microphone"], [aria-label*="打开麦克风"]');
-              if (muteBtn) { muteBtn.click(); return 'unmuted_after_join'; }
-              var alreadyOn = document.querySelector('[aria-label*="Turn off microphone"], [aria-label*="关闭麦克风"]');
-              if (alreadyOn) return 'already_on';
-              return 'mic_button_not_found';
-            })()`);
-            log(`Post-join mic: ${micState}`);
+            for (let micRetry = 0; micRetry < 3; micRetry++) {
+              await page.waitForTimeout(1500);
+              const micState = await page.evaluate(`(() => {
+                // Check all possible mic button selectors (EN + ZH)
+                var micOff = document.querySelector('[aria-label*="Turn on microphone"], [aria-label*="打开麦克风"], [aria-label*="Unmute"], [data-is-muted="true"] [aria-label*="microphone"], [data-is-muted="true"] [aria-label*="麦克风"]');
+                if (micOff) { micOff.click(); return 'unmuted'; }
+                var micOn = document.querySelector('[aria-label*="Turn off microphone"], [aria-label*="关闭麦克风"], [data-is-muted="false"] [aria-label*="microphone"]');
+                if (micOn) return 'already_on';
+                return 'not_found';
+              })()`);
+              log(`Post-join mic (attempt ${micRetry + 1}): ${micState}`);
+              if (micState === 'already_on' || micState === 'unmuted') break;
+            }
           }
 
           return { success: true, summary: "Joined meeting — camera off, mic on", steps, state: "in_meeting" };
@@ -926,6 +931,12 @@ export class ChromeLauncher {
    */
   async checkGoogleLogin(): Promise<{ loggedIn: boolean; email: string | null }> {
     if (!this._page) return { loggedIn: false, email: null };
+
+    // Return cached result if checked within 10 minutes
+    if (this._googleLoginCache && Date.now() - this._googleLoginCache.checkedAt < 600000) {
+      return { loggedIn: this._googleLoginCache.loggedIn, email: this._googleLoginCache.email };
+    }
+
     const page = this._page;
 
     try {
@@ -962,6 +973,9 @@ export class ChromeLauncher {
 
       const parsed = JSON.parse(String(result));
 
+      // Cache the result (valid for 10 minutes)
+      this._googleLoginCache = { loggedIn: parsed.loggedIn, email: parsed.email, checkedAt: Date.now() };
+
       // Navigate back if we were on a different page
       if (currentUrl && currentUrl !== "about:blank" && !currentUrl.includes("google.com")) {
         await page.goto(currentUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
@@ -972,6 +986,11 @@ export class ChromeLauncher {
       console.warn("[ChromeLauncher] Google login check failed:", e.message);
       return { loggedIn: false, email: null };
     }
+  }
+
+  /** Clear the Google login cache (e.g. after user signs in) */
+  clearGoogleLoginCache(): void {
+    this._googleLoginCache = null;
   }
 
   /** Clean shutdown */

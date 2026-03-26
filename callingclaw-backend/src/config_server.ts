@@ -2862,6 +2862,8 @@ STEP-BY-STEP FLOW:
             return Response.json({ error: "No page available" }, { status: 500, headers });
           }
 
+          // Clear login cache so next check is fresh
+          services.chromeLauncher.clearGoogleLoginCache();
           await page.goto("https://accounts.google.com", { waitUntil: "domcontentloaded", timeout: 15000 });
           console.log("[GoogleAuth] Opened accounts.google.com for user sign-in");
 
@@ -2876,11 +2878,13 @@ STEP-BY-STEP FLOW:
       }
 
       // GET /api/google/chrome-login/check — Quick check if Chrome is now logged into Google
+      // Always fresh (clears cache) — used during onboarding polling
       if (url.pathname === "/api/google/chrome-login/check" && req.method === "GET") {
         if (!services.chromeLauncher?.page) {
           return Response.json({ loggedIn: false, reason: "chrome_not_launched" }, { headers });
         }
         try {
+          services.chromeLauncher.clearGoogleLoginCache();
           const result = await services.chromeLauncher.checkGoogleLogin();
           return Response.json(result, { headers });
         } catch (e: any) {
