@@ -916,6 +916,64 @@ export class ChromeLauncher {
     this._meetingEndCallback = null;
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // Google Account Check
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Check if the Chrome profile is signed into a Google account.
+   * Navigates to myaccount.google.com and checks for signed-in indicators.
+   */
+  async checkGoogleLogin(): Promise<{ loggedIn: boolean; email: string | null }> {
+    if (!this._page) return { loggedIn: false, email: null };
+    const page = this._page;
+
+    try {
+      // Save current URL to restore later
+      const currentUrl = page.url();
+
+      // Navigate to Google account page (fast check)
+      await page.goto("https://myaccount.google.com", { waitUntil: "domcontentloaded", timeout: 10000 });
+      await page.waitForTimeout(2000);
+
+      const result = await page.evaluate(`(() => {
+        // If redirected to sign-in page, not logged in
+        if (location.hostname === 'accounts.google.com' && location.pathname.includes('/signin')) {
+          return JSON.stringify({ loggedIn: false, email: null });
+        }
+        // If on myaccount.google.com, we're logged in
+        if (location.hostname === 'myaccount.google.com') {
+          // Try to find email from the page
+          var emailEl = document.querySelector('[data-email]');
+          var email = emailEl ? emailEl.getAttribute('data-email') : null;
+          if (!email) {
+            // Try aria-label on profile button
+            var profileBtn = document.querySelector('[aria-label*="@"]');
+            if (profileBtn) {
+              var match = profileBtn.getAttribute('aria-label').match(/[\\w.-]+@[\\w.-]+/);
+              if (match) email = match[0];
+            }
+          }
+          return JSON.stringify({ loggedIn: true, email: email });
+        }
+        // Unknown state
+        return JSON.stringify({ loggedIn: false, email: null });
+      })()`);
+
+      const parsed = JSON.parse(String(result));
+
+      // Navigate back if we were on a different page
+      if (currentUrl && currentUrl !== "about:blank" && !currentUrl.includes("google.com")) {
+        await page.goto(currentUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
+      }
+
+      return parsed;
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] Google login check failed:", e.message);
+      return { loggedIn: false, email: null };
+    }
+  }
+
   /** Clean shutdown */
   async close(): Promise<void> {
     if (this._context) {

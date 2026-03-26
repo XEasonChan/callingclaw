@@ -1164,6 +1164,33 @@ export function startConfigServer(services: Services) {
           }, { status: 400, headers });
         }
 
+        // ── Auth guard: check Chrome Google login for Meet ──
+        // If ChromeLauncher is available but Chrome isn't launched yet, launch it to check
+        if (services.chromeLauncher && validated.platform === "google_meet") {
+          try {
+            await services.chromeLauncher.launch();
+            const authCheck = await services.chromeLauncher.checkGoogleLogin();
+            if (!authCheck.loggedIn) {
+              console.log("[Meeting] Chrome not logged into Google — blocking join");
+              return Response.json({
+                error: "Google account required",
+                needsAuth: true,
+                message: "Please sign into your Google account in Chrome first.",
+                steps: [
+                  { action: "POST /api/google/chrome-login", description: "Opens Chrome to Google sign-in page" },
+                  { action: "GET /api/google/auth-status", description: "Poll until loggedIn=true" },
+                  { action: "POST /api/meeting/join", description: "Retry joining the meeting" },
+                ],
+                authStatusUrl: "/api/google/auth-status",
+                chromeLoginUrl: "/api/google/chrome-login",
+              }, { status: 401, headers });
+            }
+            console.log(`[Meeting] Chrome Google auth OK (${authCheck.email || "unknown"})`);
+          } catch (e: any) {
+            console.warn("[Meeting] Auth check failed (continuing):", e.message);
+          }
+        }
+
         // Reuse existing session for the same Meet URL, or create new one
         const session = services.sessionManager!.findOrCreate({
           topic: body.instructions?.slice(0, 200) || "Meeting",
@@ -2730,6 +2757,97 @@ STEP-BY-STEP FLOW:
           },
           { headers }
         );
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // ── Google Auth Onboarding — Check + Chrome Login ──
+      // ══════════════════════════════════════════════════════════════
+
+      // GET /api/google/auth-status — Check both Calendar OAuth + Chrome Google login
+      if (url.pathname === "/api/google/auth-status" && req.method === "GET") {
+        const calendarConnected = services.calendar?.connected ?? false;
+        const hasCalendarCreds = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN);
+
+        // Check Chrome Google login by inspecting cookies in the profile
+        let chromeLoggedIn = false;
+        let chromeEmail: string | null = null;
+        if (services.chromeLauncher?.page) {
+          try {
+            const result = await services.chromeLauncher.page.evaluate(`(() => {
+              try {
+                // Check for Google session cookies in the page context
+                var cookies = document.cookie || '';
+                return JSON.stringify({ hasCookies: cookies.length > 0 });
+              } catch(e) { return JSON.stringify({ error: e.message }); }
+            })()`);
+            // If ChromeLauncher has a page, it was launched with the profile.
+            // Check if the profile has Google cookies by attempting to load accounts.google.com
+            const checkResult = await services.chromeLauncher.checkGoogleLogin();
+            chromeLoggedIn = checkResult.loggedIn;
+            chromeEmail = checkResult.email;
+          } catch {}
+        }
+
+        return Response.json({
+          ready: chromeLoggedIn, // minimum: Chrome must be logged into Google
+          calendar: {
+            connected: calendarConnected,
+            hasCredentials: hasCalendarCreds,
+          },
+          chrome: {
+            loggedIn: chromeLoggedIn,
+            email: chromeEmail,
+            profileDir: services.chromeLauncher ? "active" : "not_launched",
+          },
+          nextStep: !chromeLoggedIn
+            ? "chrome_login" // Must sign into Google in Chrome first
+            : !calendarConnected
+              ? "calendar_oauth" // Optional: connect calendar for attendee lookup
+              : null, // All good
+        }, { headers });
+      }
+
+      // POST /api/google/chrome-login — Open Chrome to Google sign-in page
+      // Returns immediately; user signs in manually. Poll /auth-status to check completion.
+      if (url.pathname === "/api/google/chrome-login" && req.method === "POST") {
+        if (!services.chromeLauncher) {
+          return Response.json({ error: "ChromeLauncher not available" }, { status: 500, headers });
+        }
+
+        try {
+          // Ensure Chrome is launched
+          await services.chromeLauncher.launch();
+
+          // Navigate to Google sign-in
+          const page = services.chromeLauncher.page;
+          if (!page) {
+            return Response.json({ error: "No page available" }, { status: 500, headers });
+          }
+
+          await page.goto("https://accounts.google.com", { waitUntil: "domcontentloaded", timeout: 15000 });
+          console.log("[GoogleAuth] Opened accounts.google.com for user sign-in");
+
+          return Response.json({
+            ok: true,
+            message: "Chrome opened to Google sign-in. Please sign in, then call /api/google/auth-status to verify.",
+            pollUrl: "/api/google/auth-status",
+          }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
+      }
+
+      // GET /api/google/chrome-login/check — Quick check if Chrome is now logged into Google
+      if (url.pathname === "/api/google/chrome-login/check" && req.method === "GET") {
+        if (!services.chromeLauncher?.page) {
+          return Response.json({ loggedIn: false, reason: "chrome_not_launched" }, { headers });
+        }
+        try {
+          const result = await services.chromeLauncher.checkGoogleLogin();
+          return Response.json(result, { headers });
+        } catch (e: any) {
+          return Response.json({ loggedIn: false, error: e.message }, { headers });
+        }
       }
 
       // --- Static files (public/) ---
