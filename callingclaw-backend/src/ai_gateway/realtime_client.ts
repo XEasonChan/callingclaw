@@ -308,7 +308,7 @@ export class RealtimeClient {
           vad: {
             threshold: provider.name === "grok" ? 0.85 : 0.5,
             prefix_padding_ms: provider.name === "grok" ? 333 : 300,
-            silence_duration_ms: provider.name === "grok" ? 800 : 500,
+            silence_duration_ms: 500, // Both providers: 500ms (Grok was 800, too conservative)
           },
         });
 

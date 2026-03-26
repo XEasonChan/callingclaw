@@ -110,6 +110,7 @@
 
     try {
       _ws = new WebSocket(BACKEND_WS_URL);
+      _ws.binaryType = 'arraybuffer'; // Receive raw binary — no base64/JSON overhead
     } catch (e) {
       console.warn('[CC-Inject] WS connect failed:', e.message);
       scheduleReconnect();
@@ -117,7 +118,7 @@
     }
 
     _ws.onopen = function() {
-      console.log('[CC-Inject] WS connected to backend');
+      console.log('[CC-Inject] WS connected to backend (binary mode)');
       if (_wsReconnectTimer) {
         clearTimeout(_wsReconnectTimer);
         _wsReconnectTimer = null;
@@ -125,16 +126,25 @@
     };
 
     _ws.onmessage = function(e) {
+      // Binary frame: byte[0] = type marker (0x01=audio, 0x02=interrupt), byte[1..] = PCM16
+      if (e.data instanceof ArrayBuffer) {
+        var view = new Uint8Array(e.data);
+        if (view[0] === 0x01 && view.length > 1) {
+          feedAudioBinary(e.data, 1); // offset 1 to skip type byte
+        } else if (view[0] === 0x02) {
+          interruptPlayback();
+        }
+        return;
+      }
+      // Fallback: JSON text frame (legacy / voice-test clients)
       try {
         var data = JSON.parse(e.data);
         if (data.type === 'audio_playback' && data.payload && data.payload.audio) {
-          feedAudio(data.payload.audio);
+          feedAudioBase64(data.payload.audio);
         } else if (data.type === 'interrupt') {
           interruptPlayback();
         }
-      } catch (err) {
-        // Ignore parse errors
-      }
+      } catch (err) {}
     };
 
     _ws.onclose = function() {
@@ -158,16 +168,14 @@
 
   // ── Audio decoding + feeding ──
 
-  function feedAudio(base64Pcm) {
+  /** Fast path: binary ArrayBuffer from WebSocket (no base64 decode) */
+  function feedAudioBinary(arrayBuffer, byteOffset) {
     if (!_playbackWorklet || !_audioCtx) return;
     if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(function() {});
 
     try {
-      // Decode base64 → PCM16 → Float32
-      var raw = atob(base64Pcm);
-      var bytes = new Uint8Array(raw.length);
-      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-      var pcm16 = new Int16Array(bytes.buffer);
+      // Direct typed array view — zero-copy from the ArrayBuffer
+      var pcm16 = new Int16Array(arrayBuffer, byteOffset);
       var float32 = new Float32Array(pcm16.length);
       for (var j = 0; j < pcm16.length; j++) {
         float32[j] = pcm16[j] / 32768;
@@ -182,10 +190,38 @@
         }
       }
 
-      // Feed to ring buffer worklet
       _playbackWorklet.port.postMessage(float32, [float32.buffer]);
     } catch (e) {
-      console.warn('[CC-Inject] feedAudio error:', e.message);
+      console.warn('[CC-Inject] feedAudioBinary error:', e.message);
+    }
+  }
+
+  /** Legacy path: base64 JSON from older clients */
+  function feedAudioBase64(base64Pcm) {
+    if (!_playbackWorklet || !_audioCtx) return;
+    if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(function() {});
+
+    try {
+      var raw = atob(base64Pcm);
+      var bytes = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      var pcm16 = new Int16Array(bytes.buffer);
+      var float32 = new Float32Array(pcm16.length);
+      for (var j = 0; j < pcm16.length; j++) {
+        float32[j] = pcm16[j] / 32768;
+      }
+
+      if (float32.length > FADE_SAMPLES * 2) {
+        for (var f = 0; f < FADE_SAMPLES; f++) {
+          var gain = f / FADE_SAMPLES;
+          float32[f] *= gain;
+          float32[float32.length - 1 - f] *= gain;
+        }
+      }
+
+      _playbackWorklet.port.postMessage(float32, [float32.buffer]);
+    } catch (e) {
+      console.warn('[CC-Inject] feedAudioBase64 error:', e.message);
     }
   }
 
