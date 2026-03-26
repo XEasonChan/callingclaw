@@ -200,8 +200,10 @@ export class PlaywrightCLIClient {
     const displayName = opts?.displayName || "CallingClaw";
     const muteCamera = opts?.muteCamera ?? true;
     const muteMic = opts?.muteMic ?? false; // Default: mic ON (for BlackHole audio bridge)
-    const micDevice = opts?.micDevice || "BlackHole 16ch";
-    const speakerDevice = opts?.speakerDevice || "BlackHole 2ch";
+    // Meet mic = BlackHole 2ch (reads AI's audio output → other participants hear AI)
+    // Meet speaker = BlackHole 16ch (plays others' audio → AudioBridge captures for AI)
+    const micDevice = opts?.micDevice || "BlackHole 2ch";
+    const speakerDevice = opts?.speakerDevice || "BlackHole 16ch";
     const steps: string[] = [];
     const log = (msg: string) => { steps.push(msg); opts?.onStep?.(msg); console.log(`[MeetJoin] ${msg}`); };
 
