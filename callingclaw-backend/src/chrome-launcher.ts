@@ -184,11 +184,11 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
 
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-      // ── Echo cancellation: suppress mic during AI playback ──
-      // When AI is speaking, the captured remote audio includes the AI's own voice
-      // (Meet mixes all streams). Sending this back would cause: AI hears echo →
-      // VAD triggers → self-interrupt → repeat. Suppress for 500ms after last AI audio.
-      if (cc.aiSpeaking) return;
+      // ── Echo handling: attenuate (not suppress) during AI playback ──
+      // Binary suppression killed user speech. Instead: let audio through but
+      // skip very low-amplitude chunks during AI playback (likely echo, not real speech).
+      // Real speech (user interrupting) has much higher amplitude than echo.
+      if (cc.aiSpeaking && maxAmp < 800) return; // Skip quiet echo, let loud speech through
 
       // Downsample to 24kHz if needed
       if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
@@ -281,6 +281,55 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       setTimeout(function() { if (!cc.captureActive) setupCapture(pc); }, 500);
     });
   }
+
+  // ── Meet Captions DOM Scraper ──
+  // Enable Meet's built-in captions and scrape text from the DOM.
+  // Google's server-side speech recognition handles echo perfectly.
+  // Sends scraped transcript to backend as supplementary text input.
+  (function initCaptionsScraper() {
+    var lastCaption = '';
+    var captionBuffer = [];
+
+    // Try to enable captions (click the CC button)
+    function enableCaptions() {
+      var ccBtn = document.querySelector('[aria-label*="captions"], [aria-label*="字幕"], [aria-label*="Turn on captions"], [data-tooltip*="captions"]');
+      if (ccBtn && !ccBtn.getAttribute('aria-pressed')?.includes('true')) {
+        ccBtn.click();
+        console.log('[CC-Captions] Captions enabled');
+        return true;
+      }
+      // Also try the 3-dot menu → "Turn on captions"
+      return !!ccBtn;
+    }
+
+    // Scrape captions from DOM
+    function scrapeCaptions() {
+      // Meet renders captions in elements with specific classes
+      var captionEls = document.querySelectorAll('[class*="caption"], [class*="iOzk7"], div[jscontroller] span[class]');
+      var texts = [];
+      captionEls.forEach(function(el) {
+        var t = el.textContent?.trim();
+        if (t && t.length > 2 && t !== lastCaption) texts.push(t);
+      });
+      if (texts.length > 0) {
+        var newText = texts.join(' ');
+        if (newText !== lastCaption && newText.length > 3) {
+          lastCaption = newText;
+          // Send to backend as transcript text
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'caption', text: newText, ts: Date.now() }));
+          }
+        }
+      }
+    }
+
+    // Enable captions after a delay (Meet needs to fully load)
+    setTimeout(enableCaptions, 5000);
+    setTimeout(enableCaptions, 10000); // Retry
+
+    // Scrape captions every 2s
+    setInterval(scrapeCaptions, 2000);
+  })();
 
   window.__ccPipeline = {
     ws: function() { return ws; },

@@ -267,6 +267,16 @@ export function startConfigServer(services: Services) {
                 console.log(`[VoiceTest] Mic audio chunk #${globalThis._vtAudioCount} (${data.audio.length} b64 chars)`);
               }
               services.realtime.sendAudio(data.audio);
+            } else if (data.type === "caption") {
+              // Meet captions DOM scrape — reliable transcript from Google's speech recognition
+              // Inject as user text input so the AI sees what was said even if audio capture is poor
+              if (data.text && services.realtime.connected) {
+                const text = String(data.text).trim();
+                if (text.length > 3) {
+                  services.context.addTranscript({ role: "user", text: `[Meet caption] ${text}`, ts: data.ts || Date.now() });
+                  console.log(`[VoiceTest] Meet caption: "${text.substring(0, 80)}"`);
+                }
+              }
             } else if (data.type === "start") {
               // Start voice session from browser (supports provider + voice selection)
               // GUARD: if voice is already connected (e.g. meeting join started it),
