@@ -1,5 +1,7 @@
 # CallingClaw 权限清单
 
+> **v2.7.12 更新：** BlackHole 虚拟音频驱动已移除。音频注入现在通过 Playwright `addInitScript` 在浏览器级别完成，不需要安装任何音频驱动。以下文档中的 BlackHole 相关内容仅供历史参考。
+
 CallingClaw 需要以下 macOS 权限才能正常运行。所有权限在 Onboarding 引导流程中检查。
 
 ---

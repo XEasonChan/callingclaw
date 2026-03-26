@@ -84,7 +84,7 @@ cd callingclaw && bun run src/callingclaw.ts
 | 2.6 | Join 会议 | `curl -X POST localhost:4000/api/meeting/join -H 'Content-Type: application/json' -d '{"url":"MEET_URL"}'` | 返回 ok |
 | 2.7 | Playwright 加入 | 看 log | `[Meeting] joining` → join steps → `admitted` |
 | 2.8 | 等候室处理 | 如有等候室 | log 显示 waiting_room → 被 admit 后继续 |
-| 2.9 | Audio bridge 激活 | 看 log | `meet_bridge` mode，音频通过 BlackHole |
+| 2.9 | Audio injection 激活 | 看 log | Playwright addInitScript 注入，getUserMedia 拦截成功，remote track `muted=false` 捕获 |
 | 2.10 | Voice AI 问候 | 在 Meet 里听 | AI 发出开场白 |
 | 2.11 | EventBus 事件 | WebSocket | 依次收到 `meeting.joining` → `meeting.started` |
 | 2.12 | Prep brief 注入 | `curl localhost:4000/api/meeting/prep-brief` | 返回完整 brief + pinned files |
