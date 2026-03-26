@@ -114,13 +114,17 @@ export function meetingRoutes(services: Services): RouteHandler {
         }
 
         // Step 1: Start OpenAI Realtime voice session (if not already running)
+        // Build topic-aware instructions so AI knows what the meeting is about
         let voiceStarted = false;
         if (!services.realtime.connected && CONFIG.openai.apiKey) {
           try {
-            const instructions = body.instructions || undefined;
+            const meetTopic0 = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic;
+            const instructions = body.instructions || (meetTopic0
+              ? `You are CallingClaw, an AI meeting assistant. This meeting's topic is: "${meetTopic0}". Focus your conversation on this topic. Ask clarifying questions, confirm decisions, and track action items related to it. Speak naturally and concisely.`
+              : undefined);
             await services.realtime.start(instructions);
             voiceStarted = true;
-            console.log("[Meeting] Voice AI started for meeting");
+            console.log(`[Meeting] Voice AI started${meetTopic0 ? ` (topic: ${meetTopic0})` : ""}`);
           } catch (e: any) {
             console.warn("[Meeting] Voice start failed:", e.message);
           }
