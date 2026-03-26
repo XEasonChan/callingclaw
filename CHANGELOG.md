@@ -3,6 +3,29 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.12] - 2026-03-26
+
+### Added
+- **Playwright 音频注入** — 用 `addInitScript()` 在 Meet 页面加载前拦截 `getUserMedia`，将 AI 音频注入会议。完全替代 BlackHole 虚拟音频驱动
+- **Full duplex 验证** — AI 在 Meet 中说话（参与者听到）✅ + AI 听到参与者说话（peakAmp=31180, 25 条转写）✅
+- **Grok Realtime E2E 测试** — `test-audio-inject-grok.ts`：完整链路测试（capture → backend → Grok → playback → Meet）
+- **音频注入架构文档** — `docs/AUDIO-INJECTION-PLAN.md`
+- **Recall.ai 客户端** — `recall-client.ts` + `voice-recall.html`（纯音频 fallback 方案）
+
+### Removed
+- **BlackHole 虚拟音频驱动** — 在 macOS 26 上完全断裂（0 信号），已移除：
+  - 打包的 .pkg 驱动文件（-240KB DMG 体积）
+  - Onboarding step 4（音频驱动安装）
+  - `audio:installBlackHole` IPC handler
+  - `findBlackHoleDevices()` 函数
+  - `meeting-routes.ts` / `playwright-cli.ts` 中的硬编码 BlackHole 设备名
+  - 状态栏音频指示器
+  - Direct 模式 BlackHole 扬声器警告
+
+### Changed
+- **音频架构** — 从 OS 级虚拟音频设备（BlackHole）迁移到浏览器级 WebRTC 注入（Playwright addInitScript）
+- **Known Gotchas** — 新增 6 条 bug memory（Meet receivers muted=false、Worklet 跨域 Blob URL、Playwright CLI vs Library、bot detection 等）
+
 ## [2.7.11] - 2026-03-25
 
 ### Added
