@@ -57,8 +57,6 @@ const AUDIO_INIT_SCRIPT = `
     triedReceiverIdx: 0,
     captureSource: null,
     captureWorklet: null,
-    aiSpeaking: false,
-    aiSpeakingTimer: null,
   };
 
   var origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
@@ -144,25 +142,38 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   }
 
   // ── Capture remote audio (from meeting participants) ──
-  // Cycles through audio receivers by index. If amp=0 after 5s,
-  // disconnects and tries the NEXT receiver (not the same one).
+  // Dual-capture approach (ported from working test-audio-inject-grok.ts):
+  //   Pipeline A: getReceivers() — immediate, picks best available receiver
+  //   Pipeline B: ontrack event — catches new tracks as they appear
+  // NO echo suppression — test proved Grok's server-side VAD handles echo fine.
+  // The session reset bug (now fixed) was the real cause of self-interruption.
+
+  function sendAudioChunk(int16) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Downsample to 24kHz if needed
+    if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
+      var ratio = captureRate / SAMPLE_RATE;
+      var newLen = Math.round(int16.length / ratio);
+      var resampled = new Int16Array(newLen);
+      for (var j = 0; j < newLen; j++) resampled[j] = int16[Math.round(j * ratio)] || 0;
+      int16 = resampled;
+    }
+    ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(int16) }));
+  }
+
+  // Pipeline A: getReceivers approach
   function setupCapture(pc) {
     if (cc.captureActive) return;
     var receivers = pc.getReceivers();
     var audioRecvs = receivers.filter(function(r) { return r.track && r.track.kind === 'audio' && r.track.readyState === 'live'; });
     if (audioRecvs.length === 0) return;
 
-    // Sort: prefer unmuted first, then by index
-    audioRecvs.sort(function(a, b) { return (a.track.muted ? 1 : 0) - (b.track.muted ? 1 : 0); });
-
-    // Pick receiver at current triedReceiverIdx (wraps around)
-    var idx = cc.triedReceiverIdx % audioRecvs.length;
-    var audioRecv = audioRecvs[idx];
+    // Prefer unmuted receiver
+    var audioRecv = audioRecvs.find(function(r) { return !r.track.muted; }) || audioRecvs[0];
     var track = audioRecv.track;
 
-    console.log('[CC-Audio] Trying receiver ' + idx + '/' + audioRecvs.length + ' (track: ' + track.id.substring(0, 10) + ', muted=' + track.muted + ')');
+    console.log('[CC-Audio] Receivers: ' + audioRecvs.length + ', using: ' + track.id.substring(0, 10) + ' muted=' + track.muted);
 
-    // Disconnect previous capture if any
     if (cc.captureSource) { try { cc.captureSource.disconnect(); } catch(e) {} }
     if (cc.captureWorklet) { try { cc.captureWorklet.disconnect(); } catch(e) {} }
 
@@ -181,46 +192,20 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       var maxAmp = 0;
       for (var i = 0; i < int16.length; i++) { var a = Math.abs(int16[i]); if (a > maxAmp) maxAmp = a; }
       if (maxAmp > cc.captureMaxAmp) cc.captureMaxAmp = maxAmp;
-
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-      // ── Echo handling: attenuate (not suppress) during AI playback ──
-      // Binary suppression killed user speech. Instead: let audio through but
-      // skip very low-amplitude chunks during AI playback (likely echo, not real speech).
-      // Real speech (user interrupting) has much higher amplitude than echo.
-      if (cc.aiSpeaking && maxAmp < 800) return; // Skip quiet echo, let loud speech through
-
-      // Downsample to 24kHz if needed
-      if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
-        var ratio = captureRate / SAMPLE_RATE;
-        var newLen = Math.round(int16.length / ratio);
-        var resampled = new Int16Array(newLen);
-        for (var j = 0; j < newLen; j++) resampled[j] = int16[Math.round(j * ratio)] || 0;
-        int16 = resampled;
+      // Log every 50th chunk (~5s)
+      if (cc.captureChunks % 50 === 1) {
+        console.log('[CC-Audio] chunk#' + cc.captureChunks + ' maxAmp=' + maxAmp + ' peak=' + cc.captureMaxAmp);
       }
-      ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(int16) }));
+      // NO echo suppression — send ALL audio, let server VAD handle it
+      sendAudioChunk(int16);
     };
 
-    // Track mute/unmute events
-    track.onmute = function() { console.log('[CC-Audio] Track MUTED → will retry next receiver'); };
+    track.onmute = function() { console.log('[CC-Audio] Track MUTED'); };
     track.onunmute = function() { console.log('[CC-Audio] Track UNMUTED'); };
-
-    // Self-check: if maxAmp stays 0 after 5s, disconnect and try NEXT receiver
-    setTimeout(function() {
-      if (cc.captureMaxAmp === 0 && cc.captureChunks > 50) {
-        console.log('[CC-Audio] Self-check FAILED: amp=0 on receiver ' + idx + ', cycling to next...');
-        try { source.disconnect(); } catch(e) {}
-        try { worklet.disconnect(); } catch(e) {}
-        cc.captureActive = false;
-        cc.triedReceiverIdx++;
-        setupCapture(pc);
-      } else if (cc.captureMaxAmp > 0) {
-        console.log('[CC-Audio] Self-check PASSED: maxAmp=' + cc.captureMaxAmp + ' on receiver ' + idx);
-      }
-    }, 5000);
+    track.onended = function() { console.log('[CC-Audio] Track ENDED — will retry'); cc.captureActive = false; };
 
     cc.captureActive = true;
-    console.log('[CC-Audio] Capture active (receiver ' + idx + ', track: ' + track.id.substring(0, 10) + ', muted=' + track.muted + ')');
+    console.log('[CC-Audio] Pipeline A active (track: ' + track.id.substring(0, 10) + ')');
   }
 
   // ── WebSocket to backend ──
@@ -235,12 +220,6 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       try {
         var data = JSON.parse(e.data);
         if (data.type === 'audio' && data.audio) {
-          // ── Echo cancellation: mark AI as speaking ──
-          // Suppress captured audio during playback + 500ms tail guard
-          cc.aiSpeaking = true;
-          if (cc.aiSpeakingTimer) clearTimeout(cc.aiSpeakingTimer);
-          cc.aiSpeakingTimer = setTimeout(function() { cc.aiSpeaking = false; }, 500);
-
           var raw = atob(data.audio);
           var bytes = new Uint8Array(raw.length);
           for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
@@ -254,8 +233,6 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
           playbackNode.port.postMessage(float32, [float32.buffer]);
         } else if (data.type === 'interrupt') {
           playbackNode.port.postMessage('clear');
-          cc.aiSpeaking = false;
-          if (cc.aiSpeakingTimer) { clearTimeout(cc.aiSpeakingTimer); cc.aiSpeakingTimer = null; }
         }
       } catch(err) {}
     };
@@ -274,61 +251,143 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     }
   }, 2000);
 
-  // Also listen for future track events on all PCs
+  // ── Pipeline B: ontrack event listener (dual-capture redundancy) ──
+  // Catches new audio tracks as they appear — covers cases where
+  // getReceivers() misses the active track at setup time.
+  var ontracktriggered = false;
   for (var i = 0; i < cc.pcs.length; i++) {
-    cc.pcs[i].addEventListener('track', function() {
-      var pc = this;
-      setTimeout(function() { if (!cc.captureActive) setupCapture(pc); }, 500);
-    });
+    (function(pc) {
+      // Pipeline A: retry via getReceivers
+      pc.addEventListener('track', function() {
+        setTimeout(function() { if (!cc.captureActive) setupCapture(pc); }, 500);
+      });
+      // Pipeline B: independent capture via ontrack event stream
+      pc.addEventListener('track', function(event) {
+        if (event.track && event.track.kind === 'audio' && event.streams && event.streams[0] && !ontracktriggered) {
+          ontracktriggered = true;
+          console.log('[CC-Track] ontrack event! Using event stream directly');
+          var evtStream = event.streams[0];
+          var evtSrc = captureCtx.createMediaStreamSource(evtStream);
+          var evtWorklet = new AudioWorkletNode(captureCtx, 'pcm-processor');
+          evtSrc.connect(evtWorklet);
+          var evtChunks = 0;
+          var evtMaxAmp = 0;
+          evtWorklet.port.onmessage = function(e) {
+            evtChunks++;
+            var d = e.data;
+            var amp = 0;
+            for (var k = 0; k < d.length; k++) { var ab = Math.abs(d[k]); if (ab > amp) amp = ab; }
+            if (amp > evtMaxAmp) evtMaxAmp = amp;
+            if (evtChunks % 50 === 1) console.log('[CC-Track] chunk#' + evtChunks + ' maxAmp=' + amp + ' peak=' + evtMaxAmp);
+            sendAudioChunk(d);
+          };
+        }
+      });
+    })(cc.pcs[i]);
   }
 
-  // ── Meet Captions DOM Scraper ──
-  // Enable Meet's built-in captions and scrape text from the DOM.
+  // ── Meet Captions Scraper (MutationObserver-based) ──
   // Google's server-side speech recognition handles echo perfectly.
-  // Sends scraped transcript to backend as supplementary text input.
+  // Uses MutationObserver for real-time caption detection.
   (function initCaptionsScraper() {
     var lastCaption = '';
-    var captionBuffer = [];
+    var captionsEnabled = false;
 
-    // Try to enable captions (click the CC button)
+    // Enable captions by clicking the CC button
     function enableCaptions() {
-      var ccBtn = document.querySelector('[aria-label*="captions"], [aria-label*="字幕"], [aria-label*="Turn on captions"], [data-tooltip*="captions"]');
-      if (ccBtn && !ccBtn.getAttribute('aria-pressed')?.includes('true')) {
-        ccBtn.click();
-        console.log('[CC-Captions] Captions enabled');
-        return true;
+      if (captionsEnabled) return;
+      // Try multiple selector patterns for the CC button
+      var selectors = [
+        'button[aria-label*="captions" i]',
+        'button[aria-label*="字幕"]',
+        'button[aria-label*="Turn on captions"]',
+        'button[data-tooltip*="captions" i]',
+        'button[jsname] [data-icon="closed_caption"]',
+      ];
+      for (var s = 0; s < selectors.length; s++) {
+        var btn = document.querySelector(selectors[s]);
+        if (btn) {
+          // Check if already enabled (aria-pressed or similar)
+          var pressed = btn.getAttribute('aria-pressed');
+          if (pressed === 'true') { captionsEnabled = true; return; }
+          btn.click();
+          captionsEnabled = true;
+          console.log('[CC-Captions] Enabled via: ' + selectors[s]);
+          return;
+        }
       }
-      // Also try the 3-dot menu → "Turn on captions"
-      return !!ccBtn;
     }
 
-    // Scrape captions from DOM
-    function scrapeCaptions() {
-      // Meet renders captions in elements with specific classes
-      var captionEls = document.querySelectorAll('[class*="caption"], [class*="iOzk7"], div[jscontroller] span[class]');
+    // Observe DOM for caption text changes
+    function startCaptionObserver() {
+      // Meet renders captions in a container at the bottom of the page
+      // The container typically has role="region" or specific data attributes
+      // We observe the entire body and filter for caption-like text nodes
+      var observer = new MutationObserver(function(mutations) {
+        for (var m = 0; m < mutations.length; m++) {
+          var mutation = mutations[m];
+          // Look at added nodes that could be captions
+          if (mutation.addedNodes) {
+            for (var n = 0; n < mutation.addedNodes.length; n++) {
+              var node = mutation.addedNodes[n];
+              if (node.nodeType === 1) { // Element node
+                var text = node.textContent ? node.textContent.trim() : '';
+                // Caption text is typically 5+ chars, not a button/UI element
+                if (text.length > 5 && !node.querySelector('button') && !node.querySelector('input')
+                    && !node.closest('[role="menu"]') && !node.closest('[role="dialog"]')
+                    && !node.closest('[role="navigation"]') && !node.closest('[role="listbox"]')) {
+                  // Check if this looks like a caption (contains speech-like text)
+                  // Exclude participant list items, settings panels
+                  var parent = node.parentElement;
+                  if (parent && (parent.getAttribute('role') === 'region'
+                      || parent.className.indexOf('caption') !== -1
+                      || parent.closest('[class*="caption" i]')
+                      || parent.closest('[class*="subtitle" i]'))) {
+                    if (text !== lastCaption) {
+                      lastCaption = text;
+                      if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'caption', text: text, ts: Date.now() }));
+                        console.log('[CC-Captions] ' + text.substring(0, 60));
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      console.log('[CC-Captions] MutationObserver active');
+    }
+
+    // Also poll as fallback (in case MutationObserver misses captions)
+    function pollCaptions() {
+      // Look for the caption overlay container specifically
+      var containers = document.querySelectorAll('[class*="caption" i] span, [role="region"] span');
       var texts = [];
-      captionEls.forEach(function(el) {
-        var t = el.textContent?.trim();
-        if (t && t.length > 2 && t !== lastCaption) texts.push(t);
+      containers.forEach(function(el) {
+        var t = el.textContent ? el.textContent.trim() : '';
+        // Filter: only actual speech text (not UI, not participant names)
+        if (t.length > 3 && t.indexOf('more_vert') === -1 && t.indexOf('Raising') === -1) {
+          texts.push(t);
+        }
       });
       if (texts.length > 0) {
-        var newText = texts.join(' ');
-        if (newText !== lastCaption && newText.length > 3) {
-          lastCaption = newText;
-          // Send to backend as transcript text
+        var combined = texts.join(' ');
+        if (combined !== lastCaption && combined.length > 5) {
+          lastCaption = combined;
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'caption', text: newText, ts: Date.now() }));
+            ws.send(JSON.stringify({ type: 'caption', text: combined, ts: Date.now() }));
           }
         }
       }
     }
 
-    // Enable captions after a delay (Meet needs to fully load)
     setTimeout(enableCaptions, 5000);
-    setTimeout(enableCaptions, 10000); // Retry
-
-    // Scrape captions every 2s
-    setInterval(scrapeCaptions, 2000);
+    setTimeout(enableCaptions, 10000);
+    setTimeout(startCaptionObserver, 6000);
+    setInterval(pollCaptions, 3000);
   })();
 
   window.__ccPipeline = {

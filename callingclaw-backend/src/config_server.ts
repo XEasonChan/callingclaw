@@ -268,13 +268,25 @@ export function startConfigServer(services: Services) {
               }
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "caption") {
-              // Meet captions DOM scrape — reliable transcript from Google's speech recognition
-              // Inject as user text input so the AI sees what was said even if audio capture is poor
+              // Meet captions DOM scrape — reliable transcript from Google's speech recognition.
+              // TWO purposes:
+              //   1. Add to SharedContext transcript (for meeting notes, summary)
+              //   2. Inject into Realtime API as conversation context (so AI understands what was said)
               if (data.text && services.realtime.connected) {
                 const text = String(data.text).trim();
-                if (text.length > 3) {
-                  services.context.addTranscript({ role: "user", text: `[Meet caption] ${text}`, ts: data.ts || Date.now() });
-                  console.log(`[VoiceTest] Meet caption: "${text.substring(0, 80)}"`);
+                if (text.length > 5) {
+                  // Add to transcript for notes/summary
+                  services.context.addTranscript({ role: "user", text, ts: data.ts || Date.now() });
+                  // Inject into Realtime API so AI sees reliable text of what was said
+                  // Uses conversation.item.create (passive context, does NOT trigger a response)
+                  services.realtime.sendEvent("conversation.item.create", {
+                    item: {
+                      type: "message",
+                      role: "user",
+                      content: [{ type: "input_text", text: `[会议发言] ${text}` }],
+                    },
+                  });
+                  console.log(`[VoiceTest] Meet caption → AI: "${text.substring(0, 80)}"`);
                 }
               }
             } else if (data.type === "start") {

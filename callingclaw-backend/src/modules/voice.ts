@@ -469,6 +469,16 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
+   * Send a raw Realtime API event (passthrough to client).
+   * Used for conversation.item.create (caption injection) etc.
+   */
+  sendEvent(eventName: string, payload: any) {
+    if (this.client.connected) {
+      this.client.sendEvent(eventName, payload);
+    }
+  }
+
+  /**
    * Get the underlying client for audio output forwarding.
    * Event name is normalized — works for both providers.
    */
