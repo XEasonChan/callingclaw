@@ -306,9 +306,9 @@ export class RealtimeClient {
           tools: this.tools,
           voice,
           vad: {
-            threshold: provider.name === "grok" ? 0.85 : 0.5,
-            prefix_padding_ms: provider.name === "grok" ? 333 : 300,
-            silence_duration_ms: 500, // Both providers: 500ms (Grok was 800, too conservative)
+            threshold: provider.name === "grok" ? 0.9 : 0.6,       // Higher = less sensitive to background noise
+            prefix_padding_ms: provider.name === "grok" ? 500 : 300, // More padding before speech detection
+            silence_duration_ms: provider.name === "grok" ? 1200 : 800, // Wait longer before assuming user finished speaking
           },
         });
 
