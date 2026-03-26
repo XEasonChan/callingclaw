@@ -38,8 +38,9 @@ export const CONFIG = {
   port: parseInt(process.env.PORT || "4000"),
   // bridgePort removed — Python sidecar eliminated in v2.6.0
 
-  // Voice provider selection: "openai" | "grok" (A/B testing)
-  voiceProvider: (process.env.VOICE_PROVIDER || "openai") as "openai" | "grok",
+  // Voice provider selection: "openai" | "grok"
+  // Default: grok (Eve voice, 6x cheaper, good enough for meetings)
+  voiceProvider: (process.env.VOICE_PROVIDER || "grok") as "openai" | "grok",
 
   // OpenAI (Realtime voice + GPT-4o vision)
   openai: {
