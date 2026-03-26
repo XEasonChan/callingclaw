@@ -1011,33 +1011,71 @@ export function startConfigServer(services: Services) {
       // ── Calendar API ──
       // ══════════════════════════════════════════════════════════════
 
-      // GET /api/calendar/events — List upcoming events with prep brief enrichment
+      // GET /api/calendar/events — List upcoming events + SessionManager meetings
+      // Merges: Google Calendar events + sessions from /callingclaw prepare
+      // So Desktop shows meetings even when Calendar is disconnected.
       if (url.pathname === "/api/calendar/events" && req.method === "GET") {
         const connected = services.calendar.connected;
         const events = await services.calendar.listUpcomingEvents();
 
-        // Enrich events with prep brief status from sessions.json
-        let enriched = events;
+        // Read all sessions (from prepare, join, etc.)
+        let sessions: any[] = [];
         try {
           const { readSessions } = await import("./modules/shared-documents");
-          const sessions = readSessions().sessions || [];
-          enriched = events.map((e: any) => {
-            const titleLower = (e.summary || "").toLowerCase();
-            let _prepBrief: string | null = null;
-            // Find the matching session that HAS a prep file (skip sessions with only live/summary)
-            for (const s of sessions) {
-              const sTopic = (s.topic || "").toLowerCase();
-              if (sTopic && (titleLower.includes(sTopic) || sTopic.includes(titleLower))) {
-                if (s.files?.prep) {
-                  _prepBrief = s.files.prep;
-                  break; // Found a match WITH prep — use it
-                }
-                // Topic matches but no prep — keep looking for one that has it
-              }
-            }
-            return { ...e, _prepBrief };
-          });
+          sessions = readSessions().sessions || [];
         } catch {}
+
+        // Enrich calendar events with prep brief status
+        const calEventIds = new Set<string>();
+        const meetUrls = new Set<string>();
+        let enriched = events.map((e: any) => {
+          if (e.id) calEventIds.add(e.id);
+          const link = e.hangoutLink || e.meetLink;
+          if (link) meetUrls.add(link);
+          const titleLower = (e.summary || "").toLowerCase();
+          let _prepBrief: string | null = null;
+          for (const s of sessions) {
+            const sTopic = (s.topic || "").toLowerCase();
+            if (sTopic && (titleLower.includes(sTopic) || sTopic.includes(titleLower))) {
+              if (s.files?.prep) { _prepBrief = s.files.prep; break; }
+            }
+            // Also match by calendarEventId or meetUrl
+            if (s.calendarEventId && s.calendarEventId === e.id) {
+              if (s.files?.prep) { _prepBrief = s.files.prep; break; }
+            }
+          }
+          return { ...e, _prepBrief };
+        });
+
+        // Merge sessions NOT already in calendar events (e.g. prepare'd without calendar, or calendar disconnected)
+        const now = Date.now();
+        for (const s of sessions) {
+          // Skip if already matched to a calendar event
+          if (s.calendarEventId && calEventIds.has(s.calendarEventId)) continue;
+          if (s.meetUrl && meetUrls.has(s.meetUrl)) continue;
+          // Skip ended sessions older than 24h
+          if (s.status === "ended" && s.endTime && now - new Date(s.endTime).getTime() > 86400000) continue;
+          // Convert session to calendar-like event format for Desktop rendering
+          enriched.push({
+            id: s.meetingId,
+            summary: s.topic,
+            start: s.startTime || new Date().toISOString(),
+            end: s.endTime || (s.startTime ? new Date(new Date(s.startTime).getTime() + 3600000).toISOString() : null),
+            hangoutLink: s.meetUrl || null,
+            meetLink: s.meetUrl || null,
+            _prepBrief: s.files?.prep || null,
+            _source: "session", // Mark so Desktop knows this came from SessionManager
+            _status: s.status,
+            _meetingId: s.meetingId,
+          });
+        }
+
+        // Sort by start time (newest first for past, soonest first for upcoming)
+        enriched.sort((a: any, b: any) => {
+          const aTime = new Date(typeof a.start === "object" ? a.start.dateTime : a.start).getTime();
+          const bTime = new Date(typeof b.start === "object" ? b.start.dateTime : b.start).getTime();
+          return aTime - bTime;
+        });
 
         return Response.json({ events: enriched, connected }, { headers });
       }

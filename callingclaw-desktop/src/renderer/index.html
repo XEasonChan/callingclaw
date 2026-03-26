@@ -2262,7 +2262,7 @@ function routeWsEvent(msg) {
   if (msg.timestamp) lastEventTs = Math.max(lastEventTs, msg.timestamp);
 
   // Dashboard-level events (meeting lifecycle → refresh calendar/status)
-  if (eventType === 'meeting.started' || eventType === 'meeting.ended' || eventType === 'meeting.agenda') {
+  if (eventType === 'meeting.started' || eventType === 'meeting.ended' || eventType === 'meeting.agenda' || eventType === 'meeting.prep_ready') {
     setTimeout(refreshAll, 500);
   }
 
