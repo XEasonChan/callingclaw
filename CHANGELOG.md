@@ -3,6 +3,24 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.13] - 2026-03-26
+
+### Fixed
+- **音频回声消除** — AI 说话时暂停发送 captured audio（`aiSpeaking` flag + 500ms 尾部保护），防止 AI 通过 Meet 听到自己的回声导致自我打断和重复
+- **Receiver 循环** — `setupCapture()` 按索引循环尝试所有 audio receiver，5s maxAmp=0 后自动切换下一个（之前重试同一个 receiver）
+- **Playwright lib vs CLI 冲突** — `ChromeLauncher.joinGoogleMeet()` 使用 Playwright library page 直接操作，不再依赖 playwright-cli（避免 launchPersistentContext 独占冲突）
+- **Voice session 重复启动** — ws/voice-test 的 `start` 消息不再重置已连接的 voice session（防止丢失 meeting context + brief）
+- **Voice 指令** — 会议加入时使用 `CORE_IDENTITY` 作为 system prompt，不再用裸 topic 字符串
+- **Chrome profile error** — 添加 `--disable-session-crashed-bubble`、`--noerrdialogs` 抑制崩溃恢复对话框；启动时清理 crash state 文件
+
+### Added
+- **Admission monitor 移植** — `startAdmissionMonitor()`、`_admitEvalLib()`、`onMeetingEnd()` 移植到 ChromeLauncher，使用 `page.evaluate()` 直接执行
+- **主 Chrome profile 支持** — 默认使用用户的 Chrome profile（`~/Library/Application Support/Google/Chrome`），保留 Google 帐户认证。启动前优雅关闭已运行的 Chrome
+
+### Changed
+- **会议加入主路径** — `config_server.ts` 的 `/api/meeting/join` 优先使用 ChromeLauncher，playwright-cli 降级为 fallback
+- **设备选择移除** — 不再修改 Meet 的扬声器/麦克风设备（之前强制设为 BlackHole），保留系统默认设备
+
 ## [2.7.12] - 2026-03-26
 
 ### Added

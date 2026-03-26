@@ -2,7 +2,7 @@
 
 > AI meeting room that joins Google Meet/Zoom as a real participant. Listens, speaks, takes notes, controls the computer — like a sharp team member who never forgets.
 
-**v2.7.12** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
+**v2.7.13** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
 
 ---
 
