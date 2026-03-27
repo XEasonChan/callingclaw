@@ -2894,6 +2894,54 @@ STEP-BY-STEP FLOW:
         return Response.json(result, { headers });
       }
 
+      // POST /api/screen/scroll — Scroll the presenting tab
+      if (url.pathname === "/api/screen/scroll" && req.method === "POST") {
+        if (!services.chromeLauncher?.presentingPage) {
+          return Response.json({ error: "No presenting tab open" }, { status: 400, headers });
+        }
+        const body = (await req.json().catch(() => ({}))) as { direction?: "up" | "down"; target?: string; pixels?: number };
+        try {
+          let scrollResult: any;
+          if (body.target) {
+            // Scroll to a specific element by text content or CSS selector
+            scrollResult = await services.chromeLauncher.evaluateOnPresentingPage(`(() => {
+              // Try finding by text content
+              var target = ${JSON.stringify(body.target)};
+              var all = document.querySelectorAll('h1,h2,h3,h4,h5,h6,section,[id],p,div');
+              for (var el of all) {
+                var text = (el.textContent || '').trim();
+                if (text.toLowerCase().includes(target.toLowerCase())) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  return 'scrolled_to:' + text.substring(0, 60);
+                }
+              }
+              // Try by ID
+              var byId = document.getElementById(target) || document.querySelector(target);
+              if (byId) { byId.scrollIntoView({ behavior: 'smooth', block: 'center' }); return 'scrolled_to_id:' + target; }
+              return 'target_not_found';
+            })()`);
+          } else {
+            // Scroll by direction/pixels
+            const px = body.pixels || 500;
+            const dir = body.direction === "up" ? -px : px;
+            await services.chromeLauncher.evaluateOnPresentingPage(`window.scrollBy({ top: ${dir}, behavior: 'smooth' })`);
+            scrollResult = `scrolled_${body.direction || "down"}_${px}px`;
+          }
+          return Response.json({ success: true, result: String(scrollResult) }, { headers });
+        } catch (e: any) {
+          return Response.json({ success: false, error: e.message }, { headers });
+        }
+      }
+
+      // POST /api/screen/snapshot — Get presenting tab DOM snapshot
+      if (url.pathname === "/api/screen/snapshot" && req.method === "GET") {
+        if (!services.chromeLauncher?.presentingPage) {
+          return Response.json({ error: "No presenting tab" }, { status: 400, headers });
+        }
+        const snapshot = await services.chromeLauncher.snapshotPresentingPage();
+        return Response.json({ snapshot }, { headers });
+      }
+
       // POST /api/bridge/action — Send direct action to Python sidecar
       if (url.pathname === "/api/bridge/action" && req.method === "POST") {
         const body = (await req.json()) as {

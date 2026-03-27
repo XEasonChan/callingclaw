@@ -541,11 +541,34 @@ Respond with JSON only:
         }
 
         case "scroll": {
-          instruction = `scroll ${params.direction || "down"}`;
+          const scrollTarget = params.target || params.selector || "";
           const targetScroll = params.targetTab || result.targetTab || "presenting";
+          instruction = scrollTarget ? `scroll to: ${scrollTarget}` : `scroll ${params.direction || "down"}`;
+
           if (targetScroll === "presenting" && this.chromeLauncher?.presentingPage) {
-            await this.chromeLauncher.evaluateOnPresentingPage(`window.scrollBy(0, ${params.direction === 'up' ? -500 : 500})`);
-            executionResult = `Scrolled ${params.direction || "down"} on presenting tab`;
+            if (scrollTarget) {
+              // Smart scroll: find element by text and scrollIntoView
+              const scrollResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+                var target = ${JSON.stringify(scrollTarget)};
+                var all = document.querySelectorAll('h1,h2,h3,h4,h5,h6,section,[id],p,div,span');
+                for (var el of all) {
+                  var text = (el.textContent || '').trim();
+                  if (text.toLowerCase().includes(target.toLowerCase()) && text.length < 200) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return 'scrolled_to:' + text.substring(0, 60);
+                  }
+                }
+                return 'not_found:' + target;
+              })()`);
+              executionResult = String(scrollResult);
+              console.log(`[Auditor] Scroll to "${scrollTarget}": ${executionResult}`);
+            } else {
+              // Simple directional scroll
+              await this.chromeLauncher.evaluateOnPresentingPage(
+                `window.scrollBy({ top: ${params.direction === 'up' ? -500 : 500}, behavior: 'smooth' })`
+              );
+              executionResult = `Scrolled ${params.direction || "down"} on presenting tab`;
+            }
           } else {
             const r = await this.automationRouter.execute(instruction);
             executionResult = r.result;
