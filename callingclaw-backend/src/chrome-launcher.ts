@@ -444,6 +444,10 @@ export class ChromeLauncher {
       if (existsSync(p)) try { rmSync(p); } catch {}
     }
 
+    // Clear stale audio device preferences (BlackHole was removed in v2.7.12)
+    // Without this, Meet may select BlackHole as mic/speaker from saved prefs → muted audio
+    this.clearAudioDevicePrefs();
+
     // Import Google cookies from user's main Chrome profile (one-time bootstrap)
     // This gives the CallingClaw profile access to Google Meet without manual sign-in.
     await this.importGoogleCookies();
@@ -1257,6 +1261,38 @@ export class ChromeLauncher {
       console.log("[ChromeLauncher] Imported cookies from main Chrome profile");
     } catch (e: any) {
       console.warn("[ChromeLauncher] Cookie import failed:", e.message);
+    }
+  }
+
+  /**
+   * Clear saved audio device preferences from Chrome profile.
+   * Prevents Meet from selecting BlackHole (removed in v2.7.12) as mic/speaker.
+   * Sets to empty string = system default device.
+   */
+  private clearAudioDevicePrefs(): void {
+    const prefsPath = resolve(this.profileDir, "Default", "Preferences");
+    try {
+      if (!existsSync(prefsPath)) return;
+      const prefs = JSON.parse(require("fs").readFileSync(prefsPath, "utf-8"));
+      let changed = false;
+
+      // Clear default audio devices → system default
+      if (!prefs.media) prefs.media = {};
+      if (prefs.media.default_audio_capture_device !== "") {
+        prefs.media.default_audio_capture_device = "";
+        changed = true;
+      }
+      if (prefs.media.default_audio_render_device !== "") {
+        prefs.media.default_audio_render_device = "";
+        changed = true;
+      }
+
+      if (changed) {
+        require("fs").writeFileSync(prefsPath, JSON.stringify(prefs));
+        console.log("[ChromeLauncher] Cleared audio device prefs (reset to system default)");
+      }
+    } catch (e: any) {
+      // Non-fatal — prefs file may not exist on first launch
     }
   }
 
