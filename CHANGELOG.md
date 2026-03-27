@@ -3,6 +3,12 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.18] - 2026-03-27
+
+### Changed
+- **Onboarding Step 4 重设计** — "Give CallingClaw an Email" 两阶段流程：Phase 1 Google 登录，Phase 2 显示 CallingClaw 帐户 + 用户邮箱输入。强调 CallingClaw 带着 OpenClaw memory + tasks 参会
+- **文档清理** — 删除 v2.0 废弃 PRD + playwright-cli 测试目录，归档 6 个已完成文档 + 17 条会议记录到 `docs/archived/`，重写 DEPENDENCIES.md
+
 ## [2.7.17] - 2026-03-27
 
 ### Added
