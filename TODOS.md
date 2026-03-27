@@ -63,3 +63,37 @@
 **Depends on:** v2.7.12 Playwright 注入稳定运行、Recall.ai API key
 **Added:** 2026-03-26
 **Branch:** `feat/recall-ai-transport` (5eacdce)
+
+## SenseVoice Local STT — Accuracy Test
+**Priority:** P1
+**Owner:** Backend agent
+**Context:** Grok 内置 ASR 对中文准确度差（产生幻觉转写 "Skyscraping" 等），直接影响 Haiku agent 意图分类能力。SenseVoice-Small 模型（70ms/10s 音频，15x faster than Whisper-Large）已在 `experiment/sensevoice-stt` 分支准备好。需要对比 Grok ASR vs SenseVoice vs Meet Captions 三个转写源的准确率。
+**Why:** 准确的 transcript 是 Haiku agent 正确分类意图的前提。当前 Grok ASR 的中文错误率导致很多用户指令被忽略。
+**What to change:** (1) 启动 SenseVoice 本地服务 (2) 在同一个会议中同时收集三个转写源 (3) 对比中文/英文/混合语音准确率
+**Branch:** `experiment/sensevoice-stt`
+**Added:** 2026-03-27
+
+## Meet Captions CSS Selector Fix
+**Priority:** P1
+**Owner:** Backend agent
+**Context:** Meet Captions DOM 抓取选择器错误（抓到参会者名字 "more_vert" 而不是字幕文字）。MutationObserver 已实现但 role="region" / class*="caption" 过滤条件不匹配 Meet 的实际 DOM。需要在真实 Meet 会议中用 DevTools 检查实际字幕元素结构。
+**Added:** 2026-03-27
+
+## OpenAI Realtime input_image — Presentation Vision
+**Priority:** P2
+**Owner:** Backend agent
+**Context:** OpenAI GPT-4o Realtime API 支持 `conversation.item.create { type: "input_image" }` 发送截图，模型可以看着屏幕说话。Grok 不支持。可在 presentation 模式下切换到 OpenAI，每个 slide 截图发给模型，实现"看着说"。
+**Cost tradeoff:** OpenAI $0.30/min vs Grok $0.05/min，只在 presentation 模式启用。
+**Added:** 2026-03-27
+
+## Grok MCP Integration — CallingClaw as MCP Server
+**Priority:** P2
+**Owner:** Backend agent
+**Context:** Grok Voice API 支持 `{ type: "mcp", server_url: "..." }` 在 session.update 中注册 MCP server。服务端自动执行，零客户端延迟。可以把 CallingClaw 的 scroll_page/click_element/share_screen 注册为 MCP tools，让 Grok 直接调用（不需要经过 Haiku TranscriptAuditor）。
+**Added:** 2026-03-27
+
+## Audio Capture Tooltip Noise Filter
+**Priority:** P2
+**Owner:** Backend agent
+**Context:** 投屏 Confluence 等页面时，音频捕获抓到了页面的 accessibility announcements（"Press the down arrow to open the hover tray..."）作为 user speech。需要在 config_server.ts 的 voice-test handler 中过滤这些重复的 tooltip 文字。
+**Added:** 2026-03-27

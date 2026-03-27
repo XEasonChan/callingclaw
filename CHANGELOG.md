@@ -3,6 +3,24 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.1] - 2026-03-27
+
+### Added
+- **Presentation Engine** — Haiku 读取页面 DOM snapshot → 生成 5-8 个 slide plan → Grok 同步讲解 + 滚动。`POST /api/screen/present { url, topic }` + `/callingclaw present <url>`
+- **Smart scroll API** — `POST /api/screen/scroll { target }` 按文字内容 scrollIntoView（不只是像素滚动）
+- **Presenting tab snapshot** — `GET /api/screen/snapshot` 返回 DOM accessibility tree
+- **Haiku agent 工具重写** — 12 个按场景分组的具体 tool（search_and_open / share_file / click / scroll），文件名解析示例，目录列表
+- **Grok search.mode: auto** — Grok 自动决定何时调用 web_search / x_search
+- **CORE_IDENTITY 角色框架** — Presenter/Reviewer 双模式 + agent 声明 + OpenClaw 后续执行
+- **6 个新 TODOS** — SenseVoice 测试、Meet Captions 修复、OpenAI input_image、Grok MCP、tooltip 过滤
+
+### Fixed
+- **i18n join verify** — 语言无关的 mic+camera 按钮检测 + URL fallback
+- **Prep 不阻塞 join** — prepareMeeting 改为 fire-and-forget
+- **BlackHole Chrome prefs** — 每次启动清空设备偏好
+- **重复 screen share 路由** — 移除 legacy meetJoiner 路由
+- **Google OAuth auto-scan** — 启动时 + Chrome 登录时自动连接 Calendar
+
 ## [2.8.0] - 2026-03-27
 
 ### 🎯 Major: Meeting Automation Overhaul
