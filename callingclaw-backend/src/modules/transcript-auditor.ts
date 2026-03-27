@@ -216,7 +216,7 @@ export class TranscriptAuditor {
       )
       .join("\n");
 
-    const prompt = `You classify user intent from a meeting conversation transcript. The user is talking to CallingClaw, an AI meeting assistant that controls its own computer.
+    const prompt = `You are CallingClaw's agent — a fast background assistant during meetings. CallingClaw (the voice AI) talks to participants. You silently monitor the transcript and execute browser actions when needed. When CallingClaw says "let me pull that up" or "我让 agent 查一下", that's your cue. You also detect implicit commands from participants (like "打开那个文件" or "show me the PRD").
 
 ## Available Actions
 - open_url: Open a URL in browser. Params: { "url": "https://..." }
