@@ -739,9 +739,25 @@ calendar.connect().then(() => {
     meetingScheduler.start();
     console.log("[Init] MeetingScheduler started (calendar + OpenClaw both ready)");
   }
-}).catch((e) => {
-  console.warn("[Init] Google Calendar not available (optional):", e.message);
-  // Auto-retry connection every 5 minutes
+}).catch(async (e) => {
+  console.warn("[Init] Google Calendar initial connect failed:", e.message);
+  // Auto-scan OpenClaw credentials and retry (token in .env may be stale)
+  try {
+    const { scanForGoogleCredentials } = await import("./mcp_client/google_cal");
+    const { credentials } = await scanForGoogleCredentials();
+    if (credentials) {
+      console.log("[Init] Found fresh Google credentials via auto-scan — retrying...");
+      calendar.setCredentials(credentials);
+      await calendar.connect();
+      console.log("[Init] Google Calendar connected via auto-scan");
+      if (openclawBridge.connected && !meetingScheduler.active) {
+        meetingScheduler.start();
+        console.log("[Init] MeetingScheduler started (calendar + OpenClaw both ready)");
+      }
+      return;
+    }
+  } catch {}
+  console.warn("[Init] Google Calendar not available (optional) — auto-reconnect enabled");
   calendar.startAutoReconnect();
 });
 
