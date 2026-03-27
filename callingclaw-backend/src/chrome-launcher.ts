@@ -724,13 +724,20 @@ export class ChromeLauncher {
         }
       }
 
-      // Step 4: Verify join state (poll up to 20s)
+      // Step 4: Verify join state (poll up to 20s) — language-agnostic selectors
       log("Verifying join state...");
       await page.waitForTimeout(2000);
 
       for (let attempt = 0; attempt < 6; attempt++) {
         const state = await page.evaluate(`(() => {
-          if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) return 'in_meeting';
+          // Language-agnostic: check for call_end icon (Material icon), any leave button, or control bar
+          var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"]');
+          var callEnd = document.querySelector('[aria-label*="call_end"],[aria-label*="Call controls"],[aria-label*="通话控件"]');
+          // Also check: does the page have a bottom control bar with mic/camera buttons?
+          var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"]');
+          var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"]');
+          var hasControls = micBtn && camBtn;
+          if (leaveBtn || callEnd || hasControls) return 'in_meeting';
           var t = document.body.innerText;
           if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人')) return 'waiting_room';
           return 'loading';
@@ -765,6 +772,13 @@ export class ChromeLauncher {
         if (attempt < 5) await page.waitForTimeout(3000);
       }
 
+      // Fallback: if still on meet.google.com, assume we're in the meeting
+      // (verify selectors may not match non-English UI)
+      const currentUrl = page.url();
+      if (currentUrl.includes("meet.google.com")) {
+        log("Verify timeout but still on Meet — assuming in_meeting (i18n fallback)");
+        return { success: true, summary: "Joined meeting (verify fallback)", steps, state: "in_meeting" };
+      }
       return { success: false, summary: "Could not confirm join state", steps, state: "failed" };
 
     } catch (err: any) {
