@@ -3,6 +3,44 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.0] - 2026-03-27
+
+### 🎯 Major: Meeting Automation Overhaul
+
+**会议中全链路 Haiku + Playwright 自动化**。CallingClaw 现在可以在会议中实时执行浏览器操作：投屏、点击、导航、滚动，全程不影响音频。
+
+### Added
+- **Tab-level screen sharing** — `shareScreen(url)` 打开 URL 在新 tab，Chrome `--auto-select-desktop-capture-source` flag 按标题自动匹配投屏，零对话框
+  - `POST /api/screen/share { url }` + `POST /api/screen/stop`
+  - `/callingclaw share <url>` + `/callingclaw share stop`
+- **Dual-tab Playwright routing** — Meet tab（音频注入）和 Presenting tab（内容操作）独立运行，互不干扰
+  - `evaluateOnPresentingPage()` / `clickOnPresentingPage()` / `navigatePresentingPage()` / `snapshotPresentingPage()`
+  - TranscriptAuditor Haiku prompt 新增 `targetTab` 分类（presenting vs meet）
+- **File search in AutomationRouter** — 模糊关键词搜索项目 + shared 目录，`open_file` 自动查找文件
+- **Meeting automation config** — `MEETING_AUTOMATION_MODEL` 独立配置，会议中使用 Haiku（~500ms），非会议用 Sonnet
+- **Auto-leave + summary** — 任何方式退出会议都自动生成 summary + tasks + Telegram 推送
+- **Meeting Summary Skill** — `/meeting-summary` 生成 CallingClaw 官网风格 HTML 报告
+- **Frame API** — `GET /api/meeting/frame/:meetingId/:filename` 提供会议截图
+- **Browser E2E tests** — Meet join、local HTML、Twitter profile、Google search、screen share（5 scenarios）
+- **Meeting + Present E2E test** — join → share → scroll → AI speak → stop → leave
+
+### Fixed
+- **音频捕获重写** — 移除 echo suppression（Grok 自行处理），双管道捕获（getReceivers + ontrack），Meet 字幕注入 Realtime API
+- **Join 不再被 prep 阻塞** — `prepareMeeting()` 改为 fire-and-forget，join 立即返回
+- **Join 多语言兼容** — verify 检测 mic+camera 按钮存在性（语言无关），URL fallback 兜底
+- **BlackHole 设备残留** — Chrome profile 启动时清空 audio device prefs
+- **VAD 调优** — Grok silence 500→1200ms / threshold 0.85→0.9 / prefix 333→500ms
+- **TranscriptAuditor debounce** — 2500ms → 1200ms
+- **Mic unmute** — 入会后重试 3 次 + 更多选择器
+- **重复 screen share 路由** — 移除 legacy meetJoiner 路由，统一走 ChromeLauncher
+- **Google OAuth auto-scan** — 启动时自动扫描 OpenClaw credentials
+- **Calendar auto-connect** — Chrome 登录检测成功时自动连接 Calendar
+
+### Changed
+- **默认 Voice Provider** — OpenAI (marin) → Grok (Eve)，6x 更便宜
+- **Onboarding Step 4** — "Give CallingClaw an Email" 两阶段流程
+- **文档清理** — 删除废弃文件，归档 PRDs + meeting notes
+
 ## [2.7.19] - 2026-03-27
 
 ### Added
