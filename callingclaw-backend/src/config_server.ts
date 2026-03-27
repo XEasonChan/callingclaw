@@ -2574,20 +2574,11 @@ STEP-BY-STEP FLOW:
       }
 
       // ══════════════════════════════════════════════════════════════
-      // ── Screen Sharing API ──
+      // ── Screen Sharing API (legacy routes → redirect to ChromeLauncher) ──
+      // New handlers are below in the Bridge/Google/Static section.
+      // These legacy routes are kept for backward compatibility but now
+      // prefer ChromeLauncher over meetJoiner osascript.
       // ══════════════════════════════════════════════════════════════
-
-      // POST /api/screen/share — Start screen sharing in Meet
-      if (url.pathname === "/api/screen/share" && req.method === "POST") {
-        const ok = await services.meetJoiner.shareScreen();
-        return Response.json({ ok, sharing: services.meetJoiner.isSharing }, { headers });
-      }
-
-      // POST /api/screen/stop — Stop screen sharing
-      if (url.pathname === "/api/screen/stop" && req.method === "POST") {
-        await services.meetJoiner.stopSharing();
-        return Response.json({ ok: true, sharing: false }, { headers });
-      }
 
       // POST /api/screen/open — Open a file on CallingClaw's screen
       if (url.pathname === "/api/screen/open" && req.method === "POST") {
