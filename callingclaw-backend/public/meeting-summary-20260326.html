@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Summary — CallingClaw Desktop UI 重设计</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-subtle: #faf9f9;
+    --surface: #ffffff;
+    --text: #1f2937;
+    --text2: #6b7280;
+    --text3: #9ca3af;
+    --accent: #dc4a3a;
+    --accent-light: #fef2f1;
+    --success: #4aa682;
+    --success-light: #e6f4ee;
+    --warning: #f59e0b;
+    --warning-light: #fef3c7;
+    --border: #e5e7eb;
+    --border-light: #f3f4f6;
+    --font-display: "Space Grotesk", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.04);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.06);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+  body { font-family: var(--font-body); color: var(--text); background: var(--bg); line-height: 1.6; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
+
+  /* Header */
+  .header { margin-bottom: 40px; }
+  .header-logo { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .header-logo svg { width: 28px; height: 28px; }
+  .header-logo span { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--accent); letter-spacing: -0.02em; }
+  .header h1 { font-family: var(--font-display); font-size: 32px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 12px; }
+  .header-meta { display: flex; flex-wrap: wrap; gap: 16px; color: var(--text2); font-size: 14px; }
+  .header-meta .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-accent { background: var(--accent-light); color: var(--accent); }
+  .badge-success { background: var(--success-light); color: var(--success); }
+  .badge-warning { background: var(--warning-light); color: #92400e; }
+
+  /* Section */
+  .section { margin-bottom: 40px; }
+  .section-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  /* Summary card */
+  .summary-card { background: var(--bg-subtle); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 24px; }
+  .summary-card p { margin-bottom: 10px; font-size: 15px; }
+  .summary-card ul { padding-left: 20px; margin: 8px 0; }
+  .summary-card li { margin-bottom: 4px; font-size: 14px; }
+
+  /* Action items table */
+  .review-table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .review-table th { background: var(--bg-subtle); font-family: var(--font-display); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text2); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+  .review-table td { padding: 16px; border-bottom: 1px solid var(--border-light); vertical-align: top; font-size: 14px; }
+  .review-table tr:last-child td { border-bottom: none; }
+  .review-table .frame-cell { width: 320px; padding: 12px; }
+  .review-table .frame-cell img { width: 100%; border-radius: var(--radius-sm); display: block; box-shadow: var(--shadow-sm); }
+  .review-table .content-cell { padding: 16px 20px; }
+  .review-table .content-cell h4 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .review-table .content-cell p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+  .review-table .time-badge { font-family: var(--font-mono); font-size: 12px; color: var(--text3); margin-bottom: 6px; display: block; }
+  .priority { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-right: 6px; }
+  .p1 { background: var(--accent-light); color: var(--accent); }
+  .p2 { background: var(--warning-light); color: #92400e; }
+  .p3 { background: var(--border-light); color: var(--text2); }
+
+  /* Transcript */
+  .transcript { background: var(--bg-subtle); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 20px; }
+  .msg { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
+  .msg:last-child { border-bottom: none; }
+  .msg-role { flex-shrink: 0; width: 48px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; text-transform: uppercase; padding-top: 2px; }
+  .msg-role.ai { color: var(--accent); }
+  .msg-role.user { color: #2563eb; }
+  .msg-text { flex: 1; font-size: 14px; }
+  .msg-time { flex-shrink: 0; font-family: var(--font-mono); color: var(--text3); font-size: 12px; }
+
+  /* Issues */
+  .issue { background: var(--accent-light); border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 16px; margin-bottom: 10px; }
+  .issue-title { font-weight: 600; font-size: 14px; color: var(--accent); margin-bottom: 4px; }
+  .issue p { font-size: 13px; color: var(--text2); }
+
+  /* Footer */
+  .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text3); font-size: 12px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Header -->
+<div class="header">
+  <div class="header-logo">
+    <svg viewBox="0 0 20 20" fill="none"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="#dc4a3a" stroke-width="2.2" stroke-linecap="round"/></svg>
+    <span>CallingClaw</span>
+  </div>
+  <h1>CallingClaw Desktop UI 重设计</h1>
+  <div class="header-meta">
+    <span>2026-03-26 &middot; 23:16 – 23:41 (25 min)</span>
+    <span>XEason Chan, xueyi chen</span>
+    <span class="badge badge-accent">Calendly 风格 AI 助手</span>
+    <span class="badge badge-success">v2.7.16</span>
+  </div>
+</div>
+
+<!-- Summary -->
+<div class="section">
+  <div class="section-title">Meeting Summary</div>
+  <div class="summary-card">
+    <p><strong>目标：</strong>将 CallingClaw Desktop UI 从开发者调试面板重设计为 Calendly 风格的产品级界面 — 以会议为中心、AI 助手驱动、简洁直观。</p>
+    <p><strong>核心决策：</strong></p>
+    <ul>
+      <li>设计方向：Calendly 风格 — 一屏搞定预约 + 时间线 + AI 协作</li>
+      <li>自动化：Verify 自动处理常规调用，用户无需手动配置</li>
+      <li>融入学生时间线概念（里程碑标记 + 渐进披露）</li>
+    </ul>
+    <p><strong>待解决：</strong>OpenFlow 出站会议调用失败（权限/API 配置问题）</p>
+  </div>
+</div>
+
+<!-- Review Items Table — screenshot + action -->
+<div class="section">
+  <div class="section-title">Review Items</div>
+  <table class="review-table">
+    <thead>
+      <tr><th style="width:320px">Screenshot</th><th>Discussion & Action</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="frame-cell"><img src="/api/meeting/frame/cc_mn7lp24a_hnjl/1774538185341.jpg" alt="会议开始"></td>
+        <td class="content-cell">
+          <span class="time-badge">23:16</span>
+          <h4>会议启动 — AI 主持开场</h4>
+          <p>CallingClaw AI 助手自动加入 Meet，开场确认会议主题：Desktop UI 重设计，采用 Calendly 风格 AI 助手心智模型。AI 主动引导讨论方向。</p>
+          <p style="margin-top:8px;"><span class="priority p3">方向</span>确认以 Calendly 的简约调度体验为设计北极星</p>
+        </td>
+      </tr>
+      <tr>
+        <td class="frame-cell"><img src="/api/meeting/frame/cc_mn7lp24a_hnjl/1774538266460.jpg" alt="讨论设计理念"></td>
+        <td class="content-cell">
+          <span class="time-badge">23:17</span>
+          <h4>设计理念分享 — 学生时间线</h4>
+          <p>Andrew 分享了与学生讨论 AI session 后画时间线的经验。AI 建议将时间线概念融入 CallingClaw UI：里程碑标记关键日期，渐进披露避免信息 overload。</p>
+          <p style="margin-top:8px;"><span class="priority p2">设计</span>将学生时间线作为 UI 核心组件，位于主面板或悬浮窗</p>
+        </td>
+      </tr>
+      <tr>
+        <td class="frame-cell"><img src="/api/meeting/frame/cc_mn7lp24a_hnjl/1774539421409.jpg" alt="OpenFlow 问题"></td>
+        <td class="content-cell">
+          <span class="time-badge">23:37</span>
+          <h4>OpenFlow 出站会议调用失败</h4>
+          <p>发现 OpenFlow 无法正确调用出站会议，这是一个经常发生的问题。根因可能是权限或 API 配置。需要定位具体错误并在 UI 设计中避免类似痛点。</p>
+          <p style="margin-top:8px;"><span class="priority p1">Bug</span>排查 OpenFlow 出站会议权限/API 配置，修复调用链路</p>
+        </td>
+      </tr>
+      <tr>
+        <td class="frame-cell"><img src="/api/meeting/frame/cc_mn7lp24a_hnjl/1774539553633.jpg" alt="自动化讨论"></td>
+        <td class="content-cell">
+          <span class="time-badge">23:39</span>
+          <h4>Verify 自动化方案确认</h4>
+          <p>确认常规时间和目录会自己自动调用，Verify 通过后自动进入下一步。这个自动化减少了手动配置的摩擦。</p>
+          <p style="margin-top:8px;"><span class="priority p2">功能</span>实现 Verify 自动化：常规调用自动触发，用户只需确认结果</p>
+        </td>
+      </tr>
+      <tr>
+        <td class="frame-cell"><img src="/api/meeting/frame/cc_mn7lp24a_hnjl/1774539666755.jpg" alt="会议结束"></td>
+        <td class="content-cell">
+          <span class="time-badge">23:41</span>
+          <h4>会议结束 — 下一步规划</h4>
+          <p>确认时间线在 Desktop UI 中的位置（主面板 vs 悬浮窗）待后续讨论。AI 建议用 Calendly 的简化可视化方式处理调度界面。</p>
+          <p style="margin-top:8px;"><span class="priority p3">下一步</span>产出 UI mockup — 主面板布局包含时间线、调度、AI 助手入口</p>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Action Items -->
+<div class="section">
+  <div class="section-title">Action Items</div>
+  <table class="review-table">
+    <thead><tr><th style="width:60px">Priority</th><th>Task</th><th style="width:120px">Owner</th></tr></thead>
+    <tbody>
+      <tr><td><span class="priority p1">P1</span></td><td>排查 OpenFlow 出站会议调用失败 — 权限/API 配置</td><td>Andrew</td></tr>
+      <tr><td><span class="priority p1">P1</span></td><td>AI 语音识别质量修复（已完成 v2.7.16：双管道音频 + 字幕注入）</td><td>CallingClaw</td></tr>
+      <tr><td><span class="priority p2">P2</span></td><td>Desktop UI Calendly 风格重设计 — 一屏搞定预约 + 时间线 + AI 助手</td><td>Design</td></tr>
+      <tr><td><span class="priority p2">P2</span></td><td>学生时间线功能集成 — 里程碑标记 + 渐进披露</td><td>Andrew</td></tr>
+      <tr><td><span class="priority p2">P2</span></td><td>Verify 自动化常规调用 — 时间/目录自动触发</td><td>Backend</td></tr>
+      <tr><td><span class="priority p3">P3</span></td><td>产出 UI mockup — 主面板布局含时间线、调度、AI 入口</td><td>Design</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Key Transcript -->
+<div class="section">
+  <div class="section-title">Key Transcript</div>
+  <div class="transcript">
+    <div class="msg"><span class="msg-role ai">AI</span><span class="msg-text">收到，大家好。会议主题是 CallingClaw Desktop UI 的重设计，目标是 Calendly 风格的 AI 助手心智模型，谁来分享下具体的设计思路？</span><span class="msg-time">23:17</span></div>
+    <div class="msg"><span class="msg-role user">User</span><span class="msg-text">嗯，好，其实我很想在这里给给提供一些理念给我们现在的方向。</span><span class="msg-time">23:18</span></div>
+    <div class="msg"><span class="msg-role ai">AI</span><span class="msg-text">好的，你今天和 AI 快速开了个 session，之后拉学生画了时间线。能具体说说这个时间线的内容？</span><span class="msg-time">23:25</span></div>
+    <div class="msg"><span class="msg-role user">User</span><span class="msg-text">我现在显示是 OpenFlow 不可以正确的调用，稍微把出站会议这个东西是经常会发生</span><span class="msg-time">23:38</span></div>
+    <div class="msg"><span class="msg-role ai">AI</span><span class="msg-text">明白了，OpenFlow 无法正确调用出站会议。根因可能是权限或 API 配置——具体错误是什么？</span><span class="msg-time">23:38</span></div>
+    <div class="msg"><span class="msg-role user">User</span><span class="msg-text">好像这个常规的时间和目录全部都会自己自动调用，Verify 持续下一步可以</span><span class="msg-time">23:39</span></div>
+    <div class="msg"><span class="msg-role ai">AI</span><span class="msg-text">决定让 Verify 自动处理常规调用——确认一下对吗？然后我们讨论时间线在 Desktop UI 里的位置。</span><span class="msg-time">23:40</span></div>
+  </div>
+</div>
+
+<!-- Known Issues -->
+<div class="section">
+  <div class="section-title">Known Issues</div>
+  <div class="issue">
+    <div class="issue-title">AI 语音识别幻觉 (已修复 v2.7.16)</div>
+    <p>中文被识别为无意义英文。根因：echo suppression 压掉了用户语音。修复：移除 echo gate + 双管道音频 + Meet 字幕注入。</p>
+  </div>
+  <div class="issue">
+    <div class="issue-title">Memory 检索不足</div>
+    <p>AI 没有调用 recall_context 搜索已有设计文档。需优化 ContextRetriever 触发阈值。</p>
+  </div>
+  <div class="issue">
+    <div class="issue-title">电脑操作能力断开</div>
+    <p>用户要求打开 mockup 文件，AI 无反馈无执行。TranscriptAuditor 未检测到意图（语音未被正确识别）。</p>
+  </div>
+</div>
+
+<div class="footer">
+  <span>Generated by CallingClaw v2.7.16</span>
+  <span>Meeting ID: cc_mn7lp24a_hnjl &middot; 2026-03-26</span>
+</div>
+
+</div>
+</body>
+</html>

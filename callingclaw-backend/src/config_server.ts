@@ -5,7 +5,9 @@
 import { CONFIG, USER_CONFIG_PATH } from "./config";
 import { readFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
+import { homedir } from "os";
 import type { PythonBridge } from "./bridge";
+import { RecallAPI } from "./recall-api";
 
 // ── Read unified VERSION file ────────────────────────────────
 let APP_VERSION = "2.4.2";
@@ -100,6 +102,8 @@ export function startConfigServer(services: Services) {
   const browserVoiceClients = new Set<any>();
   // ── Electron Audio Bridge clients (replaces Python sidecar) ──
   const audioBridgeClients = new Set<any>();
+  // ── Recall.ai Bridge clients (cloud bot audio relay) ──
+  const recallBridgeClients = new Set<any>();
   const voiceSessionState: {
     active: boolean;
     mode: "default" | "local" | "meeting" | "test";
@@ -230,6 +234,9 @@ export function startConfigServer(services: Services) {
           audioBridgeClients.add(ws);
           ws.send(JSON.stringify({ type: "status", voiceConnected: services.realtime.connected }));
           console.log(`[AudioBridge] Electron client connected (${audioBridgeClients.size} total)`);
+        } else if (ws.data?.type === "recall-bridge") {
+          recallBridgeClients.add(ws);
+          console.log(`[RecallBridge] Cloud bot connected (${recallBridgeClients.size} total)`);
         } else {
           services.eventBus.addSubscriber(ws);
         }
@@ -241,6 +248,9 @@ export function startConfigServer(services: Services) {
         } else if (ws.data?.type === "audio-bridge") {
           audioBridgeClients.delete(ws);
           console.log(`[AudioBridge] Electron client disconnected (${audioBridgeClients.size} remaining)`);
+        } else if (ws.data?.type === "recall-bridge") {
+          recallBridgeClients.delete(ws);
+          console.log(`[RecallBridge] Cloud bot disconnected (${recallBridgeClients.size} remaining)`);
         } else {
           services.eventBus.removeSubscriber(ws);
         }
@@ -255,6 +265,17 @@ export function startConfigServer(services: Services) {
               services.realtime.sendAudio(data.payload.audio);
             }
           } catch {}
+          return;
+        }
+        // ── Recall Bridge: binary PCM16 from cloud bot → OpenAI Realtime ──
+        if (ws.data?.type === "recall-bridge") {
+          if (msg instanceof ArrayBuffer || msg instanceof Buffer) {
+            const view = new Uint8Array(msg instanceof Buffer ? msg.buffer : msg, msg instanceof Buffer ? msg.byteOffset : 0, msg instanceof Buffer ? msg.byteLength : (msg as ArrayBuffer).byteLength);
+            if (view[0] === 0x01 && view.length > 1) {
+              const pcm = Buffer.from(view.buffer, view.byteOffset + 1, view.length - 1);
+              services.realtime.sendAudio(pcm.toString("base64"));
+            }
+          }
           return;
         }
         if (ws.data?.type === "voice-test") {
@@ -411,6 +432,85 @@ export function startConfigServer(services: Services) {
           return new Response("WebSocket upgrade failed", { status: 400 });
         }
         return undefined as any;
+      }
+
+      // ── WebSocket upgrade for /ws/recall-bridge (Recall.ai cloud bot audio relay) ──
+      if (url.pathname === "/ws/recall-bridge") {
+        const upgraded = server.upgrade(req, { data: { type: "recall-bridge" } });
+        if (!upgraded) {
+          return new Response("WebSocket upgrade failed", { status: 400 });
+        }
+        return undefined as any;
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // ── Recall.ai Bot Management ──
+      // ══════════════════════════════════════════════════════════════
+
+      // GET /api/recall/status — Check if Recall.ai is configured
+      if (url.pathname === "/api/recall/status") {
+        return Response.json({
+          configured: !!CONFIG.recall.apiKey,
+          clientPageUrl: CONFIG.recall.clientPageUrl || null,
+          wsUrl: CONFIG.recall.wsUrl || null,
+          activeBridgeClients: recallBridgeClients.size,
+        }, { headers });
+      }
+
+      // POST /api/recall/bot — Create a Recall.ai bot for a meeting
+      if (url.pathname === "/api/recall/bot" && req.method === "POST") {
+        if (!CONFIG.recall.apiKey) {
+          return Response.json({ error: "RECALL_API_KEY not configured" }, { status: 400, headers });
+        }
+        try {
+          const body = await req.json();
+          const meetUrl = body.meet_url;
+          if (!meetUrl) {
+            return Response.json({ error: "meet_url required" }, { status: 400, headers });
+          }
+          const wsUrl = CONFIG.recall.wsUrl || body.ws_url || `ws://localhost:${CONFIG.port}/ws/recall-bridge`;
+          const clientBase = CONFIG.recall.clientPageUrl || `http://localhost:${CONFIG.port}/recall-client.html`;
+          const clientPageUrl = `${clientBase}?ws=${encodeURIComponent(wsUrl)}`;
+
+          const api = new RecallAPI(CONFIG.recall.apiKey, CONFIG.recall.baseUrl);
+          const bot = await api.createBot({ meetUrl, clientPageUrl, botName: body.bot_name });
+          console.log(`[Recall] Bot created: ${bot.id} for ${meetUrl}`);
+          return Response.json(bot, { status: 201, headers });
+        } catch (e: any) {
+          console.error(`[Recall] Bot creation failed:`, e.message);
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
+      }
+
+      // GET /api/recall/bot/:id — Get bot status
+      if (url.pathname.startsWith("/api/recall/bot/") && req.method === "GET") {
+        const botId = url.pathname.split("/api/recall/bot/")[1]?.replace(/\/$/, "");
+        if (!botId || !CONFIG.recall.apiKey) {
+          return Response.json({ error: "Not found" }, { status: 404, headers });
+        }
+        try {
+          const api = new RecallAPI(CONFIG.recall.apiKey, CONFIG.recall.baseUrl);
+          const bot = await api.getBot(botId);
+          return Response.json(bot, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
+      }
+
+      // DELETE /api/recall/bot/:id — Destroy bot (leave meeting)
+      if (url.pathname.startsWith("/api/recall/bot/") && req.method === "DELETE") {
+        const botId = url.pathname.split("/api/recall/bot/")[1]?.replace(/\/$/, "");
+        if (!botId || !CONFIG.recall.apiKey) {
+          return Response.json({ error: "Not found" }, { status: 404, headers });
+        }
+        try {
+          const api = new RecallAPI(CONFIG.recall.apiKey, CONFIG.recall.baseUrl);
+          await api.destroyBot(botId);
+          console.log(`[Recall] Bot destroyed: ${botId}`);
+          return Response.json({ ok: true }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
       }
 
       // ══════════════════════════════════════════════════════════════
@@ -2568,6 +2668,22 @@ STEP-BY-STEP FLOW:
         }
       }
 
+      // GET /api/meeting/frame/:meetingId/:filename — Serve meeting screenshot frame
+      if (url.pathname.startsWith("/api/meeting/frame/") && req.method === "GET") {
+        const parts = url.pathname.replace("/api/meeting/frame/", "").split("/");
+        const meetingId = parts[0];
+        const filename = parts[1];
+        if (!meetingId || !filename) {
+          return Response.json({ error: "meetingId and filename required" }, { status: 400, headers });
+        }
+        const framePath = resolve(homedir(), ".callingclaw", "shared", "meetings", meetingId, "frames", filename);
+        const file = Bun.file(framePath);
+        if (await file.exists()) {
+          return new Response(file, { headers: { ...headers, "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" } });
+        }
+        return Response.json({ error: "Frame not found" }, { status: 404, headers });
+      }
+
       // GET /api/shared/prep — List available prep brief files
       if (url.pathname === "/api/shared/prep" && req.method === "GET") {
         const files = await listPrepFiles();
@@ -2926,7 +3042,11 @@ STEP-BY-STEP FLOW:
       const publicPath = `${import.meta.dir}/../public${resolvedPath === "/" ? "/callingclaw-panel.html" : resolvedPath}`;
       const file = Bun.file(publicPath);
       if (await file.exists()) {
-        return new Response(file);
+        // CORS for AudioWorklet .js files (recall-client.html loads from different origin)
+        const corsHeaders = resolvedPath.endsWith(".js")
+          ? { "Access-Control-Allow-Origin": "*" }
+          : {};
+        return new Response(file, { headers: corsHeaders });
       }
 
       return Response.json({ error: "Not found" }, { status: 404, headers });
@@ -2949,6 +3069,10 @@ STEP-BY-STEP FLOW:
     for (const ws of audioBridgeClients) {
       try { ws.send(frame); } catch {}
     }
+    // Recall bridge clients (same binary protocol)
+    for (const ws of recallBridgeClients) {
+      try { ws.send(frame); } catch {}
+    }
   });
 
   // ── Interruption: user started speaking → stop playback on all clients ──
@@ -2960,6 +3084,9 @@ STEP-BY-STEP FLOW:
     // Audio bridge: single-byte interrupt marker (0x02)
     const interruptFrame = Buffer.from([0x02]);
     for (const ws of audioBridgeClients) {
+      try { ws.send(interruptFrame); } catch {}
+    }
+    for (const ws of recallBridgeClients) {
       try { ws.send(interruptFrame); } catch {}
     }
     console.log("[Voice] Speech started — interrupted AI response");
