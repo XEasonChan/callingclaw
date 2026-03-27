@@ -3022,30 +3022,35 @@ STEP-BY-STEP FLOW:
         const calendarConnected = services.calendar?.connected ?? false;
         const hasCalendarCreds = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN);
 
-        // Check Chrome Google login by inspecting cookies in the profile
+        // Check Chrome Google login via cookie check (fast)
         let chromeLoggedIn = false;
         let chromeEmail: string | null = null;
         if (services.chromeLauncher?.page) {
           try {
-            const result = await services.chromeLauncher.page.evaluate(`(() => {
-              try {
-                // Check for Google session cookies in the page context
-                var cookies = document.cookie || '';
-                return JSON.stringify({ hasCookies: cookies.length > 0 });
-              } catch(e) { return JSON.stringify({ error: e.message }); }
-            })()`);
-            // If ChromeLauncher has a page, it was launched with the profile.
-            // Check if the profile has Google cookies by attempting to load accounts.google.com
             const checkResult = await services.chromeLauncher.checkGoogleLogin();
             chromeLoggedIn = checkResult.loggedIn;
             chromeEmail = checkResult.email;
           } catch {}
         }
 
+        // Auto-connect Calendar if Chrome is logged in but Calendar isn't
+        let calConnected = calendarConnected;
+        if (chromeLoggedIn && !calendarConnected) {
+          try {
+            const { credentials } = await scanForGoogleCredentials();
+            if (credentials) {
+              services.calendar.setCredentials(credentials);
+              await services.calendar.connect();
+              calConnected = services.calendar.connected;
+              if (calConnected) console.log("[GoogleAuth] Calendar auto-connected via auth-status poll");
+            }
+          } catch {}
+        }
+
         return Response.json({
-          ready: chromeLoggedIn, // minimum: Chrome must be logged into Google
+          ready: chromeLoggedIn,
           calendar: {
-            connected: calendarConnected,
+            connected: calConnected,
             hasCredentials: hasCalendarCreds,
           },
           chrome: {
@@ -3054,9 +3059,9 @@ STEP-BY-STEP FLOW:
             profileDir: services.chromeLauncher ? "active" : "not_launched",
           },
           nextStep: !chromeLoggedIn
-            ? "chrome_login" // Must sign into Google in Chrome first
-            : !calendarConnected
-              ? "calendar_oauth" // Optional: connect calendar for attendee lookup
+            ? "chrome_login"
+            : !calConnected
+              ? "calendar_oauth"
               : null, // All good
         }, { headers });
       }
@@ -3095,6 +3100,7 @@ STEP-BY-STEP FLOW:
 
       // GET /api/google/chrome-login/check — Quick check if Chrome is now logged into Google
       // Always fresh (clears cache) — used during onboarding polling
+      // On first successful login: auto-scan + apply OpenClaw Calendar credentials
       if (url.pathname === "/api/google/chrome-login/check" && req.method === "GET") {
         if (!services.chromeLauncher?.page) {
           return Response.json({ loggedIn: false, reason: "chrome_not_launched" }, { headers });
@@ -3102,7 +3108,25 @@ STEP-BY-STEP FLOW:
         try {
           services.chromeLauncher.clearGoogleLoginCache();
           const result = await services.chromeLauncher.checkGoogleLogin();
-          return Response.json(result, { headers });
+
+          // Auto-connect Calendar when Chrome login succeeds (if not already connected)
+          if (result.loggedIn && !services.calendar.connected) {
+            try {
+              const { credentials } = await scanForGoogleCredentials();
+              if (credentials) {
+                services.calendar.setCredentials(credentials);
+                await services.calendar.connect();
+                console.log("[GoogleAuth] Calendar auto-connected after Chrome sign-in");
+              }
+            } catch (e: any) {
+              console.warn("[GoogleAuth] Calendar auto-connect failed:", e.message);
+            }
+          }
+
+          return Response.json({
+            ...result,
+            calendar: services.calendar.connected,
+          }, { headers });
         } catch (e: any) {
           return Response.json({ loggedIn: false, error: e.message }, { headers });
         }
