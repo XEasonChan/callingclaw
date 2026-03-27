@@ -1600,6 +1600,84 @@ export function startConfigServer(services: Services) {
           console.log(`[Meeting] Admission monitor started via playwright-cli (${names.length} attendees)`);
         }
 
+        // ── Auto-leave: detect when meeting ends (host ended, kicked, left via Meet UI) ──
+        // Triggers the full leave flow: summary generation → file export → PostMeetingDelivery
+        if (services.chromeLauncher?.page) {
+          services.chromeLauncher.onMeetingEnd(async () => {
+            console.log("[Meeting] Auto-leave: meeting ended detected by ChromeLauncher");
+            try {
+              // Stop monitors
+              if (services.chromeLauncher?.isAdmissionMonitoring) {
+                services.chromeLauncher.stopAdmissionMonitor();
+              }
+
+              // Mark session ended
+              if (services.sessionManager) {
+                const active = services.sessionManager.list({ status: "active" });
+                if (active[0]) services.sessionManager.markEnded(active[0].meetingId);
+              }
+
+              // Generate summary + export
+              const autoSummary = await services.meeting.generateSummary();
+              const autoFilepath = await services.meeting.exportToMarkdown(autoSummary);
+              services.meeting.stopRecording();
+              console.log(`[Meeting] Auto-leave: summary exported → ${autoFilepath}`);
+
+              // Create tasks from action items
+              if (autoSummary.actionItems?.length > 0) {
+                services.taskStore.createFromMeetingItems(
+                  autoSummary.actionItems.map((a: any) => ({ task: a.task, assignee: a.assignee, deadline: a.deadline })),
+                  services.eventBus.correlationId || undefined
+                );
+              }
+
+              // Attach summary to session
+              if (services.sessionManager && autoFilepath) {
+                const ended = services.sessionManager.list({ status: "ended" });
+                if (ended[0]) {
+                  try {
+                    const content = await Bun.file(autoFilepath).text();
+                    await services.sessionManager.attachSummary(ended[0].meetingId, content);
+                  } catch {}
+                }
+              }
+
+              // Emit meeting.ended
+              services.eventBus.emit("meeting.ended", {
+                filepath: autoFilepath,
+                summary: autoSummary,
+                autoLeave: true,
+              });
+              services.eventBus.endCorrelation();
+
+              // Trigger PostMeetingDelivery (OpenClaw → Telegram)
+              if (services.postMeetingDelivery) {
+                services.postMeetingDelivery.deliver({
+                  summary: autoSummary,
+                  notesFilePath: autoFilepath,
+                  prepSummary: services.meetingPrepSkill?.currentBrief ? {
+                    topic: services.meetingPrepSkill.currentBrief.topic,
+                    liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],
+                    completedTasks: (services.meetingPrepSkill.currentBrief.liveNotes || []).filter((n: string) => n.startsWith("[DONE]")),
+                    requirements: (services.meetingPrepSkill.currentBrief.liveNotes || []).filter((n: string) => n.startsWith("[REQ]")),
+                  } : null,
+                }).catch((e: any) => console.error("[Meeting] Auto-leave delivery failed:", e.message));
+              }
+
+              // Stop voice session
+              if (services.realtime.connected) {
+                services.realtime.stop();
+                services.eventBus.emit("voice.stopped", {});
+              }
+
+              console.log("[Meeting] Auto-leave complete — summary + delivery triggered");
+            } catch (e: any) {
+              console.error("[Meeting] Auto-leave failed:", e.message);
+            }
+          });
+          console.log("[Meeting] Auto-leave watcher registered (detects host-end, kicked, left via Meet)");
+        }
+
         // ── Pre-meeting agenda: emit for user confirmation ──
         const agenda = {
           meetUrl: validated.url,
