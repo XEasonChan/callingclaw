@@ -249,6 +249,14 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
       case "screenshot":
         return await apiPost("/api/bridge/action", { action: "screenshot" });
 
+      case "present": {
+        // /callingclaw present <url> [topic] — Haiku reads page, Grok narrates, scroll synced
+        const presentUrl = parts[1];
+        if (!presentUrl) return { success: false, error: "Usage: /callingclaw present <url> [topic]" };
+        const presentTopic = parts.slice(2).join(" ") || undefined;
+        return await apiPost("/api/screen/present", { url: presentUrl, topic: presentTopic });
+      }
+
       case "share":
       case "present": {
         // /callingclaw share <url> — share a URL in the meeting (opens tab + auto-presents)

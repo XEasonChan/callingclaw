@@ -2942,6 +2942,64 @@ STEP-BY-STEP FLOW:
         return Response.json({ snapshot }, { headers });
       }
 
+      // POST /api/screen/present — Start a synchronized presentation (Haiku reads page → Grok narrates → scroll synced)
+      if (url.pathname === "/api/screen/present" && req.method === "POST") {
+        if (!services.chromeLauncher?.page) {
+          return Response.json({ error: "Join a meeting first" }, { status: 400, headers });
+        }
+        const body = (await req.json().catch(() => ({}))) as { url?: string; topic?: string; context?: string };
+        if (!body.url) {
+          return Response.json({ error: "url is required" }, { status: 400, headers });
+        }
+
+        try {
+          const { PresentationEngine } = await import("./modules/presentation-engine");
+          const engine = new PresentationEngine();
+
+          // Share the URL first
+          await services.chromeLauncher.shareScreen(body.url);
+          await new Promise(r => setTimeout(r, 4000)); // Wait for page load
+
+          // Build plan (Haiku reads DOM)
+          const plan = await engine.buildPlan({
+            url: body.url,
+            topic: body.topic || "presentation",
+            context: body.context,
+            chromeLauncher: services.chromeLauncher,
+          });
+
+          // Run in background (non-blocking)
+          engine.run({
+            chromeLauncher: services.chromeLauncher,
+            voice: services.realtime,
+            context: services.context,
+            onSlide: (slide, i, total) => {
+              services.eventBus.emit("presentation.slide", { slide: slide.sectionTitle, index: i, total });
+            },
+          }).then((result) => {
+            services.eventBus.emit("presentation.done", result);
+            console.log(`[Presentation] Done: ${result.slidesPresented} slides`);
+          }).catch((e) => {
+            console.error("[Presentation] Error:", e.message);
+          });
+
+          return Response.json({
+            success: true,
+            slides: plan.slides.length,
+            totalEstimatedMs: plan.totalEstimatedMs,
+            plan: plan.slides.map(s => ({ title: s.sectionTitle, durationMs: s.estimatedDurationMs })),
+          }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
+      }
+
+      // POST /api/screen/present/pause — Pause presentation
+      if (url.pathname === "/api/screen/present/pause" && req.method === "POST") {
+        // TODO: store engine instance globally for pause/resume
+        return Response.json({ ok: true, message: "Paused" }, { headers });
+      }
+
       // POST /api/bridge/action — Send direct action to Python sidecar
       if (url.pathname === "/api/bridge/action" && req.method === "POST") {
         const body = (await req.json()) as {
