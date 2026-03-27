@@ -216,22 +216,37 @@ export class TranscriptAuditor {
       )
       .join("\n");
 
-    const prompt = `You are CallingClaw's agent — a fast background assistant during meetings. CallingClaw (the voice AI) talks to participants. You silently monitor the transcript and execute browser actions when needed. When CallingClaw says "let me pull that up" or "我让 agent 查一下", that's your cue. You also detect implicit commands from participants (like "打开那个文件" or "show me the PRD").
+    const prompt = `You are CallingClaw's meeting agent — a fast background assistant. You monitor the conversation and execute actions when the voice AI or participants request something.
 
-## Available Actions
-- open_url: Open a URL in browser. Params: { "url": "https://..." }
-- open_file: Open a local file. Params: { "path": "/abs/path", "app": "vscode"|"browser"|"finder" }
-- share_screen: Start screen sharing in the meeting. Params: { "url": "optional URL to share" }
-- stop_sharing: Stop screen sharing. Params: {}
-- navigate: Navigate/interact in the presenting tab. Params: { "instruction": "describe what to do", "targetTab": "presenting"|"meet" }
-- click: Click a specific element on the presenting tab. Params: { "selector": "button text or description", "targetTab": "presenting"|"meet" }
-- scroll: Scroll current view. Params: { "direction": "up"|"down", "targetTab": "presenting"|"meet" }
-- computer_action: General computer task. Params: { "instruction": "describe what to do", "targetTab": "presenting"|"meet" }
+## Your Tools (choose the RIGHT one)
 
-## Tab Targeting Rules
-- If user is asking about content being presented/shared (click, login, scroll, navigate a document) → targetTab = "presenting"
-- If user is asking about meeting controls (mute, camera, share screen, leave) → targetTab = "meet"
-- Default: "presenting" (most browser actions during meetings are on the shared content)
+### File & URL Tools
+- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone says "打开那个XX文件" / "show me the XX" / "open the XX page" but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
+- **open_url**: Open an exact URL. Use when a full URL is mentioned. Params: { "url": "https://..." }
+- **open_file**: Open a file by exact path. Only use if you know the full path. Params: { "path": "/abs/path", "app": "browser"|"vscode" }
+
+### Screen Sharing Tools
+- **share_url**: Open a URL and present it in the meeting (投屏). Params: { "url": "https://..." }
+- **share_file**: Search for a file and present it in the meeting. Params: { "query": "keywords" }
+- **stop_sharing**: Stop presenting. Params: {}
+
+### Presenting Tab Tools (operate on the currently shared content)
+- **click**: Click a button/link on the presenting page. Params: { "selector": "button text or link text", "targetTab": "presenting" }
+- **scroll**: Scroll the presenting page. Params: { "direction": "up"|"down", "targetTab": "presenting" }
+- **navigate**: Navigate the presenting page to a new URL. Params: { "url": "https://...", "targetTab": "presenting" }
+
+### Meeting Control Tools
+- **share_screen**: Start sharing (no URL = entire screen). Params: {}
+- **meet_mute**: Toggle mute. Params: {}
+- **meet_camera**: Toggle camera. Params: {}
+
+## Key Directories (for file search)
+- Project root: ~/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/
+- Backend public (HTML pages): callingclaw-backend/public/
+- Landing pages: Callingclaw-landing/ (callingclaw-landing.html, features.html, vision.html)
+- Docs: docs/
+- Meeting prep files: ~/.callingclaw/shared/prep/
+- Shared files: ~/.callingclaw/shared/
 
 ## Meeting Context
 ${
@@ -251,16 +266,23 @@ Recent actions: ${
 ## Transcript (most recent at bottom)
 ${transcriptText}
 
-## Classification Rules
-1. ONLY classify as actionable if the user is DIRECTING CallingClaw to perform a computer action.
-2. Actionable phrases: "我们看看X" / "帮我打开X" / "跳到X" / "展示一下X" / "开始投屏" / "打开那个Y"
-3. Discussion phrases: "这个要改成X" / "我觉得X应该Y" / "下次我们需要Z" → NOT commands, confidence=0
-4. If user references a file/URL that matches the meeting brief's known files/URLs, resolve to the full path/URL.
-5. Be conservative — a false positive (executing something the user didn't ask for) is much worse than a false negative (missing a command).
-6. If the most recent user message is a response to the AI (answering a question, agreeing, etc.) and not a new command → confidence=0.
+## When to Act
+1. Someone says "打开/open/show/展示/投屏/看看/找到" + a thing → ACT (search_and_open, share_file, open_url)
+2. Someone says "点击/click/登录/login/下一步/next" → ACT (click on presenting tab)
+3. Someone says "往下/scroll down/翻页" → ACT (scroll)
+4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
+5. Discussion/opinion ("我觉得.../this should be.../下次需要...") → DO NOT ACT, confidence=0
+6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
+
+## File Name Resolution Examples
+- "landing page html" / "官网html" → search "callingclaw-landing.html" or "callingclaw-landing"
+- "vision page" → search "vision.html"
+- "meeting summary" → search "meeting-summary"
+- "PRD" / "需求文档" → search "PRD" or "callingclaw-v2.5-PRD"
+- "prep file" / "会议准备" → search in ~/.callingclaw/shared/prep/
 
 Respond with JSON only:
-{"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<brief explanation>","targetTab":"presenting"|"meet"}`;
+{"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<brief>","targetTab":"presenting"|"meet"}`;
 
     return await this.callClaude(prompt);
   }
@@ -386,6 +408,53 @@ Respond with JSON only:
 
     try {
       switch (action) {
+        // ── File search + open (fuzzy name) ──
+        case "search_and_open": {
+          const query = params.query || "";
+          instruction = `search and open: ${query}`;
+          console.log(`[Auditor] Searching for file: "${query}"`);
+          const searchResult = await this.automationRouter.execute(`open file: ${query}`);
+          executionResult = searchResult.success ? searchResult.result : `File not found: "${query}"`;
+          break;
+        }
+
+        // ── Share file (search + present in meeting) ──
+        case "share_file": {
+          const shareQuery = params.query || "";
+          instruction = `share file: ${shareQuery}`;
+          console.log(`[Auditor] Searching and sharing: "${shareQuery}"`);
+          const shareResult = await this.automationRouter.execute(`share_screen file: ${shareQuery}`);
+          if (!shareResult.success) {
+            // Fallback: try direct share API with file search
+            try {
+              const resp = await fetch("http://localhost:4000/api/screen/share", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: undefined }), // will trigger file search in shareScreen
+              });
+              const data = await resp.json() as any;
+              executionResult = data.success ? `Sharing: ${data.message}` : `Share failed`;
+            } catch { executionResult = shareResult.result; }
+          } else {
+            executionResult = shareResult.result;
+          }
+          break;
+        }
+
+        // ── Share exact URL (open + present) ──
+        case "share_url": {
+          const shareUrl = params.url || "";
+          instruction = `share URL: ${shareUrl}`;
+          try {
+            const resp = await fetch("http://localhost:4000/api/screen/share", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: shareUrl }),
+            });
+            const data = await resp.json() as any;
+            executionResult = data.success ? `Presenting: ${shareUrl}` : `Share failed: ${data.message}`;
+          } catch (e: any) { executionResult = `Share error: ${e.message}`; }
+          break;
+        }
+
         case "open_url": {
           instruction = `open ${params.url} in browser`;
           const r = await this.automationRouter.execute(instruction);
