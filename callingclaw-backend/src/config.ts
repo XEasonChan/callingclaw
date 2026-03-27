@@ -135,6 +135,14 @@ export const CONFIG = {
   // Python sidecar REMOVED in v2.6.0 — NativeBridge handles all input actions
   // Audio: Electron AudioWorklet, Input: osascript + cliclick, Screenshots: screencapture + CDP
 
+  // Recall.ai cloud bot integration
+  recall: {
+    apiKey: process.env.RECALL_API_KEY || "",
+    baseUrl: process.env.RECALL_API_URL || "https://us-west-2.recall.ai/api/v1",
+    clientPageUrl: process.env.RECALL_CLIENT_URL || "", // Vercel URL of recall-client.html
+    wsUrl: process.env.RECALL_WS_URL || "",             // Public WS URL (via Cloudflare Tunnel)
+  },
+
   // User identity
   userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };

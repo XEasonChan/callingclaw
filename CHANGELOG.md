@@ -3,6 +3,22 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.16] - 2026-03-27
+
+### Fixed
+- **音频捕获彻底重写** — 移除所有 echo suppression（测试证明 Grok 服务端 VAD 自行处理 echo）。之前的振幅门控压掉了用户真实语音，导致 Grok 只听到噪声产生幻觉转写
+- **双管道捕获** — Pipeline A (getReceivers) + Pipeline B (ontrack event) 同时运行，互为冗余。从 test-audio-inject-grok.ts 移植的已验证方案
+- **Meet 字幕抓取修复** — 旧选择器抓到的是参会者名字和 UI 菜单（"more_vert"、"Raising your hand"），现改为 MutationObserver + aria/class 过滤，只抓实际字幕文字
+- **字幕 → Realtime API** — 字幕文本通过 `conversation.item.create` 注入 AI 对话上下文（`[会议发言]` 前缀），即使音频质量差 AI 也能理解会议内容
+- **VAD 调优** — Grok silence 500→1200ms、threshold 0.85→0.9、prefix 333→500ms，减少 AI 在用户停顿时抢话
+- **Session 合并显示** — Desktop 会议列表合并 Calendar events + SessionManager sessions，OpenClaw prepare 的会议即使 Calendar 断连也能显示
+- **Auth check 加速** — Google 登录检查改用 cookie 检测（~10ms），不再导航到 myaccount.google.com（~5s+）
+- **MeetingScheduler 去重** — 检查 SessionManager 已有 session 再注册 cron，防止 20+ 重复事件
+- **Mic unmute 重试** — 入会后 unmute 重试 3 次（Meet 有时自动 mute），增加更多选择器
+
+### Added
+- **VoiceModule.sendEvent()** — 直接发送 Realtime API 事件的通道（用于字幕注入等）
+
 ## [2.7.15] - 2026-03-26
 
 ### Added
