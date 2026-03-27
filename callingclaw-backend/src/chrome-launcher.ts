@@ -467,6 +467,8 @@ export class ChromeLauncher {
         "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
+        "--auto-select-desktop-capture-source=Entire screen",  // Auto-grant screen share
+        "--enable-usermedia-screen-capturing",    // Enable screen capture API
         `--remote-debugging-port=${port}`,
       ],
       permissions: ["microphone", "camera"],
@@ -1010,6 +1012,70 @@ export class ChromeLauncher {
 
   clearMeetingEndCallback(): void {
     this._meetingEndCallback = null;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Screen Sharing (Meet "Present now")
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * Start screen sharing in Google Meet.
+   * Clicks "Present now" → "Your entire screen" → auto-granted via Chrome flag.
+   * Requires --auto-select-desktop-capture-source flag (set in launch args).
+   */
+  async shareScreen(): Promise<{ success: boolean; message: string }> {
+    if (!this._page) return { success: false, message: "No page — call launch() first" };
+    const page = this._page;
+
+    try {
+      // Step 1: Click "Share screen" button (aria-label="Share screen" in Meet)
+      const step1 = String(await page.evaluate(`(() => {
+        var btns = Array.from(document.querySelectorAll('button, [role="button"]'));
+        var present = btns.find(function(b) {
+          var label = (b.getAttribute('aria-label') || '').toLowerCase();
+          return label === 'share screen' || label.includes('present') || label.includes('投屏')
+            || label.includes('展示') || label.includes('共享屏幕');
+        });
+        if (present) { present.click(); return 'clicked_present'; }
+        return 'no_present_button';
+      })()`));
+
+      if (step1 === "no_present_button") {
+        return { success: false, message: "Present button not found — are you in a meeting?" };
+      }
+      console.log("[ShareScreen] Clicked Share screen — auto-select via Chrome flag");
+
+      // Chrome's --auto-select-desktop-capture-source=Entire screen bypasses
+      // the "Choose what to share" dialog entirely. Just wait for it to start.
+      await page.waitForTimeout(4000);
+
+      const sharing = String(await page.evaluate(`(() => {
+        var stopBtn = document.querySelector('[aria-label*="Stop sharing"], [aria-label*="停止共享"], [aria-label*="Stop presenting"], [aria-label*="停止展示"]');
+        return stopBtn ? 'sharing' : 'not_sharing';
+      })()`));
+
+      console.log(`[ShareScreen] Step 3: ${sharing}`);
+      return { success: sharing === "sharing", message: sharing === "sharing" ? "Screen sharing active" : "Screen sharing may not have started — check Chrome flag" };
+    } catch (e: any) {
+      console.warn("[ShareScreen] Failed:", e.message);
+      return { success: false, message: e.message };
+    }
+  }
+
+  /** Stop screen sharing */
+  async stopSharing(): Promise<{ success: boolean }> {
+    if (!this._page) return { success: false };
+    try {
+      const result = String(await this._page.evaluate(`(() => {
+        var btn = document.querySelector('[aria-label*="Stop sharing"], [aria-label*="停止共享"], [aria-label*="Stop presenting"], [aria-label*="停止展示"]');
+        if (btn) { btn.click(); return 'stopped'; }
+        return 'no_button';
+      })()`));
+      console.log(`[ShareScreen] Stop: ${result}`);
+      return { success: result === "stopped" };
+    } catch {
+      return { success: false };
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
