@@ -163,7 +163,7 @@ export class MeetingModule {
       : "unknown";
 
     try {
-      let text: string;
+      let text = "";
 
       if (this._openclawBridge?.connected) {
         // Delegate to OpenClaw — richest context available
@@ -180,9 +180,16 @@ export class MeetingModule {
           `Transcript:\n${transcript}\n\n` +
           `Existing notes:\n${JSON.stringify(notes)}`
         );
-      } else if (CONFIG.openrouter.apiKey) {
-        // Fallback: direct LLM call
-        console.log("[Meeting] Generating summary via OpenRouter (no OpenClaw)...");
+        // If OpenClaw timed out or disconnected, clear to trigger fallback
+        if (text.includes("timed out") || text.includes("disconnected")) {
+          console.warn("[Meeting] OpenClaw failed for summary — falling back to OpenRouter");
+          text = "";
+        }
+      }
+
+      // Fallback: direct LLM call if OpenClaw unavailable or failed
+      if (!text && CONFIG.openrouter.apiKey) {
+        console.log("[Meeting] Generating summary via OpenRouter...");
         const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
@@ -198,7 +205,7 @@ export class MeetingModule {
         });
         const data = await resp.json() as any;
         text = data.choices?.[0]?.message?.content || "{}";
-      } else {
+      } else if (!text) {
         return {
           title: "Meeting", duration, participants: [],
           keyPoints: ["No API available (OpenClaw or OpenRouter)"],
