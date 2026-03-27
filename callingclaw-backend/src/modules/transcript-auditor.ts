@@ -385,28 +385,51 @@ Respond with JSON only:
         }
 
         case "open_file": {
-          instruction = `open ${params.path}${params.app ? ` in ${params.app}` : ""}`;
-          await this.meetJoiner.openFile(
-            params.path,
-            params.app || "vscode"
-          );
-          executionResult = `Opened ${params.path} in ${params.app || "vscode"}`;
+          // Fast path: use AutomationRouter's file search + open (not legacy osascript)
+          const fileQuery = params.path || params.query || "";
+          instruction = `open file: ${fileQuery}`;
+          const fileResult = await this.automationRouter.execute(instruction);
+          if (!fileResult.success) {
+            // Fallback: try legacy meetJoiner
+            try {
+              await this.meetJoiner.openFile(params.path, params.app || "browser");
+              executionResult = `Opened ${params.path}`;
+            } catch { executionResult = fileResult.result; }
+          } else {
+            executionResult = fileResult.result;
+          }
           break;
         }
 
         case "share_screen": {
+          // Fast path: use ChromeLauncher screen share API (not legacy osascript)
           instruction = "start screen sharing";
-          const ok = await this.meetJoiner.shareScreen();
-          executionResult = ok
-            ? "Screen sharing started"
-            : "Failed to start screen sharing";
+          const shareUrl = params.url || undefined;
+          try {
+            const resp = await fetch("http://localhost:4000/api/screen/share", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: shareUrl }),
+            });
+            const shareData = await resp.json() as any;
+            executionResult = shareData.success ? "Screen sharing started" : `Share failed: ${shareData.message}`;
+          } catch {
+            // Fallback: legacy meetJoiner
+            const ok = await this.meetJoiner.shareScreen();
+            executionResult = ok ? "Screen sharing started (legacy)" : "Failed to start screen sharing";
+          }
           break;
         }
 
         case "stop_sharing": {
           instruction = "stop screen sharing";
-          await this.meetJoiner.stopSharing();
-          executionResult = "Screen sharing stopped";
+          try {
+            await fetch("http://localhost:4000/api/screen/stop", { method: "POST" });
+            executionResult = "Screen sharing stopped";
+          } catch {
+            await this.meetJoiner.stopSharing();
+            executionResult = "Screen sharing stopped (legacy)";
+          }
           break;
         }
 

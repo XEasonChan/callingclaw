@@ -311,6 +311,73 @@ export class AutomationRouter {
       return `Opened ${params.url}`;
     }
 
+    // Open file — search by fuzzy name if no absolute path
+    if (action === "open_file") {
+      let filePath = params.path;
+      if (!filePath || !filePath.startsWith("/")) {
+        // Fuzzy file search: search project dir + shared dir for matching files
+        const query = params.path || params.query || params.instruction || "";
+        filePath = await this.searchLocalFile(query);
+        if (!filePath) throw new Error(`File not found: "${query}"`);
+      }
+      const app = params.app || "browser";
+      if (app === "browser" || filePath.endsWith(".html") || filePath.endsWith(".htm")) {
+        await Bun.$`open -a "Google Chrome" ${filePath}`.quiet().nothrow();
+      } else if (app === "vscode") {
+        await Bun.$`code ${filePath}`.quiet().nothrow();
+      } else {
+        await Bun.$`open ${filePath}`.quiet().nothrow();
+      }
+      return `Opened ${filePath}`;
+    }
+
+    // Share screen / present — use ChromeLauncher if available
+    if (action === "share_screen" || action === "present") {
+      const url = params.url;
+      // If fuzzy file reference, search first
+      if (params.query && !url) {
+        const filePath = await this.searchLocalFile(params.query);
+        if (filePath) {
+          // Serve via localhost if it's in the public dir, otherwise file://
+          const isPublic = filePath.includes("/public/");
+          const serveUrl = isPublic
+            ? `http://localhost:4000/${filePath.split("/public/").pop()}`
+            : `file://${filePath}`;
+          try {
+            const resp = await fetch("http://localhost:4000/api/screen/share", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: serveUrl }),
+            });
+            const data = await resp.json() as any;
+            return data.success ? `Presenting: ${serveUrl}` : `Share failed: ${data.message}`;
+          } catch (e: any) {
+            throw new Error(`Screen share API failed: ${e.message}`);
+          }
+        }
+      }
+      // Direct URL share
+      try {
+        const resp = await fetch("http://localhost:4000/api/screen/share", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url || undefined }),
+        });
+        const data = await resp.json() as any;
+        return data.success ? `Presenting${url ? ': ' + url : ' (entire screen)'}` : `Share failed: ${data.message}`;
+      } catch (e: any) {
+        throw new Error(`Screen share API failed: ${e.message}`);
+      }
+    }
+
+    // Stop sharing
+    if (action === "stop_sharing") {
+      try {
+        await fetch("http://localhost:4000/api/screen/stop", { method: "POST" });
+        return "Stopped presenting";
+      } catch { return "Stop sharing failed"; }
+    }
+
     throw new Error(`Unknown shortcut action: ${action}`);
   }
 
@@ -360,6 +427,64 @@ export class AutomationRouter {
       }
       default:
         throw new Error(`Unknown browser action: ${action}`);
+    }
+  }
+
+  // ── File Search (fuzzy name match across project + shared dirs) ──
+
+  private async searchLocalFile(query: string): Promise<string | null> {
+    if (!query || query.length < 2) return null;
+
+    // Normalize query: lowercase, extract keywords
+    const keywords = query.toLowerCase().replace(/[^\w\s\u4e00-\u9fff]/g, " ").split(/\s+/).filter(k => k.length > 1);
+    if (keywords.length === 0) return null;
+
+    // Search directories
+    const { homedir } = await import("os");
+    const { resolve } = await import("path");
+    const searchDirs = [
+      resolve(homedir(), ".callingclaw", "shared"),
+      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public"),
+      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs"),
+      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-desktop"),
+    ];
+
+    try {
+      // Use find to get all html/md/pdf files, then fuzzy match
+      const results: string[] = [];
+      for (const dir of searchDirs) {
+        try {
+          const output = await Bun.$`find ${dir} -maxdepth 3 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) 2>/dev/null`.text();
+          for (const line of output.split("\n")) {
+            const path = line.trim();
+            if (!path) continue;
+            const lower = path.toLowerCase();
+            // Check if ALL keywords appear in the path
+            const matchCount = keywords.filter(k => lower.includes(k)).length;
+            if (matchCount >= Math.max(1, Math.ceil(keywords.length * 0.5))) {
+              results.push(path);
+            }
+          }
+        } catch {}
+      }
+
+      if (results.length === 0) return null;
+
+      // Prefer .html files, then by keyword match score
+      results.sort((a, b) => {
+        const aHtml = a.endsWith(".html") ? 1 : 0;
+        const bHtml = b.endsWith(".html") ? 1 : 0;
+        if (aHtml !== bHtml) return bHtml - aHtml;
+        // More keyword matches = better
+        const aScore = keywords.filter(k => a.toLowerCase().includes(k)).length;
+        const bScore = keywords.filter(k => b.toLowerCase().includes(k)).length;
+        return bScore - aScore;
+      });
+
+      console.log(`[Router] File search "${query}" → ${results.length} results, best: ${results[0]}`);
+      return results[0];
+    } catch {
+      return null;
     }
   }
 
