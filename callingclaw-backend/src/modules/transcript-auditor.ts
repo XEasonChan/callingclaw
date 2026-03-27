@@ -33,6 +33,7 @@ export interface AuditResult {
   params: Record<string, any>;
   confidence: number;
   reasoning: string;
+  targetTab?: "presenting" | "meet";
 }
 
 // Tools that the auditor takes over during meetings (removed from OpenAI session)
@@ -53,6 +54,7 @@ export class TranscriptAuditor {
   private computerUse: ComputerUseModule;
   private meetingPrepSkill: MeetingPrepSkill;
   private meetJoiner: MeetJoiner;
+  private chromeLauncher: any = null; // ChromeLauncher instance for presenting tab operations
   private voice: VoiceModule | null = null;
 
   private _active = false;
@@ -76,6 +78,7 @@ export class TranscriptAuditor {
     computerUse: ComputerUseModule;
     meetingPrepSkill: MeetingPrepSkill;
     meetJoiner: MeetJoiner;
+    chromeLauncher?: any;
   }) {
     this.context = opts.context;
     this.eventBus = opts.eventBus;
@@ -83,6 +86,7 @@ export class TranscriptAuditor {
     this.computerUse = opts.computerUse;
     this.meetingPrepSkill = opts.meetingPrepSkill;
     this.meetJoiner = opts.meetJoiner;
+    this.chromeLauncher = opts.chromeLauncher || null;
   }
 
   get active() {
@@ -217,11 +221,17 @@ export class TranscriptAuditor {
 ## Available Actions
 - open_url: Open a URL in browser. Params: { "url": "https://..." }
 - open_file: Open a local file. Params: { "path": "/abs/path", "app": "vscode"|"browser"|"finder" }
-- share_screen: Start screen sharing in the meeting. Params: {}
+- share_screen: Start screen sharing in the meeting. Params: { "url": "optional URL to share" }
 - stop_sharing: Stop screen sharing. Params: {}
-- navigate: Navigate/interact in browser. Params: { "instruction": "describe what to do" }
-- scroll: Scroll current view. Params: { "direction": "up"|"down" }
-- computer_action: General computer task. Params: { "instruction": "describe what to do" }
+- navigate: Navigate/interact in the presenting tab. Params: { "instruction": "describe what to do", "targetTab": "presenting"|"meet" }
+- click: Click a specific element on the presenting tab. Params: { "selector": "button text or description", "targetTab": "presenting"|"meet" }
+- scroll: Scroll current view. Params: { "direction": "up"|"down", "targetTab": "presenting"|"meet" }
+- computer_action: General computer task. Params: { "instruction": "describe what to do", "targetTab": "presenting"|"meet" }
+
+## Tab Targeting Rules
+- If user is asking about content being presented/shared (click, login, scroll, navigate a document) → targetTab = "presenting"
+- If user is asking about meeting controls (mute, camera, share screen, leave) → targetTab = "meet"
+- Default: "presenting" (most browser actions during meetings are on the shared content)
 
 ## Meeting Context
 ${
@@ -250,7 +260,7 @@ ${transcriptText}
 6. If the most recent user message is a response to the AI (answering a question, agreeing, etc.) and not a new command → confidence=0.
 
 Respond with JSON only:
-{"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<brief explanation>"}`;
+{"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<brief explanation>","targetTab":"presenting"|"meet"}`;
 
     return await this.callClaude(prompt);
   }
@@ -348,6 +358,7 @@ Respond with JSON only:
         confidence:
           typeof parsed.confidence === "number" ? parsed.confidence : 0,
         reasoning: parsed.reasoning || "",
+        targetTab: parsed.targetTab || "presenting",
       };
     } catch {
       return {
@@ -433,10 +444,43 @@ Respond with JSON only:
           break;
         }
 
+        case "click": {
+          // Direct click on presenting tab
+          instruction = `click: ${params.selector || params.instruction || ""}`;
+          const targetClick = params.targetTab || result.targetTab || "presenting";
+          if (targetClick === "presenting" && this.chromeLauncher?.presentingPage) {
+            // Use ChromeLauncher to click on presenting tab (not Meet tab)
+            const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+              var target = ${JSON.stringify(params.selector || params.instruction || "")};
+              // Try by text content
+              var all = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"]'));
+              var match = all.find(function(el) {
+                var t = (el.textContent || '').trim().toLowerCase();
+                var a = (el.getAttribute('aria-label') || '').toLowerCase();
+                return t.includes(target.toLowerCase()) || a.includes(target.toLowerCase());
+              });
+              if (match) { match.click(); return 'clicked:' + (match.textContent || '').trim().substring(0, 40); }
+              return 'not_found';
+            })()`);
+            executionResult = String(clickResult);
+            console.log(`[Auditor] Click on presenting tab: ${executionResult}`);
+          } else {
+            const r = await this.automationRouter.execute(instruction);
+            executionResult = r.result;
+          }
+          break;
+        }
+
         case "scroll": {
           instruction = `scroll ${params.direction || "down"}`;
-          const r = await this.automationRouter.execute(instruction);
-          executionResult = r.result;
+          const targetScroll = params.targetTab || result.targetTab || "presenting";
+          if (targetScroll === "presenting" && this.chromeLauncher?.presentingPage) {
+            await this.chromeLauncher.evaluateOnPresentingPage(`window.scrollBy(0, ${params.direction === 'up' ? -500 : 500})`);
+            executionResult = `Scrolled ${params.direction || "down"} on presenting tab`;
+          } else {
+            const r = await this.automationRouter.execute(instruction);
+            executionResult = r.result;
+          }
           break;
         }
 
@@ -447,7 +491,34 @@ Respond with JSON only:
             params.instruction ||
             `${action} ${JSON.stringify(params)}`;
 
-          // Route through L1→L2→L3, fallback to L4 Computer Use
+          // Check if action should target presenting tab
+          const targetNav = params.targetTab || result.targetTab || "meet";
+          if (targetNav === "presenting" && this.chromeLauncher?.presentingPage) {
+            // Execute on presenting tab via ChromeLauncher
+            const snapshot = await this.chromeLauncher.snapshotPresentingPage();
+            console.log(`[Auditor] Presenting tab snapshot (${snapshot.length} chars)`);
+            // For simple instructions, try direct evaluate
+            const evalResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+              var instruction = ${JSON.stringify(instruction)};
+              // Try clicking buttons/links matching the instruction
+              var all = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"], [tabindex]'));
+              for (var el of all) {
+                var t = (el.textContent || '').trim().toLowerCase();
+                var a = (el.getAttribute('aria-label') || '').toLowerCase();
+                var words = instruction.toLowerCase().split(/\\s+/);
+                var matchCount = words.filter(function(w) { return w.length > 2 && (t.includes(w) || a.includes(w)); }).length;
+                if (matchCount >= 2 || (words.length === 1 && (t.includes(words[0]) || a.includes(words[0])))) {
+                  el.click();
+                  return 'clicked:' + t.substring(0, 40);
+                }
+              }
+              return 'no_match';
+            })()`);
+            executionResult = String(evalResult) !== 'no_match' ? String(evalResult) : `Presenting tab: no element matched "${instruction}"`;
+            break;
+          }
+
+          // Default: route through L1→L2→L3, fallback to L4 Computer Use
           const r = await this.automationRouter.execute(instruction);
 
           if (r.success) {

@@ -1139,6 +1139,77 @@ export class ChromeLauncher {
   }
 
   // ══════════════════════════════════════════════════════════════
+  // Presenting Tab Operations (content tab, NOT Meet tab)
+  // ══════════════════════════════════════════════════════════════
+
+  /** Get the presenting page (the tab showing shared content) */
+  get presentingPage(): any { return this._presentingPage; }
+
+  /** Execute JavaScript on the presenting tab */
+  async evaluateOnPresentingPage(code: string): Promise<any> {
+    if (!this._presentingPage) return null;
+    try { return await this._presentingPage.evaluate(code); }
+    catch (e: any) { console.warn("[ChromeLauncher] Presenting page evaluate failed:", e.message); return null; }
+  }
+
+  /** Click element on presenting page by CSS selector */
+  async clickOnPresentingPage(selector: string): Promise<boolean> {
+    if (!this._presentingPage) return false;
+    try {
+      await this._presentingPage.click(selector, { timeout: 5000 });
+      return true;
+    } catch (e: any) {
+      console.warn(`[ChromeLauncher] Click failed on presenting page: ${selector}`, e.message);
+      return false;
+    }
+  }
+
+  /** Navigate presenting page to a new URL */
+  async navigatePresentingPage(url: string): Promise<boolean> {
+    if (!this._presentingPage) {
+      // Create presenting page if it doesn't exist
+      if (this._context) {
+        this._presentingPage = await this._context.newPage();
+      } else return false;
+    }
+    try {
+      await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+      await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+      return true;
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] Presenting page navigate failed:", e.message);
+      return false;
+    }
+  }
+
+  /** Get accessibility snapshot of presenting page (for Haiku action loop) */
+  async snapshotPresentingPage(): Promise<string> {
+    if (!this._presentingPage) return "No presenting page";
+    try {
+      return String(await this._presentingPage.evaluate(`(() => {
+        function snap(el, depth) {
+          if (depth > 4) return '';
+          var tag = el.tagName || '';
+          var text = (el.textContent || '').trim().substring(0, 60);
+          var label = el.getAttribute('aria-label') || '';
+          var role = el.getAttribute('role') || '';
+          var href = el.getAttribute('href') || '';
+          var parts = [];
+          if (role) parts.push('role=' + role);
+          if (label) parts.push('label="' + label + '"');
+          if (href) parts.push('href="' + href.substring(0, 40) + '"');
+          if (text && text.length > 2 && !el.children.length) parts.push('"' + text + '"');
+          var line = parts.length > 0 ? '<' + tag + ' ' + parts.join(' ') + '>' : '';
+          var children = '';
+          for (var c of el.children) { children += snap(c, depth + 1); }
+          return (line ? '  '.repeat(depth) + line + '\\n' : '') + children;
+        }
+        return snap(document.body, 0).substring(0, 4000);
+      })()`));
+    } catch { return "Snapshot failed"; }
+  }
+
+  // ══════════════════════════════════════════════════════════════
   // Google Account Check
   // ══════════════════════════════════════════════════════════════
 
