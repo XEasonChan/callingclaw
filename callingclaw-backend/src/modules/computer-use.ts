@@ -311,9 +311,16 @@ export class ComputerUseModule {
     const steps: string[] = [];
     const recentTranscript = this.context.getTranscriptText(15);
 
-    const model = this._mode === "openrouter"
-      ? CONFIG.openrouter.model
-      : CONFIG.anthropic.model;
+    // Use fast Haiku model during meetings (meetingAutomation config)
+    // Falls back to standard model for non-meeting Computer Use
+    const isMeeting = this.context.transcript.length > 0; // Simple heuristic: has transcript = in meeting
+    const model = isMeeting
+      ? CONFIG.meetingAutomation.model
+      : (this._mode === "openrouter" ? CONFIG.openrouter.model : CONFIG.anthropic.model);
+
+    if (isMeeting) {
+      console.log(`[ComputerUse] Using fast meeting model: ${model}`);
+    }
 
     const { toolType, betaFlag } = getToolVersionForModel(model);
 

@@ -63,7 +63,7 @@ export class TranscriptAuditor {
   private _lastExecutionTs = 0;
 
   // ── Tuning knobs ──
-  private DEBOUNCE_MS = 2500;        // Wait 2.5s after last user utterance
+  private DEBOUNCE_MS = 1200;         // Wait 1.2s after last user utterance (was 2.5s, reduced for meeting responsiveness)
   private CONFIDENCE_AUTO = 0.85;     // Auto-execute threshold
   private CONFIDENCE_SUGGEST = 0.6;   // Suggest to Voice AI threshold
   private WINDOW_ENTRIES = 15;        // Transcript entries to analyze

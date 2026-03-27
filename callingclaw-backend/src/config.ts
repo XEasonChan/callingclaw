@@ -88,6 +88,13 @@ export const CONFIG = {
     //   SEARCH_MODEL=anthropic/claude-haiku-4-5      # or same Haiku for both
   },
 
+  // Meeting automation — model for Computer Use during meetings
+  // Haiku is fast (~500ms) vs Sonnet (~2-3s) — prioritize speed during live meetings
+  // OpenClaw handles deep reasoning (prep/summary/todo execution) outside meetings
+  meetingAutomation: {
+    model: process.env.MEETING_AUTOMATION_MODEL || "anthropic/claude-haiku-4-5",
+  },
+
   // Vision analysis (screen/meeting screenshots → Gemini Flash via OpenRouter)
   vision: {
     model: process.env.VISION_MODEL || "google/gemini-3-flash-preview",
