@@ -2889,6 +2889,25 @@ STEP-BY-STEP FLOW:
       // ── Bridge / Google / Static ──
       // ══════════════════════════════════════════════════════════════
 
+      // POST /api/screen/share — Share a URL or entire screen in Meet
+      if (url.pathname === "/api/screen/share" && req.method === "POST") {
+        if (!services.chromeLauncher?.page) {
+          return Response.json({ error: "ChromeLauncher not active — join a meeting first" }, { status: 400, headers });
+        }
+        const body = (await req.json().catch(() => ({}))) as { url?: string };
+        const result = await services.chromeLauncher.shareScreen(body.url);
+        return Response.json(result, { headers });
+      }
+
+      // POST /api/screen/stop — Stop screen sharing
+      if (url.pathname === "/api/screen/stop" && req.method === "POST") {
+        if (!services.chromeLauncher?.page) {
+          return Response.json({ error: "ChromeLauncher not active" }, { status: 400, headers });
+        }
+        const result = await services.chromeLauncher.stopSharing();
+        return Response.json(result, { headers });
+      }
+
       // POST /api/bridge/action — Send direct action to Python sidecar
       if (url.pathname === "/api/bridge/action" && req.method === "POST") {
         const body = (await req.json()) as {

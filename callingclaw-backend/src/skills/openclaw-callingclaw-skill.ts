@@ -249,6 +249,19 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
       case "screenshot":
         return await apiPost("/api/bridge/action", { action: "screenshot" });
 
+      case "share":
+      case "present": {
+        // /callingclaw share <url> — share a URL in the meeting (opens tab + auto-presents)
+        // /callingclaw share stop — stop sharing
+        // /callingclaw share — share entire screen (no URL)
+        const shareArg = parts[1]?.toLowerCase();
+        if (shareArg === "stop") {
+          return await apiPost("/api/screen/stop", {});
+        }
+        const shareUrl = rest || undefined;
+        return await apiPost("/api/screen/share", { url: shareUrl });
+      }
+
       case "notes":
         // Reads from ~/.callingclaw/shared/notes/ (+ legacy meeting_notes/)
         return await apiGet("/api/meeting/notes");
@@ -325,6 +338,9 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw recover sidecar      — Kill + restart Python sidecar",
               "/callingclaw recover voice        — Restart voice session",
               "/callingclaw recover all          — Reset all subsystems",
+              "/callingclaw share <url>          — Present a URL in the meeting (auto tab share)",
+              "/callingclaw share stop           — Stop presenting",
+              "/callingclaw share                — Present entire screen",
               "/callingclaw google-auth          — Setup Google OAuth (reuse OpenClaw's, or generate new)",
               "/callingclaw google-chrome-login   — Open Chrome to sign in with Google (for Meet)",
             ],

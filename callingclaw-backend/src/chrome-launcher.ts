@@ -467,7 +467,7 @@ export class ChromeLauncher {
         "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
-        "--auto-select-desktop-capture-source=Entire screen",  // Auto-grant screen share
+        "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab/window matching this title
         "--enable-usermedia-screen-capturing",    // Enable screen capture API
         `--remote-debugging-port=${port}`,
       ],
@@ -1018,51 +1018,88 @@ export class ChromeLauncher {
   // Screen Sharing (Meet "Present now")
   // ══════════════════════════════════════════════════════════════
 
+  // The presenting tab — kept alive for screen sharing
+  private _presentingPage: any = null;
+
   /**
-   * Start screen sharing in Google Meet.
-   * Clicks "Present now" → "Your entire screen" → auto-granted via Chrome flag.
-   * Requires --auto-select-desktop-capture-source flag (set in launch args).
+   * Share a URL or the current screen in Google Meet.
+   *
+   * How it works:
+   *   1. Opens the target URL in a new tab titled "CallingClaw Presenting"
+   *   2. Switches back to Meet tab and clicks "Share screen"
+   *   3. Chrome's --auto-select-desktop-capture-source=CallingClaw Presenting
+   *      auto-selects that tab (no dialog, no manual step)
+   *
+   * @param url - URL to present (http, file://, or localhost). If omitted, shares entire screen.
    */
-  async shareScreen(): Promise<{ success: boolean; message: string }> {
-    if (!this._page) return { success: false, message: "No page — call launch() first" };
-    const page = this._page;
+  async shareScreen(url?: string): Promise<{ success: boolean; message: string }> {
+    if (!this._page || !this._context) return { success: false, message: "No page — call launch() first" };
+    const meetPage = this._page;
 
     try {
-      // Step 1: Click "Share screen" button (aria-label="Share screen" in Meet)
-      const step1 = String(await page.evaluate(`(() => {
+      // Step 1: Open target URL in a "presenting" tab
+      if (url) {
+        // Close previous presenting tab if any
+        if (this._presentingPage) {
+          try { await this._presentingPage.close(); } catch {}
+        }
+        this._presentingPage = await this._context.newPage();
+        await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        // Rename tab title to match Chrome's auto-select flag
+        await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+        console.log(`[ShareScreen] Opened presenting tab: ${url}`);
+
+        // Switch back to Meet
+        await meetPage.bringToFront();
+        await meetPage.waitForTimeout(500);
+      }
+
+      // Step 2: Click "Share screen" in Meet
+      const clicked = String(await meetPage.evaluate(`(() => {
         var btns = Array.from(document.querySelectorAll('button, [role="button"]'));
-        var present = btns.find(function(b) {
+        var btn = btns.find(function(b) {
           var label = (b.getAttribute('aria-label') || '').toLowerCase();
           return label === 'share screen' || label.includes('present') || label.includes('投屏')
             || label.includes('展示') || label.includes('共享屏幕');
         });
-        if (present) { present.click(); return 'clicked_present'; }
-        return 'no_present_button';
+        if (btn) { btn.click(); return 'clicked'; }
+        return 'not_found';
       })()`));
 
-      if (step1 === "no_present_button") {
-        return { success: false, message: "Present button not found — are you in a meeting?" };
+      if (clicked === "not_found") {
+        return { success: false, message: "Share screen button not found — are you in a meeting?" };
       }
-      console.log("[ShareScreen] Clicked Share screen — auto-select via Chrome flag");
 
-      // Chrome's --auto-select-desktop-capture-source=Entire screen bypasses
-      // the "Choose what to share" dialog entirely. Just wait for it to start.
-      await page.waitForTimeout(4000);
+      // Step 3: Chrome auto-selects "CallingClaw Presenting" tab (or entire screen if no URL)
+      // Wait for sharing to initialize
+      console.log("[ShareScreen] Waiting for Chrome auto-select...");
+      await meetPage.waitForTimeout(4000);
 
-      const sharing = String(await page.evaluate(`(() => {
-        var stopBtn = document.querySelector('[aria-label*="Stop sharing"], [aria-label*="停止共享"], [aria-label*="Stop presenting"], [aria-label*="停止展示"]');
-        return stopBtn ? 'sharing' : 'not_sharing';
+      // Step 4: Verify sharing is active
+      const status = String(await meetPage.evaluate(`(() => {
+        var stop = document.querySelector('[aria-label*="Stop sharing"], [aria-label*="停止共享"], [aria-label*="Stop presenting"], [aria-label*="停止展示"]');
+        if (stop) return 'sharing';
+        var label = document.querySelector('[aria-label*="Presentation is"], [aria-label*="presenting"]');
+        if (label) return 'presenting';
+        if (document.body.innerText.includes('presenting') || document.body.innerText.includes('Presentation')) return 'presenting_text';
+        return 'not_sharing';
       })()`));
 
-      console.log(`[ShareScreen] Step 3: ${sharing}`);
-      return { success: sharing === "sharing", message: sharing === "sharing" ? "Screen sharing active" : "Screen sharing may not have started — check Chrome flag" };
+      const success = status !== "not_sharing";
+      console.log(`[ShareScreen] Status: ${status} (${success ? "✅" : "❌"})`);
+      return {
+        success,
+        message: success
+          ? `Presenting${url ? ': ' + url : ' (entire screen)'}`
+          : "Sharing may not have started — check macOS Screen Recording permission",
+      };
     } catch (e: any) {
       console.warn("[ShareScreen] Failed:", e.message);
       return { success: false, message: e.message };
     }
   }
 
-  /** Stop screen sharing */
+  /** Stop screen sharing and close the presenting tab */
   async stopSharing(): Promise<{ success: boolean }> {
     if (!this._page) return { success: false };
     try {
@@ -1071,8 +1108,13 @@ export class ChromeLauncher {
         if (btn) { btn.click(); return 'stopped'; }
         return 'no_button';
       })()`));
+      // Close presenting tab
+      if (this._presentingPage) {
+        try { await this._presentingPage.close(); } catch {}
+        this._presentingPage = null;
+      }
       console.log(`[ShareScreen] Stop: ${result}`);
-      return { success: result === "stopped" };
+      return { success: result === "stopped" || result === "no_button" };
     } catch {
       return { success: false };
     }
