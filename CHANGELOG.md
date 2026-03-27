@@ -3,6 +3,21 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.19] - 2026-03-27
+
+### Added
+- **Tab-level screen sharing** — `shareScreen(url)` opens URL in a "CallingClaw Presenting" tab, Chrome auto-selects via `--auto-select-desktop-capture-source` flag. Zero dialogs, zero manual steps
+- **Screen share API** — `POST /api/screen/share { url }` + `POST /api/screen/stop`
+- **OpenClaw skill** — `/callingclaw share <url>` and `/callingclaw share stop`
+- **File search in AutomationRouter** — fuzzy keyword search across project + shared dirs for `open_file` actions
+- **Browser E2E tests** — 4 scenarios: Meet join, local HTML open, Twitter profile, Google search (12/13 pass)
+- **Screen share E2E test** — Meet join → share screen → verify presenting → stop
+
+### Changed
+- **Meeting automation all-Haiku** — Computer Use during meetings uses `claude-haiku-4-5` (~500ms) instead of `claude-sonnet-4.6` (~3s). New config: `MEETING_AUTOMATION_MODEL`
+- **TranscriptAuditor debounce** — 2500ms → 1200ms for faster in-meeting response
+- **TranscriptAuditor actions** — `open_file` uses AutomationRouter file search (not legacy osascript), `share_screen` uses ChromeLauncher API (not legacy osascript)
+
 ## [2.7.18] - 2026-03-27
 
 ### Changed
