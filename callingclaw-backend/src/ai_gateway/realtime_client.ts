@@ -136,10 +136,10 @@ export const GROK_PROVIDER: RealtimeProviderConfig = {
         },
         input_audio_transcription: { model: "grok-2-audio" },
         tools: [
-          // Grok native tools (free, no token cost)
+          // Grok native tools (server-side execution, free, no token cost, FAST)
           { type: "web_search" },
           { type: "x_search" },
-          // CallingClaw function tools
+          // CallingClaw function tools (client-side execution)
           ...tools.map((t) => ({
             type: "function",
             name: t.name,
@@ -147,6 +147,10 @@ export const GROK_PROVIDER: RealtimeProviderConfig = {
             parameters: t.parameters,
           })),
         ],
+        // Search settings (optimize for meeting context)
+        search: {
+          mode: "auto", // Let Grok decide when to search
+        },
         turn_detection: { type: "server_vad", ...vad },
       },
     };
