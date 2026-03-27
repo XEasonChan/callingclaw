@@ -3,6 +3,26 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.7.17] - 2026-03-27
+
+### Added
+- **Meeting Summary Skill** (`/meeting-summary`) — CallingClaw 官网 light 主题的 HTML 会议报告，含 Review Items 表格（截图+行动方向）、Action Items、Transcript、Known Issues
+- **Frame API** — `GET /api/meeting/frame/:meetingId/:filename` 提供会议截图
+- **Auto-leave 触发完整 summary 流程** — 不管怎么退出会议（Meet UI、host 结束、掉线），都自动生成 summary → 导出 Markdown → 创建 tasks → PostMeetingDelivery → OpenClaw → Telegram
+
+### Fixed
+- **会议结束无 summary** — 之前只有 `POST /api/meeting/leave` 才触发 summary，用户在 Meet 里点 Leave call 不会生成。现在 `onMeetingEnd` 回调自动触发完整流程
+
+## [2.7.16] - 2026-03-27
+
+### Fixed
+- **音频捕获彻底重写** — 移除所有 echo suppression，双管道捕获（getReceivers + ontrack），Meet 字幕注入 Realtime API
+- **VAD 调优** — Grok silence 500→1200ms，减少 AI 抢话
+- **Session 合并显示** — Desktop 列表合并 Calendar + SessionManager
+- **Auth check 加速** — cookie 检测替代页面导航
+- **MeetingScheduler 去重** — 检查 SessionManager 已有 session
+- **Mic unmute 重试** — 3 次重试 + 更多选择器
+
 ## [2.7.15] - 2026-03-26
 
 ### Added
