@@ -1385,29 +1385,24 @@ export function startConfigServer(services: Services) {
           } catch {}
         }
 
-        // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
+        // Generate meeting prep brief via OpenClaw — BACKGROUND, NEVER blocks join
         const meetTopic = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
         let prepBrief: any = null;
         if (services.meetingPrepSkill && services.openclawBridge?.connected) {
-          try {
-            const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
-            prepBrief = prepResult.brief;
-            if (services.realtime.connected) {
-              // Layer 2: inject meeting brief via conversation.item.create
-              const itemId = injectMeetingBrief(services.realtime, prepResult.brief);
-              if (itemId) {
-                console.log(`[Meeting] ✅ Layer 2 meeting brief injected (${prepResult.brief.keyPoints?.length || 0} key points, item: ${itemId})`);
-              } else {
-                console.warn("[Meeting] ⚠️ Layer 2 brief injection returned false — voice may not be connected");
+          // Fire-and-forget: prep runs in background, injects when ready
+          (async () => {
+            try {
+              const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
+              prepBrief = prepResult.brief;
+              if (services.realtime.connected) {
+                const itemId = injectMeetingBrief(services.realtime, prepResult.brief);
+                console.log(`[Meeting] ✅ Layer 2 meeting brief injected (background, ${prepResult.brief.keyPoints?.length || 0} key points)`);
               }
-            } else {
-              console.warn("[Meeting] ⚠️ Voice not connected — brief generated but NOT injected. Will inject when voice starts.");
+            } catch (e: any) {
+              console.warn("[Meeting] Prep brief failed (non-blocking):", e.message);
             }
-          } catch (e: any) {
-            console.warn("[Meeting] ❌ Prep brief failed (continuing without):", e.message);
-          }
-        } else {
-          console.warn(`[Meeting] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, openClaw=${services.openclawBridge?.connected ?? false}. Voice AI will have no meeting context.`);
+          })();
+          console.log("[Meeting] Prep brief started in background — join continues immediately");
         }
 
         // Step 2: Configure audio + screen capture mode BEFORE joining
