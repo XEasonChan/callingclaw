@@ -1,24 +1,15 @@
-# CallingClaw 2.0 — Dependency Manifest
+# CallingClaw — Dependency Manifest (v2.7.17)
 
 ## Quick Setup
 
 ```bash
-# 1. Install all dependencies
-cd "CallingClaw 2.0/callingclaw"
+cd callingclaw-backend
 bun install
-pip3 install -r requirements.txt
-
-# 2. Install system dependencies (macOS)
-brew install portaudio        # Required by pyaudio
-brew install blackhole-2ch    # Virtual audio device (for Meet audio bridge)
-
-# 3. Copy and configure env
-cp .env.example .env
-# Edit .env with your API keys
-
-# 4. Start
-bun run start
+cp .env.example .env  # Edit with your API keys
+bun --hot run src/callingclaw.ts
 ```
+
+No Python, no BlackHole, no virtual audio drivers needed. Audio injection via Playwright `addInitScript`.
 
 ---
 
@@ -26,119 +17,73 @@ bun run start
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| **macOS** | 12+ | Required for PyAutoGUI, AppleScript, BlackHole |
-| **Bun** | 1.3+ | Runtime for main process |
-| **Python** | 3.9+ | Sidecar runtime (recommend conda 3.13) |
-| **portaudio** | 19.7+ | System lib for PyAudio |
-| **BlackHole** | 0.6+ | Virtual audio device for Meet bridging (optional) |
+| **macOS** | 13+ (Ventura) | Required for Accessibility, Screen Recording TCC |
+| **Bun** | 1.3+ | Runtime for backend |
+| **Google Chrome** | Stable | Playwright launches Chrome for meeting join + audio |
 
 ---
 
-## Bun (Node) Dependencies
+## Bun Dependencies
 
 Defined in `package.json`, installed via `bun install`.
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `@anthropic-ai/sdk` | 0.78.0 | Claude Computer Use API (direct or via OpenRouter) |
-| `openai` | 6.27.0 | OpenAI Realtime voice + GPT-4o vision |
-| `@types/bun` | latest | TypeScript types (dev) |
-
-> **Note:** Google Calendar uses direct REST API with OAuth2 refresh tokens — no MCP package needed.
-> Credentials are auto-discovered from `~/.openclaw/workspace/` or `~/.config/gcloud/`.
-
----
-
-## Python Dependencies
-
-Defined in `requirements.txt`, installed via `pip3 install -r requirements.txt`.
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `websockets` | 15.0.1 | WebSocket client to connect to Bun bridge |
-| `pyautogui` | 0.9.54 | Mouse/keyboard automation (Computer Use execution) |
-| `mss` | 10.1.0 | Fast screen capture (1 FPS screenshot stream) |
-| `Pillow` | 12.1.1 | Image processing (screenshot format conversion) |
-| `pyaudio` | 0.2.14 | Audio I/O for Meet bridging (requires portaudio) |
-
-### PyAutoGUI Sub-dependencies (auto-installed)
-
 | Package | Purpose |
 |---------|---------|
-| `pyobjc-core` | macOS Objective-C bridge |
-| `pyobjc-framework-Cocoa` | macOS Cocoa framework |
-| `pyobjc-framework-quartz` | macOS screen/window access |
-| `pyscreeze` | Screenshot capture |
-| `pytweening` | Animation easing for mouse movement |
-| `pymsgbox` | Message box dialogs |
-| `pygetwindow` | Window management |
-| `pyrect` | Rectangle utilities |
-| `mouseinfo` | Mouse position info |
-| `pyperclip` | Clipboard access |
-| `rubicon-objc` | Obj-C bridge (alternative) |
+| `openai` | OpenAI Realtime voice API + GPT-4o vision |
+| `@anthropic-ai/sdk` | Claude Computer Use (direct or via OpenRouter) |
+| `playwright-core` | Chrome automation for Meet join + audio injection |
+
+> **Google Calendar** uses direct REST API with OAuth2 refresh tokens — no npm package.
+> Credentials auto-discovered from `~/.openclaw/workspace/` or `.env`.
 
 ---
 
-## System Dependencies (Homebrew)
+## API Keys
 
-| Package | Install Command | Purpose |
-|---------|----------------|---------|
-| `portaudio` | `brew install portaudio` | C library for audio I/O (PyAudio build dep) |
-| `blackhole-2ch` | `brew install blackhole-2ch` | Virtual audio device for Meet audio routing |
-
----
-
-## API Keys Required
-
-| Key | Required | Source | Purpose |
-|-----|----------|--------|---------|
-| `OPENAI_API_KEY` | **Yes** | [platform.openai.com](https://platform.openai.com/api-keys) | Realtime voice + GPT-4o vision |
-| `OPENROUTER_API_KEY` | Recommended | [openrouter.ai/keys](https://openrouter.ai/keys) | Claude Computer Use (no Anthropic account needed) |
-| `ANTHROPIC_API_KEY` | Optional | [console.anthropic.com](https://console.anthropic.com/) | Direct Claude API (alternative to OpenRouter) |
-| `GOOGLE_CLIENT_ID` | Optional | Google Cloud Console | Calendar + Meet integration |
-| `GOOGLE_CLIENT_SECRET` | Optional | Google Cloud Console | Calendar + Meet integration |
-| `GOOGLE_REFRESH_TOKEN` | Optional | OAuth flow | Calendar + Meet integration |
+| Key | Required | Purpose |
+|-----|----------|---------|
+| `XAI_API_KEY` | **Yes** (default voice) | Grok Realtime voice (Eve) |
+| `OPENAI_API_KEY` | Optional | OpenAI Realtime voice (alternative to Grok) |
+| `OPENROUTER_API_KEY` | Recommended | Claude Computer Use via OpenRouter |
+| `GOOGLE_CLIENT_ID` + `SECRET` + `REFRESH_TOKEN` | Optional | Calendar integration |
 
 ---
 
 ## Environment Variables
 
 ```bash
-# .env file — copy from .env.example
-OPENAI_API_KEY=sk-xxx              # Required
-OPENROUTER_API_KEY=sk-or-v1-xxx    # Recommended (for Computer Use)
-# ANTHROPIC_API_KEY=sk-ant-xxx     # Optional (direct Anthropic)
+# .env — see .env.example for all options
+XAI_API_KEY=xai-xxx                # Required (default voice provider)
+OPENAI_API_KEY=sk-xxx              # Optional (alternative voice)
+OPENROUTER_API_KEY=sk-or-v1-xxx    # Recommended (Computer Use)
 
-GOOGLE_CLIENT_ID=                  # Optional
+GOOGLE_CLIENT_ID=                  # Optional (Calendar)
 GOOGLE_CLIENT_SECRET=              # Optional
 GOOGLE_REFRESH_TOKEN=              # Optional
 
-PORT=4000                          # HTTP config server
-BRIDGE_PORT=4001                   # Python sidecar WebSocket
-PYTHON_PATH=/opt/miniconda3/bin/python3  # Python binary path
-
-SCREEN_WIDTH=1920                  # Screen resolution
-SCREEN_HEIGHT=1080
+PORT=4000                          # Backend HTTP + WebSocket
+VOICE_PROVIDER=grok                # "grok" (default) or "openai"
 ```
+
+---
+
+## Removed Dependencies (historical)
+
+These were used in earlier versions and have been fully removed:
+
+| Dependency | Removed In | Replaced By |
+|-----------|-----------|-------------|
+| Python sidecar (pyautogui, mss, pyaudio) | v2.6.0 | NativeBridge (osascript + cliclick) |
+| BlackHole virtual audio | v2.7.12 | Playwright addInitScript audio injection |
+| portaudio (brew) | v2.6.0 | Not needed |
+| playwright-cli (npm) | v2.7.13 | playwright-core library (ChromeLauncher) |
 
 ---
 
 ## Verification
 
 ```bash
-# Check Bun deps
-bun run src/callingclaw.ts &  # Should start without import errors
-
-# Check Python deps
-python3 -c "
-import pyautogui; print(f'pyautogui: {pyautogui.__version__}')
-import mss; print(f'mss: {mss.__version__}')
-import pyaudio; print(f'pyaudio: {pyaudio.__version__}')
-import websockets; print(f'websockets: {websockets.__version__}')
-import PIL; print(f'Pillow: {PIL.__version__}')
-print('All OK')
-"
-
-# Run tests
-bun test
+bun --hot run src/callingclaw.ts    # Should start on :4000
+curl http://localhost:4000/api/status  # Should return version + module status
+bun test                              # All tests pass
 ```
