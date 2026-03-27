@@ -732,6 +732,36 @@ voice.onAudioOutput((base64Pcm) => {
   }
 });
 
+// ── 5b. SenseVoice Local STT (optional — high-quality Chinese/English transcript) ──
+(async () => {
+  try {
+    const { SenseVoiceClient } = await import("./stt/sensevoice-client");
+    const svClient = new SenseVoiceClient();
+    const ok = await svClient.connect();
+    if (ok) {
+      globalThis._senseVoiceClient = svClient;
+      svClient.onText((t) => {
+        // High-quality transcript → SharedContext + Realtime API context
+        if (t.text && t.text.length > 2) {
+          context.addTranscript({ role: "user", text: t.text, ts: Date.now() });
+          // Also inject into Realtime API as conversation context
+          if (voice.connected) {
+            voice.sendEvent("conversation.item.create", {
+              item: { type: "message", role: "user", content: [{ type: "input_text", text: `[SenseVoice] ${t.text}` }] },
+            });
+          }
+          console.log(`[SenseVoice] ${t.lang || "?"}: "${t.text.substring(0, 60)}"`);
+        }
+      });
+      console.log("[Init] SenseVoice STT connected (high-quality local transcript)");
+    } else {
+      console.log("[Init] SenseVoice STT not available (optional — run services/sensevoice/server.py)");
+    }
+  } catch {
+    console.log("[Init] SenseVoice STT not available (optional)");
+  }
+})();
+
 // ── 6. Google Calendar (non-blocking) ───────────────────────────
 
 calendar.connect().then(() => {

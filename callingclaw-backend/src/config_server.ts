@@ -288,6 +288,10 @@ export function startConfigServer(services: Services) {
                 console.log(`[VoiceTest] Mic audio chunk #${globalThis._vtAudioCount} (${data.audio.length} b64 chars)`);
               }
               services.realtime.sendAudio(data.audio);
+              // Also forward to SenseVoice for high-quality local transcript
+              if (globalThis._senseVoiceClient?.connected) {
+                globalThis._senseVoiceClient.sendAudio(data.audio);
+              }
             } else if (data.type === "caption") {
               // Meet captions DOM scrape — reliable transcript from Google's speech recognition.
               // TWO purposes:
