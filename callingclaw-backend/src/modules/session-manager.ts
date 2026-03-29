@@ -193,6 +193,19 @@ export class SessionManager {
   async attachPrep(meetingId: string, content: string, topic?: string): Promise<string> {
     const filename = meetingId + FILE_SUFFIXES.prep;
     const filePath = resolve(SHARED_DIR, filename);
+    // Guard: don't overwrite existing non-empty prep (recovery retry race condition)
+    try {
+      const existing = Bun.file(filePath);
+      if (await existing.exists() && (await existing.size()) > 100) {
+        console.log(`[SessionManager] Prep already exists, skipping overwrite: ${meetingId}`);
+        this._mergeFile(meetingId, "prep", filename);
+        const session = this.get(meetingId);
+        if (session && session.status === SESSION_STATUS.PREPARING) {
+          this._transition(meetingId, SESSION_STATUS.READY, topic ? { topic } : undefined);
+        }
+        return filePath;
+      }
+    } catch { /* proceed to write */ }
     await Bun.write(filePath, content);
     this._mergeFile(meetingId, "prep", filename);
     // Auto-transition to ready if still preparing

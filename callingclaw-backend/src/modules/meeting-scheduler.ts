@@ -378,6 +378,21 @@ export class MeetingScheduler {
         continue;
       }
 
+      // Double-check: file might have been written between Case A check and here (race)
+      // Or Case A's text check rejected it (< 50 chars) but it's still valid
+      try {
+        const recheckFile = Bun.file(prepPath);
+        if (await recheckFile.exists() && (await recheckFile.size()) > 100) {
+          console.log(`[PrepRecovery] Skipping regeneration — file appeared on disk: "${s.topic}" (${s.meetingId})`);
+          // Mark as ready since file exists
+          if (this.sessionManager) {
+            this.sessionManager.registerFile(s.meetingId, "prep", s.meetingId + "_prep.md");
+            this.sessionManager.markReady(s.meetingId);
+          }
+          continue;
+        }
+      } catch { /* proceed to regenerate */ }
+
       // Stale session — regenerate if we have the tools
       if (!this.meetingPrepSkill || !this.openclawBridge.connected) continue;
 
