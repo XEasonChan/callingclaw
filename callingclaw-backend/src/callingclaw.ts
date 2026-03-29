@@ -524,9 +524,20 @@ async function autoLeaveMeeting() {
     eventBus.emit("meeting.ended", followUp);
     eventBus.endCorrelation();
 
-    // Post-meeting delivery
+    // Finalize key frame timeline for screenshot delivery
+    let keyFrameResult: { htmlFile?: string; frameCount?: number } | null = null;
+    if (keyFrameStore.active) {
+      const timeline = await keyFrameStore.finalize(summary.title || "Meeting").catch(() => null);
+      if (timeline) {
+        keyFrameResult = { htmlFile: timeline.htmlFile, frameCount: timeline.frameCount };
+        console.log(`[AutoLeave] Timeline: ${timeline.frameCount} frames → ${timeline.htmlFile}`);
+      }
+      await keyFrameStore.stop();
+    }
+
+    // Post-meeting delivery (now includes screenshots)
     const prepSummary = getPostMeetingSummary(meetingPrepSkill);
-    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary }).catch((e: any) => {
+    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult }).catch((e: any) => {
       console.error("[AutoLeave] Delivery failed:", e.message);
     });
 

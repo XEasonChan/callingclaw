@@ -1,15 +1,20 @@
 // CallingClaw — Presentation Engine
-// Haiku reads a webpage, builds a presentation plan, then orchestrates
-// Grok (voice) + Playwright (scroll) to deliver a synchronized presentation.
+//
+// Story-driven presentation: the NARRATIVE leads, the page follows.
 //
 // Architecture:
-//   1. Haiku reads full page DOM snapshot (ONE call, ~1-2s)
-//   2. Returns structured slides: { sectionTitle, scrollTarget, talkingPoints }
-//   3. Runner loops: scroll → wait → speak → wait → next
-//   4. User interruption → pause → Grok responds → resume
+//   Phase 1 — Story (from MeetingPrepBrief):
+//     MeetingPrep generates: goal → keyPoints → decisions → narrative arc
+//     This is the "what to say" — independent of any specific page.
 //
-// This gives Grok "vision" without any vision model — Haiku pre-digests
-// the page content into talking points that Grok speaks naturally.
+//   Phase 2 — Stage Directions (this engine):
+//     Haiku takes the story + DOM snapshot and maps each story beat
+//     to a scroll position on the page. The page is the "slideshow"
+//     that accompanies the narrative, not the source of it.
+//
+//   Phase 3 — Performance:
+//     Runner loops: scroll → wait → speak → wait → next
+//     User interruption → pause → voice responds → resume
 
 import { CONFIG } from "../config";
 import type { VoiceModule } from "./voice";
@@ -29,6 +34,18 @@ export interface PresentationPlan {
   totalEstimatedMs: number;
 }
 
+/** Meeting context — the STORY that drives the presentation */
+export interface PresentationBriefContext {
+  goal?: string;
+  summary?: string;
+  keyPoints?: string[];
+  architectureDecisions?: Array<{ decision: string; rationale: string }>;
+  expectedQuestions?: Array<{ question: string; suggestedAnswer: string }>;
+  previousContext?: string;
+  attendees?: Array<{ name?: string; email: string }>;
+  liveNotes?: string[];
+}
+
 export class PresentationEngine {
   private _running = false;
   private _paused = false;
@@ -41,16 +58,22 @@ export class PresentationEngine {
   get plan() { return this._plan; }
 
   /**
-   * Build a presentation plan by having Haiku read the page DOM.
-   * Returns the plan without starting the presentation.
+   * Build a presentation plan: story-first, page-second.
+   *
+   * If briefContext is provided (normal flow):
+   *   The story comes from MeetingPrep → Haiku maps story beats to DOM positions.
+   *
+   * If no briefContext (fallback):
+   *   Haiku reads DOM and generates both story + positions (legacy behavior).
    */
   async buildPlan(opts: {
     url: string;
     topic: string;
     context?: string;
+    briefContext?: PresentationBriefContext;
     chromeLauncher: any;
   }): Promise<PresentationPlan> {
-    const { url, topic, context: extraContext, chromeLauncher } = opts;
+    const { url, topic, context: extraContext, briefContext, chromeLauncher } = opts;
 
     // 1. Get DOM snapshot from the presenting page
     console.log(`[Presentation] Building plan for: ${url}`);
@@ -60,26 +83,12 @@ export class PresentationEngine {
       throw new Error("Page snapshot too short — page may not be loaded");
     }
 
-    // 2. Ask Haiku to build the presentation plan
-    const prompt = `You are building a presentation plan from a webpage. The presenter (CallingClaw AI) will narrate each section while the page scrolls to match.
+    // 2. Build the prompt — story-driven if brief available, DOM-driven fallback
+    const prompt = briefContext
+      ? this._buildStoryDrivenPrompt(url, topic, extraContext, briefContext, snapshot)
+      : this._buildDomDrivenPrompt(url, topic, extraContext, snapshot);
 
-## Page URL: ${url}
-## Topic: ${topic}
-${extraContext ? `## Additional context: ${extraContext}` : ""}
-
-## Page DOM Snapshot (headings + key content):
-${snapshot.substring(0, 6000)}
-
-## Instructions
-Extract 5-8 sections from the page in visual order (top to bottom). For each section:
-- sectionTitle: the heading text (exact match from DOM)
-- scrollTarget: exact text string to find via scrollIntoView (use the heading text)
-- talkingPoints: 2-4 sentences to say about this section. Write as natural speech (not bullet points). Connect each section to the topic. Use the language that matches the page (Chinese page → Chinese talking points, English page → English).
-- estimatedDurationMs: how long it takes to say the talking points at normal speed (~150 words/min for English, ~200 chars/min for Chinese)
-
-Return ONLY a JSON array:
-[{"sectionTitle":"...","scrollTarget":"...","talkingPoints":"...","estimatedDurationMs":N},...]`;
-
+    // 3. Call Haiku
     const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -88,7 +97,7 @@ Return ONLY a JSON array:
       },
       body: JSON.stringify({
         model: CONFIG.analysis.model, // Haiku
-        max_tokens: 2000,
+        max_tokens: 2500,
         temperature: 0.3,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -113,9 +122,109 @@ Return ONLY a JSON array:
     return this._plan;
   }
 
-  /**
-   * Run the presentation: scroll + speak for each slide.
-   */
+  // ── Story-Driven Prompt (normal flow: brief → story → page mapping) ──
+
+  private _buildStoryDrivenPrompt(
+    url: string,
+    topic: string,
+    extraContext: string | undefined,
+    brief: PresentationBriefContext,
+    snapshot: string,
+  ): string {
+    // Build the narrative arc from the brief
+    const storyParts: string[] = [];
+
+    if (brief.goal) storyParts.push(`Goal of this presentation: ${brief.goal}`);
+    if (brief.previousContext) storyParts.push(`Where we left off last time: ${brief.previousContext}`);
+
+    if (brief.attendees?.length) {
+      const names = brief.attendees.map(a => a.name || a.email).join(", ");
+      storyParts.push(`Audience: ${names}`);
+    }
+
+    if (brief.keyPoints?.length) {
+      storyParts.push(`Story beats (in order of importance):\n${brief.keyPoints.map((p, i) => `${i + 1}. ${p}`).join("\n")}`);
+    }
+
+    if (brief.architectureDecisions?.length) {
+      const decisions = brief.architectureDecisions.map(d => `- "${d.decision}" — because: ${d.rationale}`).join("\n");
+      storyParts.push(`Key decisions to highlight (emphasize the WHY):\n${decisions}`);
+    }
+
+    if (brief.expectedQuestions?.length) {
+      const qs = brief.expectedQuestions.slice(0, 3).map(q => `- "${q.question}" → ${q.suggestedAnswer}`).join("\n");
+      storyParts.push(`Questions the audience will likely ask (preemptively address):\n${qs}`);
+    }
+
+    if (brief.liveNotes?.length) {
+      const recent = brief.liveNotes.slice(-5);
+      storyParts.push(`Recent updates to weave in:\n${recent.map(n => `- ${n}`).join("\n")}`);
+    }
+
+    return `You are a presentation director. A meeting prep has already written the STORY — your job is to map that story onto this webpage, finding the right scroll positions for each story beat.
+
+## The Story (this is what the presenter MUST say)
+${storyParts.join("\n\n")}
+
+## The Stage (webpage to scroll through)
+URL: ${url}
+Topic: ${topic}
+${extraContext ? `Additional context: ${extraContext}` : ""}
+
+## Page DOM Snapshot:
+${snapshot.substring(0, 6000)}
+
+## Your Task
+Map each story beat to a position on the page. Create 5-8 slides:
+
+- sectionTitle: a short label for this story beat (can differ from DOM headings)
+- scrollTarget: exact text string from the DOM to scrollIntoView (must exist in the snapshot)
+- talkingPoints: 2-4 sentences of natural speech. Rules:
+  1. The story beats and decisions above are your SCRIPT — follow them faithfully
+  2. Lead with WHY and the DECISION, not implementation details
+  3. If the brief mentions "last time we discussed X", open with that continuity
+  4. Skip resolved bugs or old issues — only mention if the lesson matters to the audience
+  5. Preemptively address expected questions when relevant
+  6. Match the page language (Chinese → Chinese, English → English)
+  7. Sound like a knowledgeable teammate presenting, not a robot reading a summary
+- estimatedDurationMs: ~150 words/min (English) or ~200 chars/min (Chinese)
+
+If a story beat has no matching section on the page, still include it as a slide — use the nearest relevant scroll position and deliver the talking point there.
+
+Return ONLY a JSON array:
+[{"sectionTitle":"...","scrollTarget":"...","talkingPoints":"...","estimatedDurationMs":N},...]`;
+  }
+
+  // ── DOM-Driven Prompt (fallback: no brief, generate from page) ──
+
+  private _buildDomDrivenPrompt(
+    url: string,
+    topic: string,
+    extraContext: string | undefined,
+    snapshot: string,
+  ): string {
+    return `You are preparing a presentation script from a webpage. The presenter (CallingClaw AI) will narrate each section while the page scrolls to match.
+
+## Page URL: ${url}
+## Topic: ${topic}
+${extraContext ? `## Additional context: ${extraContext}` : ""}
+
+## Page DOM Snapshot (headings + key content):
+${snapshot.substring(0, 6000)}
+
+## Instructions
+Extract 5-8 sections from the page in visual order (top to bottom). For each section:
+- sectionTitle: the heading text (exact match from DOM)
+- scrollTarget: exact text string to find via scrollIntoView (use the heading text)
+- talkingPoints: 2-4 sentences of natural speech. Focus on decisions and rationale over implementation details. Match the page language.
+- estimatedDurationMs: ~150 words/min (English) or ~200 chars/min (Chinese)
+
+Return ONLY a JSON array:
+[{"sectionTitle":"...","scrollTarget":"...","talkingPoints":"...","estimatedDurationMs":N},...]`;
+  }
+
+  // ── Runner: scroll + speak for each slide ──
+
   async run(opts: {
     chromeLauncher: any;
     voice: VoiceModule;
@@ -132,6 +241,10 @@ Return ONLY a JSON array:
 
     console.log(`[Presentation] Starting: ${plan.slides.length} slides`);
     let slidesPresented = 0;
+
+    // Enable presentation mode on voice — slow tools (computer_action) will be
+    // awaited instead of async, keeping voice and screen in sync
+    voice.presentationMode = true;
 
     try {
       for (let i = 0; i < plan.slides.length; i++) {
@@ -163,15 +276,17 @@ Return ONLY a JSON array:
           return 'fallback_scroll';
         })()`);
 
-        // 2. Wait for audience to see
-        await new Promise(r => setTimeout(r, 2000));
+        // 2. Wait for scroll animation to settle
+        await new Promise(r => setTimeout(r, 1000));
 
         // 3. Speak talking points
         const transcriptBefore = sharedContext.transcript.length;
         voice.sendText(slide.talkingPoints);
 
-        // 4. Wait for speech to complete
-        await new Promise(r => setTimeout(r, slide.estimatedDurationMs));
+        // 4. Wait for ACTUAL speech completion (not fixed estimate)
+        // waitForSpeechDone() resolves when voice transitions from speaking → listening,
+        // with estimatedDurationMs + 3s buffer as timeout fallback
+        await voice.waitForSpeechDone(slide.estimatedDurationMs + 3000);
 
         // 5. Check if user spoke during this slide (interruption detection)
         const newEntries = sharedContext.transcript.slice(transcriptBefore);
@@ -180,18 +295,19 @@ Return ONLY a JSON array:
 
         if (userSpoke) {
           console.log("[Presentation] User spoke — pausing for response");
-          // Let Grok respond naturally (it has the talking points context)
-          await new Promise(r => setTimeout(r, 8000)); // Wait for Grok to respond
+          // Let voice model respond naturally, wait for it to finish
+          await voice.waitForSpeechDone(10000);
         }
 
         slidesPresented++;
 
-        // Brief pause between slides
-        await new Promise(r => setTimeout(r, 1500));
+        // Brief pause between slides (tighter pacing for natural flow)
+        await new Promise(r => setTimeout(r, 800));
       }
     } finally {
       this._running = false;
       this._currentSlide = -1;
+      voice.presentationMode = false;
     }
 
     console.log(`[Presentation] Completed: ${slidesPresented}/${plan.slides.length} slides`);

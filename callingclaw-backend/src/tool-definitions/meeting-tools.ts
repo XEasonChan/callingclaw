@@ -4,6 +4,7 @@
 
 import type { ToolModule } from "./types";
 import { CONFIG } from "../config";
+import { RecallAPI } from "../recall-api";
 import type { GoogleCalendarClient, CalendarAttendee } from "../mcp_client/google_cal";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { MeetJoiner } from "../meet_joiner";
@@ -76,6 +77,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             meet_url: {
               type: "string",
               description: "Google Meet URL (e.g. https://meet.google.com/abc-defg-hij)",
+            },
+            transport: {
+              type: "string",
+              enum: ["auto", "playwright", "recall"],
+              description: "How to join: 'playwright' (local Chrome), 'recall' (Recall.ai cloud bot). Default: auto.",
             },
           },
           required: ["meet_url"],
@@ -187,14 +193,55 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // ── Step 3: Join via Playwright fast-path (deterministic, no AI model) ──
-          // Switch system audio to BlackHole first
+          // ── Step 3: Determine transport and join meeting ──
+          const transport = args.transport || "auto";
+          const useRecall = transport === "recall" ||
+            (transport === "auto" && CONFIG.recall.apiKey && !playwrightCli.connected);
+
           let usedPlaywright = false;
           let joinSuccess = false;
           let joinSummary = "";
-
           let joinState: "in_meeting" | "waiting_room" | "failed" = "failed";
 
+          // ── Step 3a: Recall.ai cloud bot path ──
+          if (useRecall) {
+            if (!CONFIG.recall.apiKey) {
+              return `Recall.ai API key not configured. Set RECALL_API_KEY in .env.`;
+            }
+            try {
+              const wsUrl = CONFIG.recall.wsUrl || `ws://localhost:${CONFIG.port}/ws/recall-bridge`;
+              const clientBase = CONFIG.recall.clientPageUrl || `http://localhost:${CONFIG.port}/recall-client.html`;
+              const clientPageUrl = `${clientBase}?ws=${encodeURIComponent(wsUrl)}`;
+
+              const recallApi = new RecallAPI(CONFIG.recall.apiKey, CONFIG.recall.baseUrl);
+              const bot = await recallApi.createBot({
+                meetUrl: args.meet_url,
+                clientPageUrl,
+                botName: "CallingClaw",
+              });
+
+              // Store bot reference for leave_meeting cleanup
+              (meeting as any)._recallBotId = bot.id;
+              (meeting as any)._recallApi = recallApi;
+
+              joinSuccess = true;
+              joinState = "in_meeting"; // Bot will join asynchronously
+              joinSummary = `Recall.ai bot created (${bot.id}). Bot is joining meeting...`;
+              console.log(`[Meeting] Recall.ai bot ${bot.id} created for ${args.meet_url}`);
+            } catch (e: any) {
+              console.error("[Meeting] Recall.ai bot creation failed:", e.message);
+              joinSummary = `Recall.ai failed: ${e.message}. Try transport=playwright.`;
+            }
+
+            if (joinState === "in_meeting") {
+              meeting.startRecording();
+              eventBus.emit("meeting.started", { meet_url: args.meet_url, transport: "recall", correlation_id: corrId });
+            }
+
+            return `${joinSummary}\n\nMeeting: ${meetTopic}\nAttendees: ${meetAttendees.map(a => a.displayName || a.email).join(", ") || "unknown"}${prepResult ? `\n\nPrep Brief:\n${prepResult.brief}` : ""}`;
+          }
+
+          // ── Step 3b: Playwright local path (existing) ──
           // Ensure Playwright is started (lazy init)
           if (!playwrightCli.connected) {
             try { await playwrightCli.start(); } catch {}
@@ -332,6 +379,17 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             : `Failed: ${session.error}`;
         }
         case "leave_meeting": {
+          // Recall.ai bot cleanup (if used)
+          if ((meeting as any)._recallBotId && (meeting as any)._recallApi) {
+            try {
+              await (meeting as any)._recallApi.destroyBot((meeting as any)._recallBotId);
+              console.log(`[Meeting] Recall.ai bot ${(meeting as any)._recallBotId} destroyed`);
+            } catch (e: any) {
+              console.warn("[Meeting] Recall bot destroy failed:", e.message);
+            }
+            (meeting as any)._recallBotId = null;
+            (meeting as any)._recallApi = null;
+          }
           // Stop meeting-end watcher + admission monitor
           playwrightCli.clearMeetingEndCallback();
           const _waitingRoomAbort = getWaitingRoomAbort();

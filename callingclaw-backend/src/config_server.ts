@@ -323,11 +323,13 @@ export function startConfigServer(services: Services) {
                 const provider = data.provider || undefined; // "openai" | "grok"
                 const voice = data.voice || undefined;
 
-                // If Grok provider selected with a specific voice, update Grok config before start
+                // Update voice config for selected provider before start
                 if (provider === "grok" && voice) {
                   CONFIG.grok.voice = voice;
                 } else if (provider === "openai" && voice) {
                   CONFIG.openai.voice = voice;
+                } else if (provider === "gemini" && voice) {
+                  CONFIG.gemini.voice = voice;
                 }
 
                 services.realtime.start(instructions, provider).then(() => {
@@ -341,6 +343,13 @@ export function startConfigServer(services: Services) {
               services.realtime.stop();
               ws.send(JSON.stringify({ type: "status", voiceConnected: false }));
               services.eventBus.emit("voice.stopped", {});
+            } else if (data.type === "inject_context" && data.text) {
+              // Inject context into voice session (e.g., meeting prep brief from Talk Locally mode)
+              const id = services.realtime.injectContext(data.text);
+              ws.send(JSON.stringify({ type: "context_injected", ok: !!id, id }));
+            } else if (data.type === "video" && data.frame) {
+              // Video frame from browser screen capture (Gemini vision mode)
+              services.realtime.sendVideo(data.frame);
             } else if (data.type === "update_instructions" && data.instructions) {
               const ok = services.realtime.updateInstructions(data.instructions);
               ws.send(JSON.stringify({ type: "instructions_updated", ok }));
@@ -2960,11 +2969,22 @@ STEP-BY-STEP FLOW:
           await services.chromeLauncher.shareScreen(body.url);
           await new Promise(r => setTimeout(r, 4000)); // Wait for page load
 
-          // Build plan (Haiku reads DOM)
+          // Build plan (Haiku reads DOM + meeting brief context)
+          const brief = services.meetingPrepSkill?.currentBrief;
           const plan = await engine.buildPlan({
             url: body.url,
             topic: body.topic || "presentation",
             context: body.context,
+            briefContext: brief ? {
+              goal: brief.goal,
+              summary: brief.summary,
+              keyPoints: brief.keyPoints,
+              architectureDecisions: brief.architectureDecisions,
+              expectedQuestions: brief.expectedQuestions,
+              previousContext: brief.previousContext,
+              attendees: brief.attendees,
+              liveNotes: brief.liveNotes,
+            } : undefined,
             chromeLauncher: services.chromeLauncher,
           });
 

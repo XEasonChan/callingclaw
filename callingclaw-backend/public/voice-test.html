@@ -170,6 +170,7 @@
           <select id="provider-select">
             <option value="openai">OpenAI</option>
             <option value="grok">Grok (xAI)</option>
+            <option value="gemini">Gemini 3.1 Flash Live</option>
           </select>
         </div>
 
@@ -299,8 +300,14 @@
         { value: 'Rex', label: 'Rex' }, { value: 'Sal', label: 'Sal' },
         { value: 'Leo', label: 'Leo' },
       ],
+      gemini: [
+        { value: 'Kore', label: 'Kore' }, { value: 'Puck', label: 'Puck' },
+        { value: 'Charon', label: 'Charon' }, { value: 'Fenrir', label: 'Fenrir' },
+        { value: 'Aoede', label: 'Aoede' }, { value: 'Leda', label: 'Leda' },
+        { value: 'Orus', label: 'Orus' }, { value: 'Zephyr', label: 'Zephyr' },
+      ],
     };
-    const DEFAULT_VOICE = { openai: 'marin', grok: 'Eve' };
+    const DEFAULT_VOICE = { openai: 'marin', grok: 'Eve', gemini: 'Kore' };
 
     function rebuildVoiceList(provider) {
       const select = document.getElementById('voice-select');

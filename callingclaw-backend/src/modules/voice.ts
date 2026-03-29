@@ -48,6 +48,7 @@ export class VoiceModule {
   // Audio state machine
   private _audioState: AudioState = "idle";
   private _audioStateTs: number = 0;
+  private _presentationMode = false;
 
   // Heard transcript tracking (interruption truncation)
   private _currentResponseAudioSamples = 0;  // Total samples received from provider
@@ -83,6 +84,13 @@ export class VoiceModule {
   get audioStateTimestamp(): number {
     return this._audioStateTs;
   }
+
+  /** Enable/disable presentation mode — when true, slow tools are awaited instead of async */
+  set presentationMode(on: boolean) {
+    this._presentationMode = on;
+    console.log(`[Voice] Presentation mode: ${on ? "ON" : "OFF"}`);
+  }
+  get presentationMode(): boolean { return this._presentationMode; }
 
   /** Voice path tracer for observability metrics */
   get tracer(): VoiceTracer { return this._tracer; }
@@ -285,28 +293,52 @@ export class VoiceModule {
       });
 
       if (SLOW_TOOLS.has(name)) {
-        // Slow tool — acknowledge immediately, don't block voice thread
-        this.client.submitToolResult(call_id, "Working on it. I'll let you know when done.");
+        // Slow tool handling depends on context:
+        // - During presentation: await result (so voice waits for action to complete)
+        // - During normal conversation: acknowledge immediately, execute async
+        const awaitSlow = this._presentationMode;
 
-        // Execute async — inject result when ready
-        if (this.onToolCall) {
-          this.onToolCall(name, args, call_id).then((result) => {
-            this.injectContext(`[DONE] ${name}: ${result.slice(0, 200)}`);
-            this.context.addTranscript({
-              role: "system",
-              text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
-              ts: Date.now(),
-            });
-            console.log(`[Voice] Slow tool ${name} completed async`);
-          }).catch((e: any) => {
-            this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
-            this.context.addTranscript({
-              role: "system",
-              text: `[Tool Result] ${name}: Error: ${e.message}`,
-              ts: Date.now(),
-            });
-            console.error(`[Voice] Slow tool ${name} failed:`, e.message);
+        if (awaitSlow) {
+          // Presentation mode: await the slow tool so voice and screen stay in sync
+          console.log(`[Voice] Slow tool ${name} — awaiting (presentation mode)`);
+          let result = "Action completed.";
+          if (this.onToolCall) {
+            try {
+              result = await this.onToolCall(name, args, call_id);
+            } catch (e: any) {
+              result = `Error: ${e.message}`;
+            }
+          }
+          this.client.submitToolResult(call_id, result);
+          this.context.addTranscript({
+            role: "system",
+            text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
+            ts: Date.now(),
           });
+        } else {
+          // Normal conversation: acknowledge immediately, don't block voice thread
+          this.client.submitToolResult(call_id, "Working on it. I'll let you know when done.");
+
+          // Execute async — inject result when ready
+          if (this.onToolCall) {
+            this.onToolCall(name, args, call_id).then((result) => {
+              this.injectContext(`[DONE] ${name}: ${result.slice(0, 200)}`);
+              this.context.addTranscript({
+                role: "system",
+                text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
+                ts: Date.now(),
+              });
+              console.log(`[Voice] Slow tool ${name} completed async`);
+            }).catch((e: any) => {
+              this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
+              this.context.addTranscript({
+                role: "system",
+                text: `[Tool Result] ${name}: Error: ${e.message}`,
+                ts: Date.now(),
+              });
+              console.error(`[Voice] Slow tool ${name} failed:`, e.message);
+            });
+          }
         }
       } else {
         // Fast tool — await inline (existing behavior)
@@ -348,7 +380,11 @@ export class VoiceModule {
     this._provider = provider || CONFIG.voiceProvider;
 
     // Validate API key for selected provider
-    if (this._provider === "grok") {
+    if (this._provider === "gemini") {
+      if (!CONFIG.gemini.apiKey) {
+        throw new Error("Google AI API key not configured (set GOOGLE_AI_API_KEY in .env)");
+      }
+    } else if (this._provider === "grok") {
       if (!CONFIG.grok.apiKey) {
         throw new Error("Grok API key not configured (set XAI_API_KEY in .env)");
       }
@@ -466,6 +502,44 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   sendText(text: string) {
     this.context.addTranscript({ role: "user", text, ts: Date.now() });
     this.client.sendText(text);
+  }
+
+  /**
+   * Wait for current speech to complete.
+   * Resolves when audioState transitions from "speaking" to "listening" or "idle",
+   * or when timeoutMs elapses (fallback for missed events).
+   * Used by PresentationEngine to wait for actual speech completion instead of fixed timers.
+   */
+  waitForSpeechDone(timeoutMs: number = 30000): Promise<void> {
+    return new Promise((resolve) => {
+      // Already not speaking — resolve immediately
+      if (this._audioState !== "speaking" && this._audioState !== "thinking") {
+        resolve();
+        return;
+      }
+
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      // Listen for state change to listening/idle
+      const checkInterval = setInterval(() => {
+        if (this._audioState === "listening" || this._audioState === "idle") {
+          clearInterval(checkInterval);
+          done();
+        }
+      }, 200);
+
+      // Timeout fallback
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        done();
+      }, timeoutMs);
+    });
   }
 
   /**

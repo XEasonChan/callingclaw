@@ -38,9 +38,9 @@ export const CONFIG = {
   port: parseInt(process.env.PORT || "4000"),
   // bridgePort removed — Python sidecar eliminated in v2.6.0
 
-  // Voice provider selection: "openai" | "grok"
+  // Voice provider selection: "openai" | "grok" | "gemini"
   // Default: grok (Eve voice, 6x cheaper, good enough for meetings)
-  voiceProvider: (process.env.VOICE_PROVIDER || "grok") as "openai" | "grok",
+  voiceProvider: (process.env.VOICE_PROVIDER || "grok") as "openai" | "grok" | "gemini",
 
   // OpenAI (Realtime voice + GPT-4o vision)
   openai: {
@@ -57,6 +57,17 @@ export const CONFIG = {
     apiKey: process.env.XAI_API_KEY || "",
     realtimeUrl: "wss://api.x.ai/v1/realtime",
     voice: "Eve",  // options: Eve, Ara, Rex, Sal, Leo
+  },
+
+  // Gemini 3.1 Flash Live (real-time voice + vision)
+  // Pricing: ~$0.02/min (10x cheaper than OpenAI, 2.5x cheaper than Grok)
+  // Limit: 15min audio / 2min video per session (session resumption extends transparently)
+  // Vision: native real-time screen capture + narration (1 FPS JPEG)
+  gemini: {
+    apiKey: process.env.GOOGLE_AI_API_KEY || "",
+    realtimeModel: "gemini-3.1-flash-live-preview",
+    realtimeUrl: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
+    voice: "Kore",  // options: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr
   },
 
   // Anthropic Computer Use (direct API — optional)

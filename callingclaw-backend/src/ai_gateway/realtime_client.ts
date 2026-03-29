@@ -1,11 +1,12 @@
 // CallingClaw 2.0 — Realtime Voice WebSocket Client (Multi-Provider)
 //
-// Supports OpenAI Realtime API and Grok Voice Agent via provider config.
+// Supports OpenAI Realtime API, Grok Voice Agent, and Gemini Live via provider config.
 // Provider differences are isolated in RealtimeProviderConfig objects:
 //   - Connection URL + auth headers
 //   - session.update format (audio config shape differs)
-//   - Event name mapping (3 audio events differ between providers)
-//   - Auto-reconnect with transcript context replay (both providers)
+//   - Event name mapping (3 audio events differ between OpenAI/Grok)
+//   - Gemini: GeminiProtocolAdapter does structural transform (different protocol)
+//   - Auto-reconnect with transcript context replay (Gemini uses session resumption)
 //
 // Context Injection (v2.4.9+):
 //   Instead of replacing the full system instructions on every context update,
@@ -16,18 +17,22 @@
 //
 // Architecture:
 //   RealtimeClient
-//     ├── provider: RealtimeProviderConfig (openai | grok)
+//     ├── provider: RealtimeProviderConfig (openai | grok | gemini)
 //     ├── connect() → provider.url + provider.headers + provider.buildSession()
-//     ├── onmessage → provider.eventMap normalizes event names
+//     ├── onmessage → provider.eventMap normalizes names (OpenAI/Grok)
+//     │               → GeminiProtocolAdapter.transformInbound() (Gemini)
+//     ├── sendEvent() → direct JSON (OpenAI/Grok)
+//     │                → GeminiProtocolAdapter.transformOutbound() (Gemini)
 //     ├── injectContext() → conversation.item.create (incremental, no audio break)
-//     ├── removeContext() → conversation.item.delete (FIFO eviction)
-//     └── onclose → auto-reconnect with context + context queue replay
+//     ├── removeContext() → conversation.item.delete (FIFO eviction; no-op for Gemini)
+//     └── onclose → auto-reconnect with context replay (Gemini: session resumption)
 
 import { CONFIG } from "../config";
+import { GeminiProtocolAdapter } from "./gemini-adapter";
 
 // ── Provider Config Types ──────────────────────────────────────────
 
-export type VoiceProviderName = "openai" | "grok";
+export type VoiceProviderName = "openai" | "grok" | "gemini";
 
 export interface ProviderCapabilities {
   supportsInterruption: boolean;
@@ -53,6 +58,10 @@ export interface RealtimeProviderConfig {
   }): Record<string, any>;
   /** Explicit capability declaration for this provider */
   capabilities: ProviderCapabilities;
+  /** Default voice for this provider */
+  defaultVoice: string;
+  /** Default VAD settings tuned for this provider */
+  defaultVad: { threshold: number; prefix_padding_ms: number; silence_duration_ms: number };
 }
 
 export interface RealtimeTool {
@@ -82,6 +91,8 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
     audioFormats: ["pcm16"],
     maxSessionMinutes: 120,
   },
+  defaultVoice: CONFIG.openai.voice,
+  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 800 },
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
@@ -119,6 +130,8 @@ export const GROK_PROVIDER: RealtimeProviderConfig = {
     audioFormats: ["pcm16", "pcmu", "pcma"],
     maxSessionMinutes: 30,
   },
+  defaultVoice: CONFIG.grok.voice,
+  defaultVad: { threshold: 0.9, prefix_padding_ms: 500, silence_duration_ms: 1200 },
   eventMap: {
     "response.output_audio.delta": "response.audio.delta",
     "response.output_audio.done": "response.audio.done",
@@ -157,9 +170,47 @@ export const GROK_PROVIDER: RealtimeProviderConfig = {
   },
 };
 
+export const GEMINI_PROVIDER: RealtimeProviderConfig = {
+  name: "gemini",
+  // URL gets API key appended as query param in _connectInternal()
+  url: CONFIG.gemini.realtimeUrl,
+  headers: {},  // Gemini uses query param auth, not headers
+  // Gemini uses completely different protocol — GeminiProtocolAdapter handles transform
+  // eventMap is unused for Gemini (adapter does structural transform, not string rename)
+  eventMap: {},
+  capabilities: {
+    supportsInterruption: true,
+    supportsResume: true,           // Built-in session resumption tokens
+    supportsNativeTools: true,
+    supportsTranscription: true,    // Built-in input/output transcription
+    audioFormats: ["pcm16"],
+    maxSessionMinutes: 15,          // 15min audio, 2min video (extended via compression + resume)
+  },
+  defaultVoice: CONFIG.gemini.voice,
+  defaultVad: { threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 1000 },
+  buildSession({ instructions, tools, voice, vad }) {
+    // Gemini session config is handled by GeminiProtocolAdapter.transformOutbound()
+    // This returns the raw data that the adapter will transform into a setup envelope
+    return {
+      session: {
+        instructions,
+        voice,
+        _geminiModel: CONFIG.gemini.realtimeModel,
+        tools: tools.map((t) => ({
+          type: "function",
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        })),
+      },
+    };
+  },
+};
+
 const PROVIDERS: Record<VoiceProviderName, RealtimeProviderConfig> = {
   openai: OPENAI_PROVIDER,
   grok: GROK_PROVIDER,
+  gemini: GEMINI_PROVIDER,
 };
 
 export function getProvider(name: VoiceProviderName): RealtimeProviderConfig {
@@ -233,6 +284,12 @@ export class RealtimeClient {
   };
   private _onTokenWarning?: (budget: TokenBudget) => void;
 
+  // Gemini protocol adapter (only instantiated for gemini provider)
+  private _geminiAdapter: GeminiProtocolAdapter | null = null;
+
+  // Gemini session resumption handle (for reconnect without transcript replay)
+  private _geminiSessionHandle: string | null = null;
+
   get connected() {
     return this._connected;
   }
@@ -289,8 +346,19 @@ export class RealtimeClient {
   private _connectInternal(instructions: string): Promise<void> {
     const provider = this._provider;
 
+    // Gemini: instantiate protocol adapter + append API key to URL
+    if (provider.name === "gemini") {
+      this._geminiAdapter = new GeminiProtocolAdapter();
+    } else {
+      this._geminiAdapter = null;
+    }
+
+    const wsUrl = provider.name === "gemini"
+      ? `${provider.url}?key=${CONFIG.gemini.apiKey}`
+      : provider.url;
+
     return new Promise<void>((resolve, reject) => {
-      this.ws = new WebSocket(provider.url, {
+      this.ws = new WebSocket(wsUrl, {
         headers: provider.headers,
       } as any);
 
@@ -299,21 +367,16 @@ export class RealtimeClient {
         this._connected = true;
         this._reconnectRetries = 0;
 
-        // Determine voice for this provider
-        const voice = provider.name === "grok"
-          ? CONFIG.grok.voice
-          : CONFIG.openai.voice;
+        // Use provider's default voice and VAD (no more hardcoded ternaries)
+        const voice = provider.defaultVoice;
+        const vad = provider.defaultVad;
 
         // Build and send session config
         const sessionPayload = provider.buildSession({
           instructions,
           tools: this.tools,
           voice,
-          vad: {
-            threshold: provider.name === "grok" ? 0.9 : 0.6,       // Higher = less sensitive to background noise
-            prefix_padding_ms: provider.name === "grok" ? 500 : 300, // More padding before speech detection
-            silence_duration_ms: provider.name === "grok" ? 1200 : 800, // Wait longer before assuming user finished speaking
-          },
+          vad,
         });
 
         this.sendEvent("session.update", sessionPayload);
@@ -323,6 +386,17 @@ export class RealtimeClient {
       this.ws.onmessage = (event: MessageEvent) => {
         try {
           const data = typeof event.data === "string" ? event.data : String(event.data);
+
+          // Gemini: route through protocol adapter for structural transform
+          if (this._geminiAdapter) {
+            const normalized = this._geminiAdapter.transformInbound(data);
+            for (const parsed of normalized) {
+              this._dispatchEvent(parsed);
+            }
+            return;
+          }
+
+          // OpenAI/Grok: standard {type, ...} parsing with eventMap rename
           const parsed = JSON.parse(data);
 
           // Normalize event name via provider's event map
@@ -332,35 +406,7 @@ export class RealtimeClient {
             parsed.type = normalizedType;
           }
 
-          // Log events (audio events throttled)
-          if (parsed.type?.includes("audio")) {
-            if (parsed.type === "response.audio.delta") {
-              if (!this._audioLogThrottle || Date.now() - this._audioLogThrottle > 5000) {
-                console.log(`[Realtime] Audio streaming... (delta ${parsed.delta?.length || 0} chars)`);
-                this._audioLogThrottle = Date.now();
-              }
-            } else {
-              console.log(`[Realtime] Audio event: ${parsed.type}`);
-            }
-          } else {
-            console.log(`[Realtime] Event: ${parsed.type}`);
-          }
-
-          // Dispatch to handlers using normalized event name
-          const listeners = this.handlers.get(parsed.type) || [];
-          for (const fn of listeners) fn(parsed);
-
-          const globalListeners = this.handlers.get("*") || [];
-          for (const fn of globalListeners) fn(parsed);
-
-          if (parsed.type === "error") {
-            console.error("[Realtime] API error:", JSON.stringify(parsed.error, null, 2));
-          }
-
-          // Token budget tracking from response.done events
-          if (parsed.type === "response.done" && parsed.response?.usage) {
-            this._updateTokenBudget(parsed.response.usage);
-          }
+          this._dispatchEvent(parsed);
         } catch (e) {
           console.error("[Realtime] Parse error:", e);
         }
@@ -383,6 +429,46 @@ export class RealtimeClient {
     });
   }
 
+  // ── Event Dispatch (shared by OpenAI/Grok and Gemini paths) ──────
+
+  private _dispatchEvent(parsed: any) {
+    // Log events (audio events throttled)
+    if (parsed.type?.includes("audio")) {
+      if (parsed.type === "response.audio.delta") {
+        if (!this._audioLogThrottle || Date.now() - this._audioLogThrottle > 5000) {
+          console.log(`[Realtime] Audio streaming... (delta ${parsed.delta?.length || 0} chars)`);
+          this._audioLogThrottle = Date.now();
+        }
+      } else {
+        console.log(`[Realtime] Audio event: ${parsed.type}`);
+      }
+    } else {
+      console.log(`[Realtime] Event: ${parsed.type}`);
+    }
+
+    // Dispatch to handlers using normalized event name
+    const listeners = this.handlers.get(parsed.type) || [];
+    for (const fn of listeners) fn(parsed);
+
+    const globalListeners = this.handlers.get("*") || [];
+    for (const fn of globalListeners) fn(parsed);
+
+    if (parsed.type === "error") {
+      console.error("[Realtime] API error:", JSON.stringify(parsed.error, null, 2));
+    }
+
+    // Token budget tracking from response.done events
+    if (parsed.type === "response.done" && parsed.response?.usage) {
+      this._updateTokenBudget(parsed.response.usage);
+    }
+
+    // Gemini session resumption handle
+    if (parsed.type === "gemini.session_resumption" && parsed.handle) {
+      this._geminiSessionHandle = parsed.handle;
+      console.log(`[Realtime] Gemini session handle updated: ${parsed.handle.substring(0, 20)}...`);
+    }
+  }
+
   // ── Token Budget Tracking ────────────────────────────────────────
 
   private _updateTokenBudget(usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number }) {
@@ -397,13 +483,19 @@ export class RealtimeClient {
     if (ratio >= TOKEN_COMPRESS_THRESHOLD) {
       this._tokenBudget.warningLevel = "critical";
       // Auto-compress: evict half the context queue
-      const evictCount = Math.ceil(this._contextQueue.length / 2);
-      for (let i = 0; i < evictCount; i++) {
-        const oldest = this._contextQueue.shift();
-        if (oldest) {
-          this.sendEvent("conversation.item.delete", { item_id: oldest.id });
-          console.log(`[Realtime] Token critical (${this._tokenBudget.usagePercent}%) — evicted context: ${oldest.id}`);
+      // Gemini: skip eviction (no conversation.item.delete equivalent)
+      // Gemini uses built-in contextWindowCompression.slidingWindow instead
+      if (this._provider.name !== "gemini") {
+        const evictCount = Math.ceil(this._contextQueue.length / 2);
+        for (let i = 0; i < evictCount; i++) {
+          const oldest = this._contextQueue.shift();
+          if (oldest) {
+            this.sendEvent("conversation.item.delete", { item_id: oldest.id });
+            console.log(`[Realtime] Token critical (${this._tokenBudget.usagePercent}%) — evicted context: ${oldest.id}`);
+          }
         }
+      } else {
+        console.log(`[Realtime] Token critical (${this._tokenBudget.usagePercent}%) — Gemini uses server-side compression`);
       }
     } else if (ratio >= TOKEN_WARNING_THRESHOLD) {
       this._tokenBudget.warningLevel = "warning";
@@ -482,6 +574,19 @@ export class RealtimeClient {
 
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+
+    // Gemini: route through protocol adapter for structural transform
+    if (this._geminiAdapter) {
+      const geminiPayload = this._geminiAdapter.transformOutbound(type, data);
+      if (geminiPayload === null) return true; // No-op for this event (e.g., conversation.item.delete)
+      if (type !== "input_audio_buffer.append") {
+        console.log(`[Realtime] >>> ${type} → gemini (${geminiPayload.length} bytes)`);
+      }
+      this.ws.send(geminiPayload);
+      return true;
+    }
+
+    // OpenAI/Grok: standard {type, ...data} format
     const payload = JSON.stringify({ type, ...data });
     if (type !== "input_audio_buffer.append") {
       console.log(`[Realtime] >>> ${type} (${payload.length} bytes)`);
@@ -495,6 +600,18 @@ export class RealtimeClient {
     return this.sendEvent("input_audio_buffer.append", {
       audio: base64Audio,
     });
+  }
+
+  /** Send video frame (JPEG base64) — Gemini only */
+  sendVideo(base64Jpeg: string): boolean {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    if (!this._geminiAdapter) {
+      console.warn("[Realtime] sendVideo() only supported for Gemini provider");
+      return false;
+    }
+    const payload = this._geminiAdapter.buildVideoFrame(base64Jpeg);
+    this.ws.send(payload);
+    return true;
   }
 
   /** Submit tool call result */

@@ -46,6 +46,10 @@ interface MeetingDelivery {
   liveNotes: string[];
   requirements: string[];
   completedTasks: string[];
+  /** Path to key frame timeline HTML (from KeyFrameStore.finalize()) */
+  timelineHtmlPath?: string;
+  /** Number of captured key frames */
+  frameCount?: number;
 }
 
 export class PostMeetingDelivery {
@@ -74,13 +78,18 @@ export class PostMeetingDelivery {
       completedTasks: string[];
       requirements: string[];
     } | null;
+    /** Key frame timeline data from KeyFrameStore.finalize() */
+    keyFrameResult?: {
+      htmlFile?: string;
+      frameCount?: number;
+    } | null;
   }): Promise<MeetingDelivery | null> {
     if (!this.openclawBridge.connected) {
       console.warn("[PostMeeting] OpenClaw not connected — cannot deliver todos");
       return null;
     }
 
-    const { summary, notesFilePath, prepSummary } = opts;
+    const { summary, notesFilePath, prepSummary, keyFrameResult } = opts;
     const meetingId = `mtg_${Date.now()}`;
     const topic = prepSummary?.topic || summary.title || "Meeting";
 
@@ -123,6 +132,8 @@ export class PostMeetingDelivery {
       liveNotes: prepSummary?.liveNotes || [],
       requirements: prepSummary?.requirements || [],
       completedTasks: prepSummary?.completedTasks || [],
+      timelineHtmlPath: keyFrameResult?.htmlFile,
+      frameCount: keyFrameResult?.frameCount || 0,
     };
 
     this.deliveries.set(meetingId, delivery);
@@ -202,8 +213,17 @@ export class PostMeetingDelivery {
     };
 
     try {
-      await this.openclawBridge.sendTask(OC004_PROMPT(req));
-      console.log(`[PostMeeting] Todo message sent to user (${todos.length} items)`);
+      // Include screenshot summary if key frames were captured
+      let screenshotNote = "";
+      if (delivery.frameCount && delivery.frameCount > 0) {
+        screenshotNote = `\n\n📸 ${delivery.frameCount} key frames captured during the meeting.`;
+        if (delivery.timelineHtmlPath) {
+          screenshotNote += `\nTimeline viewer: ${delivery.timelineHtmlPath}`;
+        }
+      }
+
+      await this.openclawBridge.sendTask(OC004_PROMPT(req) + screenshotNote);
+      console.log(`[PostMeeting] Todo message sent to user (${todos.length} items, ${delivery.frameCount || 0} frames)`);
 
       this.eventBus.emit("postmeeting.todos_sent", {
         meetingId,
