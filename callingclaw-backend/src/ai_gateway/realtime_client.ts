@@ -358,11 +358,21 @@ export class RealtimeClient {
       : provider.url;
 
     return new Promise<void>((resolve, reject) => {
+      // Connection timeout (15s) — prevents hanging on proxy/network issues
+      const connectTimeout = setTimeout(() => {
+        console.error(`[Realtime] Connection timeout (15s) to ${provider.name}`);
+        if (this.ws) {
+          try { this.ws.close(); } catch {}
+        }
+        reject(new Error(`Connection timeout to ${provider.name} Voice API`));
+      }, 15000);
+
       this.ws = new WebSocket(wsUrl, {
         headers: provider.headers,
       } as any);
 
       this.ws.onopen = () => {
+        clearTimeout(connectTimeout);
         console.log(`[Realtime] Connected to ${provider.name} Voice API`);
         this._connected = true;
         this._reconnectRetries = 0;
@@ -413,6 +423,7 @@ export class RealtimeClient {
       };
 
       this.ws.onerror = (event) => {
+        clearTimeout(connectTimeout);
         console.error(`[Realtime] WebSocket error (${provider.name}):`, event);
         reject(new Error(`${provider.name} WebSocket connection failed`));
       };
