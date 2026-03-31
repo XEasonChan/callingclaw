@@ -32,7 +32,7 @@ import { existsSync, mkdirSync, rmSync } from "fs";
 // Always use dedicated CallingClaw profile (lightweight, fast startup).
 // Google cookies are imported from the user's main Chrome on first launch.
 // Using the main Chrome profile directly causes hangs (huge profile, tab restore).
-const DEFAULT_PROFILE = resolve(homedir(), ".callingclaw", "browser-profile");
+const DEFAULT_PROFILE = resolve(process.env.CALLINGCLAW_HOME || resolve(homedir(), ".callingclaw"), "browser-profile");
 const MAIN_CHROME_PROFILE = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
 const DEFAULT_PORT = 0; // 0 = random free port
 
@@ -423,10 +423,17 @@ export class ChromeLauncher {
    * (it will reconnect to the existing Chrome via the port)
    */
   async launch(): Promise<{ port: number }> {
-    // If already launched, return existing port
+    // If already launched, verify browser is still alive before reusing
     if (this._context && this._page) {
-      console.log(`[ChromeLauncher] Already launched (port=${this.port}), reusing`);
-      return { port: this.port };
+      try {
+        await this._page.evaluate("1");
+        console.log(`[ChromeLauncher] Already launched (port=${this.port}), reusing`);
+        return { port: this.port };
+      } catch {
+        console.warn("[ChromeLauncher] Stale browser detected (closed/crashed), relaunching...");
+        this._context = null;
+        this._page = null;
+      }
     }
 
     // Dynamic import to avoid loading playwright-core at module level
@@ -623,7 +630,7 @@ export class ChromeLauncher {
         var btns = Array.from(document.querySelectorAll('button'));
         var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
 
-        if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) {
+        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -662,7 +669,7 @@ export class ChromeLauncher {
         }
 
         // 7. Check if join button exists
-        var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+        var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
         for (var i = 0; i < btns.length; i++) {
           if (joinTargets.indexOf(btns[i].textContent.trim()) !== -1) { R.hasJoinBtn = true; break; }
         }
@@ -692,7 +699,7 @@ export class ChromeLauncher {
         const retry = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
           for (var i = 0; i < btns.length; i++) {
-            if (['Join now','Ask to join','Join','加入会议','请求加入'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
+            if (['Join now','Ask to join','Join','加入会议','请求加入','立即加入'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
           }
           return 'still_no_button';
         })()`);
@@ -707,7 +714,7 @@ export class ChromeLauncher {
         log("Clicking join...");
         const joinResult = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
-          var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+          var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
           for (var i = 0; i < btns.length; i++) {
             var t = btns[i].textContent.trim();
             if (joinTargets.indexOf(t) !== -1) {
@@ -739,7 +746,7 @@ export class ChromeLauncher {
           var hasControls = micBtn && camBtn;
           if (leaveBtn || callEnd || hasControls) return 'in_meeting';
           var t = document.body.innerText;
-          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人')) return 'waiting_room';
+          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
           return 'loading';
         })()`);
 
@@ -1030,6 +1037,54 @@ export class ChromeLauncher {
 
   clearMeetingEndCallback(): void {
     this._meetingEndCallback = null;
+  }
+
+  /**
+   * Leave the current Google Meet meeting by clicking the hangup button.
+   * Returns true if successfully left, false if no meeting page or button not found.
+   */
+  async leaveMeeting(): Promise<boolean> {
+    if (!this._page) return false;
+    const page = this._page;
+
+    try {
+      const left = await page.evaluate(() => {
+        // Find the Leave/Hangup button
+        const selectors = [
+          '[aria-label*="Leave call"]',
+          '[aria-label*="退出通话"]',
+          '[aria-label*="離開通話"]',
+          '[data-tooltip*="Leave call"]',
+          '[data-tooltip*="退出通话"]',
+        ];
+        for (const sel of selectors) {
+          const btn = document.querySelector(sel) as HTMLElement | null;
+          if (btn) {
+            btn.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (left) {
+        console.log("[ChromeLauncher] Leave button clicked");
+        // Wait a moment then navigate away to ensure full disconnect
+        await new Promise((r) => setTimeout(r, 1000));
+        await page.goto("about:blank").catch(() => {});
+        console.log("[ChromeLauncher] Left meeting, navigated to about:blank");
+        return true;
+      }
+
+      console.warn("[ChromeLauncher] Leave button not found, navigating away as fallback");
+      await page.goto("about:blank").catch(() => {});
+      return true;
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] leaveMeeting error:", e.message);
+      // Last resort: navigate away
+      try { await page.goto("about:blank"); } catch {}
+      return false;
+    }
   }
 
   // ══════════════════════════════════════════════════════════════

@@ -13,8 +13,9 @@ import { Database } from "bun:sqlite";
 import { readdirSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const DB_PATH = resolve(process.env.HOME || "~", ".callingclaw", "callingclaw.db");
-const SHARED_DIR = resolve(process.env.HOME || "~", ".callingclaw", "shared");
+const _CC_HOME = process.env.CALLINGCLAW_HOME || resolve(process.env.HOME || "~", ".callingclaw");
+const DB_PATH = resolve(_CC_HOME, "callingclaw.db");
+const SHARED_DIR = resolve(_CC_HOME, "shared");
 
 export interface Meeting {
   id: string;

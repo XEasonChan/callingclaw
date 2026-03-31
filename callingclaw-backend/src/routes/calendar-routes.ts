@@ -7,7 +7,7 @@ import type { Services, RouteHandler } from "./types";
 async function loadPrepSessions(): Promise<Map<string, { topic: string; prepFile: string }>> {
   const map = new Map<string, { topic: string; prepFile: string }>();
   try {
-    const sessionsPath = `${process.env.HOME}/.callingclaw/shared/sessions.json`;
+    const sessionsPath = `${process.env.CALLINGCLAW_HOME || process.env.HOME + "/.callingclaw"}/shared/sessions.json`;
     const file = Bun.file(sessionsPath);
     if (await file.exists()) {
       const data = await file.json() as any;

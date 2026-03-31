@@ -91,7 +91,7 @@ interface Services {
 // ── Tool Layer Definitions (for Voice Test toggles) ──
 const TOOL_LAYERS: Record<string, { label: string; tools: string[] }> = {
   memory:     { label: "Memory",     tools: ["recall_context"] },
-  calendar:   { label: "Calendar",   tools: ["schedule_meeting", "check_calendar"] },
+  calendar:   { label: "Calendar",   tools: ["schedule_meeting", "check_calendar", "delete_event"] },
   meeting:    { label: "Meeting",    tools: ["join_meeting", "create_and_join_meeting", "leave_meeting", "save_meeting_notes"] },
   automation: { label: "Automation", tools: ["computer_action", "browser_action", "open_file", "share_screen", "stop_sharing", "take_screenshot"] },
   zoom:       { label: "Zoom",       tools: ["zoom_control"] },
@@ -153,6 +153,8 @@ export function startConfigServer(services: Services) {
     transport?: "direct" | "meet_bridge" | "browser";
     mode?: "default" | "local" | "meeting" | "test";
     topic?: string;
+    meetLink?: string;
+    calendarEventId?: string;
     provider?: string;
     voice?: string;
   }) => {
@@ -179,6 +181,37 @@ export function startConfigServer(services: Services) {
     }
 
     await services.realtime.start(instructions, provider);
+
+    // Inject current date/time so AI can correctly parse relative time references ("今天", "明天", "下午5点")
+    const now = new Date();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timeCtx = `当前时间: ${now.toISOString()} (${tz}, ${now.toLocaleDateString("zh-CN", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: tz })})`;
+    services.realtime.sendEvent("conversation.item.create", {
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: `[系统信息]\n${timeCtx}` }],
+      },
+    });
+
+    // Inject selected meeting context so AI knows which meeting to join/delete
+    if (opts.topic || opts.meetLink) {
+      const meetingCtx = [
+        opts.topic ? `会议主题: ${opts.topic}` : "",
+        opts.meetLink ? `Meet链接: ${opts.meetLink}` : "",
+        opts.calendarEventId ? `日历事件ID: ${opts.calendarEventId}` : "",
+        "用户已选择此会议。当用户要求加入会议时，直接使用上述Meet链接调用join_meeting工具，无需再次询问链接。",
+        opts.calendarEventId ? "当用户要求删除/取消此会议时，直接使用上述日历事件ID调用delete_event工具。" : "",
+      ].filter(Boolean).join("\n");
+      services.realtime.sendEvent("conversation.item.create", {
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: `[当前会议上下文]\n${meetingCtx}` }],
+        },
+      });
+      console.log(`[VoiceSession] Meeting context injected: ${opts.topic || "no topic"}, link: ${opts.meetLink || "none"}, calEventId: ${opts.calendarEventId || "none"}`);
+    }
 
     if (transport === "meet_bridge") {
       const audioOk = await services.bridge.sendConfigAndVerify(
@@ -311,13 +344,39 @@ export function startConfigServer(services: Services) {
                 }
               }
             } else if (data.type === "start") {
-              // Start voice session from browser (supports provider + voice selection)
+              // Start voice session from browser (supports provider + voice + meeting context)
               // GUARD: if voice is already connected (e.g. meeting join started it),
-              // do NOT restart — just send status back. Restarting would reset
-              // the session and lose meeting context + injected brief.
+              // do NOT restart — just send status back. But still inject meeting context
+              // if provided (user may have selected a meeting after session started).
+              const topic = data.topic || undefined;
+              const meetLink = data.meetLink || undefined;
+              const calendarEventId = data.calendarEventId || undefined;
+
+              const injectMeetingContext = () => {
+                if ((topic || meetLink) && services.realtime.connected) {
+                  const meetingCtx = [
+                    topic ? `会议主题: ${topic}` : "",
+                    meetLink ? `Meet链接: ${meetLink}` : "",
+                    calendarEventId ? `日历事件ID: ${calendarEventId}` : "",
+                    "用户已选择此会议。当用户要求加入会议时，直接使用上述Meet链接调用join_meeting工具，无需再次询问链接。",
+                    calendarEventId ? "当用户要求删除/取消此会议时，直接使用上述日历事件ID调用delete_event工具。" : "",
+                  ].filter(Boolean).join("\n");
+                  services.realtime.sendEvent("conversation.item.create", {
+                    item: {
+                      type: "message",
+                      role: "user",
+                      content: [{ type: "input_text", text: `[当前会议上下文]\n${meetingCtx}` }],
+                    },
+                  });
+                  console.log(`[VoiceTest] Meeting context injected: ${topic || "no topic"}, link: ${meetLink || "none"}, calEventId: ${calendarEventId || "none"}`);
+                }
+              };
+
               if (services.realtime.connected) {
                 console.log("[VoiceTest] Voice already connected — skipping start, sending status");
                 ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
+                // Still inject meeting context if provided
+                injectMeetingContext();
               } else {
                 const instructions = data.instructions || undefined;
                 const provider = data.provider || undefined; // "openai" | "grok"
@@ -333,6 +392,17 @@ export function startConfigServer(services: Services) {
                 services.realtime.start(instructions, provider).then(() => {
                   ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
                   services.eventBus.emit("voice.started", { audio_mode: "browser", provider });
+                  // Inject current date/time for relative time parsing
+                  const _now = new Date();
+                  const _tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                  services.realtime.sendEvent("conversation.item.create", {
+                    item: {
+                      type: "message", role: "user",
+                      content: [{ type: "input_text", text: `[系统信息]\n当前时间: ${_now.toISOString()} (${_tz}, ${_now.toLocaleDateString("zh-CN", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: _tz })})` }],
+                    },
+                  });
+                  // Inject meeting context after session is ready
+                  injectMeetingContext();
                 }).catch((e: any) => {
                   ws.send(JSON.stringify({ type: "error", message: e.message }));
                 });
@@ -688,6 +758,8 @@ export function startConfigServer(services: Services) {
             transport?: "direct" | "meet_bridge" | "browser";
             mode?: "default" | "local" | "meeting" | "test";
             topic?: string;
+            meetLink?: string;
+            calendarEventId?: string;
             provider?: string;
             voice?: string;
           };
@@ -696,6 +768,8 @@ export function startConfigServer(services: Services) {
             transport: body.transport || "direct",
             mode: body.mode || "default",
             topic: body.topic,
+            meetLink: body.meetLink,
+            calendarEventId: body.calendarEventId,
             provider: body.provider,
             voice: body.voice,
           });
@@ -1215,6 +1289,7 @@ export function startConfigServer(services: Services) {
         const raw = await services.calendar.createEvent(body);
         let result: any;
         try { result = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { result = raw; }
+        services.eventBus.emit("calendar.updated", { action: "created", summary: body.summary });
         return Response.json(result, { headers });
       }
 

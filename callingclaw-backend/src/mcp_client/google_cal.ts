@@ -27,12 +27,13 @@ interface TokenResponse {
 }
 
 /** Well-known paths where Google OAuth credentials may be stored */
+const _ccHome = process.env.CALLINGCLAW_HOME || "~/.callingclaw";
 const CREDENTIAL_SEARCH_PATHS = [
   "~/.openclaw/workspace/google-credentials.json",
   "~/.openclaw/workspace/google-token.json",
   "~/.config/gcloud/application_default_credentials.json",
-  "~/.callingclaw/google-credentials.json",
-  "~/.callingclaw/google-token.json",
+  `${_ccHome}/google-credentials.json`,
+  `${_ccHome}/google-token.json`,
 ];
 
 function expandHome(p: string): string {
@@ -375,6 +376,36 @@ export class GoogleCalendarClient {
       return true;
     } catch (e: any) {
       console.warn(`[Calendar] patchEvent failed: ${e.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Delete a calendar event by its event ID.
+   */
+  async deleteEvent(eventId: string): Promise<boolean> {
+    if (!this._connected || !eventId) return false;
+
+    try {
+      const token = await this.getToken();
+      const res = await fetch(
+        `${CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(`[Calendar] deleteEvent failed (${res.status}): ${text}`);
+        return false;
+      }
+
+      console.log(`[Calendar] Event ${eventId} deleted`);
+      return true;
+    } catch (e: any) {
+      console.warn(`[Calendar] deleteEvent error: ${e.message}`);
       return false;
     }
   }

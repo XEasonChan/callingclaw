@@ -110,6 +110,22 @@
       100% { height: 32px; opacity: 1; }
     }
 
+    /* Mic mute toggle */
+    .mic-toggle-bar {
+      padding: 8px 20px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .mic-toggle-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg2); color: var(--text); font-size: 13px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mic-toggle-btn:hover { border-color: var(--accent); }
+    .mic-toggle-btn.muted { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+    .mic-toggle-btn .icon { font-size: 16px; }
+    .mic-toggle-hint { font-size: 11px; color: var(--text3); }
+
     /* Text input */
     .text-input-bar {
       padding: 12px 20px; border-top: 1px solid var(--border);
@@ -256,6 +272,15 @@
         <script>for(let i=0;i<24;i++)document.write('<div class="bar" style="animation-delay:'+(i*0.05)+'s"></div>')</script>
       </div>
 
+      <!-- Mic mute toggle -->
+      <div class="mic-toggle-bar" id="mic-toggle-bar">
+        <button class="mic-toggle-btn" id="mic-toggle-btn" onclick="toggleMic()">
+          <span class="icon" id="mic-icon">🎙️</span>
+          <span id="mic-label">Mic On</span>
+        </button>
+        <span class="mic-toggle-hint" id="mic-hint">Voice mode — speak to interact</span>
+      </div>
+
       <!-- Text input -->
       <div class="text-input-bar">
         <input type="text" id="text-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendText()">
@@ -340,6 +365,33 @@
 
     document.addEventListener('DOMContentLoaded', function() {
       var providerSelect = document.getElementById('provider-select');
+
+      // ── Auto-refresh meeting list ──
+      // 3-tier strategy: event-driven (instant) + visibility (on tab focus) + poll (fallback)
+      //
+      // 1. EventBus WS: backend emits "calendar.updated" → instant refresh
+      // 2. visibilitychange: refresh when user switches back to this tab
+      // 3. Poll every 5min: fallback for external changes (e.g., someone else edits calendar)
+      var _meetingPollTimer = setInterval(loadMeetingList, 300000);
+      document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) loadMeetingList();
+      });
+      // EventBus WebSocket — listen for calendar changes
+      (function connectEventBus() {
+        var evtWs = new WebSocket(API.replace('http', 'ws') + '/ws/events');
+        evtWs.onmessage = function(e) {
+          try {
+            var msg = JSON.parse(e.data);
+            if (msg.type === 'calendar.updated' || msg.type === 'meeting.started' || msg.type === 'meeting.ended') {
+              console.log('[VoiceTest] Calendar event → refreshing meeting list');
+              loadMeetingList();
+            }
+          } catch(err) {}
+        };
+        evtWs.onclose = function() { setTimeout(connectEventBus, 5000); };
+        evtWs.onerror = function() {};
+      })();
+
       // Set initial provider from server VOICE_PROVIDER config
       fetch(API + '/api/status').then(function(r) { return r.json(); }).then(function(d) {
         // Use configured voiceProvider or session provider
@@ -366,15 +418,14 @@
     async function loadMeetingList() {
       const select = document.getElementById('meeting-select');
       const statusEl = document.getElementById('meeting-prep-status');
+      // Remember current selection to restore after refresh
+      const prevSelectedIdx = select.value;
+      const prevSelectedId = (prevSelectedIdx !== '' && meetingList[prevSelectedIdx]) ? meetingList[prevSelectedIdx].id : null;
+      const prevSelectedSummary = (prevSelectedIdx !== '' && meetingList[prevSelectedIdx]) ? meetingList[prevSelectedIdx].summary : null;
       try {
-        // 1. Fetch from ALL sources in parallel
-        const [evtRes, notesRes] = await Promise.all([
-          fetch(`${API}/api/calendar/events`).then(r => r.json()).catch(() => ({ events: [] })),
-          fetch(`${API}/api/meeting/notes`).then(r => r.json()).catch(() => ({ files: [] })),
-        ]);
-
+        // Fetch calendar events + active sessions
+        const evtRes = await fetch(`${API}/api/calendar/events`).then(r => r.json()).catch(() => ({ events: [] }));
         const calEvents = Array.isArray(evtRes) ? evtRes : (evtRes.events || []);
-        const noteFiles = Array.isArray(notesRes) ? notesRes : (notesRes.files || []);
 
         // 2. Build meeting list from calendar events
         const seen = new Set(); // dedup by title
@@ -401,27 +452,8 @@
           seen.add(summary.toLowerCase());
         }
 
-        // 3. Add meetings from notes that aren't already in calendar
-        // Note filename format: YYYY-MM-DD_HHMM_Title.md
-        for (const f of noteFiles) {
-          const fname = typeof f === 'string' ? f : (f.name || f.filename || '');
-          const m = fname.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_(.+)\.md$/);
-          if (!m) continue;
-          const date = m[1], hour = m[2], min = m[3], title = m[4].replace(/_/g, ' ');
-          if (seen.has(title.toLowerCase())) continue; // skip duplicates
-          seen.add(title.toLowerCase());
-          meetingList.push({
-            id: null,
-            summary: title,
-            start: `${date}T${hour}:${min}:00`,
-            end: '',
-            hangoutLink: null,
-            meetingId: null,
-            hasPrepBrief: false,
-            source: 'notes',
-            noteFile: fname,
-          });
-        }
+        // Notes files are historical records — not shown in the meeting selection list.
+        // Meeting context dropdown should only show upcoming/active calendar events + sessions.
 
         // 4. Sort by date (newest first)
         meetingList.sort(function(a, b) {
@@ -441,6 +473,17 @@
         });
 
         statusEl.textContent = meetingList.length + ' meetings';
+
+        // Restore previous selection (match by calendar event id, then by title)
+        if (prevSelectedId || prevSelectedSummary) {
+          for (var i = 0; i < meetingList.length; i++) {
+            if ((prevSelectedId && meetingList[i].id === prevSelectedId) ||
+                (!prevSelectedId && prevSelectedSummary && meetingList[i].summary === prevSelectedSummary)) {
+              select.value = i;
+              break;
+            }
+          }
+        }
       } catch (e) {
         statusEl.textContent = 'Failed to load';
         console.warn('[VoiceTest] Meeting list failed:', e);
@@ -527,6 +570,34 @@
         ta.rows = 3;
         toggle.textContent = 'expand';
       }
+    }
+
+    // ── Mic mute toggle ──
+    var micMuted = false;
+
+    function toggleMic() {
+      micMuted = !micMuted;
+      var btn = document.getElementById('mic-toggle-btn');
+      var icon = document.getElementById('mic-icon');
+      var label = document.getElementById('mic-label');
+      var hint = document.getElementById('mic-hint');
+      var viz = document.getElementById('voice-viz');
+      var micBar = document.getElementById('mic-bar');
+      if (micMuted) {
+        btn.classList.add('muted');
+        icon.textContent = '🔇';
+        label.textContent = 'Mic Off';
+        hint.textContent = 'Text-only mode — use the input box below';
+        viz.style.display = 'none';
+        if (micBar) micBar.style.width = '0%';
+      } else {
+        btn.classList.remove('muted');
+        icon.textContent = '🎙️';
+        label.textContent = 'Mic On';
+        hint.textContent = 'Voice mode — speak to interact';
+        viz.style.display = '';
+      }
+      addTranscript('system', micMuted ? 'Microphone muted — text-only mode' : 'Microphone unmuted — voice mode');
     }
 
     // ── Update instructions mid-session ──
@@ -619,6 +690,7 @@
             int16Data = resampled;
           }
 
+          if (micMuted) return; // Skip sending audio when muted
           if (micSessionReady && sessionActive && ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'audio', audio: audioToBase64(int16Data) }));
           } else if (!micSessionReady) {
@@ -725,55 +797,37 @@
             }).catch(() => {});
           }
 
-          // Get selected meeting topic for context injection
+          // Get selected meeting topic + meetLink for context injection
           const meetingIdx = parseInt(document.getElementById('meeting-select').value);
           const selectedMeeting = (!isNaN(meetingIdx) && meetingList[meetingIdx]) ? meetingList[meetingIdx] : null;
           const topic = selectedMeeting ? selectedMeeting.summary : null;
+          const meetLink = selectedMeeting ? (selectedMeeting.hangoutLink || selectedMeeting.meetLink) : null;
 
-          // In Talk Locally mode, also start a voice session via REST for full context
-          if (mode === 'local') {
-            fetch(`${API}/api/voice/session/start`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                mode: 'local',
-                transport: 'browser',
-                topic: topic,
-                provider: provider,
-                voice: voice,
-              })
-            }).then(r => r.json()).then(d => {
-              addTranscript('system', 'Talk Locally session: ' + (d.ok ? 'started' : d.error || 'failed')
-                + (topic ? ' — topic: ' + topic : '')
-                + (d.provider ? ' (' + d.provider + ')' : ''));
-              // If we have a meeting brief, inject it after session is ready
-              if (selectedMeetingBrief && selectedMeeting?.meetingId) {
-                // The backend's injectMeetingBrief is called via the join flow.
-                // For Talk Locally via browser, we inject it as a text message.
-                setTimeout(function() {
-                  if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                      type: 'inject_context',
-                      text: '[会议准备资料]\n\n' + selectedMeetingBrief.slice(0, 4000),
-                    }));
-                    addTranscript('system', 'Meeting prep injected (' + selectedMeetingBrief.length + ' chars)');
-                  }
-                }, 2000); // Wait for session to be fully established
+          // Inject meeting prep brief after session is ready (if available)
+          if (mode === 'local' && selectedMeetingBrief && selectedMeeting?.meetingId) {
+            setTimeout(function() {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'inject_context',
+                  text: '[会议准备资料]\n\n' + selectedMeetingBrief.slice(0, 4000),
+                }));
+                addTranscript('system', 'Meeting prep injected (' + selectedMeetingBrief.length + ' chars)');
               }
-            }).catch(e => {
-              addTranscript('system', 'Session start failed: ' + e.message);
-            });
+            }, 2000);
           }
 
-          // Send WS start command — but skip if Talk Locally mode already started via REST
-          if (mode !== 'local') {
-            const instructions = document.getElementById('instructions').value.trim();
-            ws.send(JSON.stringify({
-              type: 'start',
-              instructions: instructions || undefined,
-              provider: provider,
-              voice: voice,
-            }));
-          }
+          // Send WS start command (always — REST path is redundant and causes race conditions)
+          const instructions = document.getElementById('instructions').value.trim();
+          const calendarEventId = selectedMeeting ? selectedMeeting.id : null;
+          ws.send(JSON.stringify({
+            type: 'start',
+            instructions: instructions || undefined,
+            provider: provider,
+            voice: voice,
+            topic: topic || undefined,
+            meetLink: meetLink || undefined,
+            calendarEventId: calendarEventId || undefined,
+          }));
         };
 
         ws.onmessage = (event) => {
@@ -804,6 +858,7 @@
               if (msg.voiceConnected) {
                 btnStart.style.display = 'none';
                 btnStop.style.display = '';
+                document.getElementById('mic-toggle-bar').style.display = '';
                 startMicLevel();
                 enableLayerToggles(true);
                 if (enabledLayers.size > 0) applyLayers();
@@ -935,6 +990,15 @@
       btnStart.disabled = false;
       btnStart.textContent = 'Start Voice Session';
       btnStop.style.display = 'none';
+      document.getElementById('mic-toggle-bar').style.display = 'none';
+      // Reset mic mute state
+      micMuted = false;
+      var micBtn = document.getElementById('mic-toggle-btn');
+      if (micBtn) { micBtn.classList.remove('muted'); }
+      document.getElementById('mic-icon').textContent = '🎙️';
+      document.getElementById('mic-label').textContent = 'Mic On';
+      document.getElementById('mic-hint').textContent = 'Voice mode — speak to interact';
+      document.getElementById('voice-viz').style.display = '';
       if (micLevelRAF) { cancelAnimationFrame(micLevelRAF); micLevelRAF = null; }
       document.getElementById('mic-bar').style.width = '0%';
     }

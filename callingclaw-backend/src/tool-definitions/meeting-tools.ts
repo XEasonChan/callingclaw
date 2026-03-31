@@ -6,6 +6,7 @@ import type { ToolModule } from "./types";
 import { CONFIG } from "../config";
 import type { GoogleCalendarClient, CalendarAttendee } from "../mcp_client/google_cal";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
+import type { ChromeLauncher } from "../chrome-launcher";
 import type { MeetJoiner } from "../meet_joiner";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
@@ -24,6 +25,7 @@ import { OC009_PROMPT, type OC009_Request } from "../openclaw-protocol";
 export interface MeetingToolDeps {
   calendar: GoogleCalendarClient;
   playwrightCli: PlaywrightCLIClient;
+  chromeLauncher?: ChromeLauncher;
   meetJoiner: MeetJoiner;
   openclawBridge: OpenClawBridge;
   meetingPrepSkill: MeetingPrepSkill;
@@ -69,13 +71,13 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "join_meeting",
         description:
-          "Join a Google Meet meeting. Call when user provides a Meet link or asks to join a meeting. CallingClaw will auto-join, mute camera, and start AI voice bridging.",
+          "Join an EXISTING Google Meet meeting by its URL. Use this when: (1) user says '加入会议/帮我进会议/join the meeting', (2) a Meet link is available from meeting context or user input. This tool ONLY joins — it never creates a new meeting. If the meeting context already has a meetLink, use it directly without asking.",
         parameters: {
           type: "object",
           properties: {
             meet_url: {
               type: "string",
-              description: "Google Meet URL (e.g. https://meet.google.com/abc-defg-hij)",
+              description: "Google Meet URL — must be a real URL from meeting context or user input. NEVER fabricate a URL.",
             },
           },
           required: ["meet_url"],
@@ -84,12 +86,13 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "create_and_join_meeting",
         description:
-          "Create a new Google Meet meeting with attendees and auto-join it. Call when user wants to start a new meeting.",
+          "Create a NEW Google Meet meeting on Google Calendar and auto-join it. ONLY call when user EXPLICITLY asks to CREATE/新建/发起 a new meeting (e.g. '帮我创建一个会议', 'create a new meeting'). NEVER call this for joining existing meetings — use join_meeting instead. IMPORTANT: If the intended time slot overlaps with an existing calendar event, this is almost certainly a wrong intent — the user likely wants to JOIN that existing meeting, not create a duplicate. Use check_calendar first to verify no conflict before creating. When user specifies a time (e.g. '下午6点', '18:00'), you MUST set start_time accordingly.",
         parameters: {
           type: "object",
           properties: {
             summary: { type: "string", description: "Meeting title" },
-            duration_minutes: { type: "number", description: "Duration in minutes (default 30)" },
+            start_time: { type: "string", description: "Meeting start time as ISO 8601 string with timezone offset (e.g. '2026-03-31T17:00:00+08:00'). MUST use the current date from system context — '今天' means TODAY's date, '明天' means tomorrow. If not specified, defaults to now." },
+            duration_minutes: { type: "number", description: "Duration in minutes (default 60)" },
             attendees: {
               type: "array",
               items: { type: "string" },
@@ -167,44 +170,108 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // ── Step 2: Generate meeting prep brief with attendee context ──
+          // ── Step 2: Generate or load meeting prep brief ──
           const meetTopic = calEvent?.summary || context.workspace?.topic || `Meeting at ${args.meet_url}`;
           const toolSession = deps.sessionManager?.findOrCreate({ topic: meetTopic, meetUrl: args.meet_url })
-            || { meetingId: generateMeetingId() };
+            || { meetingId: generateMeetingId(), files: {} as Record<string, string> };
           const toolMeetingId = toolSession.meetingId;
           deps.sessionManager?.markActive(toolMeetingId, { meetUrl: args.meet_url });
           let prepResult: Awaited<ReturnType<typeof prepareMeeting>> | null = null;
+          let prepInjected = false;
+
+          // Path A: OpenClaw available → generate fresh brief
           if (openclawBridge.connected) {
             try {
               prepResult = await prepareMeeting(meetingPrepSkill, meetTopic, undefined, meetAttendees, toolMeetingId);
               if (deps.voice.connected) {
-                // Layer 2: inject meeting brief via conversation.item.create
                 injectMeetingBrief(deps.voice, prepResult.brief);
-                console.log("[Meeting] Layer 2 meeting brief injected");
+                prepInjected = true;
+                console.log("[Meeting] Layer 2 meeting brief injected (OpenClaw)");
               }
             } catch (e: any) {
               console.warn("[Meeting] Prep brief generation failed (continuing without):", e.message);
             }
           }
 
-          // ── Step 3: Join via Playwright fast-path (deterministic, no AI model) ──
-          // Switch system audio to BlackHole first
+          // Path B: No OpenClaw → load existing prep file from disk
+          if (!prepInjected && deps.voice.connected) {
+            try {
+              const { SHARED_DIR } = await import("../config");
+              const { resolve } = await import("path");
+              // Search order: session file → prep/ subdirectory → SHARED_DIR root
+              const candidates = [
+                toolSession.files?.prep ? resolve(SHARED_DIR, toolSession.files.prep) : "",
+                resolve(SHARED_DIR, "prep", toolMeetingId + "_prep.md"),
+                resolve(SHARED_DIR, toolMeetingId + "_prep.md"),
+              ].filter(Boolean);
+
+              // Also scan prep/ directory for topic-matching files
+              const { readdirSync } = await import("fs");
+              try {
+                const prepDir = resolve(SHARED_DIR, "prep");
+                const prepFiles = readdirSync(prepDir).filter((f: string) => f.endsWith("_prep.md"));
+                for (const pf of prepFiles) {
+                  if (!candidates.includes(resolve(prepDir, pf))) {
+                    candidates.push(resolve(prepDir, pf));
+                  }
+                }
+              } catch {}
+
+              for (const filePath of candidates) {
+                try {
+                  const content = await Bun.file(filePath).text();
+                  if (content && content.length > 50) {
+                    // Check if topic matches (title in first line of markdown)
+                    const firstLine = content.split("\n")[0]?.replace(/^#+\s*/, "").trim() || "";
+                    const topicLower = meetTopic.toLowerCase();
+                    const titleLower = firstLine.toLowerCase();
+                    const isMatch = titleLower.includes(topicLower) || topicLower.includes(titleLower)
+                      || filePath.includes(toolMeetingId);
+
+                    if (isMatch || candidates.indexOf(filePath) < 3) {
+                      // Inject markdown directly as Layer 2 context
+                      const { MISSION_CONTEXT_PREFIX, MISSION_CONTEXT_SUFFIX } = await import("../prompt-constants");
+                      const briefText = [
+                        MISSION_CONTEXT_PREFIX,
+                        `Topic: ${meetTopic}`,
+                        "",
+                        content.slice(0, 4000), // Token budget ~1000 tokens
+                        "",
+                        MISSION_CONTEXT_SUFFIX,
+                        "This is pre-vetted meeting prep material. Use it proactively when answering questions about meeting topics. Do not call recall_context for information already covered here.",
+                      ].join("\n");
+
+                      deps.voice.injectContext(briefText);
+                      prepInjected = true;
+                      console.log(`[Meeting] Layer 2 prep loaded from disk: ${filePath} (${content.length} chars)`);
+                      break;
+                    }
+                  }
+                } catch {}
+              }
+              if (!prepInjected) {
+                console.log("[Meeting] No matching prep file found on disk");
+              }
+            } catch (e: any) {
+              console.warn("[Meeting] Disk prep loading failed:", e.message);
+            }
+          }
+
+          // ── Step 3: Join via ChromeLauncher (preferred — has audio injection) or Playwright CLI ──
           let usedPlaywright = false;
           let joinSuccess = false;
           let joinSummary = "";
-
           let joinState: "in_meeting" | "waiting_room" | "failed" = "failed";
+          const chromeLauncher = deps.chromeLauncher;
 
-          // Ensure Playwright is started (lazy init)
-          if (!playwrightCli.connected) {
-            try { await playwrightCli.start(); } catch {}
-          }
-
-          if (playwrightCli.connected) {
-            console.log("[Meeting] Using Playwright fast-join (deterministic path)...");
-            const result = await playwrightCli.joinGoogleMeet(args.meet_url, {
+          // Preferred: ChromeLauncher (Playwright library with audio injection initScript)
+          if (chromeLauncher) {
+            console.log("[Meeting] Using ChromeLauncher join (Playwright library, audio injection)...");
+            // Ensure Chrome is launched (lazy init — first call starts the browser)
+            await chromeLauncher.launch();
+            const result = await chromeLauncher.joinGoogleMeet(args.meet_url, {
               muteCamera: true,
-              muteMic: false, // Keep mic ON for BlackHole bridge
+              muteMic: false, // Mic ON for audio injection
               onStep: (step) => eventBus.emit("meeting.join_step", { step }),
             });
             usedPlaywright = true;
@@ -212,12 +279,22 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             joinState = result.state;
             joinSummary = result.summary;
 
+            // Activate audio pipeline after joining (captures meeting audio + enables AI playback)
+            if (joinSuccess) {
+              try {
+                const pipelineResult = await chromeLauncher.activateAudioPipeline();
+                console.log("[Meeting] ✅ Audio pipeline activated:", pipelineResult);
+              } catch (e: any) {
+                console.warn("[Meeting] Audio pipeline activation failed:", e.message);
+              }
+            }
+
             if (result.success || result.state === "waiting_room") {
-              // ── Step 4: Start admission monitor for expected attendees ──
+              // Start admission monitor via ChromeLauncher
               const attendeeNames = meetAttendees
                 .filter((a) => !a.self)
                 .map((a) => a.displayName || a.email);
-              playwrightCli.startAdmissionMonitor(
+              chromeLauncher.startAdmissionMonitor(
                 attendeeNames,
                 3000,
                 async (instruction) => {
@@ -227,11 +304,48 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               );
               console.log(`[Meeting] Admission monitor started (${attendeeNames.length} expected attendees)`);
 
-              // ── Step 5: Register meeting-end detector (piggybacks on admission monitor) ──
-              playwrightCli.onMeetingEnd(() => {
+              chromeLauncher.onMeetingEnd(() => {
                 autoLeaveMeeting();
               });
               console.log("[Meeting] Meeting-end detector registered");
+            }
+          }
+
+          // Fallback: Playwright CLI (legacy, no audio injection)
+          if (!usedPlaywright) {
+            if (!playwrightCli.connected) {
+              try { await playwrightCli.start(); } catch {}
+            }
+            if (playwrightCli.connected) {
+              console.log("[Meeting] Using Playwright CLI fast-join (no audio injection)...");
+              const result = await playwrightCli.joinGoogleMeet(args.meet_url, {
+                muteCamera: true,
+                muteMic: false,
+                onStep: (step) => eventBus.emit("meeting.join_step", { step }),
+              });
+              usedPlaywright = true;
+              joinSuccess = result.success;
+              joinState = result.state;
+              joinSummary = result.summary;
+
+              if (result.success || result.state === "waiting_room") {
+                const attendeeNames = meetAttendees
+                  .filter((a) => !a.self)
+                  .map((a) => a.displayName || a.email);
+                playwrightCli.startAdmissionMonitor(
+                  attendeeNames,
+                  3000,
+                  async (instruction) => {
+                    console.log("[Meeting] Admission fallback → AutomationRouter");
+                    await automationRouter.execute(instruction);
+                  },
+                );
+                console.log(`[Meeting] Admission monitor started (${attendeeNames.length} expected attendees)`);
+                playwrightCli.onMeetingEnd(() => {
+                  autoLeaveMeeting();
+                });
+                console.log("[Meeting] Meeting-end detector registered");
+              }
             }
           }
 
@@ -316,9 +430,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           const session = await meetJoiner.createAndJoinMeeting(
             calendar,
             args.summary,
-            args.duration_minutes || 30,
-            meetingAttendees
+            args.duration_minutes || 60,
+            meetingAttendees,
+            args.start_time || undefined,
           );
+          eventBus.emit("calendar.updated", { action: "created", summary: args.summary });
           if (session.status === "in_meeting") {
             meeting.startRecording();
             eventBus.emit("meeting.started", {
@@ -350,6 +466,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           // Notify Electron UI that summary file is ready
           eventBus.emit("meeting.summary_ready", { filepath, title: summary.title, timestamp: Date.now() });
 
+          // Leave via ChromeLauncher (Playwright page click) if available, otherwise fallback to keyboard shortcut
+          if (deps.chromeLauncher) {
+            await deps.chromeLauncher.leaveMeeting();
+            deps.chromeLauncher.clearMeetingEndCallback();
+          }
           await meetJoiner.leaveMeeting();
 
           // Auto-create tasks from action items
