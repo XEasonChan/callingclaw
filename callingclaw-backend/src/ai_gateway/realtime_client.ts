@@ -786,6 +786,10 @@ export class RealtimeClient {
   /** Dynamically update session instructions */
   updateInstructions(instructions: string) {
     this._lastInstructions = instructions;
+    // Gemini: session.update mid-session causes disconnect. Inject as context instead.
+    if (this._provider.name === "gemini") {
+      return !!this.injectContext(`[SYSTEM UPDATE] ${instructions.slice(0, 500)}`, "ctx_instr_update");
+    }
     return this.sendEvent("session.update", {
       session: { instructions },
     });
@@ -793,6 +797,11 @@ export class RealtimeClient {
 
   /** Dynamically update the voice */
   updateVoice(voice: string) {
+    // Gemini: voice can only be set in initial setup, not mid-session
+    if (this._provider.name === "gemini") {
+      console.log(`[Realtime] Voice update skipped for Gemini (only settable in setup)`);
+      return true;
+    }
     return this.sendEvent("session.update", {
       session: { voice },
     });
@@ -801,6 +810,11 @@ export class RealtimeClient {
   /** Dynamically update session tools */
   updateTools(tools: RealtimeTool[]) {
     this.tools = tools;
+    // Gemini: tools can only be set in initial setup
+    if (this._provider.name === "gemini") {
+      console.log(`[Realtime] Tools update skipped for Gemini (only settable in setup)`);
+      return true;
+    }
     return this.sendEvent("session.update", {
       session: {
         tools: tools.map((t) => ({

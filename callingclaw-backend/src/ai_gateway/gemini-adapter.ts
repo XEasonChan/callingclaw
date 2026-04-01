@@ -81,10 +81,20 @@ export class GeminiProtocolAdapter {
   // ── Outbound: Normalized event → Gemini JSON string ──────────────
   // Returns null if the event has no Gemini equivalent (e.g., conversation.item.delete)
 
+  private _setupSent = false;
+
   transformOutbound(type: string, data: any): string | null {
     try {
       switch (type) {
         case "session.update":
+          // Gemini 3.1 only accepts `setup` as the FIRST message.
+          // Mid-session session.update causes immediate disconnect (code 1000).
+          // Block all subsequent session.update calls after initial setup.
+          if (this._setupSent) {
+            console.log(`[GeminiAdapter] Blocked mid-session session.update (Gemini only accepts setup once)`);
+            return null;
+          }
+          this._setupSent = true;
           return this._buildSetupMessage(data);
 
         case "input_audio_buffer.append":
