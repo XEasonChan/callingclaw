@@ -58,7 +58,15 @@ All services instantiate once in `callingclaw.ts` and inject cross-module depend
 
 ### Multi-Provider Voice (ai_gateway/)
 
-`RealtimeClient` normalizes OpenAI Realtime API and Grok Voice behind a `RealtimeProviderConfig` interface. Each provider defines URL, headers, event name mapping, capabilities, and session builder. The `VoiceModule` wraps this with a state machine: `idle <-> listening <-> thinking <-> speaking` (with interruption handling that tracks "heard transcript" ratio).
+`RealtimeClient` normalizes OpenAI Realtime API, Grok Voice, and Gemini 3.1 Flash Live behind a `RealtimeProviderConfig` interface. Each provider defines URL, headers, event name mapping, capabilities, and session builder. Gemini uses `GeminiProtocolAdapter` for structural protocol transform (envelope-based, not type-field). The `VoiceModule` wraps this with a state machine: `idle <-> listening <-> thinking <-> speaking` (with interruption handling that tracks "heard transcript" ratio).
+
+**Gemini-specific constraints:**
+- Audio input: `realtimeInput.audio` (not `.media` or `.mediaChunks`), 16kHz PCM16
+- Audio output: 24kHz PCM16 (matches CallingClaw canonical rate, no upsampling needed)
+- Setup: `systemInstruction` must be <100 chars when tools are present (silently hangs otherwise)
+- Tool schemas: minimal format only (`{ type: "string" }`, no property descriptions)
+- Session resumption: 15-min limit, auto-reconnect with handle
+- WebSocket: must use `require("ws")` npm package (Bun's `import from "ws"` gives built-in shim that ignores proxy)
 
 ### 5-Layer Context Model
 

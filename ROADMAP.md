@@ -32,6 +32,16 @@
 - Multiple onboarding, settings, and calendar fixes
 - Reuse existing session on repeated join of same Meet URL
 
+## Completed in v2.8.2 (2026-04-01)
+
+- **Gemini 3.1 Flash Live** — one of the first production applications of Google's real-time voice API
+- GeminiProtocolAdapter: envelope protocol transform, 24kHz→16kHz resampling, instruction compaction
+- 3-provider voice switching (Gemini/Grok/OpenAI) in Desktop UI + voice-test.html
+- Session resumption for Gemini's 15-min session limit
+- Async tool dispatch for Gemini (recall_context, save_meeting_notes)
+- Gemini eval framework (14 dimensions) + connectivity test scripts
+- Default voice provider changed from Grok → Gemini (10x cheaper than OpenAI)
+
 ---
 
 ## v3.0 — Post-Sidecar Improvements

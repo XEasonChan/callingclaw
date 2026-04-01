@@ -3,6 +3,30 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.2] - 2026-04-01
+
+### Added
+- **Gemini 3.1 Flash Live voice provider** — one of the first production integrations of Google's latest real-time voice API. Full duplex conversation with long-context understanding and native tool calling at ~$0.02/min (10x cheaper than OpenAI)
+- **GeminiProtocolAdapter** — structural transform layer between CallingClaw's normalized events and Gemini's envelope-based protocol. Handles 24kHz to 16kHz audio resampling, instruction compaction, session resumption tokens, and deferred instruction injection
+- **3-provider voice switching** — Gemini, Grok, and OpenAI selectable from Desktop UI status bar, voice-test.html, and `.env` config. Each with provider-specific voice options (Gemini: 8 voices including Kore, Puck, Aoede)
+- **Gemini session resumption** — auto-reconnect with session handle when Gemini's 15-min limit is reached, preserving conversation context across sessions
+- **Gemini connectivity tests** — `test/gemini-live-ping.ts` (minimal WS round-trip) and `test/gemini-live-full-setup.ts` (tools, VAD, transcription, compression)
+- **Gemini eval framework** — `eval/gemini-live-eval.ts` + `eval/gemini-ws-worker.ts` for voice model comparison across 14 dimensions
+- **Desktop Gemini UI** — provider dropdown, 8 voice choices, Gemini API key input in Settings
+- **BUGS.md** — structured bug tracker with 8 bugs documented during Gemini integration
+
+### Fixed
+- **Audio input field** — Gemini 3.1 uses `realtimeInput.audio` (not `.media` or `.mediaChunks`), discovered through live API error messages
+- **Setup hang with tools + long instruction** — Gemini silently hangs when `systemInstruction` > ~100 chars with tools present. Instruction now auto-compacted, remainder injected post-setup
+- **Tool calls blocking voice thread** — `recall_context` and `save_meeting_notes` moved to async dispatch (SLOW_TOOLS) to prevent Gemini disconnects during tool execution
+- **Parallel connection race** — retry loop and auto-reconnect no longer create duplicate WS connections (`_intentionalClose` guard during retry)
+- **Browser status sync** — voice-test page now receives `voiceConnected: true` after Gemini connects (previously missed because connection was slower than initial WS status send)
+- **WebSocket package in Bun** — `require("ws")` at module level instead of dynamic import (Bun's `import from "ws"` returns built-in shim that ignores proxy agent)
+
+### Changed
+- **Default voice provider** — Grok → Gemini 3.1 Flash Live (significantly better quality at lower cost)
+- **Tool schema cleaning** — Gemini setup strips property descriptions and complex types from tool schemas for compatibility
+
 ## [2.8.1] - 2026-03-27
 
 ### Added
