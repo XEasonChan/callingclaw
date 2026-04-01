@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="CallingClaw is a local-first architecture for multimodal meeting intelligence agents. Elevate human-AI interaction from text to real-time audio-visual meetings with zero latency.">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#FAF6F0" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/png" href="./logo.png">
   <title>CallingClaw — AI That Joins Your Meetings</title>
@@ -21,8 +21,8 @@
   <style>
     /* ── Design Tokens ─────────────────────────────────── */
     :root {
-      --bg: #ffffff;
-      --bg-subtle: #faf9f9;
+      --bg: #FAF6F0;
+      --bg-subtle: #F3EDE4;
       --surface: #ffffff;
       --surface-elevated: #ffffff;
       --text: #1f2937;
@@ -259,17 +259,38 @@
     /* ── Hero ───────────────────────────────────────────── */
     .hero {
       padding-block: clamp(4rem, 10vw, 6rem) clamp(3rem, 6vw, 5rem);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Audio waveform canvas background */
+    .hero-scatter {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0;
+      transition: opacity 400ms ease;
+    }
+    .hero-scatter.visible {
+      opacity: 1;
     }
 
     .hero-layout {
-      display: grid;
-      grid-template-columns: 1fr 1.1fr;
-      gap: clamp(3rem, 6vw, 5rem);
+      display: flex;
+      flex-direction: column;
       align-items: center;
+      text-align: center;
+      gap: 0;
+      position: relative;
+      z-index: 1;
     }
 
     .hero-content {
-      text-align: left;
+      text-align: center;
+      max-width: 720px;
     }
 
     .hero-badge {
@@ -301,7 +322,8 @@
 
     .hero h1 {
       margin-bottom: 1.25rem;
-      max-width: 16ch;
+      max-width: 20ch;
+      margin-inline: auto;
     }
 
     .hero h1 .gradient {
@@ -311,19 +333,24 @@
     .hero-subtitle {
       font-size: 1.125rem;
       line-height: 1.7;
-      max-width: 42ch;
+      max-width: 52ch;
       margin-bottom: 2rem;
+      margin-inline: auto;
     }
 
     .hero-actions {
       display: flex;
       gap: 1rem;
       flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: clamp(3rem, 6vw, 4.5rem);
     }
 
     /* Meeting Frame */
     .hero-visual {
       position: relative;
+      max-width: 900px;
+      width: 100%;
     }
 
     .meeting-frame {
@@ -1032,28 +1059,13 @@
     }
 
     @media (max-width: 900px) {
-      .hero-layout {
-        grid-template-columns: 1fr;
-        text-align: center;
-      }
-      .hero-content {
-        text-align: center;
-        order: 1;
-      }
       .hero-visual {
-        order: 0;
-        max-width: 480px;
-        margin-inline: auto;
+        max-width: 100%;
       }
-      .hero h1 {
-        max-width: none;
-        margin-inline: auto;
-      }
-      .hero-subtitle {
-        margin-inline: auto;
-      }
-      .hero-actions {
-        justify-content: center;
+    }
+    @media (max-width: 600px) {
+      .hero-content {
+        padding-inline: 0.5rem;
       }
     }
 
@@ -2151,16 +2163,17 @@
 
   <!-- Hero -->
   <section class="hero">
+    <canvas id="heroScatter" class="hero-scatter" aria-hidden="true" role="presentation"></canvas>
     <div class="container">
       <div class="hero-layout">
         <div class="hero-content">
           <div class="hero-badge" data-animate>
             <span class="lobster"><img src="./logo.png" alt="CallingClaw"></span>
-            macOS &middot; OpenClaw Skill &middot; Free Beta
+            macOS &middot; Gemini 3.1 Live &middot; Free Beta
           </div>
           <h1 data-animate>AI That <span class="gradient">Joins Your Meetings</span></h1>
           <p class="hero-subtitle" data-animate>
-            Download CallingClaw, type <code style="font-family: var(--font-mono); background: var(--accent-light); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em;">/callingclaw</code> in OpenClaw, and let AI prep, join, speak, and take notes — all in real-time on Google Meet and Zoom.
+            One of the first production applications of Google Gemini 3.1 Flash Live. Full duplex voice AI that preps, joins, speaks, and takes notes in your Google Meet and Zoom meetings — with long-context understanding and native tool calling at 10x lower cost.
           </p>
           <div class="hero-actions" data-animate>
             <a class="btn btn-primary" href="#download" style="text-decoration: none;">Download for Mac</a>
@@ -2687,7 +2700,7 @@
         <div class="privacy-card">
           <div class="privacy-icon">&#x1F510;</div>
           <h3>Direct API Connections</h3>
-          <p>Audio streams directly to your chosen AI provider (OpenAI, xAI) using your own API keys. We never see or store your data.</p>
+          <p>Audio streams directly to your chosen AI provider (Gemini, Grok, or OpenAI) using your own API keys. We never see or store your data.</p>
         </div>
         <div class="privacy-card">
           <div class="privacy-icon">&#x1F6AB;</div>
@@ -2697,7 +2710,7 @@
         <div class="privacy-card">
           <div class="privacy-icon">&#x1F512;</div>
           <h3>You Control the Keys</h3>
-          <p>Bring your own API keys for OpenAI, Claude (via OpenRouter), and Google Calendar. Revoke access anytime.</p>
+          <p>Bring your own API keys for Gemini, OpenAI, Grok, Claude (via OpenRouter), and Google Calendar. Revoke access anytime.</p>
         </div>
       </div>
     </div>
@@ -2717,15 +2730,15 @@
         </details>
         <details class="faq-item">
           <summary>What are the system requirements?</summary>
-          <p>macOS 13 (Ventura) or later. Apple Silicon recommended for best performance. You'll also need BlackHole 2ch for audio routing.</p>
+          <p>macOS 13 (Ventura) or later. Apple Silicon recommended for best performance. No virtual audio drivers needed — audio injection is handled at the browser level.</p>
         </details>
         <details class="faq-item">
           <summary>Do I need OpenClaw?</summary>
-          <p>Yes — CallingClaw is invoked as a <code>/callingclaw</code> skill inside OpenClaw. OpenClaw reads your project context, preps the meeting brief, and tells CallingClaw to join. You also bring your own API keys for the AI providers (OpenAI Realtime, OpenRouter, etc.).</p>
+          <p>OpenClaw is optional. CallingClaw works standalone with just an API key (Gemini, Grok, or OpenAI). With OpenClaw, you get deeper features: project-aware meeting prep, deep reasoning, and the <code>/callingclaw</code> skill for hands-free meeting management.</p>
         </details>
         <details class="faq-item">
           <summary>What does it cost?</summary>
-          <p>CallingClaw is free during beta. The main cost is your AI provider API usage — primarily OpenAI Realtime API for voice (roughly $0.06/min for audio) and Claude via OpenRouter for deep analysis.</p>
+          <p>CallingClaw is free during beta. The main cost is your AI provider API usage. Gemini 3.1 Flash Live (default) costs ~$0.02/min, Grok ~$0.05/min, OpenAI ~$0.30/min. Claude via OpenRouter for deep analysis is extra.</p>
         </details>
         <details class="faq-item">
           <summary>Can other people in the meeting tell it's AI?</summary>
@@ -2733,7 +2746,7 @@
         </details>
         <details class="faq-item">
           <summary>Can I customize the AI voice?</summary>
-          <p>Yes. You can switch between OpenAI and xAI voice providers, and select different voice personas within each provider.</p>
+          <p>Yes. Choose from 3 providers (Gemini, Grok, OpenAI) with 25+ voice personas. Gemini offers Kore, Puck, Aoede and 5 more. Switch in the Desktop status bar or voice-test page.</p>
         </details>
         <details class="faq-item">
           <summary>Is my meeting data private?</summary>
@@ -3047,6 +3060,221 @@
           cancelAnimationFrame(rafId);
           rafId = null;
         }
+      });
+    })();
+
+    // ── Hero Scatter: Flowing Audio Waveform Ribbons ───────────────
+    (function() {
+      const canvas = document.getElementById('heroScatter');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const hero = canvas.closest('.hero');
+      const dpr = window.devicePixelRatio || 1;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // Mouse tracking
+      let mx = -9999, my = -9999;
+      hero.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        mx = (e.clientX - rect.left) * dpr;
+        my = (e.clientY - rect.top) * dpr;
+      });
+      hero.addEventListener('mouseleave', () => { mx = -9999; my = -9999; });
+      hero.addEventListener('touchmove', e => {
+        const t = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        mx = (t.clientX - rect.left) * dpr;
+        my = (t.clientY - rect.top) * dpr;
+      }, { passive: true });
+      hero.addEventListener('touchend', () => { mx = -9999; my = -9999; });
+
+      function getColors() {
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        return {
+          r: dark ? 232 : 230, g: dark ? 93 : 57, b: dark ? 76 : 70,
+          baseAlpha: dark ? 0.07 : 0.05,
+          maxAlpha: dark ? 0.45 : 0.40
+        };
+      }
+
+      // ── Bezier path utilities ──
+      function cubicBezier(t, p0, p1, p2, p3) {
+        const u = 1 - t;
+        return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
+      }
+      function cubicBezierDeriv(t, p0, p1, p2, p3) {
+        const u = 1 - t;
+        return 3*u*u*(p1-p0) + 6*u*t*(p2-p1) + 3*t*t*(p3-p2);
+      }
+      function pointOnPath(t, path) {
+        return {
+          x: cubicBezier(t, path.x0, path.x1, path.x2, path.x3),
+          y: cubicBezier(t, path.y0, path.y1, path.y2, path.y3)
+        };
+      }
+      function normalOnPath(t, path) {
+        const dx = cubicBezierDeriv(t, path.x0, path.x1, path.x2, path.x3);
+        const dy = cubicBezierDeriv(t, path.y0, path.y1, path.y2, path.y3);
+        const len = Math.hypot(dx, dy) || 1;
+        return { nx: -dy / len, ny: dx / len };
+      }
+
+      // ── Ribbon definitions (regenerated on resize) ──
+      let ribbons = [];
+      let W = 0, H = 0;
+
+      function buildRibbons() {
+        W = canvas.width;
+        H = canvas.height;
+        ribbons = [];
+
+        // Ribbon 1: sweeping curve from top-left, spiraling gently toward center-right
+        ribbons.push({
+          path: {
+            x0: W * -0.05, y0: H * 0.15,
+            x1: W * 0.15,  y1: H * -0.1,
+            x2: W * 0.55,  y2: H * 0.35,
+            x3: W * 0.30,  y3: H * 0.65
+          },
+          barCount: 90,
+          barSpacing: 0.008,
+          maxBarH: 18 * dpr,
+          seed: 42
+        });
+
+        // Ribbon 2: flowing from bottom-right up and across
+        ribbons.push({
+          path: {
+            x0: W * 1.08, y0: H * 0.90,
+            x1: W * 0.80, y1: H * 1.05,
+            x2: W * 0.50, y2: H * 0.55,
+            x3: W * 0.75, y3: H * 0.25
+          },
+          barCount: 85,
+          barSpacing: 0.009,
+          maxBarH: 16 * dpr,
+          seed: 137
+        });
+
+        // Ribbon 3: subtle arc across the top area
+        ribbons.push({
+          path: {
+            x0: W * 0.20, y0: H * -0.05,
+            x1: W * 0.45, y1: H * 0.12,
+            x2: W * 0.70, y2: H * 0.08,
+            x3: W * 1.05, y3: H * 0.18
+          },
+          barCount: 70,
+          barSpacing: 0.010,
+          maxBarH: 12 * dpr,
+          seed: 271
+        });
+
+        // Ribbon 4: gentle curve near bottom-left
+        ribbons.push({
+          path: {
+            x0: W * -0.08, y0: H * 0.75,
+            x1: W * 0.15,  y1: H * 0.90,
+            x2: W * 0.35,  y2: H * 0.70,
+            x3: W * 0.55,  y3: H * 0.85
+          },
+          barCount: 60,
+          barSpacing: 0.011,
+          maxBarH: 14 * dpr,
+          seed: 89
+        });
+
+        // Pre-compute bar data for each ribbon
+        ribbons.forEach(rib => {
+          rib.bars = [];
+          let rng = rib.seed;
+          const pseudoRandom = () => { rng = (rng * 16807 + 0) % 2147483647; return (rng & 0x7fffffff) / 0x7fffffff; };
+          for (let i = 0; i < rib.barCount; i++) {
+            const t = 0.02 + i * rib.barSpacing;
+            if (t > 0.98) break;
+            const pt = pointOnPath(t, rib.path);
+            const n = normalOnPath(t, rib.path);
+            // Bar height: audio-like pattern (louder in middle, quieter at edges)
+            const envelope = Math.sin(i / rib.barCount * Math.PI);
+            const noise = 0.3 + 0.7 * pseudoRandom();
+            const h = rib.maxBarH * envelope * noise;
+            rib.bars.push({ t, x: pt.x, y: pt.y, nx: n.nx, ny: n.ny, h, phase: pseudoRandom() * Math.PI * 2 });
+          }
+        });
+      }
+
+      function resize() {
+        const rect = hero.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        buildRibbons();
+      }
+
+      // Visibility
+      let visible = true;
+      const obs = new IntersectionObserver(entries => { visible = entries[0].isIntersecting; }, { threshold: 0.05 });
+      obs.observe(hero);
+
+      const PROX_RADIUS = 160 * dpr;
+      const BAR_WIDTH = 2.5 * dpr;
+      let frame = 0;
+
+      function draw(ts) {
+        if (!visible) { requestAnimationFrame(draw); return; }
+        if (++frame % 2 !== 0) { requestAnimationFrame(draw); return; }
+
+        const c = getColors();
+        ctx.clearRect(0, 0, W, H);
+
+        ribbons.forEach(rib => {
+          // Draw the ribbon's path as a faint guide line
+          const guidePath = rib.path;
+          ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${c.baseAlpha * 0.5})`;
+          ctx.lineWidth = 1 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(guidePath.x0, guidePath.y0);
+          ctx.bezierCurveTo(guidePath.x1, guidePath.y1, guidePath.x2, guidePath.y2, guidePath.x3, guidePath.y3);
+          ctx.stroke();
+
+          // Draw waveform bars along the path
+          rib.bars.forEach(bar => {
+            const dist = Math.hypot(mx - bar.x, my - bar.y);
+            const prox = Math.max(0, 1 - dist / PROX_RADIUS);
+            const alpha = c.baseAlpha + prox * (c.maxAlpha - c.baseAlpha);
+
+            // Idle pulse
+            let pulse = 0;
+            if (!reducedMotion) {
+              const pulseAmp = 2 * dpr + prox * 4 * dpr;
+              pulse = Math.sin(ts / 2500 * Math.PI * 2 + bar.phase) * pulseAmp;
+            }
+
+            const h = Math.max(2 * dpr, bar.h + pulse);
+            ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+
+            // Draw bar perpendicular to the curve
+            ctx.save();
+            ctx.translate(bar.x, bar.y);
+            ctx.rotate(Math.atan2(bar.ny, bar.nx));
+            ctx.fillRect(-BAR_WIDTH / 2, -h / 2, BAR_WIDTH, h);
+            ctx.restore();
+          });
+        });
+
+        requestAnimationFrame(draw);
+      }
+
+      // Init
+      resize();
+      requestAnimationFrame(draw);
+      requestAnimationFrame(() => canvas.classList.add('visible'));
+
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(resize, 150);
       });
     })();
   </script>
