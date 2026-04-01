@@ -33,7 +33,7 @@ const FRAME_HEIGHT = 400;
 const JPEG_QUALITY = 40;
 const DEDUP_THRESHOLD = 0.7; // Jaccard similarity > 0.7 = skip
 const MAX_AGE_DAYS = 30;     // Auto-cleanup meetings older than 30 days
-const BASE_DIR = `${process.env.HOME}/.callingclaw/shared/meetings`;
+const BASE_DIR = `${process.env.CALLINGCLAW_HOME || process.env.HOME + "/.callingclaw"}/shared/meetings`;
 
 // ── Types ──
 

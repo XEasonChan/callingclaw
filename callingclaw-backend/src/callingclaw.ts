@@ -672,6 +672,7 @@ const toolDeps = {
   calendar,
   eventBus,
   playwrightCli,
+  chromeLauncher,
   meetJoiner,
   meeting,
   get voice() { return voice; }, // Lazy — voice created below

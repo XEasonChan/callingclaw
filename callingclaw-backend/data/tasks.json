@@ -1,5 +1,27 @@
 [
   {
+    "id": "task_mn8l0m9e_x8rl",
+    "task": "Join Google Meet meeting (testing callingclaw)",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2025-03-27T15:00:00+08:00",
+    "sourceMeetingId": "mtg_mn8l0bvi_w4nc",
+    "createdAt": 1774596634034,
+    "updatedAt": 1774596634034
+  },
+  {
+    "id": "task_mn8l0m9e_vss9",
+    "task": "Task description (from notes placeholder)",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Person name",
+    "deadline": "N/A",
+    "sourceMeetingId": "mtg_mn8l0bvi_w4nc",
+    "createdAt": 1774596634034,
+    "updatedAt": 1774596634034
+  },
+  {
     "id": "task_mmyq443h_cpvr",
     "task": "Review and refine the PowerPoint slides for clarity and impact on the audience.",
     "status": "pending",

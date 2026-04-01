@@ -6,7 +6,9 @@ import { mkdirSync } from "fs";
 
 // ── Shared local document directory ──
 // Used by CallingClaw, OpenClaw, and Desktop UI for meeting artifacts
-export const SHARED_DIR = resolve(homedir(), ".callingclaw", "shared");
+// Override with CALLINGCLAW_HOME env var (e.g., for dev: a path in your project)
+export const CALLINGCLAW_HOME = process.env.CALLINGCLAW_HOME || resolve(homedir(), ".callingclaw");
+export const SHARED_DIR = resolve(CALLINGCLAW_HOME, "shared");
 export const SHARED_PREP_DIR = resolve(SHARED_DIR, "prep");
 export const SHARED_NOTES_DIR = resolve(SHARED_DIR, "notes");
 export const SHARED_LOGS_DIR = resolve(SHARED_DIR, "logs");
@@ -21,8 +23,8 @@ try {
   // Permissions issue — will fail gracefully on write
 }
 
-// ── Load persistent user config from ~/.callingclaw/user-config.json ──
-const USER_CONFIG_PATH = `${process.env.HOME}/.callingclaw/user-config.json`;
+// ── Load persistent user config ──
+const USER_CONFIG_PATH = resolve(CALLINGCLAW_HOME, "user-config.json");
 let _userConfig: Record<string, string> = {};
 try {
   const f = Bun.file(USER_CONFIG_PATH);

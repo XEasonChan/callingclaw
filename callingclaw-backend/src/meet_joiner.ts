@@ -395,7 +395,7 @@ export class MeetJoiner {
           var clicked = false;
           for (var i = 0; i < btns.length; i++) {
             var text = (btns[i].textContent || \\"\\").trim().toLowerCase();
-            if ((text === \\"join now\\" || text === \\"ask to join\\" || text === \\"加入会议\\" || text === \\"请求加入\\") && !btns[i].disabled) {
+            if ((text === \\"join now\\" || text === \\"ask to join\\" || text === \\"加入会议\\" || text === \\"请求加入\\" || text === \\"立即加入\\") && !btns[i].disabled) {
               btns[i].click();
               clicked = true;
               console.log(\\"[CallingClaw] Clicked: \\" + text);
@@ -547,17 +547,18 @@ export class MeetJoiner {
   async createAndJoinMeeting(
     calendarClient: any,
     summary: string,
-    durationMinutes: number = 30,
-    attendees: string[] = []
+    durationMinutes: number = 60,
+    attendees: string[] = [],
+    startTime?: string,
   ): Promise<MeetSession> {
-    const now = new Date();
-    const end = new Date(now.getTime() + durationMinutes * 60000);
+    const start = startTime ? new Date(startTime) : new Date();
+    const end = new Date(start.getTime() + durationMinutes * 60000);
 
-    console.log(`[Meet] Creating meeting: "${summary}"`);
+    console.log(`[Meet] Creating meeting: "${summary}" at ${start.toISOString()} (${durationMinutes}min)`);
 
     const result = await calendarClient.createEvent({
       summary,
-      start: now.toISOString(),
+      start: start.toISOString(),
       end: end.toISOString(),
       attendees: attendees.map((email: string) => ({ email })),
     });

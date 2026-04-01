@@ -232,7 +232,7 @@ export class PlaywrightCLIClient {
         const btns = [...document.querySelectorAll('button')];
         const btnTexts = btns.map(b => b.textContent.trim());
 
-        if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) {
+        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -271,7 +271,7 @@ export class PlaywrightCLIClient {
         }
 
         // 7. Check if join button exists (don't click yet — need to set devices first)
-        const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+        const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
         for (const b of btns) {
           if (joinTargets.includes(b.textContent.trim())) { R.hasJoinBtn = true; break; }
         }
@@ -327,7 +327,7 @@ export class PlaywrightCLIClient {
         log("Clicking join...");
         const joinResult = await this.evaluate(`() => {
           const btns = [...document.querySelectorAll('button')];
-          const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入'];
+          const joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
           for (const b of btns) {
             const t = b.textContent.trim();
             if (joinTargets.includes(t)) {
@@ -350,9 +350,9 @@ export class PlaywrightCLIClient {
 
       for (let attempt = 0; attempt < 6; attempt++) {
         const state = await this.evaluate(`() => {
-          if (document.querySelector('[aria-label*="Leave call"]') || document.querySelector('[aria-label="Call controls"]')) return 'in_meeting';
+          if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) return 'in_meeting';
           const t = document.body.innerText;
-          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人')) return 'waiting_room';
+          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
           return 'loading';
         }`);
 
