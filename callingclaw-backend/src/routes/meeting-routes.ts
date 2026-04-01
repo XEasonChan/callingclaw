@@ -6,8 +6,9 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildSceneContext } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
+import { PresentationEngine } from "../modules/presentation-engine";
 import type { Services, RouteHandler } from "./types";
 
 export function meetingRoutes(services: Services): RouteHandler {
@@ -149,8 +150,21 @@ export function meetingRoutes(services: Services): RouteHandler {
         services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
 
         // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
+        // DEDUP: Skip if session already has a prep file (e.g., from /api/meeting/delegate)
+        // or if meetingPrepSkill already has a loaded brief for this meeting.
         let prepBrief: any = null;
-        if (services.meetingPrepSkill && services.agentAdapter?.connected) {
+        const existingPrepBrief = services.meetingPrepSkill?.currentBrief;
+        const sessionHasPrep = session.files?.prep;
+        if (sessionHasPrep || existingPrepBrief) {
+          // Prep already exists — just inject into voice if needed
+          prepBrief = existingPrepBrief;
+          if (prepBrief && services.realtime.connected) {
+            injectMeetingBrief(services.realtime, prepBrief);
+            console.log("[Meeting] Layer 2 meeting brief injected (existing prep)");
+          } else if (sessionHasPrep) {
+            console.log(`[Meeting] Session ${meetingId} already has prep file — skipping prepareMeeting()`);
+          }
+        } else if (services.meetingPrepSkill && services.agentAdapter?.connected) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
@@ -269,6 +283,45 @@ export function meetingRoutes(services: Services): RouteHandler {
               const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
+
+              // Auto-present: if playbook has scenes, start screen sharing + scene sequence
+              const scenes = prepBrief?.scenes;
+              if (scenes && scenes.length > 0 && services.chromeLauncher) {
+                setTimeout(async () => {
+                  try {
+                    // Share the first scene's URL
+                    console.log(`[Meeting] Auto-present: ${scenes.length} scenes, starting with ${scenes[0]!.url}`);
+                    await services.chromeLauncher.shareScreen(scenes[0]!.url);
+
+                    // Run scene sequence with progressive context injection
+                    const engine = new PresentationEngine();
+                    engine.runScenes({
+                      scenes,
+                      chromeLauncher: services.chromeLauncher,
+                      voice: services.voice,
+                      context: services.context,
+                      onSceneAdvance: (idx, scene) => {
+                        // Progressive injection: push current scene context to voice AI
+                        if (prepBrief && services.realtime.connected) {
+                          const sceneCtx = buildSceneContext(prepBrief, idx);
+                          if (sceneCtx) services.realtime.injectContext(sceneCtx);
+                        }
+                        services.eventBus.emit("presentation.scene", {
+                          index: idx,
+                          total: scenes.length,
+                          url: scene.url,
+                          talkingPoints: scene.talkingPoints.slice(0, 60),
+                        });
+                      },
+                      onComplete: () => {
+                        services.eventBus.emit("presentation.done", { scenesCount: scenes.length });
+                      },
+                    }).catch(e => console.warn("[Meeting] Auto-present failed:", e.message));
+                  } catch (e: any) {
+                    console.warn("[Meeting] Auto-present setup failed:", e.message);
+                  }
+                }, 5000); // Wait 5s after intro for audio to stabilize
+              }
             }, 2000); // Wait 2s for audio bridge to fully initialize
           }
         };

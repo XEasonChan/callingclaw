@@ -51,12 +51,22 @@ export interface BrowserContext {
   capturedAt: number;
 }
 
+/** Active presentation scene — updated by PresentationEngine, read by TranscriptAuditor */
+export interface CurrentScene {
+  index: number;
+  total: number;
+  url: string;
+  scrollTarget?: string;
+  talkingPoints: string;
+}
+
 export class SharedContext {
   private _transcript: TranscriptEntry[] = [];
   private _screen: ScreenState = { latestScreenshot: null, capturedAt: 0 };
   private _meetingNotes: MeetingNote[] = [];
   private _workspace: WorkspaceContext | null = null;
   private _browserContext: BrowserContext | null = null;
+  private _currentScene: CurrentScene | null = null;
   private _listeners = new Map<string, Array<(data: any) => void>>();
 
   // ── Transcript ──
@@ -187,6 +197,21 @@ export class SharedContext {
 
   clearBrowserContext() {
     this._browserContext = null;
+  }
+
+  /** Current presentation scene — set by PresentationEngine, read by TranscriptAuditor */
+  get currentScene(): CurrentScene | null {
+    return this._currentScene;
+  }
+
+  updateCurrentScene(scene: CurrentScene) {
+    this._currentScene = scene;
+    this.emit("scene", this._currentScene);
+  }
+
+  clearCurrentScene() {
+    this._currentScene = null;
+    this.emit("scene", null);
   }
 
   // ── Event System ──

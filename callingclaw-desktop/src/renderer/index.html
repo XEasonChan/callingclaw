@@ -1103,6 +1103,23 @@ function switchPanelTab(tabName) {
   contents.forEach(function(c) { c.classList.toggle('active', c.id === 'sp-tab-' + tabName); });
 }
 
+// Update agent activity feed in-place within the tabbed panel.
+// Called by WebSocket event handlers instead of openPrepPanel() to avoid
+// destroying the tabbed layout and losing the user's tab selection.
+function updateActivityFeed(data) {
+  var body = document.getElementById('mp-activity-body');
+  if (!body || !data) return;
+  var feedHtml = (data.agentFeed || []).map(function(f) {
+    return '<div class="mp-activity-item">' + esc(f) + '</div>';
+  }).join('');
+  body.innerHTML = feedHtml;
+  // Auto-scroll to bottom if user is on the feed tab
+  var feedTab = document.getElementById('sp-tab-feed');
+  if (feedTab && feedTab.classList.contains('active')) {
+    body.scrollTop = body.scrollHeight;
+  }
+}
+
 function toggleMpSection(id) {
   const bodyId = id === 'prep' ? 'mp-prep-body' : id === 'activity' ? 'mp-activity-body' : 'mp-transcript';
   const chevronId = 'mp-' + id + '-chevron';
@@ -1346,8 +1363,8 @@ async function refreshAll() {
       if (sess.files) {
         sessData.filePaths = sess.files;
         // Mark prep/summary as available if path exists
-        if (sess.files.prep && sessData.prep.status === 'none') sessData.prep.status = 'none'; // available to load
-        if (sess.files.summary && sessData.summary.status === 'none') sessData.summary.status = 'none';
+        if (sess.files.prep && sessData.prep.status === 'none') sessData.prep.status = 'done';
+        if (sess.files.summary && sessData.summary.status === 'none') sessData.summary.status = 'done';
         if (sess.files.notes && !sessData.filePaths.notes) sessData.filePaths.notes = sess.files.notes;
       }
     }
@@ -1705,13 +1722,13 @@ function renderPastMeetingsHTML() {
       mfd.startTime = mfd.startTime || item.date || null;
       // Detect prep/notes/summary from manifest files field OR sessions.json
       if (item.files) {
-        if (item.files.prep && mfd.prep.status === 'idle') mfd.prep.status = 'done';
+        if (item.files.prep && (mfd.prep.status === 'none' || mfd.prep.status === 'idle')) mfd.prep.status = 'done';
         if (item.files.notes) { if (!mfd.filePaths) mfd.filePaths = {}; mfd.filePaths.notes = item.files.notes; }
-        if (item.files.summary && mfd.summary.status === 'idle') mfd.summary.status = 'done';
+        if (item.files.summary && (mfd.summary.status === 'none' || mfd.summary.status === 'idle')) mfd.summary.status = 'done';
         // Note: do NOT map live log to notes — they are different types
       }
       // Fallback: try loading prep file to detect if it exists (async, updates badge later)
-      if (mid && mfd.prep.status === 'idle' && !mfd._prepChecked) {
+      if (mid && mfd.prep.status === 'none' && !mfd._prepChecked) {
         mfd._prepChecked = true;
         loadMeetingFile(mid, 'prep').then(function(content) {
           if (content) {
@@ -2391,7 +2408,19 @@ function routeWsEvent(msg) {
           }
         }
       }
-      if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(pData.meetingId);
+      // Update side panel if open, but DON'T replace the tabbed layout.
+      // If the tabbed meeting panel is active (S.meetingMode is set), update the
+      // activity feed inside the existing tab instead of calling openPrepPanel()
+      // which would destroy the tabbed UI and flash back to agent activity view.
+      if (document.getElementById('side-panel')?.classList.contains('open')) {
+        if (S.meetingMode && document.getElementById('mp-activity-body')) {
+          // Tabbed panel is open — update the feed content in-place
+          updateActivityFeed(pData);
+        } else if (!S.meetingMode) {
+          // Flat prep panel — safe to re-render
+          openPrepPanel(pData.meetingId);
+        }
+      }
     }
   }
 
@@ -2402,7 +2431,11 @@ function routeWsEvent(msg) {
       if (ocData.prep.status !== 'done' && ocData.agentFeed) {
         var ocText = msg.data?.text || msg.data?.delta || '';
         if (ocText) ocData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (ocText.length > 60 ? ocText.slice(0,60) + '...' : ocText));
-        if (document.getElementById('side-panel')?.classList.contains('open')) openPrepPanel(ocId);
+        if (document.getElementById('side-panel')?.classList.contains('open') && !S.meetingMode) {
+          openPrepPanel(ocId);
+        } else if (S.meetingMode && document.getElementById('mp-activity-body')) {
+          updateActivityFeed(ocData);
+        }
       }
     }
   }

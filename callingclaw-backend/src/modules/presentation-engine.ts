@@ -314,6 +314,138 @@ Return ONLY a JSON array:
     return { completed: slidesPresented === plan.slides.length, slidesPresented };
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // Multi-URL Scene Runner (playbook-driven)
+  // ══════════════════════════════════════════════════════════════
+  //
+  // Runs a sequence of scenes from the meeting playbook.
+  // Each scene can be a different URL. The engine navigates between
+  // URLs and scrolls to the specified target on each page.
+  //
+  //   scene[0]: callingclaw.com → scroll to hero
+  //   scene[1]: callingclaw.com → scroll to #features
+  //   scene[2]: vision.html → scroll to top
+  //   scene[3]: figma.com/design/xxx → scroll to component
+  //
+  // The voice AI is driven by onSceneAdvance callbacks that inject
+  // progressive context (current phase + next scene talking points).
+
+  async runScenes(opts: {
+    scenes: Array<{
+      url: string;
+      scrollTarget?: string;
+      talkingPoints: string;
+      durationMs: number;
+    }>;
+    chromeLauncher: any;
+    voice: VoiceModule;
+    context: SharedContext;
+    onSceneAdvance?: (sceneIndex: number, scene: typeof opts.scenes[0]) => void;
+    onComplete?: () => void;
+  }): Promise<{ completed: boolean; scenesPresented: number }> {
+    const { scenes, chromeLauncher, voice, context: sharedContext, onSceneAdvance, onComplete } = opts;
+    if (scenes.length === 0) return { completed: true, scenesPresented: 0 };
+    if (this._running) throw new Error("Already presenting");
+
+    this._running = true;
+    this._paused = false;
+    let currentUrl = "";
+    let scenesPresented = 0;
+    voice.presentationMode = true;
+
+    console.log(`[Presentation] Starting scene sequence: ${scenes.length} scenes`);
+
+    try {
+      for (let i = 0; i < scenes.length; i++) {
+        if (!this._running) break;
+
+        while (this._paused && this._running) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+        if (!this._running) break;
+
+        const scene = scenes[i]!;
+        this._currentSlide = i;
+
+        // 1. Navigate to URL if different from current
+        if (scene.url && scene.url !== currentUrl) {
+          console.log(`[Presentation] Navigating to: ${scene.url}`);
+          try {
+            await chromeLauncher.navigatePresentingPage(scene.url);
+            currentUrl = scene.url;
+            // Wait for page load
+            await new Promise(r => setTimeout(r, 2000));
+          } catch (e: any) {
+            console.warn(`[Presentation] Navigation failed for ${scene.url}: ${e.message}, skipping scene`);
+            continue; // Skip this scene, voice continues
+          }
+        }
+
+        // 2. Scroll to target
+        if (scene.scrollTarget) {
+          try {
+            await chromeLauncher.evaluateOnPresentingPage(`(() => {
+              var target = ${JSON.stringify(scene.scrollTarget)};
+              var all = document.querySelectorAll('h1,h2,h3,h4,h5,h6,section,[id],p,div');
+              for (var el of all) {
+                var text = (el.textContent || '').trim();
+                if (text.toLowerCase().includes(target.toLowerCase()) && text.length < 200) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  return 'scrolled';
+                }
+              }
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              return 'fallback_top';
+            })()`);
+            await new Promise(r => setTimeout(r, 1000));
+          } catch {
+            // Scroll failure is non-fatal
+          }
+        }
+
+        // 3. Update shared state + notify callback (progressive context injection)
+        // SharedContext.currentScene is the single source of truth for "what's on screen now"
+        // Read by TranscriptAuditor (Haiku) to know which page click/scroll targets apply to
+        sharedContext.updateCurrentScene({
+          index: i,
+          total: scenes.length,
+          url: scene.url,
+          scrollTarget: scene.scrollTarget,
+          talkingPoints: scene.talkingPoints,
+        });
+        onSceneAdvance?.(i, scene);
+        console.log(`[Presentation] Scene ${i + 1}/${scenes.length}: ${scene.talkingPoints.slice(0, 60)}...`);
+
+        // 4. Speak talking points
+        const transcriptBefore = sharedContext.transcript.length;
+        voice.sendText(scene.talkingPoints);
+
+        // 5. Wait for speech completion
+        await voice.waitForSpeechDone(scene.durationMs + 3000);
+
+        // 6. Check for user interruption
+        const newEntries = sharedContext.transcript.slice(transcriptBefore);
+        const userSpoke = newEntries.some(e => e.role === "user" && e.text.length > 5);
+        if (userSpoke) {
+          console.log("[Presentation] User spoke — pausing for response");
+          await voice.waitForSpeechDone(10000);
+        }
+
+        scenesPresented++;
+        await new Promise(r => setTimeout(r, 800));
+      }
+    } finally {
+      this._running = false;
+      this._currentSlide = -1;
+      voice.presentationMode = false;
+      sharedContext.clearCurrentScene();
+      onComplete?.();
+    }
+
+    console.log(`[Presentation] Scene sequence completed: ${scenesPresented}/${scenes.length}`);
+    return { completed: scenesPresented === scenes.length, scenesPresented };
+  }
+
   /** Pause the presentation (user wants to discuss) */
   pause() {
     if (this._running) {

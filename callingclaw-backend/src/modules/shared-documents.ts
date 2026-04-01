@@ -26,9 +26,10 @@ const SESSIONS_PATH = resolve(SHARED_DIR, "sessions.json");
 // ── File Suffixes (convention shared with OpenClaw skill) ──
 
 export const FILE_SUFFIXES = {
-  prep: "_prep.md",        // 会前调研 — OpenClaw writes
-  live: "_live.md",        // 会中实时日志 — CallingClaw appends
-  summary: "_summary.md",  // 会后总结 — CallingClaw writes
+  prep: "_prep.md",            // 会前调研 + voice brief — OpenClaw writes
+  presentation: "_presentation.json", // 演示计划 (scenes, scroll targets) — parsed from prep or generated
+  live: "_live.md",            // 会中实时日志 — CallingClaw appends
+  summary: "_summary.md",     // 会后总结 — CallingClaw writes
   transcript: "_transcript.md", // 完整对话记录
 } as const;
 
@@ -44,6 +45,7 @@ export interface MeetingSession {
   status: "preparing" | "ready" | "active" | "ended";
   files: {
     prep?: string;           // filename (not full path)
+    presentation?: string;   // presentation plan JSON
     live?: string;
     summary?: string;
     transcript?: string;

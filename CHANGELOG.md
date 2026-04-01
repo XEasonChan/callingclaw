@@ -3,6 +3,30 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.4] - 2026-04-02
+
+### Added
+- **Meeting Playbook architecture** — prep system now generates a voice-optimized "meeting operation manual" (speaking plan, Q&A strategies, guardrails, presentation triggers) instead of dumping research into voice context. Research stays as a side-panel appendix
+- **Cross-file presentation scenes** — PresentationEngine supports multi-URL scene sequences. Prep can specify "show callingclaw.com, scroll to hero, then switch to vision.html" as a story-driven choreography
+- **Auto-present on meeting join** — if the playbook includes scenes, CallingClaw auto-shares the first scene and drives the presentation sequence with progressive voice context injection
+- **SharedContext.currentScene** — single source of truth for "what page is on screen now." PresentationEngine writes it, TranscriptAuditor reads it so Haiku knows which page to click/scroll
+- **Shared LLM client** — extracted `callModel()` from duplicated code in TranscriptAuditor + ContextRetriever (~100 lines of duplication removed)
+- **Transcript pipeline fast lane** — regex pre-check in TranscriptAuditor executes clicks/scrolls in <500ms without waiting for Haiku LLM call
+- **ContextRetriever expanded search** — now searches prep files + shared directory + prep-referenced file whitelist, not just OpenClaw workspace
+- **Post-retrieval conversational hints** — one-shot `[CONTEXT_HINT]` injected via conversation.item.create (ephemeral, no liveNote baggage) so voice AI can naturally mention "that reminds me..."
+- **Presentation plan file storage** — `{meetingId}_presentation.json` alongside prep/summary/live/transcript in shared directory
+
+### Changed
+- **Delegate prompt restructured** — now produces dual-system output (Prompt 4 style): voice brief with Opener/Speaking Plan/Q&A Strategies/Guardrails/Closing + separate presentation.json for scene choreography
+- **TranscriptAuditor dynamic hints** — replaced hardcoded directory list with brief.filePaths + browserUrls + scenes. Haiku now sees the same file/URL knowledge as the voice model
+- **ContextRetriever importance filter** — strengthened inferNeeds prompt to detect casual mentions ("比如/for example") and skip retrieval when content is just illustrative
+- **liveNotes TTL eviction** — notes older than 5 minutes are evicted to prevent unbounded context growth during long meetings. [DONE] notes preserved forever
+
+### Fixed
+- **Duplicate OpenClaw prep requests** — `/api/meeting/join` now checks if session already has prep from `/api/meeting/delegate` before calling `prepareMeeting()` again
+- **Desktop side panel flash-back bug** — WebSocket events (prep_progress, openclaw.delta) were calling `openPrepPanel()` which destroyed the tabbed UI. Now updates feed content in-place via `updateActivityFeed()`
+- **Old preps not loading in side panel** — `prep.status` initialized as `'none'` but comparison used `'idle'`, so manifest sessions never marked prep as available. Three status checks fixed
+
 ## [2.8.3] - 2026-04-02
 
 ### Fixed

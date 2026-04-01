@@ -2033,7 +2033,8 @@ STEP-BY-STEP FLOW:
               });
             }
 
-            // ── Step 2: Delegate RESEARCH ONLY to OpenClaw (no calendar creation!) ──
+            // ── Step 2: Delegate to OpenClaw — dual-system meeting prep ──
+            // Based on "Prompt 4: 双系统协作型" — voice brief + presentation plan
             const taskPrompt = [
               `用户想要准备一个会议，话题是: "${body.topic}"`,
               `会议ID（meetingId）: ${meetingId}`,
@@ -2042,19 +2043,110 @@ STEP-BY-STEP FLOW:
               `## 重要：不要创建日历事件！日历已由 CallingClaw 创建完毕。`,
               `## 也不要调用 /callingclaw prepare — 会导致重复创建日历。`,
               ``,
-              `请完成以下步骤:`,
+              `你要为 CallingClaw 的两个协作系统准备会议：`,
+              `- System A: Voice Agent — 实时说话、回答问题、引导讨论`,
+              `- System B: Presentation Engine — 打开页面、切换标签页、滚动、展示文件`,
               ``,
-              `## Step 1: 深度调研`,
-              `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度会前调研。`,
-              `**CRITICAL: Search MEMORY.md Lessons Learned and daily memory files for past mistakes, failures, and debugging experiences related to this topic.**`,
-              `These learnings MUST appear in the prep document to ensure the same errors are never repeated.`,
+              `你的输出不是研究报告、不是产品文档、不是 launch 策略。`,
+              `你的输出是"实时开会操作手册"——让 voice model 会开这场会。`,
               ``,
-              `## Step 2: 写入 Markdown 到共享目录（必须！）`,
+              `## Step 1: 深度调研（内部工作，不直接出现在 voice brief 里）`,
+              `用你的完整能力（MEMORY.md + 项目文件 + git 历史）做深度调研。`,
+              `**CRITICAL: Search MEMORY.md Lessons Learned for past mistakes related to this topic.**`,
+              `调研结果放在文档最后的 Research 附录，不要混入 voice brief。`,
+              ``,
+              `## Step 2: 写入两个文件`,
+              ``,
+              `### 文件 1: Voice Brief（给 voice model 的操作手册）`,
               `文件路径: ~/.callingclaw/shared/${meetingId}_prep.md`,
-              `注意: meetingId 已经生成好了，就是 ${meetingId}，请直接使用这个 ID！`,
               ``,
-              `Markdown 自由格式，**必须包含**:`,
-              `# Title, Goal, Summary, Key Points, Architecture Decisions, Expected Questions, **⚠️ Past Lessons & Mistakes**, Historical Background, Related Files and Links`,
+              `格式要求——每一句都要能直接说出口，不要写"文档段落"：`,
+              ``,
+              `\`\`\`markdown`,
+              `# [会议标题]`,
+              `> meetingId: ${meetingId}${meetUrl ? ` | Meet: ${meetUrl}` : ""}`,
+              ``,
+              `## 1. Meeting Basics`,
+              `- Topic: [一句话]`,
+              `- Type: [Pitch / Review / Strategy / Technical / Alignment]`,
+              `- Goal: [这场会要达成什么——一句话]`,
+              `- Desired outcome: [会后想要的结果]`,
+              `- Audience: [参会人是谁，他们最关心什么]`,
+              `- Tone: [专业/轻松/严肃/探索]`,
+              ``,
+              `## 2. One-Line Positioning`,
+              `- 这场会真正要讲的是: [一句话]`,
+              `- 希望大家带走的核心印象: [一句话]`,
+              ``,
+              `## 3. Opener`,
+              `[20-40秒的开场白，自然口语，不要像在念PPT]`,
+              ``,
+              `## 4. Speaking Plan`,
+              `### Phase 1: [阶段名] (~Xmin)`,
+              `- Objective: [这段要达成什么]`,
+              `- Key message: [核心信息一句话]`,
+              `- Supporting points: [2-3个支撑点]`,
+              `- Transition: [过渡到下一阶段的一句话]`,
+              `- Show asset: [如果需要展示，写 asset ID；不需要就写 none]`,
+              `- Avoid saying: [这个阶段不要说什么]`,
+              ``,
+              `### Phase 2: ...`,
+              ``,
+              `## 5. Expected Questions`,
+              `### Q1: [问题]`,
+              `- Short answer: [1-2句简答，先给这个]`,
+              `- Deeper answer: [如果追问再展开]`,
+              `- Show asset?: [yes/no, 如果 yes 写 asset ID]`,
+              `- Confidence: [high/medium/low]`,
+              `- If uncertain, say: [不确定时的话术]`,
+              ``,
+              `## 6. Presentation Triggers`,
+              `[列出什么时候应该让 presentation engine 展示什么]`,
+              `- Trigger: [什么情况下] → Show: [asset ID] → Say: [展示时说什么]`,
+              ``,
+              `## 7. Guardrails`,
+              `- Do not overclaim: [哪些不能说死]`,
+              `- If challenged: [被质疑时怎么说]`,
+              `- If uncertain: [不确定时的话术模板]`,
+              `- If interrupted: [被打断时怎么应对]`,
+              ``,
+              `## 8. Closing`,
+              `- Land this conclusion: [要落的结论]`,
+              `- Closing sentence: [结束语]`,
+              `- Propose next step: [建议的下一步]`,
+              ``,
+              `## 9. Past Lessons (from MEMORY.md)`,
+              `[和本次会议相关的历史教训，简要列出]`,
+              ``,
+              `---`,
+              `## Research（附录——不注入 voice，仅 Desktop 侧边栏参考）`,
+              `[深度调研内容放这里：背景、竞品、数据、历史等]`,
+              `\`\`\``,
+              ``,
+              `### 文件 2: Presentation Plan（给 presentation engine 的演示计划）`,
+              `文件路径: ~/.callingclaw/shared/${meetingId}_presentation.json`,
+              ``,
+              `JSON 格式：`,
+              `\`\`\`json`,
+              `{`,
+              `  "scenes": [`,
+              `    {`,
+              `      "url": "https://example.com",`,
+              `      "scrollTarget": "hero section 或 CSS 选择器",`,
+              `      "talkingPoints": "展示时 voice 要说什么",`,
+              `      "durationMs": 30000,`,
+              `      "phase": "对应 Speaking Plan 的哪个 Phase"`,
+              `    }`,
+              `  ]`,
+              `}`,
+              `\`\`\``,
+              ``,
+              `注意：`,
+              `- 故事线反推文件——根据 Speaking Plan 确定每个阶段需要展示哪个页面`,
+              `- 优先使用用户提到的现有文件/URL，不要生成新文件`,
+              `- 如果用户说"帮我讲一下xxx网页"，找到那个网页 URL 作为 scene`,
+              `- 没有对应文件的阶段就不放 scene（纯语音讨论）`,
+              `- 如果没有任何需要演示的内容，可以写空数组 {"scenes": []}`,
               ``,
               `## Step 3: 通知 CallingClaw 渲染`,
               `\`\`\`bash`,
@@ -2062,7 +2154,7 @@ STEP-BY-STEP FLOW:
               `  -H "Content-Type: application/json" \\`,
               `  -d '{"topic":"${title.replace(/'/g, "\\'")}","meetingId":"${meetingId}"${meetUrl ? `,"meetUrl":"${meetUrl}"` : ""}}'`,
               `\`\`\``,
-              `CallingClaw 自动读取 ~/.callingclaw/shared/${meetingId}_prep.md 并渲染。`,
+              `CallingClaw 自动读取 ~/.callingclaw/shared/ 下的两个文件并渲染。`,
               `**不写文件 + 不调 API = Desktop 看不到！**`,
             ].join("\n");
 
@@ -2104,10 +2196,31 @@ STEP-BY-STEP FLOW:
           try { mdContent = await Bun.file(resolve(SHARED_DIR, meetingId + "_prep.md")).text(); } catch {}
         }
 
+        // Check if presentation plan was also written
+        let presentationPlan: any = null;
+        const presentationPath = resolve(SHARED_DIR, meetingId + "_presentation.json");
+        try {
+          const raw = await Bun.file(presentationPath).text();
+          presentationPlan = JSON.parse(raw);
+          console.log(`[PrepResult] Presentation plan found: ${presentationPlan.scenes?.length || 0} scenes`);
+        } catch {
+          // No presentation plan — voice-only meeting, that's fine
+        }
+
         // Update sessions index via SessionManager (merge files, don't overwrite)
         sm.update(meetingId, { topic: body.topic, meetUrl: body.meetUrl, calendarEventId: body.calendarEventId });
         sm.registerFile(meetingId, "prep", meetingId + "_prep.md");
+        if (presentationPlan) {
+          sm.registerFile(meetingId, "presentation", meetingId + "_presentation.json");
+        }
         sm.markReady(meetingId);
+
+        // If presentation plan has scenes, store them in the MeetingPrepBrief for auto-present
+        if (presentationPlan?.scenes && services.meetingPrepSkill?.currentBrief) {
+          const brief = services.meetingPrepSkill.currentBrief;
+          brief.scenes = presentationPlan.scenes;
+          console.log(`[PrepResult] Loaded ${brief.scenes.length} scenes into MeetingPrepBrief`);
+        }
 
         // Emit event — Desktop renders markdown directly
         services.eventBus.emit("meeting.prep_ready", {
@@ -2118,6 +2231,8 @@ STEP-BY-STEP FLOW:
           calendarEventId: body.calendarEventId || null,
           filePath,
           mdContent, // Desktop can render directly without another file read
+          hasPresentation: !!presentationPlan,
+          scenesCount: presentationPlan?.scenes?.length || 0,
         });
 
         console.log(`[PrepResult] File ready: "${body.topic}" → ${filePath}`);

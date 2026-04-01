@@ -69,6 +69,23 @@ export interface MeetingPrepBrief {
   // Dynamic updates during meeting (OpenClaw can append)
   liveNotes: string[];             // notes added dynamically during the meeting
   _liveNoteTimestamps?: number[];  // parallel array: when each liveNote was added (for TTL eviction)
+
+  // ── Playbook fields (optional, present when OpenClaw produces playbook format) ──
+  // When present, the voice AI follows the speaking plan instead of passively knowing facts.
+  // PresentationEngine uses scenes[] for cross-file screen sharing.
+  speakingPlan?: Array<{
+    phase: string;           // "开场" | "首页设计" | "讨论" | "总结"
+    durationMin: number;     // time budget in minutes
+    points: string;          // what to say (1-2 sentences)
+    sceneIndices?: number[]; // which scenes to show during this phase
+  }>;
+  scenes?: Array<{
+    url: string;             // absolute URL or local file path
+    scrollTarget?: string;   // CSS selector or text anchor to scroll to
+    talkingPoints: string;   // what to say while this scene is showing
+    durationMs: number;      // how long to stay on this scene
+  }>;
+  decisionPoints?: string[];  // decisions the voice AI should explicitly drive
 }
 
 // Prompt template moved to openclaw-protocol.ts (OC-001)

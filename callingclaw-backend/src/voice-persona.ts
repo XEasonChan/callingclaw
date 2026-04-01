@@ -90,6 +90,14 @@ export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string
 export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefined): string | null {
   if (!brief) return null;
 
+  // ── Playbook path: if speakingPlan exists, inject actionable meeting plan ──
+  // This gives the voice AI a speaking plan + scene cues + decision points,
+  // NOT a research dump. Research stays in the side panel for reference.
+  if (brief.speakingPlan && brief.speakingPlan.length > 0) {
+    return buildPlaybookContext(brief);
+  }
+
+  // ── Legacy path: compressed research (backward compatible) ──
   const parts: string[] = [];
 
   parts.push(`${MISSION_CONTEXT_PREFIX}`);
@@ -132,6 +140,90 @@ export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefi
 
   parts.push(`${MISSION_CONTEXT_SUFFIX}`);
   parts.push("Context updates will appear as system messages. Use them naturally — do not repeat verbatim.");
+
+  return parts.join("\n");
+}
+
+/**
+ * Build Layer 2 context from a playbook-format brief.
+ * Injects the speaking plan (phase 0 + scene 0-1) for progressive injection.
+ * Subsequent phases are injected by PresentationEngine.runScenes() as scenes advance.
+ */
+function buildPlaybookContext(brief: MeetingPrepBrief): string {
+  const parts: string[] = [];
+  const plan = brief.speakingPlan!;
+  const scenes = brief.scenes || [];
+
+  parts.push(`${MISSION_CONTEXT_PREFIX}`);
+  parts.push(`Topic: ${brief.topic}`);
+  parts.push(`Goal: ${brief.goal}`);
+
+  // Inject speaking plan overview (phase names + time budgets only)
+  parts.push(`\nSPEAKING PLAN (follow this order):`);
+  for (const phase of plan) {
+    parts.push(`- ${phase.phase} (~${phase.durationMin}min): ${phase.points}`);
+  }
+
+  // Inject first 2 scenes' talking points (progressive — more injected as scenes advance)
+  if (scenes.length > 0) {
+    parts.push(`\nCURRENT SCENE:`);
+    parts.push(`[Scene 1/${scenes.length}] ${scenes[0]!.talkingPoints}`);
+    if (scenes.length > 1) {
+      parts.push(`[Next] ${scenes[1]!.talkingPoints.slice(0, 100)}...`);
+    }
+  }
+
+  // Decision points the voice AI should drive
+  if (brief.decisionPoints && brief.decisionPoints.length > 0) {
+    parts.push(`\nDECISIONS TO DRIVE (ask explicitly, confirm before moving on):`);
+    for (const dp of brief.decisionPoints) {
+      parts.push(`- ${dp}`);
+    }
+  }
+
+  // Q&A strategies (compact)
+  if (brief.expectedQuestions.length > 0) {
+    parts.push(`\nQ&A STRATEGIES:`);
+    for (const q of brief.expectedQuestions.slice(0, 5)) {
+      parts.push(`Q: ${q.question} → ${q.suggestedAnswer}`);
+    }
+  }
+
+  parts.push(`${MISSION_CONTEXT_SUFFIX}`);
+  parts.push("You are in PRESENTER mode. Follow the speaking plan. When a scene advances, new context will appear. Drive decisions explicitly.");
+
+  return parts.join("\n");
+}
+
+/**
+ * Build progressive context for a specific scene transition.
+ * Called by PresentationEngine.runScenes() as scenes advance.
+ * Returns a compact context string for conversation.item.create injection.
+ */
+export function buildSceneContext(
+  brief: MeetingPrepBrief,
+  sceneIndex: number,
+): string | null {
+  const scenes = brief.scenes;
+  if (!scenes || sceneIndex >= scenes.length) return null;
+
+  const current = scenes[sceneIndex]!;
+  const next = sceneIndex + 1 < scenes.length ? scenes[sceneIndex + 1] : null;
+
+  const parts: string[] = [];
+  parts.push(`[SCENE ${sceneIndex + 1}/${scenes.length}] ${current.talkingPoints}`);
+  if (next) {
+    parts.push(`[Next] ${next.talkingPoints.slice(0, 100)}...`);
+  }
+
+  // Find which speaking plan phase this scene belongs to
+  const plan = brief.speakingPlan || [];
+  for (const phase of plan) {
+    if (phase.sceneIndices?.includes(sceneIndex)) {
+      parts.push(`[Phase: ${phase.phase}] ${phase.points}`);
+      break;
+    }
+  }
 
   return parts.join("\n");
 }

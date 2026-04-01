@@ -321,21 +321,34 @@ export class TranscriptAuditor {
 - **meet_mute**: Toggle mute. Params: {}
 - **meet_camera**: Toggle camera. Params: {}
 
-## Key Directories (for file search)
-- Project root: ~/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/
-- Backend public (HTML pages): callingclaw-backend/public/
-- Landing pages: Callingclaw-landing/ (callingclaw-landing.html, features.html, vision.html)
-- Docs: docs/
-- Meeting prep files: ~/.callingclaw/shared/prep/
+## Known Files & URLs (from meeting prep)
+${
+  brief
+    ? [
+        ...(brief.filePaths || []).map((f: any) => `- File: ${f.path} (${f.description})`),
+        ...(brief.browserUrls || []).map((u: any) => `- URL: ${u.url} (${u.description})`),
+        ...(brief.scenes || []).map((s: any, i: number) => `- Scene ${i + 1}: ${s.url}${s.scrollTarget ? ` → ${s.scrollTarget}` : ""}`),
+      ].join("\n") || "- (no files or URLs in prep)"
+    : "- (no meeting brief)"
+}
 - Shared files: ~/.callingclaw/shared/
+
+## Current Presentation State
+${(() => {
+  const scene = this.context.currentScene;
+  if (scene) {
+    return `ACTIVELY PRESENTING Scene ${scene.index + 1}/${scene.total}: ${scene.url}
+Current scroll target: ${scene.scrollTarget || "top"}
+When user says "click/scroll" — operate on THIS page (${scene.url})`;
+  }
+  return "Not currently presenting any page.";
+})()}
 
 ## Meeting Context
 ${
   brief
     ? `Topic: ${brief.topic}
 Goal: ${brief.goal}
-Known files: ${JSON.stringify(brief.filePaths || [], null, 0)}
-Known URLs: ${JSON.stringify(brief.browserUrls || [], null, 0)}
 Recent actions: ${
         (brief.liveNotes || [])
           .filter((n: string) => n.startsWith("[DONE]"))
