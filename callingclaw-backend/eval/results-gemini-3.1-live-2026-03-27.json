@@ -1,0 +1,31 @@
+[
+  {
+    "case_id": "1.1",
+    "case_name": "数字引用 — Q1 营收复盘",
+    "dimension": "context_grounding",
+    "provider": "Gemini-3.1-Live",
+    "response": "ERROR: Setup timeout after 10s",
+    "tool_calls": [],
+    "auto_score": {
+      "score": 0,
+      "checks": {
+        "must_contain": {
+          "passed": [],
+          "failed": []
+        },
+        "must_not_contain": {
+          "passed": [],
+          "failed": []
+        },
+        "reference_entities": {
+          "found": [],
+          "missing": []
+        },
+        "tool_calls": [],
+        "generic_ratio": 0
+      },
+      "explanation": "Setup timeout after 10s"
+    },
+    "latency_ms": 0
+  }
+]

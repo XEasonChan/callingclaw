@@ -1,30 +1,22 @@
 // CallingClaw 2.0 — Module: PostMeetingDelivery
-// Sends concise todo list to user via OpenClaw → Telegram after meeting ends.
-// User confirms via inline buttons → triggers deep research + sub-agent execution.
+// Sends concise todo list to user after meeting ends.
+// Delivery channel depends on AgentAdapter: Telegram (OpenClaw), local file (Claude Code), etc.
+// User confirms → triggers deep research + sub-agent execution via adapter.
 //
 // Flow:
 //   1. Meeting ends → generateSummary() produces actionItems[]
-//   2. Compress each actionItem to ≤20 chars → send as Telegram message with inline buttons
-//   3. User clicks ✅ → OpenClaw receives callback → triggers execution pipeline:
-//      a. Load full meeting notes (markdown file)
-//      b. Deep research each confirmed todo: background, acceptance criteria, direction, target
-//      c. Cross-reference with MEMORY.md + workspace file structure
-//      d. Spawn sub-agent per todo for execution
+//   2. Compress each actionItem to ≤20 chars → deliver via adapter
+//   3. User confirms → adapter triggers execution pipeline
 //
 // Design:
-//   - Uses OpenClawBridge.sendTask() to tell OpenClaw what to send and how to handle callbacks
+//   - Uses AgentAdapter for all external communication (platform-agnostic)
 //   - Keeps full meeting context (transcript, decisions, requirements) for enriched execution
 //   - Each todo gets a unique ID for tracking
 
-import type { OpenClawBridge } from "../openclaw_bridge";
+import type { AgentAdapter } from "../agent-adapter";
 import type { EventBus } from "./event-bus";
 import type { MeetingSummary } from "./meeting";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
-import {
-  OC004_PROMPT, parseOC004, type OC004_Request,
-  OC005_PROMPT, type OC005_Request,
-  OC006_PROMPT, type OC006_Request,
-} from "../openclaw-protocol";
 
 interface TodoItem {
   id: string;
@@ -53,15 +45,15 @@ interface MeetingDelivery {
 }
 
 export class PostMeetingDelivery {
-  private openclawBridge: OpenClawBridge;
+  private adapter: AgentAdapter;
   private eventBus: EventBus;
   private deliveries = new Map<string, MeetingDelivery>();
 
   constructor(opts: {
-    openclawBridge: OpenClawBridge;
+    adapter: AgentAdapter;
     eventBus: EventBus;
   }) {
-    this.openclawBridge = opts.openclawBridge;
+    this.adapter = opts.adapter;
     this.eventBus = opts.eventBus;
   }
 
@@ -84,8 +76,8 @@ export class PostMeetingDelivery {
       frameCount?: number;
     } | null;
   }): Promise<MeetingDelivery | null> {
-    if (!this.openclawBridge.connected) {
-      console.warn("[PostMeeting] OpenClaw not connected — cannot deliver todos");
+    if (!this.adapter.connected) {
+      console.warn(`[PostMeeting] Agent adapter (${this.adapter.name}) not connected — cannot deliver todos`);
       return null;
     }
 
@@ -194,36 +186,25 @@ export class PostMeetingDelivery {
   }
 
   /**
-   * Send todo list to user via OpenClaw message tool with inline buttons (OC-004).
+   * Send todo list to user via agent adapter (Telegram, local file, etc.).
    */
   private async sendTodoMessage(delivery: MeetingDelivery): Promise<void> {
     const { meetingId, topic, todos } = delivery;
 
-    const req: OC004_Request = {
-      id: "OC-004",
-      topic,
-      meetingId,
-      todos: todos.map((t) => ({
-        id: t.id,
-        text: t.shortText,
-        fullText: t.fullText,
-        assignee: t.assignee,
-        deadline: t.deadline,
-      })),
-    };
-
     try {
-      // Include screenshot summary if key frames were captured
-      let screenshotNote = "";
-      if (delivery.frameCount && delivery.frameCount > 0) {
-        screenshotNote = `\n\n📸 ${delivery.frameCount} key frames captured during the meeting.`;
-        if (delivery.timelineHtmlPath) {
-          screenshotNote += `\nTimeline viewer: ${delivery.timelineHtmlPath}`;
-        }
-      }
-
-      await this.openclawBridge.sendTask(OC004_PROMPT(req) + screenshotNote);
-      console.log(`[PostMeeting] Todo message sent to user (${todos.length} items, ${delivery.frameCount || 0} frames)`);
+      await this.adapter.deliverTodos({
+        meetingId,
+        topic,
+        todos: todos.map((t) => ({
+          id: t.id,
+          text: t.shortText,
+          fullText: t.fullText,
+          assignee: t.assignee,
+          deadline: t.deadline,
+        })),
+        htmlPath: delivery.timelineHtmlPath,
+      });
+      console.log(`[PostMeeting] Todo message sent via ${this.adapter.name} (${todos.length} items, ${delivery.frameCount || 0} frames)`);
 
       this.eventBus.emit("postmeeting.todos_sent", {
         meetingId,
@@ -236,18 +217,15 @@ export class PostMeetingDelivery {
   }
 
   /**
-   * Send summary-only message when there are no action items (OC-005).
+   * Send summary-only message when there are no action items.
    */
   private async sendSummaryOnly(topic: string, summary: MeetingSummary): Promise<void> {
-    const req: OC005_Request = {
-      id: "OC-005",
-      topic,
-      keyPoints: (summary.keyPoints || []).slice(0, 5),
-      decisions: summary.decisions || [],
-    };
-
     try {
-      await this.openclawBridge.sendTask(OC005_PROMPT(req));
+      await this.adapter.deliverSummary({
+        topic,
+        keyPoints: (summary.keyPoints || []).slice(0, 5),
+        decisions: summary.decisions || [],
+      });
     } catch (e: any) {
       console.error("[PostMeeting] Failed to send summary:", e.message);
     }
@@ -356,7 +334,7 @@ export class PostMeetingDelivery {
     if (todo.executionStarted) return;
     todo.executionStarted = true;
 
-    console.log(`[PostMeeting] Handing off todo to OpenClaw: ${todo.fullText}`);
+    console.log(`[PostMeeting] Handing off todo to ${this.adapter.name}: ${todo.fullText}`);
     this.eventBus.emit("postmeeting.todo_executing", {
       meetingId: delivery.meetingId,
       todoId: todo.id,
@@ -364,9 +342,7 @@ export class PostMeetingDelivery {
     });
 
     try {
-      // Hand off via OC-006 protocol
-      const req: OC006_Request = {
-        id: "OC-006",
+      await this.adapter.executeTodo({
         todo: {
           fullText: todo.fullText,
           assignee: todo.assignee,
@@ -380,9 +356,8 @@ export class PostMeetingDelivery {
           requirements: delivery.requirements,
           liveNotes: delivery.liveNotes,
         },
-      };
-      await this.openclawBridge.sendTask(OC006_PROMPT(req));
-      console.log(`[PostMeeting] Handed off to OpenClaw: ${todo.shortText}`);
+      });
+      console.log(`[PostMeeting] Handed off to ${this.adapter.name}: ${todo.shortText}`);
     } catch (e: any) {
       console.error(`[PostMeeting] Handoff failed for "${todo.shortText}":`, e.message);
       this.eventBus.emit("postmeeting.todo_failed", {

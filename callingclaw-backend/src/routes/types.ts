@@ -14,6 +14,7 @@ import type { AutomationRouter } from "../modules/automation-router";
 import type { ContextSync } from "../modules/context-sync";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import type { OpenClawBridge } from "../openclaw_bridge";
+import type { AgentAdapter } from "../agent-adapter";
 import type { TranscriptAuditor } from "../modules/transcript-auditor";
 import type { BrowserActionLoop } from "../modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
@@ -35,6 +36,7 @@ export interface Services {
   contextSync?: ContextSync;
   meetingPrepSkill?: MeetingPrepSkill;
   openclawBridge?: OpenClawBridge;
+  agentAdapter?: AgentAdapter;
   transcriptAuditor?: TranscriptAuditor;
   browserLoop?: BrowserActionLoop;
   playwrightCli?: PlaywrightCLIClient;

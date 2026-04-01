@@ -1,0 +1,12 @@
+[
+  {
+    "id": "1.1",
+    "name": "数字引用 — Q1 营收复盘",
+    "dim": "context_grounding",
+    "score": 0,
+    "explanation": "timeout",
+    "tools": [],
+    "response": "ERROR: timeout",
+    "latency": 0
+  }
+]

@@ -1,9 +1,10 @@
-// CallingClaw 2.0 — /callingclaw Skill Definition for OpenClaw
+// CallingClaw 2.0 — /callingclaw Skill Definition (Platform-Agnostic)
 // ═══════════════════════════════════════════════════════════════════
-// This defines the /callingclaw command that OpenClaw can invoke.
-// OpenClaw calls CallingClaw's REST API on localhost:4000.
+// This defines the /callingclaw command callable from any agentic platform:
+// OpenClaw, Claude Code, Manus Desktop, or any tool with HTTP access.
+// All commands are thin REST wrappers to CallingClaw backend on localhost:4000.
 //
-// Usage in OpenClaw:
+// Usage:
 //   /callingclaw voice start       — Start voice session
 //   /callingclaw voice stop        — Stop voice session
 //   /callingclaw prepare <topic>   — Create meeting (calendar + Meet link + deep research)
@@ -398,12 +399,13 @@ async function apiPatch(path: string, body: any): Promise<CallingClawSkillResult
   return { success: res.ok, data, error: data.error };
 }
 
-// ── OpenClaw Skill Manifest ──
-// This is the metadata OpenClaw uses to register the /callingclaw command.
+// ── Skill Manifest ──
+// Metadata for any agentic platform to register the /callingclaw command.
+// Works with: OpenClaw, Claude Code, Manus Desktop, or any HTTP-capable agent.
 
 export const CALLINGCLAW_SKILL_MANIFEST = {
   name: "callingclaw",
-  version: "2.2.4",
+  version: "3.0.0",
   description: "Control CallingClaw — voice AI, computer use, meetings, screen capture, self-recovery, shared documents",
   trigger: "/callingclaw",
   examples: [
@@ -433,19 +435,12 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     "google_auth",
   ],
 
+  // ── Supported Agent Platforms ──
+  supportedPlatforms: ["openclaw", "claude-code", "manus", "standalone"],
+
   // ── Google OAuth Strategy ──
-  // Priority 1: Reuse OpenClaw's existing Google OAuth credentials
-  //   - Scans ~/.openclaw/workspace/google-credentials.json + google-token.json
-  //   - If found, auto-applies to CallingClaw .env → calendar connected
-  // Priority 2: Fallback to CallingClaw's own OAuth flow
-  //   - User runs: bun scripts/ts/google-auth.ts
-  //   - Generates CallingClaw-specific refresh token
-  // Chrome Google Sign-in (for Meet):
-  //   - Separate from Calendar OAuth — requires browser cookie auth
-  //   - /callingclaw google-chrome-login opens Chrome to accounts.google.com
-  //   - User signs in once, cookies persist in Chrome profile
+  // Scans multiple paths for existing Google credentials (any platform)
   googleOAuth: {
-    strategy: "openclaw_first",
     scanPaths: [
       "~/.openclaw/workspace/google-credentials.json",
       "~/.openclaw/workspace/google-token.json",
@@ -467,20 +462,19 @@ export const CALLINGCLAW_SKILL_MANIFEST = {
     transcript: "_transcript.md",
   },
 
-  // ── OpenClaw ↔ CallingClaw Protocol Schemas ──
-  // Source of truth: src/openclaw-protocol.ts
-  protocolSchemas: [
-    { id: "OC-001", name: "Meeting Prep Brief Generation", responseFormat: "JSON", latency: "5-15s" },
-    { id: "OC-002", name: "Context Recall", responseFormat: "text <500w", latency: "2-10s" },
-    { id: "OC-003", name: "Calendar Cron Registration", responseFormat: "jobId (regex)", latency: "2-5s" },
-    { id: "OC-004", name: "Todo Delivery (Telegram)", responseFormat: '"sent"', latency: "3-8s" },
-    { id: "OC-005", name: "Summary Delivery", responseFormat: '"sent"', latency: "3-8s" },
-    { id: "OC-006", name: "Todo Execution Handoff", responseFormat: "JSON {status, summary}", latency: "10-60s" },
-    { id: "OC-007", name: "Meeting Vision Push", responseFormat: '"ok" (fire & forget)', latency: "2-5s" },
-    { id: "OC-008", name: "Computer Use Delegation", responseFormat: "text (capped 10K)", latency: "5-30s" },
-    { id: "OC-009", name: "Follow-up Fallback", responseFormat: '"ok" (fire & forget)', latency: "2-5s" },
+  // ── AgentAdapter Capabilities ──
+  // These map to AgentAdapter interface methods — any platform implementing
+  // the adapter can provide these capabilities:
+  adapterCapabilities: [
+    { method: "generateMeetingPrep", name: "Meeting Prep Brief Generation", latency: "5-15s" },
+    { method: "recallContext", name: "Context Recall", latency: "2-10s" },
+    { method: "scheduleJob", name: "Meeting Auto-Join Scheduling", latency: "<1s (internal) or 2-5s (cron)" },
+    { method: "deliverTodos", name: "Todo Delivery", latency: "1-8s" },
+    { method: "deliverSummary", name: "Summary Delivery", latency: "1-8s" },
+    { method: "executeTodo", name: "Todo Execution", latency: "10-60s" },
+    { method: "processTimeline", name: "Multimodal Timeline Processing", latency: "10-30s" },
   ],
 };
 
-// Re-export protocol for OpenClaw integration
+// Re-export protocol for backward compat (OpenClaw integration)
 export { OPENCLAW_PROTOCOL, type OpenClawProtocolId } from "../openclaw-protocol";

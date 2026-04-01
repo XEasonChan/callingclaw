@@ -6,7 +6,7 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import type { Services, RouteHandler } from "./types";
 
@@ -150,7 +150,7 @@ export function meetingRoutes(services: Services): RouteHandler {
 
         // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
         let prepBrief: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        if (services.meetingPrepSkill && services.agentAdapter?.connected) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
@@ -261,14 +261,14 @@ export function meetingRoutes(services: Services): RouteHandler {
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
 
-          // Auto-greeting: AI speaks first to confirm audio pipeline is working
+          // Self-introduction: tell participants who CallingClaw is and why it's here
           if (services.realtime.connected) {
             setTimeout(() => {
-              const greeting = prepBrief
-                ? "大家好，我是 CallingClaw 会议助手，已准备好参与会议。"
-                : "Hello, CallingClaw meeting assistant is ready.";
-              services.realtime.sendText(greeting);
-              console.log("[Meeting] Auto-greeting sent to verify audio pipeline");
+              const ownerName = CONFIG.userEmail?.split("@")[0] || "";
+              const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
+              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
+              services.realtime.sendText(intro);
+              console.log("[Meeting] Self-introduction sent");
             }, 2000); // Wait 2s for audio bridge to fully initialize
           }
         };
@@ -478,7 +478,7 @@ STEP-BY-STEP FLOW:
 
         // Generate structured meeting prep brief via OpenClaw (if available)
         let prepBriefData: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        if (services.meetingPrepSkill && services.agentAdapter?.connected) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, body.topic, body.context, undefined, prepMeetingId);
             prepBriefData = {

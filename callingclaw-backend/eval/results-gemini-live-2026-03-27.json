@@ -1,0 +1,262 @@
+[
+  {
+    "id": "1.1",
+    "name": "数字引用 — Q1 营收复盘",
+    "dim": "context_grounding",
+    "score": 1,
+    "explanation": "Missing: 2.8,33,19,4.2; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45080
+  },
+  {
+    "id": "1.2",
+    "name": "否定信息 — APAC 零营收",
+    "dim": "context_grounding",
+    "score": 1,
+    "explanation": "Missing: 零,Q3; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45044
+  },
+  {
+    "id": "1.3",
+    "name": "动态覆盖 — DAU 数据更新",
+    "dim": "context_grounding",
+    "score": 1,
+    "explanation": "Missing: 3,500,3500; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45038
+  },
+  {
+    "id": "2.1",
+    "name": "5 轮后回引早期 context",
+    "dim": "multi_turn",
+    "score": 1,
+    "explanation": "Missing: API,限流,10; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45067
+  },
+  {
+    "id": "2.2",
+    "name": "隐式决策追踪",
+    "dim": "multi_turn",
+    "score": 1,
+    "explanation": "Missing: 49,79,一年,0.01; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45037
+  },
+  {
+    "id": "2.3",
+    "name": "跨语言上下文保持",
+    "dim": "multi_turn",
+    "score": 1,
+    "explanation": "Missing: users,projects,billing; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45039
+  },
+  {
+    "id": "3.1",
+    "name": "PRESENTER 模式: 主动汇报",
+    "dim": "role_fidelity",
+    "score": 1,
+    "explanation": "Missing: JWT,45ms,Stripe; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45041
+  },
+  {
+    "id": "3.2",
+    "name": "REVIEWER 模式: 质疑而非附和",
+    "dim": "role_fidelity",
+    "score": 5,
+    "explanation": "All passed",
+    "tools": [],
+    "response": "",
+    "latency": 45037
+  },
+  {
+    "id": "3.3",
+    "name": "角色边界: 拒绝脱角色",
+    "dim": "role_fidelity",
+    "score": 4,
+    "explanation": "Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45040
+  },
+  {
+    "id": "4.1",
+    "name": "Layer 3 注入后即时使用",
+    "dim": "dynamic_adaptation",
+    "score": 1,
+    "explanation": "Missing: PostgreSQL,2,300,45ms; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45063
+  },
+  {
+    "id": "4.2",
+    "name": "连续 context 更新（3 次覆盖）",
+    "dim": "dynamic_adaptation",
+    "score": 1,
+    "explanation": "Missing: 部署完成,staging; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45037
+  },
+  {
+    "id": "4.3",
+    "name": "Screen Context + Voice 联动",
+    "dim": "dynamic_adaptation",
+    "score": 1,
+    "explanation": "Missing: 45,320,14:32; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45038
+  },
+  {
+    "id": "5.1",
+    "name": "技术事故复盘 — context-dense 回答",
+    "dim": "informativeness",
+    "score": 1,
+    "explanation": "Missing: TTL,1h,集中过期,15K; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 929717
+  },
+  {
+    "id": "5.2",
+    "name": "拒绝编造 — context 中没有的信息",
+    "dim": "informativeness",
+    "score": 5,
+    "explanation": "All passed",
+    "tools": [],
+    "response": "",
+    "latency": 45041
+  },
+  {
+    "id": "5.3",
+    "name": "主动关联 — 跨产品数据对比",
+    "dim": "informativeness",
+    "score": 1,
+    "explanation": "Missing: 50K,12,ARPU; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45033
+  },
+  {
+    "id": "6.1",
+    "name": "打断后记住已说内容",
+    "dim": "interruption",
+    "score": 1,
+    "explanation": "Missing: Stripe,支付; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 940822
+  },
+  {
+    "id": "7.1",
+    "name": "知道何时该调 recall_context",
+    "dim": "tool_awareness",
+    "score": 5,
+    "explanation": "All passed",
+    "tools": [],
+    "response": "",
+    "latency": 45080
+  },
+  {
+    "id": "7.2",
+    "name": "不滥用工具 — context 中已有答案",
+    "dim": "tool_awareness",
+    "score": 1,
+    "explanation": "Missing: 180K,180k,$180; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 899732
+  },
+  {
+    "id": "8.1",
+    "name": "多步 Tool Chain",
+    "dim": "agent_capabilities",
+    "score": 4,
+    "explanation": "Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45035
+  },
+  {
+    "id": "8.2",
+    "name": "异步工具结果自然融入",
+    "dim": "agent_capabilities",
+    "score": 5,
+    "explanation": "All passed",
+    "tools": [],
+    "response": "",
+    "latency": 45034
+  },
+  {
+    "id": "8.3",
+    "name": "工具失败降级",
+    "dim": "agent_capabilities",
+    "score": 1,
+    "explanation": "Missing: Redis; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45033
+  },
+  {
+    "id": "8.4",
+    "name": "主动触发工具 — Reviewer 自发查证",
+    "dim": "agent_capabilities",
+    "score": 5,
+    "explanation": "All passed",
+    "tools": [],
+    "response": "",
+    "latency": 125329
+  },
+  {
+    "id": "9.1",
+    "name": "截图理解 — 识别代码内容",
+    "dim": "visual_multimodal",
+    "score": 0,
+    "explanation": "WebSocket connection to 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1b",
+    "tools": [],
+    "response": "ERROR: WebSocket connection to 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=AIzaSyAs-WLSSR3gerTcEaJIm66MyD688E0eVJw' failed: Connection ended",
+    "latency": 0
+  },
+  {
+    "id": "9.3",
+    "name": "DOM 结构注入 — 知道下面有什么",
+    "dim": "visual_multimodal",
+    "score": 1,
+    "explanation": "Missing: Architecture,Performance,Deployment,FAQ; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 56581
+  },
+  {
+    "id": "9.5",
+    "name": "Presentation Engine — 自主翻页讲解",
+    "dim": "visual_multimodal",
+    "score": 1,
+    "explanation": "Missing: 2023,实时协作,远程团队; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45040
+  },
+  {
+    "id": "9.6",
+    "name": "视觉缺失时的降级",
+    "dim": "visual_multimodal",
+    "score": -1,
+    "explanation": "N/A",
+    "tools": [],
+    "response": "SKIP",
+    "latency": 0
+  }
+]

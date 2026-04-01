@@ -50,7 +50,8 @@ export function recoveryRoutes(services: Services): RouteHandler {
           sidecar: services.bridge.ready,
           voice: services.realtime.connected,
           calendar: services.calendar.connected,
-          openclaw: services.openclawBridge?.connected ?? false,
+          agent: services.agentAdapter?.connected ?? false,
+          agentPlatform: services.agentAdapter?.name ?? "none",
           admissionMonitor: services.playwrightCli?.isAdmissionMonitoring ?? false,
           meetingActive: services.meeting.getNotes().isRecording,
         };

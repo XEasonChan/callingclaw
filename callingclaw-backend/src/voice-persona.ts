@@ -284,3 +284,37 @@ export function getPostMeetingSummary(prepSkill: MeetingPrepSkill): {
     requirements: brief.liveNotes.filter((n) => n.startsWith("[REQ]")),
   };
 }
+
+/**
+ * Build a self-introduction message for when CallingClaw joins a meeting.
+ * Tells participants: who it is, whose assistant, and what it will do.
+ *
+ * The message is sent as text to the Voice AI, which speaks it aloud.
+ * Keep it concise — ~15 seconds of speech max.
+ */
+export function buildMeetingIntro(
+  ownerName: string,
+  topic: string,
+  attendees?: Array<{ displayName?: string; email?: string; self?: boolean }>,
+): string {
+  // Count non-self attendees for context
+  const otherCount = attendees?.filter(a => !a.self).length || 0;
+
+  const parts: string[] = [];
+
+  // Core intro — always present
+  if (ownerName) {
+    parts.push(`大家好，我是 CallingClaw，${ownerName} 的 AI 会议助手。`);
+  } else {
+    parts.push("大家好，我是 CallingClaw，AI 会议助手。");
+  }
+
+  // What it will do
+  if (topic) {
+    parts.push(`今天的会议主题是「${topic}」。`);
+  }
+  parts.push("除了记录要点和跟踪待办，我也会结合团队当前的问题和记忆进行相关审核。");
+  parts.push("你们可以先继续开会，中间有问题的话我会申请发言。");
+
+  return parts.join("");
+}

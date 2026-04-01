@@ -24,8 +24,7 @@ import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState, injectMeetingBrief } from "./voice-persona";
 import { KeyFrameStore } from "./modules/key-frame-store";
 import { OpenClawDispatcher } from "./openclaw-dispatcher";
-// OC-007 import removed — no longer pushing screen descriptions to OpenClaw during meetings.
-// ContextRetriever handles gap detection locally via fast models (Haiku/Gemini Flash).
+import { createAgentAdapter, type AgentAdapter, type AgentPlatform } from "./agent-adapter";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { readFileSync } from "fs";
@@ -92,13 +91,50 @@ calendar.onAuthError = (error: string) => {
 // Load persisted tasks
 await taskStore.load();
 
-// ── 1b. ContextSync + OpenClaw Bridge ─────────────────────────────
+// ── 1b. ContextSync + Agent Adapter ─────────────────────────────
+// Detect agent platform: openclaw > claude-code > standalone
+const _detectedPlatform: AgentPlatform = (() => {
+  const envPlatform = process.env.AGENT_PLATFORM;
+  if (envPlatform === "openclaw" || envPlatform === "claude-code" || envPlatform === "standalone") {
+    return envPlatform;
+  }
+  // Auto-detect: prefer openclaw if config exists, then claude-code CLI
+  try {
+    if (require("fs").existsSync(`${process.env.HOME}/.openclaw/openclaw.json`)) return "openclaw";
+  } catch {}
+  try {
+    require("child_process").execSync("which claude", { stdio: "ignore" });
+    return "claude-code";
+  } catch {}
+  return "standalone";
+})();
+console.log(`[Init] Agent platform: ${_detectedPlatform}`);
 
 const contextSync = new ContextSync();
-const openclawBridge = new OpenClawBridge();
+const openclawBridge = new OpenClawBridge(); // kept for backward compat (activity events, ContextSync)
 const dispatcher = new OpenClawDispatcher(openclawBridge);
 
-const meetingPrepSkill = new MeetingPrepSkill(openclawBridge);
+// Job fire handler: when internal timer fires, auto-join the meeting
+const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
+  console.log(`[JobScheduler] Firing: "${job.name}" → joining ${job.payload.meetUrl}`);
+  fetch("http://localhost:4000/api/meeting/join", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: job.payload.meetUrl }),
+  }).then(r => {
+    if (r.ok) console.log(`[JobScheduler] Join request sent for "${job.payload.summary}"`);
+    else console.error(`[JobScheduler] Join failed: ${r.status}`);
+  }).catch(e => {
+    console.error(`[JobScheduler] Join request failed: ${e.message}`);
+  });
+};
+
+const agentAdapter: AgentAdapter = createAgentAdapter(_detectedPlatform, {
+  openclawBridge,
+  onJobFire: _onJobFire,
+});
+
+const meetingPrepSkill = new MeetingPrepSkill(agentAdapter);
 meetingPrepSkill.setSessionManager(sessionManager);
 
 // Track active meeting ID for live log event emission
@@ -136,31 +172,42 @@ contextSync.loadOpenClawMemory().then((ok) => {
 // ── MeetingScheduler + PostMeetingDelivery ──
 const meetingScheduler = new MeetingScheduler({
   calendar,
-  openclawBridge,
+  adapter: agentAdapter,
   eventBus,
   meetingPrepSkill,
   sessionManager,
 });
 
 const postMeetingDelivery = new PostMeetingDelivery({
-  openclawBridge,
+  adapter: agentAdapter,
   eventBus,
 });
 
-// Try connecting to OpenClaw Gateway (non-blocking)
-openclawBridge.connect().then(() => {
-  console.log("[Init] OpenClaw Bridge connected (System 2 available)");
-  // Start calendar → auto-join scheduler once OpenClaw is connected
+// Connect agent adapter (non-blocking)
+agentAdapter.connect().then(() => {
+  console.log(`[Init] Agent adapter (${agentAdapter.name}) connected`);
+  // Start calendar → auto-join scheduler once adapter is connected
   if (calendar.connected) {
     meetingScheduler.start();
-    console.log("[Init] MeetingScheduler started (calendar→cron→auto-join)");
+    console.log(`[Init] MeetingScheduler started (calendar→${agentAdapter.name}→auto-join)`);
   }
 }).catch(() => {
-  console.warn("[Init] OpenClaw not running — recall_context will use local memory search only");
+  console.warn(`[Init] Agent adapter (${_detectedPlatform}) not available — using fallback mode`);
 });
 
+// Also try OpenClaw bridge for backward compat (activity events, ContextSync, OC-010)
+if (_detectedPlatform === "openclaw") {
+  // Already connected via adapter — skip duplicate connect
+} else {
+  openclawBridge.connect().then(() => {
+    console.log("[Init] OpenClaw Bridge also connected (supplementary)");
+  }).catch(() => {
+    // Expected for non-openclaw platforms — no warning needed
+  });
+}
+
 // Note: calendar.connect() is called later in section 6.
-// After calendar connects, start scheduler if OpenClaw is also ready.
+// After calendar connects, start scheduler if adapter is also ready.
 
 // Periodically refresh MEMORY.md and push to live Voice session
 setInterval(async () => {
@@ -200,7 +247,13 @@ contextSync.onUpdate(() => {
 // Browser DOM context capture interval (started on meeting.started, cleared on meeting.ended)
 let _domContextInterval: ReturnType<typeof setInterval> | null = null;
 
-// Wire OpenClaw activity events to EventBus for real-time visibility
+// Wire agent adapter activity events to EventBus for real-time visibility
+if (agentAdapter.onActivity) {
+  agentAdapter.onActivity((kind, summary, detail) => {
+    eventBus.emit(kind, { summary, detail });
+  });
+}
+// Also wire OpenClaw bridge directly (for backward-compat with existing event names)
 openclawBridge.onActivity((kind, summary, detail) => {
   eventBus.emit(kind, { summary, detail });
 });
@@ -235,15 +288,15 @@ const vision = new VisionModule({
       appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`, eventBus, activeMeetingId || undefined);
     }
 
-    // Push visual context to OpenClaw every 5 descriptions (~40 seconds)
-    if (_meetingVisionBuffer.length >= 5 && openclawBridge.connected) {
+    // Push visual context to agent every 5 descriptions (~40 seconds)
+    if (_meetingVisionBuffer.length >= 5 && agentAdapter.connected) {
       const batch = _meetingVisionBuffer.splice(0);
-      openclawBridge.sendTask(
+      agentAdapter.executeTask(
         `Meeting screen update — the following visual content was shown during the meeting. ` +
         `Add relevant details to your meeting context for later summary:\n\n${batch.join("\n")}`
       ).catch(() => {});
       eventBus.emit("meeting.vision_pushed", { batchSize: batch.length });
-      console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to OpenClaw`);
+      console.log(`[MeetingVision] Pushed ${batch.length} screen descriptions to ${agentAdapter.name}`);
     }
 
     // Buffer for final flush only (meeting end summary)
@@ -419,23 +472,19 @@ eventBus.on("meeting.ended", async () => {
     const timeline = await keyFrameStore.finalize(meetTopic).catch(() => null);
     if (timeline) {
       console.log(`[Init] Timeline finalized: ${timeline.frameCount} frames, ${timeline.priorityFrameCount} priority → ${timeline.meetingDir}`);
-      // OC-010: Send timeline to OpenClaw for visual action extraction (async, non-blocking)
-      if (openclawBridge.connected) {
-        import("./openclaw-protocol").then(({ OC010_PROMPT }) => {
-          const req = {
-            id: "OC-010" as const,
-            meetingId: timeline.meetingId,
-            meetingDir: timeline.meetingDir,
-            topic: meetTopic,
-            duration: `${Math.round(timeline.durationMs / 60000)}min`,
-            frameCount: timeline.frameCount,
-            transcriptEntries: timeline.transcriptEntries,
-            priorityFrameCount: timeline.priorityFrameCount,
-            timelineFile: timeline.timelineFile,
-          };
-          openclawBridge.sendTask(OC010_PROMPT(req)).catch((e) => {
-            console.warn(`[Init] OC-010 timeline processing failed: ${e.message}`);
-          });
+      // Send timeline to agent adapter for visual action extraction (async, non-blocking)
+      if (agentAdapter.connected) {
+        agentAdapter.processTimeline({
+          meetingId: timeline.meetingId,
+          meetingDir: timeline.meetingDir,
+          topic: meetTopic,
+          duration: `${Math.round(timeline.durationMs / 60000)}min`,
+          frameCount: timeline.frameCount,
+          transcriptEntries: timeline.transcriptEntries,
+          priorityFrameCount: timeline.priorityFrameCount,
+          timelineFile: timeline.timelineFile,
+        }).catch((e) => {
+          console.warn(`[Init] Timeline processing failed: ${e.message}`);
         });
       }
     }
@@ -678,6 +727,7 @@ const toolDeps = {
   get voice() { return voice; }, // Lazy — voice created below
   openclawBridge,
   dispatcher,
+  agentAdapter,
   meetingPrepSkill,
   contextSync,
   contextRetriever,
@@ -748,13 +798,13 @@ voice.onAudioOutput((base64Pcm) => {
 
 calendar.connect().then(() => {
   // Start meeting scheduler once calendar is available
-  if (openclawBridge.connected && !meetingScheduler.active) {
+  if (agentAdapter.connected && !meetingScheduler.active) {
     meetingScheduler.start();
-    console.log("[Init] MeetingScheduler started (calendar + OpenClaw both ready)");
+    console.log(`[Init] MeetingScheduler started (calendar + ${agentAdapter.name} both ready)`);
   }
 }).catch(async (e) => {
   console.warn("[Init] Google Calendar initial connect failed:", e.message);
-  // Auto-scan OpenClaw credentials and retry (token in .env may be stale)
+  // Auto-scan credentials and retry (token in .env may be stale)
   try {
     const { scanForGoogleCredentials } = await import("./mcp_client/google_cal");
     const { credentials } = await scanForGoogleCredentials();
@@ -763,9 +813,9 @@ calendar.connect().then(() => {
       calendar.setCredentials(credentials);
       await calendar.connect();
       console.log("[Init] Google Calendar connected via auto-scan");
-      if (openclawBridge.connected && !meetingScheduler.active) {
+      if (agentAdapter.connected && !meetingScheduler.active) {
         meetingScheduler.start();
-        console.log("[Init] MeetingScheduler started (calendar + OpenClaw both ready)");
+        console.log(`[Init] MeetingScheduler started (calendar + ${agentAdapter.name} both ready)`);
       }
       return;
     }
@@ -790,6 +840,7 @@ startConfigServer({
   contextSync,
   meetingPrepSkill,
   openclawBridge,
+  agentAdapter,
   transcriptAuditor,
   browserLoop,
   playwrightCli,

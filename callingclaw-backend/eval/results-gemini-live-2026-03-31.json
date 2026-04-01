@@ -1,0 +1,12 @@
+[
+  {
+    "id": "1.1",
+    "name": "数字引用 — Q1 营收复盘",
+    "dim": "context_grounding",
+    "score": 1,
+    "explanation": "Missing: 2.8,33,19,4.2; Low entity refs",
+    "tools": [],
+    "response": "",
+    "latency": 45058
+  }
+]

@@ -750,7 +750,7 @@
           // Only reset on new response (>2s behind). Small inter-sentence gaps
           // (200-500ms) schedule naturally to avoid "pushing" artifacts.
           if (_nextPlayTime < now - 2.0) {
-            _nextPlayTime = now + 0.15; // new response
+            _nextPlayTime = now + 0.05; // new response (50ms — tighter for Grok's bursty delivery)
           } else if (_nextPlayTime < now) {
             _nextPlayTime = now + 0.02; // small underrun
           }

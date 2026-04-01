@@ -1,27 +1,29 @@
 // CallingClaw 2.0 — Meeting Prep Skill
 // ═══════════════════════════════════════════════════════════════════
 // This is the "slow thinking" (System 2) component.
-// OpenClaw reads its full memory + relevant files, then generates a
+// The agent adapter reads its full memory + relevant files, then generates a
 // structured Meeting Prep Brief that becomes the single context source
 // for the "fast thinking" Voice AI and Computer Use layers.
 //
 // Flow:
 //   User: "Prepare a meeting about CallingClaw PRD"
-//   → OpenClaw reads MEMORY.md + PRD + project files
+//   → AgentAdapter reads memory + PRD + project files
 //   → Generates MeetingPrepBrief (this file)
 //   → Brief injected into Voice AI system prompt
 //   → Brief's file paths/URLs available to Computer Use 4-layer automation
 //
+// Works with any agent backend: OpenClaw, Claude Code, standalone.
+//
 // Usage:
-//   const skill = new MeetingPrepSkill(openclawBridge);
+//   const skill = new MeetingPrepSkill(adapter);
 //   const brief = await skill.generate("CallingClaw 2.0 PRD review");
 //   voiceModule.updateInstructions(buildVoiceInstructions(brief));
 // ═══════════════════════════════════════════════════════════════════
 
-import type { OpenClawBridge } from "../openclaw_bridge";
+import type { AgentAdapter } from "../agent-adapter";
 import type { CalendarAttendee } from "../mcp_client/google_cal";
 import { savePrepBrief, startLiveLog, appendToLiveLog, stopLiveLog, generateMeetingId } from "../modules/shared-documents";
-import { OC001_PROMPT, parseOC001, type OC001_Request } from "../openclaw-protocol";
+import { parseOC001 } from "../openclaw-protocol";
 
 // ── Meeting Prep Brief Structure ──
 // This is the output that feeds into Voice AI + Computer Use
@@ -66,6 +68,7 @@ export interface MeetingPrepBrief {
 
   // Dynamic updates during meeting (OpenClaw can append)
   liveNotes: string[];             // notes added dynamically during the meeting
+  _liveNoteTimestamps?: number[];  // parallel array: when each liveNote was added (for TTL eviction)
 }
 
 // Prompt template moved to openclaw-protocol.ts (OC-001)
@@ -74,15 +77,15 @@ export interface MeetingPrepBrief {
 // ── Meeting Prep Skill ──
 
 export class MeetingPrepSkill {
-  private bridge: OpenClawBridge;
+  private adapter: AgentAdapter;
   private _currentBrief: MeetingPrepBrief | null = null;
   private _onLiveNote?: (note: string, topic: string) => void;
   private _onPrepReady?: (brief: MeetingPrepBrief, meetingId: string, filePath: string) => void;
   private _liveLogPath: string | null = null;
   private _sessionManager: import("../modules/session-manager").SessionManager | null = null;
 
-  constructor(bridge: OpenClawBridge) {
-    this.bridge = bridge;
+  constructor(adapter: AgentAdapter) {
+    this.adapter = adapter;
   }
 
   /** Inject SessionManager for atomic file+session updates */
@@ -117,27 +120,25 @@ export class MeetingPrepSkill {
    * @param userContext - Any additional instructions from the user
    */
   async generate(topic: string, userContext?: string, attendees?: CalendarAttendee[], meetingId?: string): Promise<MeetingPrepBrief> {
-    // Build typed request (OC-001)
-    const req: OC001_Request = {
-      id: "OC-001",
-      topic,
-      userContext,
-      attendees: attendees
-        ?.filter((a) => !a.self)
-        .map((a) => ({
-          name: a.displayName || "",
-          email: a.email,
-          status: a.responseStatus,
-        })),
-    };
+    const filteredAttendees = attendees
+      ?.filter((a) => !a.self)
+      .map((a) => ({
+        name: a.displayName || "",
+        email: a.email,
+        status: a.responseStatus,
+      }));
 
-    console.log(`[MeetingPrep] Generating brief for: "${topic}" (${attendees?.length || 0} attendees, meetingId=${meetingId || "auto"})`);
+    console.log(`[MeetingPrep] Generating brief for: "${topic}" (${attendees?.length || 0} attendees, meetingId=${meetingId || "auto"}, adapter=${this.adapter.name})`);
     const startTime = Date.now();
 
-    // Delegate to OpenClaw via OC-001 protocol
-    const rawResult = await this.bridge.sendTask(OC001_PROMPT(req));
+    // Delegate to agent adapter (OpenClaw, Claude Code, or standalone)
+    const rawResult = await this.adapter.generateMeetingPrep({
+      topic,
+      userContext,
+      attendees: filteredAttendees,
+    });
 
-    console.log(`[MeetingPrep] OpenClaw responded in ${Date.now() - startTime}ms`);
+    console.log(`[MeetingPrep] ${this.adapter.name} responded in ${Date.now() - startTime}ms`);
 
     // Parse with typed parser
     const brief = parseOC001(rawResult, topic) as any as MeetingPrepBrief;
@@ -183,14 +184,29 @@ export class MeetingPrepSkill {
     return brief;
   }
 
+  // TTL for liveNotes eviction (5 minutes)
+  private static readonly LIVE_NOTE_TTL_MS = 5 * 60 * 1000;
+
   /**
    * Add a live note during the meeting (OpenClaw pushes context updates).
    * This gets synced to Voice AI via session.update.
+   * Notes older than 5 minutes are evicted to prevent unbounded context growth.
    */
   addLiveNote(note: string): void {
     if (!this._currentBrief) return;
+
+    // Initialize timestamps array if needed
+    if (!this._currentBrief._liveNoteTimestamps) {
+      this._currentBrief._liveNoteTimestamps = [];
+    }
+
     this._currentBrief.liveNotes.push(note);
-    console.log(`[MeetingPrep] Live note added: "${note.slice(0, 60)}"`);
+    this._currentBrief._liveNoteTimestamps.push(Date.now());
+
+    // Evict expired notes (keep [DONE] notes forever — they're action records)
+    this.evictExpiredNotes();
+
+    console.log(`[MeetingPrep] Live note added: "${note.slice(0, 60)}" (${this._currentBrief.liveNotes.length} total)`);
 
     // Append to live log file on disk
     if (this._liveLogPath) {
@@ -198,6 +214,36 @@ export class MeetingPrepSkill {
     }
 
     this._onLiveNote?.(note, this._currentBrief.topic);
+  }
+
+  /**
+   * Evict liveNotes older than TTL.
+   * Preserves [DONE] notes (action completion records) and [CONTEXT] notes
+   * that are still within TTL. Removes stale [SUGGEST] and [CONTEXT] notes.
+   */
+  private evictExpiredNotes(): void {
+    const brief = this._currentBrief;
+    if (!brief || !brief._liveNoteTimestamps) return;
+
+    const now = Date.now();
+    const ttl = MeetingPrepSkill.LIVE_NOTE_TTL_MS;
+    const keepIndices: number[] = [];
+
+    for (let i = 0; i < brief.liveNotes.length; i++) {
+      const age = now - (brief._liveNoteTimestamps[i] || 0);
+      const note = brief.liveNotes[i]!;
+      // Always keep [DONE] notes (action completion records)
+      if (note.startsWith("[DONE]") || age < ttl) {
+        keepIndices.push(i);
+      }
+    }
+
+    if (keepIndices.length < brief.liveNotes.length) {
+      const evicted = brief.liveNotes.length - keepIndices.length;
+      brief.liveNotes = keepIndices.map((i) => brief.liveNotes[i]!);
+      brief._liveNoteTimestamps = keepIndices.map((i) => brief._liveNoteTimestamps![i]!);
+      console.log(`[MeetingPrep] Evicted ${evicted} expired liveNotes (${brief.liveNotes.length} remaining)`);
+    }
   }
 
   /**

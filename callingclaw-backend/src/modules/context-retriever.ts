@@ -31,6 +31,7 @@ import type { VoiceModule } from "./voice";
 import type { ContextSync } from "./context-sync";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { pushContextUpdate } from "../voice-persona";
+import { callModel, parseJSON } from "../ai_gateway/llm-client";
 import { CONFIG } from "../config";
 
 // ── Types ──
@@ -363,59 +364,7 @@ export class ContextRetriever {
   // LLM calls — all go through OpenRouter for easy model switching
   // ══════════════════════════════════════════════════════════════
 
-  /**
-   * Unified LLM call via OpenRouter.
-   * Supports any model: Haiku 4.5, Gemini 3.1 Flash, etc.
-   * Falls back to Anthropic direct API if no OpenRouter key.
-   */
-  private async callModel(
-    prompt: string,
-    opts: { model?: string; maxTokens?: number } = {},
-  ): Promise<string> {
-    const model = opts.model || CONFIG.analysis.searchModel || CONFIG.analysis.model;
-    const maxTokens = opts.maxTokens || 512;
-
-    // Prefer OpenRouter (supports all models uniformly)
-    if (CONFIG.openrouter.apiKey) {
-      const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      if (!resp.ok) throw new Error(`OpenRouter ${resp.status}: ${await resp.text()}`);
-      const data = (await resp.json()) as any;
-      return data.choices?.[0]?.message?.content || "";
-    }
-
-    // Fallback: Anthropic direct (only works for Claude models)
-    if (CONFIG.anthropic.apiKey) {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": CONFIG.anthropic.apiKey,
-          "anthropic-version": "2024-01-01",
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-      if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
-      const data = (await resp.json()) as any;
-      return data.content?.[0]?.text || "";
-    }
-
-    throw new Error("No API key (need OPENROUTER_API_KEY or ANTHROPIC_API_KEY)");
-  }
+  // LLM calls now use shared callModel from ai_gateway/llm-client.ts
 
   // ══════════════════════════════════════════════════════════════
   // Layer 1: Topic Classification
@@ -449,13 +398,12 @@ Reply with JSON only (no other text):
 "shifted" = true ONLY if the topic is meaningfully different from the previous topic. Subtopic shifts within the same area count as shifted. Small talk → topic = "small talk", shifted = true only if previous wasn't small talk.`;
 
     try {
-      const text = await this.callModel(prompt, {
+      const text = await callModel(prompt, {
         model: CONFIG.analysis.model,
         maxTokens: 100,
       });
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) return { topic: this._currentTopic, direction: "", shifted: false };
-      const parsed = JSON.parse(match[0]);
+      const parsed = parseJSON<{ topic?: string; direction?: string; shifted?: boolean }>(text);
+      if (!parsed) return { topic: this._currentTopic, direction: "", shifted: false };
       return {
         topic: parsed.topic || this._currentTopic,
         direction: parsed.direction || "",
@@ -514,7 +462,13 @@ Think about what the AI assistant NEEDS to know to be helpful on this topic.
 
 Ask yourself: "If I were the AI in this conversation, what specific facts, numbers, decisions, or history would I need to answer well?"
 
-If the prep brief already covers this topic adequately, or the topic is just opinions/brainstorming (nothing to look up), return needsRetrieval=false.
+Return needsRetrieval=false if ANY of these apply:
+- The prep brief already covers this topic adequately
+- The topic is opinions/brainstorming (nothing factual to look up)
+- The user mentioned something as a passing EXAMPLE to illustrate a point, not as a topic requiring follow-up (e.g., "比如之前的XX" / "like that time with XX" when the point is about something else)
+- The reference is casual/parenthetical, not a request for information or action
+
+Only return needsRetrieval=true when the conversation genuinely needs specific facts, numbers, decisions, or history that aren't in the prep brief.
 
 ## Output
 JSON only:
@@ -523,13 +477,12 @@ JSON only:
 Max 3 queries. Each query should be a specific information need, not a keyword.`;
 
     try {
-      const text = await this.callModel(prompt, {
+      const text = await callModel(prompt, {
         model: CONFIG.analysis.model,
         maxTokens: 256,
       });
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
-      const parsed = JSON.parse(match[0]);
+      const parsed = parseJSON<{ needsRetrieval?: boolean; queries?: string[]; reasoning?: string }>(text);
+      if (!parsed) return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
       return {
         needsRetrieval: !!parsed.needsRetrieval,
         queries: Array.isArray(parsed.queries) ? parsed.queries.slice(0, 3) : [],
@@ -551,6 +504,8 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
   // Haiku/Gemini Flash — 10-50x faster, 100x cheaper.
 
   private static readonly WORKSPACE_DIR = `${process.env.HOME}/.openclaw/workspace`;
+  private static readonly SHARED_DIR = `${process.env.HOME}/.callingclaw/shared`;
+  private static readonly PREP_DIR = `${process.env.HOME}/.callingclaw/shared/prep`;
   private static readonly MAX_TOOL_ROUNDS = 3; // Max agentic iterations
   private static readonly AGENT_TIMEOUT_MS = 8_000; // Hard cap on total search time
 
@@ -558,23 +513,23 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
   private static readonly SEARCH_TOOLS = [
     {
       name: "list_workspace",
-      description: "List all files in the knowledge workspace. Returns filenames with sizes. Call this first to see what's available.",
+      description: "List all files in the knowledge workspace + meeting prep/shared directories. Returns filenames with sizes. Call this first to see what's available.",
       input_schema: { type: "object" as const, properties: {}, required: [] as string[] },
     },
     {
       name: "read_file",
-      description: "Read a file from the workspace. Returns the file content (truncated if large). Use this to read MEMORY.md, project docs, meeting notes, etc.",
+      description: "Read a file from the workspace, prep directory, shared directory, or a prep-referenced file. Returns content (truncated if large). Use for MEMORY.md, prep briefs, meeting notes, and files mentioned in the meeting prep.",
       input_schema: {
         type: "object" as const,
         properties: {
-          path: { type: "string" as const, description: "Filename (e.g. 'MEMORY.md', 'callingclaw-architecture-analysis.md')" },
+          path: { type: "string" as const, description: "Filename or relative path (e.g. 'MEMORY.md', 'prep/meeting-prep-callingclaw.md', or a full path from prep references)" },
         },
         required: ["path"],
       },
     },
     {
       name: "search_files",
-      description: "Search across all workspace files for a keyword/phrase. Returns matching lines with filenames. Good for finding which file contains specific info.",
+      description: "Search across workspace, prep, and shared files for a keyword/phrase. Returns matching lines with filenames. Good for finding which file contains specific info.",
       input_schema: {
         type: "object" as const,
         properties: {
@@ -732,66 +687,157 @@ RULES:
     throw new Error("No API key for agentic search");
   }
 
-  /** Execute a tool call against the local workspace */
+  /**
+   * Get the list of directories to search, plus prep-referenced file whitelist.
+   * Searches: workspace, shared, prep, and any files explicitly referenced in the prep brief.
+   */
+  private getSearchDirs(): string[] {
+    const dirs = [ContextRetriever.WORKSPACE_DIR, ContextRetriever.SHARED_DIR, ContextRetriever.PREP_DIR];
+    return dirs;
+  }
+
+  /**
+   * Get absolute paths of files referenced in the current meeting prep brief.
+   * These are whitelisted for read_file even though they're outside search dirs.
+   */
+  private getPrepReferencedFiles(): string[] {
+    const brief = this.meetingPrepSkill.currentBrief;
+    if (!brief) return [];
+    const paths: string[] = [];
+    for (const fp of brief.filePaths || []) {
+      if (fp.path) paths.push(fp.path.startsWith("/") ? fp.path : `${process.env.HOME}/${fp.path}`);
+    }
+    return paths;
+  }
+
+  /** List files in a directory, returning entries with sizes */
+  private async listDir(dir: string, prefix: string): Promise<string[]> {
+    const entries: string[] = [];
+    try {
+      const files = await Array.fromAsync(new Bun.Glob("*").scan({ cwd: dir, onlyFiles: true })) as string[];
+      for (const f of files.sort()) {
+        try {
+          const stat = Bun.file(`${dir}/${f}`);
+          const size = stat.size;
+          entries.push(`${prefix}${f} (${size > 1024 ? `${(size / 1024).toFixed(0)}KB` : `${size}B`})`);
+        } catch {
+          entries.push(`${prefix}${f}`);
+        }
+      }
+    } catch { /* dir doesn't exist, skip */ }
+    return entries;
+  }
+
+  /** Execute a tool call against local directories */
   private async executeTool(name: string, input: any): Promise<string> {
     const ws = ContextRetriever.WORKSPACE_DIR;
+    const shared = ContextRetriever.SHARED_DIR;
+    const prep = ContextRetriever.PREP_DIR;
 
     switch (name) {
       case "list_workspace": {
         try {
           const entries: string[] = [];
-          const dir = await Array.fromAsync(new Bun.Glob("*").scan({ cwd: ws, onlyFiles: true })) as string[];
-          for (const f of dir.sort()) {
+          entries.push(...await this.listDir(ws, "[workspace] "));
+          entries.push(...await this.listDir(prep, "[prep] "));
+          entries.push(...await this.listDir(shared, "[shared] "));
+
+          // Also list prep-referenced files
+          const refFiles = this.getPrepReferencedFiles();
+          for (const fp of refFiles) {
             try {
-              const stat = Bun.file(`${ws}/${f}`);
-              const size = stat.size;
-              entries.push(`${f} (${size > 1024 ? `${(size / 1024).toFixed(0)}KB` : `${size}B`})`);
-            } catch {
-              entries.push(f);
-            }
+              const file = Bun.file(fp);
+              if (await file.exists()) {
+                const size = file.size;
+                entries.push(`[prep-ref] ${fp} (${size > 1024 ? `${(size / 1024).toFixed(0)}KB` : `${size}B`})`);
+              }
+            } catch {}
           }
-          return entries.join("\n") || "(empty workspace)";
+
+          return entries.join("\n") || "(empty — no files in workspace, prep, or shared)";
         } catch (e: any) {
-          return `Error listing workspace: ${e.message}`;
+          return `Error listing: ${e.message}`;
         }
       }
 
       case "read_file": {
         const path = input.path as string;
-        // Security: only allow reading from workspace dir
-        const fullPath = `${ws}/${path.replace(/\.\./g, "")}`;
-        try {
-          const file = Bun.file(fullPath);
-          if (!(await file.exists())) return `File not found: ${path}`;
-          let content = await file.text();
-          // Truncate large files to keep context manageable
-          if (content.length > 6000) {
-            content = content.slice(0, 6000) + `\n...(truncated, ${content.length} chars total)`;
-          }
-          return content;
-        } catch (e: any) {
-          return `Error reading ${path}: ${e.message}`;
+        const sanitized = path.replace(/\.\./g, "");
+
+        // Try multiple locations: workspace, shared, prep, then prep-referenced whitelist
+        const candidates = [
+          `${ws}/${sanitized}`,
+          `${shared}/${sanitized}`,
+          `${prep}/${sanitized}`,
+        ];
+
+        // If the path looks absolute or matches a prep-referenced file, allow it
+        const refFiles = this.getPrepReferencedFiles();
+        if (path.startsWith("/") && refFiles.some((rf) => rf === path || path.startsWith(rf.replace(/[^/]+$/, "")))) {
+          candidates.unshift(path);
         }
+
+        for (const fullPath of candidates) {
+          try {
+            const file = Bun.file(fullPath);
+            if (!(await file.exists())) continue;
+            let content = await file.text();
+            if (content.length > 6000) {
+              content = content.slice(0, 6000) + `\n...(truncated, ${content.length} chars total)`;
+            }
+            return content;
+          } catch { continue; }
+        }
+        return `File not found: ${path}`;
       }
 
       case "search_files": {
         const query = (input.query as string).toLowerCase();
         try {
           const results: string[] = [];
-          const dir = await Array.fromAsync(new Bun.Glob("*.{md,txt}").scan({ cwd: ws, onlyFiles: true })) as string[];
-          for (const f of dir) {
+          const searchDirs = [
+            { dir: ws, prefix: "" },
+            { dir: prep, prefix: "prep/" },
+            { dir: shared, prefix: "shared/" },
+          ];
+
+          for (const { dir, prefix } of searchDirs) {
             try {
-              const content = await Bun.file(`${ws}/${f}`).text();
-              const lines = content.split("\n");
-              for (let i = 0; i < lines.length; i++) {
-                if (lines[i]!.toLowerCase().includes(query)) {
-                  results.push(`${f}:${i + 1}: ${lines[i]!.slice(0, 200)}`);
+              const files = await Array.fromAsync(new Bun.Glob("*.{md,txt,json,jsonl}").scan({ cwd: dir, onlyFiles: true })) as string[];
+              for (const f of files) {
+                try {
+                  const content = await Bun.file(`${dir}/${f}`).text();
+                  const lines = content.split("\n");
+                  for (let i = 0; i < lines.length; i++) {
+                    if (lines[i]!.toLowerCase().includes(query)) {
+                      results.push(`${prefix}${f}:${i + 1}: ${lines[i]!.slice(0, 200)}`);
+                      if (results.length >= 20) break;
+                    }
+                  }
                   if (results.length >= 20) break;
-                }
+                } catch {}
               }
               if (results.length >= 20) break;
-            } catch {}
+            } catch { /* dir doesn't exist, skip */ }
           }
+
+          // Also search prep-referenced files
+          if (results.length < 20) {
+            for (const fp of this.getPrepReferencedFiles()) {
+              try {
+                const content = await Bun.file(fp).text();
+                const lines = content.split("\n");
+                for (let i = 0; i < lines.length; i++) {
+                  if (lines[i]!.toLowerCase().includes(query)) {
+                    results.push(`[ref] ${fp}:${i + 1}: ${lines[i]!.slice(0, 200)}`);
+                    if (results.length >= 20) break;
+                  }
+                }
+              } catch {}
+              if (results.length >= 20) break;
+            }
+          }
+
           return results.length > 0 ? results.join("\n") : `No matches for "${query}"`;
         } catch (e: any) {
           return `Search error: ${e.message}`;
@@ -844,13 +890,21 @@ RULES:
   private injectIntoVoice(newContexts: RetrievedContext[]) {
     if (!this.voice?.connected || !this.meetingPrepSkill.currentBrief) return;
 
+    // Inject context data as persistent liveNotes (these stay in context)
     for (const ctx of newContexts) {
       const note = `[CONTEXT] ${ctx.query}: ${ctx.content}`;
       this.meetingPrepSkill.addLiveNote(note);
     }
-
     pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
-    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI`);
+
+    // One-shot conversational hint — injected directly via conversation.item.create.
+    // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
+    // once and can naturally weave it into conversation if relevant.
+    const topicSummary = newContexts.map((c) => c.query).join(", ");
+    const hint = `[CONTEXT_HINT] You just learned relevant information about: ${topicSummary}. If this connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的..." or "that reminds me, we discussed...". If it's not relevant right now, ignore this hint.`;
+    this.voice.injectContext(hint);
+
+    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts + conversational hint into Voice AI`);
   }
 
   // ══════════════════════════════════════════════════════════════

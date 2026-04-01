@@ -27,13 +27,12 @@ interface TokenResponse {
 }
 
 /** Well-known paths where Google OAuth credentials may be stored */
-const _ccHome = process.env.CALLINGCLAW_HOME || "~/.callingclaw";
 const CREDENTIAL_SEARCH_PATHS = [
   "~/.openclaw/workspace/google-credentials.json",
   "~/.openclaw/workspace/google-token.json",
   "~/.config/gcloud/application_default_credentials.json",
-  `${_ccHome}/google-credentials.json`,
-  `${_ccHome}/google-token.json`,
+  "~/.callingclaw/google-credentials.json",
+  "~/.callingclaw/google-token.json",
 ];
 
 function expandHome(p: string): string {
@@ -381,32 +380,63 @@ export class GoogleCalendarClient {
   }
 
   /**
-   * Delete a calendar event by its event ID.
+   * Accept a calendar invite by patching CallingClaw's attendee status to "accepted".
+   * Google Calendar API requires sending the full attendees array with the updated status.
    */
-  async deleteEvent(eventId: string): Promise<boolean> {
+  async acceptInvite(eventId: string, selfEmail: string): Promise<boolean> {
     if (!this._connected || !eventId) return false;
 
     try {
-      const token = await this.getToken();
-      const res = await fetch(
-        `${CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      // Fetch the full event to get the current attendees list
+      const event = await this.calendarFetch(
+        `/calendars/primary/events/${encodeURIComponent(eventId)}`
       );
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn(`[Calendar] deleteEvent failed (${res.status}): ${text}`);
+      const attendees = event.attendees || [];
+      const selfLower = selfEmail.toLowerCase();
+      let found = false;
+
+      // Update CallingClaw's responseStatus to "accepted"
+      for (const a of attendees) {
+        if (a.email?.toLowerCase() === selfLower || a.self === true) {
+          a.responseStatus = "accepted";
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        console.warn(`[Calendar] acceptInvite: ${selfEmail} not found in attendees for event ${eventId}`);
         return false;
       }
 
-      console.log(`[Calendar] Event ${eventId} deleted`);
+      await this.calendarFetch(
+        `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=none`,
+        { method: "PATCH", body: JSON.stringify({ attendees }) }
+      );
+      console.log(`[Calendar] Accepted invite for event ${eventId}`);
       return true;
     } catch (e: any) {
-      console.warn(`[Calendar] deleteEvent error: ${e.message}`);
+      console.warn(`[Calendar] acceptInvite failed: ${e.message}`);
       return false;
+    }
+  }
+
+  /**
+   * Get the authenticated user's email address from the calendar API.
+   * Used to identify CallingClaw's own attendee entry in events.
+   */
+  private _selfEmail: string | null = null;
+  async getSelfEmail(): Promise<string | null> {
+    if (this._selfEmail) return this._selfEmail;
+    if (!this._connected) return null;
+
+    try {
+      const data = await this.calendarFetch("/calendars/primary");
+      this._selfEmail = data.id || null; // Google Calendar "primary" id = owner email
+      return this._selfEmail;
+    } catch {
+      return null;
     }
   }
 

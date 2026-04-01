@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CallingClaw - 您的会议助手</title>
+    <style>
+        :root {
+            --primary-blue: #a3c2e0; /* 截图中的浅蓝色 */
+            --primary-red: #e04a4f; /* 提交按钮的红色 */
+            --bg-color: #f8f1e6; /* 以前会议背景的米色 */
+            --white: #ffffff;
+            --text-color: #333333;
+            --border-color: #e0e0e0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--white);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 主容器 */
+        #main-container {
+            display: flex;
+            flex: 1;
+            height: 100%;
+        }
+
+        /* 简化左侧栏 */
+        #left-sidebar {
+            width: 80px;
+            background-color: var(--white);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+        }
+
+        .logo-placeholder {
+            width: 50px;
+            height: 50px;
+            background-color: var(--primary-blue);
+            border-radius: 50%;
+            margin-bottom: 20px;
+        }
+
+        .icon-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            margin-bottom: 10px;
+            color: var(--text-color);
+            font-size: 20px;
+        }
+
+        /* 主对话区域 */
+        #chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--white);
+        }
+
+        #chat-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .assistant-profile {
+            display: flex;
+            align-items: center;
+        }
+
+        .lobster-avatar {
+            width: 60px; /* 稍微大一点，作为主要头像 */
+            height: 60px;
+            border-radius: 50%;
+            /* 在 HTML 中，我会用 <img> 标签指向裁剪后的龙虾 */
+            object-fit: cover;
+            margin-right: 15px;
+        }
+
+        #chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            margin-bottom: 15px;
+            padding: 15px 20px;
+            border-radius: 20px;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .message-bubble.assistant {
+            background-color: var(--primary-blue);
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message-bubble.user {
+            background-color: var(--primary-red);
+            color: var(--white);
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+
+        .assistant-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        /* 对话输入栏 */
+        #input-bar {
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            background-color: var(--white);
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 25px;
+            font-size: 16px;
+            margin-right: 15px;
+            outline: none;
+        }
+
+        #submit-button {
+            background-color: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 25px;
+            padding: 15px 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* 上下文侧边栏 */
+        #context-sidebar {
+            width: 320px;
+            background-color: var(--white);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%); /* 默认隐藏 */
+            position: fixed;
+            top: 0;
+            right: 0;
+            height: 100%;
+            z-index: 1000;
+        }
+
+        #context-sidebar.open {
+            transform: translateX(0);
+        }
+
+        #context-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .context-title {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #ccc;
+            font-size: 24px;
+        }
+
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-section-title {
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1em;
+            color: var(--text-color);
+        }
+
+        /* 模仿以前会议 */
+        .meetings-list {
+            background-color: var(--bg-color);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .meeting-item {
+            background-color: var(--white);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .meeting-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .meeting-date {
+            font-size: 0.9em;
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .meeting-summary {
+            font-size: 0.9em;
+        }
+
+        /* 模仿预订时间区域 */
+        #calendar-section {
+            margin-top: 20px;
+        }
+
+        .book-time-button {
+            background-color: var(--primary-red);
+            color: var(--white);
+            border: none;
+            border-radius: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        /* 日历网格模仿 */
+        .calendar-grid-placeholder {
+            display: none; /* 默认隐藏 */
+            margin-top: 15px;
+            grid-template-columns: 60px repeat(5, 1fr);
+            gap: 5px;
+            background-color: var(--bg-color);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .calendar-grid-placeholder.open {
+            display: grid;
+        }
+
+        .calendar-cell {
+            background-color: var(--white);
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8em;
+            height: 30px;
+        }
+
+        .calendar-cell.time {
+            color: #666;
+            justify-content: flex-end;
+            padding-right: 5px;
+        }
+
+        .calendar-cell.booked-placeholder {
+            background-color: var(--primary-red);
+            color: var(--white);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        <nav id="left-sidebar">
+            <div class="logo-placeholder"></div>
+            <button class="icon-button" onclick="toggleSidebar()">🕒</button> </nav>
+
+        <main id="chat-area">
+            <header id="chat-header">
+                <div class="assistant-profile">
+                    <img src="lobster_callingclaw_clean.png" alt="CallingClaw Lobster" class="lobster-avatar">
+                    <div>
+                        <div class="assistant-name">CallingClaw</div>
+                        <div style="font-size: 0.9em; color: #666;">会议助手</div>
+                    </div>
+                </div>
+                <button class="icon-button" style="color:var(--primary-red)">≡</button>
+            </header>
+
+            <div id="chat-messages">
+                <div class="message-bubble assistant">
+                    CallingClaw: <br><br> Hey Andrew, What's our next meeting topic?
+                </div>
+                </div>
+
+            <footer id="input-bar">
+                <input type="text" id="message-input" placeholder="告诉 CallingClaw 你想讨论什么话题...">
+                <button id="submit-button" onclick="submitMeetingTopic()">准备会议</button>
+            </footer>
+        </main>
+    </div>
+
+    <aside id="context-sidebar">
+        <header id="context-header">
+            <div class="context-title">会议上下文 & 工具</div>
+            <button class="close-button" onclick="toggleSidebar()">&times;</button>
+        </header>
+
+        <section class="sidebar-section">
+            <div class="sidebar-section-title">以前的会议</div>
+            <div class="meetings-list">
+                <div class="meeting-item">
+                    <div class="meeting-info">
+                        <div class="meeting-date">Mar 26, 21:13</div>
+                        <div class="meeting-summary">讨论CallingClaw的内容和优化更新</div>
+                    </div>
+                    <span>📋</span>
+                </div>
+                <div class="meeting-item">
+                    <div class="meeting-info">
+                        <div class="meeting-date">Mar 26, 18:02</div>
+                        <div class="meeting-summary">Test Meeting</div>
+                    </div>
+                    <span>📋</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="sidebar-section" id="calendar-section">
+            <div class="sidebar-section-title">预订时间</div>
+            <button class="book-time-button" onclick="toggleCalendar()">查看时间安排</button>
+
+            <div class="calendar-grid-placeholder" id="calendar-grid">
+                <div class="calendar-cell time">Time</div>
+                <div class="calendar-cell">MON 25</div>
+                <div class="calendar-cell">TUE 26</div>
+                <div class="calendar-cell">WED 27</div>
+                <div class="calendar-cell">THU 28</div>
+                <div class="calendar-cell">FRI 29</div>
+
+                <div class="calendar-cell time">09:00</div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell"></div>
+
+                <div class="calendar-cell time">11:00</div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell booked-placeholder">Book 15 min</div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell"></div>
+                <div class="calendar-cell"></div>
+
+                </div>
+        </section>
+    </aside>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('context-sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        function toggleCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            grid.classList.toggle('open');
+        }
+
+        function submitMeetingTopic() {
+            const input = document.getElementById('message-input');
+            const messages = document.getElementById('chat-messages');
+
+            if (input.value.trim() === '') return;
+
+            // 添加用户消息
+            const userBubble = document.createElement('div');
+            userBubble.className = 'message-bubble user';
+            userBubble.innerText = "我想讨论：" + input.value;
+            messages.appendChild(userBubble);
+
+            // 清空输入
+            input.value = '';
+
+            // 模拟助手回应
+            setTimeout(() => {
+                const assistantBubble = document.createElement('div');
+                assistantBubble.className = 'message-bubble assistant';
+                assistantBubble.innerHTML = "CallingClaw: <br><br> 收到！我正在处理这个话题。需要我查看您的日历来预订时间吗？<br><br>您可以通过右侧的工具栏查看您的空闲时间。";
+                messages.appendChild(assistantBubble);
+
+                // 自动打开侧边栏
+                const sidebar = document.getElementById('context-sidebar');
+                sidebar.classList.add('open');
+                
+                // 自动向下滚动聊天
+                messages.scrollTop = messages.scrollHeight;
+            }, 1000);
+
+            // 自动向下滚动聊天
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // 处理 Enter 键提交
+        document.getElementById('message-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                submitMeetingTopic();
+            }
+        });
+    </script>
+</body>
+</html>

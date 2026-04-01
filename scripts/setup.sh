@@ -59,18 +59,24 @@ if ! command -v bun &>/dev/null; then
 fi
 ok "Bun $(bun --version)"
 
-# OpenClaw (AI reasoning engine)
-if ! command -v openclaw &>/dev/null; then
-  info "Installing OpenClaw..."
-  npm install -g openclaw 2>/dev/null
-fi
+# ── Agent Platform Detection ──
+# CallingClaw works with any agentic backend: OpenClaw, Claude Code, or standalone
+AGENT_PLATFORM="standalone"
+
 if command -v openclaw &>/dev/null; then
   OPENCLAW_VERSION=$(openclaw --version 2>/dev/null || echo "unknown")
-  ok "OpenClaw $OPENCLAW_VERSION"
+  ok "OpenClaw $OPENCLAW_VERSION (agent platform: openclaw)"
+  AGENT_PLATFORM="openclaw"
+elif command -v claude &>/dev/null; then
+  CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
+  ok "Claude Code $CLAUDE_VERSION (agent platform: claude-code)"
+  AGENT_PLATFORM="claude-code"
 else
-  warn "OpenClaw install failed. Install manually: npm install -g openclaw"
-  warn "CallingClaw will work without it (voice, notes, screen — all work)"
-  warn "OpenClaw adds: meeting prep, deep reasoning, Telegram delivery"
+  warn "No agent platform detected (OpenClaw or Claude Code)"
+  warn "CallingClaw will work in standalone mode (voice, notes, screen — all work)"
+  warn "For full features (meeting prep, deep reasoning, auto-execution):"
+  warn "  - Install Claude Code: npm install -g @anthropic-ai/claude-code"
+  warn "  - Or install OpenClaw: npm install -g openclaw"
 fi
 
 # cliclick (for screen automation)
@@ -129,8 +135,16 @@ else
 fi
 
 # ═══════════════════════════════════════════════
-# 4. Setup OpenClaw (if installed)
+# 4. Setup Agent Platform
 # ═══════════════════════════════════════════════
+
+# Write detected platform to .env (if not already set)
+if ! grep -q "^AGENT_PLATFORM=" "$ENV_FILE" 2>/dev/null; then
+  echo "" >> "$ENV_FILE"
+  echo "# Agent platform (auto-detected)" >> "$ENV_FILE"
+  echo "AGENT_PLATFORM=$AGENT_PLATFORM" >> "$ENV_FILE"
+  ok "AGENT_PLATFORM=$AGENT_PLATFORM written to .env"
+fi
 
 if command -v openclaw &>/dev/null; then
   if [[ ! -f "$HOME/.openclaw/openclaw.json" ]]; then

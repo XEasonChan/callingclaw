@@ -24,6 +24,7 @@ import type { VoiceModule } from "./voice";
 import type { MeetJoiner } from "../meet_joiner";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion, pushContextUpdate } from "../voice-persona";
+import { callModel, parseJSON } from "../ai_gateway/llm-client";
 import { CONFIG } from "../config";
 
 // ── Types ──
@@ -63,9 +64,11 @@ export class TranscriptAuditor {
   private _processing = false;
   private _recentActions: string[] = []; // dedup ring buffer (last 5)
   private _lastExecutionTs = 0;
+  private _fastLaneProcessing = false; // prevent concurrent fast lane executions
 
   // ── Tuning knobs ──
   private DEBOUNCE_MS = 1200;         // Wait 1.2s after last user utterance (was 2.5s, reduced for meeting responsiveness)
+  private FAST_LANE_CONFIDENCE = 0.95; // Regex match threshold for immediate execution (no LLM)
   private CONFIDENCE_AUTO = 0.85;     // Auto-execute threshold
   private CONFIDENCE_SUGGEST = 0.6;   // Suggest to Voice AI threshold
   private WINDOW_ENTRIES = 15;        // Transcript entries to analyze
@@ -131,6 +134,17 @@ export class TranscriptAuditor {
   private _onTranscript = (entry: TranscriptEntry) => {
     if (!this._active) return;
     if (entry.role !== "user") return; // Only audit on user speech
+
+    // ── FAST LANE: regex pre-check, 0ms debounce ──
+    // If AutomationRouter regex matches with high confidence, execute immediately
+    // without waiting for Haiku LLM call. Target: <500ms from utterance to action.
+    const intent = this.automationRouter.classify(entry.text);
+    if (intent.confidence >= this.FAST_LANE_CONFIDENCE && intent.layer !== "computer_use") {
+      this.tryFastLane(entry.text, intent);
+      // Don't return — medium lane still runs (action + retrieval are not exclusive)
+      // but scheduleAudit will be skipped via dedup if fast lane executed the same action
+    }
+
     this.scheduleAudit();
   };
 
@@ -139,7 +153,74 @@ export class TranscriptAuditor {
     this._debounceTimer = setTimeout(() => this.runAudit(), this.DEBOUNCE_MS);
   }
 
-  // ── Core audit loop ──
+  // ── Fast Lane: regex-only execution, no LLM call ──
+
+  /**
+   * Execute an action immediately based on regex match, bypassing the Haiku LLM call.
+   * Only fires for high-confidence patterns (click, scroll, mute, etc.).
+   * Target latency: <500ms from utterance to execution.
+   */
+  private async tryFastLane(
+    text: string,
+    intent: import("./automation-router").ClassifiedIntent,
+  ) {
+    if (this._fastLaneProcessing) return;
+
+    // Action-level dedup (not utterance-level — a single utterance can trigger
+    // both fast lane action AND slow lane retrieval)
+    const actionKey = `${intent.action}:${JSON.stringify(intent.params)}`;
+    if (this._recentActions.includes(actionKey)) return;
+
+    this._fastLaneProcessing = true;
+    const startTs = Date.now();
+
+    try {
+      this.eventBus.emit("auditor.fast_lane", {
+        action: intent.action,
+        layer: intent.layer,
+        confidence: intent.confidence,
+        text: text.slice(0, 60),
+      });
+
+      // For click/scroll on presenting tab, use ChromeLauncher directly
+      if (
+        (intent.action === "browser_click" || intent.action.startsWith("scroll")) &&
+        this.chromeLauncher?.presentingPage
+      ) {
+        const result = await this.executeAction({
+          action: intent.action === "browser_click" ? "click" : "scroll",
+          params: {
+            selector: text,
+            direction: intent.action === "scroll_up" ? "up" : "down",
+            targetTab: "presenting",
+          },
+          confidence: intent.confidence,
+          reasoning: `fast_lane: ${intent.reason}`,
+          targetTab: "presenting",
+        });
+      } else {
+        // Route through AutomationRouter for other actions (meet shortcuts, tab management, etc.)
+        const result = await this.automationRouter.execute(text);
+
+        if (result.success && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
+          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, result.result, this.eventBus);
+        }
+      }
+
+      // Add to dedup ring buffer
+      this._recentActions.push(actionKey);
+      if (this._recentActions.length > 5) this._recentActions.shift();
+      this._lastExecutionTs = Date.now();
+
+      console.log(`[TranscriptAuditor] Fast lane: ${intent.action} (${Date.now() - startTs}ms)`);
+    } catch (err: any) {
+      console.error(`[TranscriptAuditor] Fast lane error: ${err.message}`);
+    } finally {
+      this._fastLaneProcessing = false;
+    }
+  }
+
+  // ── Core audit loop (medium lane — Haiku LLM) ──
 
   private async runAudit() {
     if (!this._active || this._processing) return;
@@ -284,111 +365,32 @@ ${transcriptText}
 Respond with JSON only:
 {"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<brief>","targetTab":"presenting"|"meet"}`;
 
-    return await this.callClaude(prompt);
-  }
-
-  // ── LLM API Call (Anthropic Direct or OpenRouter) ──
-
-  private async callClaude(prompt: string): Promise<AuditResult> {
-    const NULL_RESULT: AuditResult = {
-      action: null,
-      params: {},
-      confidence: 0,
-      reasoning: "no_api_key",
-    };
-
-    // Prefer OpenRouter (supports all models uniformly — Haiku, Gemini, etc.)
-    if (CONFIG.openrouter.apiKey) {
-      return this.callOpenRouter(prompt);
-    } else if (CONFIG.anthropic.apiKey) {
-      return this.callAnthropicDirect(prompt);
-    }
-
-    console.warn(
-      "[TranscriptAuditor] No API key (need OPENROUTER_API_KEY or ANTHROPIC_API_KEY)"
-    );
-    return NULL_RESULT;
-  }
-
-  private async callAnthropicDirect(prompt: string): Promise<AuditResult> {
-    // Strip OpenRouter-style prefix (e.g. "anthropic/claude-haiku-4-5" → "claude-haiku-4-5")
-    const model = CONFIG.analysis.model.replace(/^anthropic\//, "");
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": CONFIG.anthropic.apiKey,
-        "anthropic-version": "2024-01-01",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 256,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!resp.ok) {
-      throw new Error(`Anthropic API ${resp.status}: ${await resp.text()}`);
-    }
-
-    const data = (await resp.json()) as any;
-    return this.parseResponse(data.content?.[0]?.text || "{}");
-  }
-
-  private async callOpenRouter(prompt: string): Promise<AuditResult> {
-    const resp = await fetch(
-      `${CONFIG.openrouter.baseUrl}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: CONFIG.analysis.model,
-          max_tokens: 256,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      }
-    );
-
-    if (!resp.ok) {
-      throw new Error(`OpenRouter API ${resp.status}: ${await resp.text()}`);
-    }
-
-    const data = (await resp.json()) as any;
-    return this.parseResponse(
-      data.choices?.[0]?.message?.content || "{}"
-    );
-  }
-
-  private parseResponse(text: string): AuditResult {
+    // Use shared LLM client instead of duplicated API call code
     try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        return {
-          action: null,
-          params: {},
-          confidence: 0,
-          reasoning: "parse_error: no JSON found",
-        };
+      const text = await callModel(prompt, {
+        model: CONFIG.analysis.model,
+        maxTokens: 256,
+      });
+      const parsed = parseJSON<{
+        action?: string;
+        params?: Record<string, any>;
+        confidence?: number;
+        reasoning?: string;
+        targetTab?: string;
+      }>(text);
+      if (!parsed) {
+        return { action: null, params: {}, confidence: 0, reasoning: "parse_error: no JSON found" };
       }
-      const parsed = JSON.parse(jsonMatch[0]);
       return {
         action: parsed.action || null,
         params: parsed.params || {},
-        confidence:
-          typeof parsed.confidence === "number" ? parsed.confidence : 0,
+        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
         reasoning: parsed.reasoning || "",
-        targetTab: parsed.targetTab || "presenting",
+        targetTab: (parsed.targetTab as "presenting" | "meet") || "presenting",
       };
-    } catch {
-      return {
-        action: null,
-        params: {},
-        confidence: 0,
-        reasoning: "json_parse_error",
-      };
+    } catch (err: any) {
+      console.warn(`[TranscriptAuditor] LLM call failed: ${err.message}`);
+      return { action: null, params: {}, confidence: 0, reasoning: `llm_error: ${err.message}` };
     }
   }
 

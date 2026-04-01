@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280, height=720">
+<title>CallingClaw - Recall Bridge</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #e0e0e0; font-family: -apple-system, system-ui, sans-serif; width: 1280px; height: 720px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+#status { position: absolute; top: 24px; left: 32px; font-size: 14px; opacity: 0.7; }
+#status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+#status .dot.green { background: #4caf50; }
+#status .dot.red { background: #f44336; }
+#status .dot.yellow { background: #ff9800; }
+#center { text-align: center; }
+#center h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; color: #E63946; }
+#center p { font-size: 14px; opacity: 0.5; }
+canvas { position: absolute; bottom: 0; left: 0; }
+</style>
+</head>
+<body>
+<div id="status"><span class="dot yellow" id="dot"></span><span id="statusText">Connecting...</span></div>
+<div id="center">
+  <h1>CallingClaw</h1>
+  <p id="mode">AI Meeting Assistant</p>
+</div>
+<canvas id="viz" width="1280" height="120"></canvas>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Config ──
+  var SAMPLE_RATE = 24000;
+  var FADE_SAMPLES = 24; // 1ms @ 24kHz
+
+  // ── Parse backend WS URL from query param ──
+  var params = new URLSearchParams(window.location.search);
+  var wsUrl = params.get('ws');
+  if (!wsUrl) {
+    setStatus('red', 'Error: missing ?ws= parameter');
+    return;
+  }
+
+  // Derive HTTP origin from WS URL for loading worklets
+  var wsOrigin = wsUrl.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:').replace(/\/ws\/.*$/, '');
+
+  // ── State ──
+  var _ws = null;
+  var _captureCtx = null;
+  var _playbackCtx = null;
+  var _playbackWorklet = null;
+  var _captureWorklet = null;
+  var _reconnectTimer = null;
+  var _reconnectDelay = 2000;
+  var _vizCanvas = document.getElementById('viz');
+  var _vizCtx = _vizCanvas.getContext('2d');
+  var _inputLevel = 0;
+  var _outputLevel = 0;
+
+  function setStatus(color, text) {
+    document.getElementById('dot').className = 'dot ' + color;
+    document.getElementById('statusText').textContent = text;
+  }
+
+  // ── WebSocket ──
+  function connectWS() {
+    try {
+      _ws = new WebSocket(wsUrl);
+      _ws.binaryType = 'arraybuffer';
+    } catch (e) {
+      setStatus('red', 'WS connect failed: ' + e.message);
+      scheduleReconnect();
+      return;
+    }
+
+    _ws.onopen = function() {
+      setStatus('green', 'Connected to CallingClaw backend');
+      _reconnectDelay = 2000; // reset backoff
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+      startAudio();
+    };
+
+    _ws.onmessage = function(e) {
+      if (!(e.data instanceof ArrayBuffer)) return;
+      var view = new Uint8Array(e.data);
+      if (view[0] === 0x01 && view.length > 1) {
+        feedAudio(e.data, 1);
+      } else if (view[0] === 0x02) {
+        interruptPlayback();
+      }
+    };
+
+    _ws.onclose = function() {
+      setStatus('yellow', 'Disconnected, reconnecting...');
+      scheduleReconnect();
+    };
+
+    _ws.onerror = function() {
+      setStatus('red', 'WebSocket error');
+    };
+  }
+
+  function scheduleReconnect() {
+    if (_reconnectTimer) return;
+    _reconnectTimer = setTimeout(function() {
+      _reconnectTimer = null;
+      _reconnectDelay = Math.min(_reconnectDelay * 1.5, 30000);
+      connectWS();
+    }, _reconnectDelay);
+  }
+
+  // ── Audio Capture (meeting audio → backend) ──
+  async function startAudio() {
+    try {
+      // Capture: meeting audio via getUserMedia (Recall auto-grants)
+      var stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: SAMPLE_RATE,
+          channelCount: 1,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      });
+
+      _captureCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      var source = _captureCtx.createMediaStreamSource(stream);
+
+      // Load PCM processor worklet from backend
+      await _captureCtx.audioWorklet.addModule(wsOrigin + '/pcm-processor-worklet.js');
+      _captureWorklet = new AudioWorkletNode(_captureCtx, 'pcm-processor');
+      source.connect(_captureWorklet);
+
+      _captureWorklet.port.onmessage = function(e) {
+        if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
+        var int16 = e.data; // Int16Array from PCM processor
+        // Send binary: 0x01 type byte + PCM16 data
+        var frame = new Uint8Array(1 + int16.byteLength);
+        frame[0] = 0x01;
+        frame.set(new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength), 1);
+        _ws.send(frame.buffer);
+
+        // Update input level for viz
+        var sum = 0;
+        for (var i = 0; i < int16.length; i++) sum += Math.abs(int16[i]);
+        _inputLevel = sum / int16.length / 32768;
+      };
+
+      // Playback: AI audio → meeting speakers
+      _playbackCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      await _playbackCtx.audioWorklet.addModule(wsOrigin + '/playback-worklet.js');
+      _playbackWorklet = new AudioWorkletNode(_playbackCtx, 'playback-processor');
+      _playbackWorklet.connect(_playbackCtx.destination);
+
+      setStatus('green', 'Audio active — listening');
+      document.getElementById('mode').textContent = 'Listening to meeting...';
+    } catch (e) {
+      setStatus('red', 'Audio setup failed: ' + e.message);
+      console.error('[Recall-Client] Audio error:', e);
+    }
+  }
+
+  // ── Audio Playback (AI audio from backend) ──
+  function feedAudio(arrayBuffer, byteOffset) {
+    if (!_playbackWorklet || !_playbackCtx) return;
+    if (_playbackCtx.state === 'suspended') _playbackCtx.resume().catch(function() {});
+
+    try {
+      var pcm16 = new Int16Array(arrayBuffer, byteOffset);
+      var float32 = new Float32Array(pcm16.length);
+      for (var j = 0; j < pcm16.length; j++) {
+        float32[j] = pcm16[j] / 32768;
+      }
+
+      // Micro fade-in/out
+      if (float32.length > FADE_SAMPLES * 2) {
+        for (var f = 0; f < FADE_SAMPLES; f++) {
+          var gain = f / FADE_SAMPLES;
+          float32[f] *= gain;
+          float32[float32.length - 1 - f] *= gain;
+        }
+      }
+
+      // Update output level for viz
+      var sum = 0;
+      for (var k = 0; k < float32.length; k++) sum += Math.abs(float32[k]);
+      _outputLevel = sum / float32.length;
+
+      _playbackWorklet.port.postMessage(float32, [float32.buffer]);
+    } catch (e) {
+      console.warn('[Recall-Client] feedAudio error:', e.message);
+    }
+  }
+
+  function interruptPlayback() {
+    if (_playbackWorklet) {
+      _playbackWorklet.port.postMessage('clear');
+    }
+    _outputLevel = 0;
+  }
+
+  // ── Audio Level Visualization ──
+  function drawViz() {
+    _vizCtx.clearRect(0, 0, 1280, 120);
+
+    // Input level (meeting audio) — left half, blue
+    _vizCtx.fillStyle = 'rgba(66, 133, 244, 0.6)';
+    var inH = Math.min(_inputLevel * 800, 100);
+    _vizCtx.fillRect(0, 120 - inH, 640, inH);
+
+    // Output level (AI audio) — right half, red
+    _vizCtx.fillStyle = 'rgba(230, 57, 70, 0.6)';
+    var outH = Math.min(_outputLevel * 400, 100);
+    _vizCtx.fillRect(640, 120 - outH, 640, outH);
+
+    // Labels
+    _vizCtx.fillStyle = 'rgba(255,255,255,0.3)';
+    _vizCtx.font = '11px sans-serif';
+    _vizCtx.fillText('Meeting Audio', 8, 112);
+    _vizCtx.fillText('AI Response', 648, 112);
+
+    // Decay
+    _inputLevel *= 0.92;
+    _outputLevel *= 0.92;
+
+    requestAnimationFrame(drawViz);
+  }
+
+  // ── Start ──
+  connectWS();
+  drawViz();
+})();
+</script>
+</body>
+</html>
