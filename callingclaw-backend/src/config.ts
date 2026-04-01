@@ -41,8 +41,8 @@ export const CONFIG = {
   // bridgePort removed — Python sidecar eliminated in v2.6.0
 
   // Voice provider selection: "openai" | "grok" | "gemini"
-  // Default: grok (Eve voice, 6x cheaper, good enough for meetings)
-  voiceProvider: (process.env.VOICE_PROVIDER || "grok") as "openai" | "grok" | "gemini",
+  // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
+  voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "grok" | "gemini",
 
   // OpenAI (Realtime voice + GPT-4o vision)
   openai: {
