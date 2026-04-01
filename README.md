@@ -2,7 +2,7 @@
 
 > AI meeting room that joins Google Meet/Zoom as a real participant. Listens, speaks, takes notes, controls the computer — like a sharp team member who never forgets.
 
-**v2.8.2** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
+**v2.8.3** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
 
 One of the first production applications of **Google Gemini 3.1 Flash Live** for real-time voice AI. Full duplex voice conversation with long-context understanding, native tool calling, and session resumption... at 10x lower cost than OpenAI Realtime.
 

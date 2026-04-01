@@ -3,6 +3,19 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.3] - 2026-04-02
+
+### Fixed
+- **Gemini voice survives meeting join** — mid-session `session.update` (from meeting persona injection) was killing the Gemini connection. Now blocked at adapter level; instructions injected via `conversation.item.create` instead
+- **Google Calendar reconnected** — Bun's fetch auto-routes through HTTPS_PROXY which breaks TLS to googleapis.com. Fixed with `googleFetch()` using curl subprocess to bypass proxy. Also fixed stale token override: backend .env was a separate copy (now symlinked to root)
+- **Summary extraction circuit breaker** — `generateSummary()` was called infinitely per meeting with no guard, consuming Opus tokens on every duplicate. Added mutex + circuit breaker (max 3) + transcript hash idempotency
+- **Summary crash on partial JSON** — `summary.participants.length` and other properties accessed without null checks. Added optional chaining + empty array fallback for all summary fields
+- **Calendar event creation** — `googleFetch` now correctly handles POST requests for event creation through proxy bypass
+- **Meeting auto-leave crash** — same `participants.length` crash was preventing clean meeting exit
+
+### Changed
+- **Desktop package version** — bumped to match VERSION file (2.8.3)
+
 ## [2.8.2] - 2026-04-01
 
 ### Added
