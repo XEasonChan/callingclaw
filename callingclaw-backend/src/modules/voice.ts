@@ -25,6 +25,11 @@ const SLOW_TOOLS = new Set([
   "take_screenshot",
   "open_file",
   "share_screen",
+  // Gemini 3.1 Live is very sensitive to delays — any blocking tool call
+  // causes the connection to stall or disconnect. These are normally "fast"
+  // for OpenAI/Grok but must be async for Gemini to keep audio flowing.
+  "recall_context",
+  "save_meeting_notes",
 ]);
 
 export interface VoiceModuleOptions {

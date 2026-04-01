@@ -20,6 +20,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@playwright/cli": "^0.1.1",
-    "openai": "^6.27.0"
+    "https-proxy-agent": "^7.0.0",
+    "openai": "^6.27.0",
+    "ws": "^8.18.0"
   }
 }

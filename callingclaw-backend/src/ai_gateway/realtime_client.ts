@@ -30,6 +30,11 @@
 import { CONFIG } from "../config";
 import { GeminiProtocolAdapter } from "./gemini-adapter";
 
+// Load ws npm package at module level (not dynamic require at connection time).
+// MUST use require() — `import from "ws"` gives Bun's built-in shim which ignores proxy.
+const WsWebSocket = require("ws");
+const WsHttpsProxyAgent = require("https-proxy-agent").HttpsProxyAgent;
+
 // ── Provider Config Types ──────────────────────────────────────────
 
 export type VoiceProviderName = "openai" | "grok" | "gemini";
@@ -340,6 +345,30 @@ export class RealtimeClient {
     this._intentionalClose = false;
     this._reconnectRetries = 0;
 
+    // Gemini: retry initial connection up to 3 times.
+    // First attempt often fails with 1006 (Connection ended) due to rate limits
+    // from previous sessions or proxy instability.
+    // IMPORTANT: set _intentionalClose during retry to prevent onclose auto-reconnect
+    // from creating parallel connections.
+    if (provider.name === "gemini") {
+      this._intentionalClose = true; // Block auto-reconnect during retry loop
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await this._connectInternal(instructions);
+          this._intentionalClose = false; // Re-enable auto-reconnect after success
+          return;
+        } catch (e: any) {
+          console.warn(`[Realtime] Gemini connect attempt ${attempt}/3 failed: ${e.message}`);
+          if (attempt < 3) {
+            await new Promise(r => setTimeout(r, 2000 * attempt));
+          } else {
+            this._intentionalClose = false;
+            throw e;
+          }
+        }
+      }
+    }
+
     return this._connectInternal(instructions);
   }
 
@@ -348,7 +377,7 @@ export class RealtimeClient {
 
     // Gemini: instantiate protocol adapter + append API key to URL
     if (provider.name === "gemini") {
-      this._geminiAdapter = new GeminiProtocolAdapter();
+      this._geminiAdapter = new GeminiProtocolAdapter(CONFIG.gemini.realtimeModel);
     } else {
       this._geminiAdapter = null;
     }
@@ -367,9 +396,46 @@ export class RealtimeClient {
         reject(new Error(`Connection timeout to ${provider.name} Voice API`));
       }, 15000);
 
-      this.ws = new WebSocket(wsUrl, {
-        headers: provider.headers,
-      } as any);
+      // Gemini: always use `ws` package (not Bun native WebSocket).
+      // Reason: Bun WS ignores proxy for wss://, and even without proxy, `ws` package
+      // is proven reliable with Gemini's endpoint (tested via gemini-live-ping.ts).
+      const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || "";
+      if (provider.name === "gemini") {
+        const wsOpts: any = {};
+        if (proxyUrl) {
+          wsOpts.agent = new WsHttpsProxyAgent(proxyUrl);
+          console.log(`[Realtime] Using ws+proxy for Gemini`);
+        } else {
+          console.log(`[Realtime] Using ws (direct) for Gemini`);
+        }
+        const pws = new WsWebSocket(wsUrl, wsOpts);
+        // Create a thin wrapper that maps ws EventEmitter → Bun-style onXxx callbacks
+        this.ws = {
+          send: (d: any) => pws.send(d),
+          close: () => pws.close(),
+          get readyState() { return pws.readyState; },
+        } as any;
+        pws.on("open", () => this.ws!.onopen?.(new Event("open") as any));
+        pws.on("message", (d: any) => {
+          const str = d.toString();
+          // Log first 200 chars of each raw message for debugging
+          console.log(`[Realtime] RAW Gemini msg (${str.length} chars): ${str.substring(0, 200)}`);
+          this.ws!.onmessage?.({ data: str } as any);
+        });
+        pws.on("close", (code: number, reason: any) => {
+          console.log(`[Realtime] RAW Gemini close: ${code} ${reason?.toString?.() || ""}`);
+          this.ws!.onclose?.({ code, reason: reason?.toString?.() || "", wasClean: code === 1000 } as any);
+        });
+        pws.on("error", (e: any) => {
+          console.error(`[Realtime] RAW Gemini error:`, e.message || e);
+          this.ws!.onerror?.(e);
+        });
+      } else {
+        // OpenAI / Grok: original Bun WebSocket (unchanged)
+        this.ws = new WebSocket(wsUrl, {
+          headers: provider.headers,
+        } as any);
+      }
 
       this.ws.onopen = () => {
         clearTimeout(connectTimeout);
@@ -388,6 +454,12 @@ export class RealtimeClient {
           voice,
           vad,
         });
+
+        // Gemini: inject session resumption handle for reconnect
+        if (provider.name === "gemini" && this._geminiSessionHandle && sessionPayload.session) {
+          sessionPayload.session._resumeHandle = this._geminiSessionHandle;
+          console.log(`[Realtime] Injecting Gemini resume handle into setup`);
+        }
 
         this.sendEvent("session.update", sessionPayload);
         resolve();
@@ -432,9 +504,14 @@ export class RealtimeClient {
         console.log(`[Realtime] Disconnected from ${provider.name} (code: ${event.code}, reason: ${event.reason || "none"}, wasClean: ${event.wasClean})`);
         this._connected = false;
 
-        // Auto-reconnect if not intentional
+        // Auto-reconnect if not intentional.
         if (!this._intentionalClose) {
-          this._scheduleReconnect();
+          if (this._provider.name === "gemini") {
+            // Gemini: use session resumption handle (avoids rate limits from blind reconnect)
+            this._scheduleGeminiResume();
+          } else {
+            this._scheduleReconnect();
+          }
         }
       };
     });
@@ -473,10 +550,31 @@ export class RealtimeClient {
       this._updateTokenBudget(parsed.response.usage);
     }
 
+    // Gemini: inject deferred instruction + greeting after setup completes
+    if (parsed.type === "session.updated" && this._geminiAdapter) {
+      const deferred = this._geminiAdapter.getDeferredInstruction();
+      if (deferred) {
+        this.injectContext(`[SYSTEM] ${deferred}`, "ctx_deferred_instr");
+        console.log(`[Realtime] Injected deferred instruction (${deferred.length} chars)`);
+      }
+      // Send greeting prompt so Gemini speaks first
+      setTimeout(() => {
+        if (this._connected) {
+          this.sendText("Please introduce yourself briefly and say hello.");
+          console.log(`[Realtime] Sent Gemini greeting prompt`);
+        }
+      }, 500);
+    }
+
     // Gemini session resumption handle
     if (parsed.type === "gemini.session_resumption" && parsed.handle) {
       this._geminiSessionHandle = parsed.handle;
       console.log(`[Realtime] Gemini session handle updated: ${parsed.handle.substring(0, 20)}...`);
+    }
+
+    // Gemini goAway — session about to end, log remaining time
+    if (parsed.type === "gemini.go_away") {
+      console.warn(`[Realtime] Gemini goAway — session ending soon (timeLeft: ${parsed.timeLeft})`);
     }
   }
 
@@ -506,7 +604,13 @@ export class RealtimeClient {
           }
         }
       } else {
-        console.log(`[Realtime] Token critical (${this._tokenBudget.usagePercent}%) — Gemini uses server-side compression`);
+        // Gemini uses server-side slidingWindow compression.
+        // But trim local queue to prevent unbounded memory growth.
+        const trimCount = Math.ceil(this._contextQueue.length / 2);
+        for (let i = 0; i < trimCount; i++) {
+          this._contextQueue.shift(); // Local trim only, no delete event
+        }
+        console.log(`[Realtime] Token critical (${this._tokenBudget.usagePercent}%) — Gemini server-side compression, trimmed ${trimCount} local items`);
       }
     } else if (ratio >= TOKEN_WARNING_THRESHOLD) {
       this._tokenBudget.warningLevel = "warning";
@@ -571,6 +675,48 @@ export class RealtimeClient {
       } catch (e: any) {
         console.error(`[Realtime] Reconnect attempt ${this._reconnectRetries} failed: ${e.message}`);
         // onclose will fire → _scheduleReconnect again
+      }
+    }, delay);
+  }
+
+  // ── Gemini Session Resumption ──────────────────────────────────
+  //
+  // Gemini Live has a 15-min session limit. Instead of blind reconnect (which
+  // triggers rate limits), use the session resumption handle to resume context.
+
+  private _scheduleGeminiResume() {
+    if (!this._geminiSessionHandle) {
+      console.warn("[Realtime] Gemini session ended without resume handle — falling back to reconnect");
+      this._scheduleReconnect();
+      return;
+    }
+
+    if (this._reconnectRetries >= RECONNECT_MAX_RETRIES) {
+      console.error(`[Realtime] Gemini resume failed after ${RECONNECT_MAX_RETRIES} attempts`);
+      this._onReconnectFailed?.();
+      return;
+    }
+
+    this._reconnectRetries++;
+    const delay = RECONNECT_DELAY_MS * this._reconnectRetries;
+    console.log(`[Realtime] Gemini session resume in ${delay}ms (attempt ${this._reconnectRetries}/${RECONNECT_MAX_RETRIES}, handle: ${this._geminiSessionHandle.substring(0, 12)}...)`);
+
+    this._reconnectTimer = setTimeout(async () => {
+      try {
+        // Store handle before reconnect (connect resets adapter state)
+        const resumeHandle = this._geminiSessionHandle;
+        await this._connectInternal(this._lastInstructions);
+        console.log(`[Realtime] Gemini session resumed successfully`);
+
+        // Inject resume handle into the setup message for this session
+        // The adapter's _buildSetupMessage checks for _resumeHandle
+        // Note: handle is consumed by _connectInternal → sendEvent("session.update") → adapter
+        // But _connectInternal already sent setup by now. We need to pass it differently.
+        // The handle must be in the session payload BEFORE the setup is sent.
+        // This is handled by passing it via GEMINI_PROVIDER.buildSession() session object.
+      } catch (e: any) {
+        console.error(`[Realtime] Gemini resume attempt ${this._reconnectRetries} failed: ${e.message}`);
+        // onclose will fire → _scheduleGeminiResume again
       }
     }, delay);
   }

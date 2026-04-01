@@ -770,6 +770,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
             <div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="key-openai" placeholder="sk-..."></div>
             <div class="input-group"><div class="input-label">Grok (xAI) API Key</div><input class="input-field" type="password" id="key-xai" placeholder="xai-..."></div>
+            <div class="input-group"><div class="input-label">Gemini API Key</div><input class="input-field" type="password" id="key-gemini" placeholder="AIza..."></div>
             <div class="input-group"><div class="input-label">OpenRouter API Key (可选)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
             <button class="btn btn-sm btn-primary" onclick="saveKeys()">保存密钥</button>
           </div>
@@ -874,6 +875,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <select id="st-provider" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;" onchange="onProviderChange(this.value)">
       <option value="openai">OpenAI</option>
       <option value="grok">Grok</option>
+      <option value="gemini">Gemini</option>
     </select>
     <select id="st-voice-select" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;">
     </select>
@@ -1398,8 +1400,9 @@ async function toggleEngine() {
 var VOICE_OPTIONS = {
   openai: ['alloy','ash','ballad','coral','echo','fable','marin','nova','onyx','sage','shimmer','verse'],
   grok: ['Eve','Ara','Rex','Sal','Leo'],
+  gemini: ['Kore','Puck','Charon','Fenrir','Aoede','Leda','Orus','Zephyr'],
 };
-var VOICE_DEFAULTS = { openai: 'marin', grok: 'Eve' };
+var VOICE_DEFAULTS = { openai: 'marin', grok: 'Eve', gemini: 'Kore' };
 
 function rebuildVoiceSelect(provider) {
   var sel = document.getElementById('st-voice-select');
@@ -2520,9 +2523,9 @@ async function scanGoogleCreds() {
 async function reqPerm(name) { await window.callingclaw.permissions.request(name); setTimeout(runAllChecks, 1000); }
 function openPerm(name) { window.callingclaw.permissions.openSettings(name); }
 async function saveKeys() {
-  const o = document.getElementById('key-openai').value.trim(), x = document.getElementById('key-xai').value.trim(), r = document.getElementById('key-openrouter').value.trim();
-  if (!o && !x && !r) return;
-  const body = {}; if (o) body.OPENAI_API_KEY = o; if (x) body.XAI_API_KEY = x; if (r) body.OPENROUTER_API_KEY = r;
+  const o = document.getElementById('key-openai').value.trim(), x = document.getElementById('key-xai').value.trim(), g = document.getElementById('key-gemini').value.trim(), r = document.getElementById('key-openrouter').value.trim();
+  if (!o && !x && !g && !r) return;
+  const body = {}; if (o) body.OPENAI_API_KEY = o; if (x) body.XAI_API_KEY = x; if (g) body.GEMINI_API_KEY = g; if (r) body.OPENROUTER_API_KEY = r;
   const btn = document.querySelector('button[onclick*="saveKeys"]');
   if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
   try {

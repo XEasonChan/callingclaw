@@ -66,6 +66,18 @@ interface NormalizedEvent {
 
 export class GeminiProtocolAdapter {
 
+  // Model name — needed to detect protocol differences between 2.5 and 3.1+
+  private _model: string;
+
+  constructor(model?: string) {
+    this._model = model || "gemini-3.1-flash-live-preview";
+  }
+
+  /** Gemini 3.1+ uses realtimeInput.text instead of clientContent.turns for text input */
+  private get _usesRealtimeInputText(): boolean {
+    return this._model.includes("3.1") || (this._model.includes("3.") && !this._model.includes("2."));
+  }
+
   // ── Outbound: Normalized event → Gemini JSON string ──────────────
   // Returns null if the event has no Gemini equivalent (e.g., conversation.item.delete)
 
@@ -79,7 +91,9 @@ export class GeminiProtocolAdapter {
           return this._buildAudioInput(data);
 
         case "response.create":
-          // Gemini auto-responds; sending turnComplete signals "I'm done talking"
+          // Gemini 3.1+: model auto-responds after realtimeInput/toolResponse, no explicit trigger needed
+          // Gemini 2.5: sending turnComplete signals "I'm done talking"
+          if (this._usesRealtimeInputText) return null;
           return JSON.stringify({ clientContent: { turnComplete: true } });
 
         case "conversation.item.create":
@@ -197,6 +211,32 @@ export class GeminiProtocolAdapter {
     });
   }
 
+  // ── Private: Instruction compaction ────────────────────────────────
+
+  /** Gemini 3.1 Live silently hangs on long systemInstruction, especially with tools.
+   *  With tools: keep under ~100 chars (proven working). Without tools: ~500 chars OK.
+   *  Store remainder for post-setup injection via conversation.item.create. */
+  _deferredInstruction = "";
+  private _hasTools = false;
+
+  private _compactInstruction(full: string): string {
+    this._deferredInstruction = "";
+    // With tools, Gemini 3.1 Live hangs if instruction > ~100 chars
+    const limit = this._hasTools ? 100 : 600;
+    if (full.length <= limit) return full;
+
+    const cutPoint = full.slice(0, limit).lastIndexOf("\n");
+    const userPart = cutPoint > 20 ? full.slice(0, cutPoint) : full.slice(0, limit);
+    this._deferredInstruction = full.slice(userPart.length);
+
+    return userPart;
+  }
+
+  /** Get deferred instruction for post-setup injection (empty if nothing was deferred) */
+  getDeferredInstruction(): string {
+    return this._deferredInstruction;
+  }
+
   // ── Private: Outbound message builders ────────────────────────────
 
   private _buildSetupMessage(data: any): string {
@@ -209,8 +249,11 @@ export class GeminiProtocolAdapter {
         parameters: t.parameters,
       }));
 
+    // Store model name for protocol version detection
+    this._model = session._geminiModel || "gemini-3.1-flash-live-preview";
+
     const setup: any = {
-      model: `models/${session._geminiModel || "gemini-3.1-flash-live-preview"}`,
+      model: `models/${this._model}`,
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {
@@ -223,18 +266,44 @@ export class GeminiProtocolAdapter {
       },
     };
 
-    // System instruction
+    // System instruction — Gemini 3.1 Live silently hangs on long instructions + tools combo.
+    // Mark hasTools before compaction so the threshold is adjusted.
+    this._hasTools = tools.length > 0;
     if (session.instructions) {
+      const compact = this._compactInstruction(session.instructions);
+      console.log(`[GeminiAdapter] Compacted instruction: ${session.instructions.length} → ${compact.length} chars`);
       setup.systemInstruction = {
-        parts: [{ text: session.instructions }],
+        parts: [{ text: compact }],
       };
     }
 
-    // Function tools
+    // Function tools — Gemini 3.1 Live rejects setup with complex tool schemas.
+    // Keep only tools with simple parameter schemas; strip to essentials.
+    const essentialToolNames = new Set([
+      "recall_context", "save_meeting_notes",
+    ]);
+    const filteredTools = tools.length > 4
+      ? tools.filter((t: any) => essentialToolNames.has(t.name))
+      : tools;
+
     if (tools.length > 0) {
+      // Hardcode tools in the exact format proven to work via gemini-live-full-setup.ts.
+      // Gemini 3.1 Live silently rejects setups with non-conforming tool schemas.
       setup.tools = [{
-        functionDeclarations: tools,
+        functionDeclarations: [
+          {
+            name: "recall_context",
+            description: "Fetch facts from memory",
+            parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+          },
+          {
+            name: "save_meeting_notes",
+            description: "Save meeting notes",
+            parameters: { type: "object", properties: { notes: { type: "string" } }, required: ["notes"] },
+          },
+        ],
       }];
+      console.log(`[GeminiAdapter] Tools: 2 hardcoded (proven format)`);
     }
 
     // Input config (VAD, turnCoverage, transcription)
@@ -255,25 +324,40 @@ export class GeminiProtocolAdapter {
       triggerTokens: 80000,
     };
 
-    // Session resumption (always request handles for Phase 2)
-    setup.sessionResumption = { transparent: true };
+    // Session resumption — request handle tokens for reconnect
+    // Include `handle` field when reconnecting with a previously received handle
+    setup.sessionResumption = {};
+    if (session._resumeHandle) {
+      setup.sessionResumption.handle = session._resumeHandle;
+      console.log(`[GeminiAdapter] Resuming with handle: ${session._resumeHandle.substring(0, 20)}...`);
+    }
 
     // Vision config: set if _visionEnabled flag is present
     if (session._visionEnabled) {
       setup.realtimeInputConfig.turnCoverage = "TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO";
     }
 
-    return JSON.stringify({ setup });
+    const payload = JSON.stringify({ setup });
+    // Log tools section specifically for debugging
+    if (setup.tools) {
+      console.log(`[GeminiAdapter] Tools JSON: ${JSON.stringify(setup.tools)}`);
+    }
+    console.log(`[GeminiAdapter] Setup payload (${payload.length} bytes)`);
+    return payload;
   }
 
   private _buildAudioInput(data: any): string {
     const audioBase64 = data.audio || "";
     const resampled = resampleAudio24kTo16k(audioBase64);
 
+    // Gemini 3.1 Live API: use `audio` field directly (not `media` or `mediaChunks`).
+    // - `media` → "Unknown name 'media'" error
+    // - `mediaChunks` → "deprecated. Use audio, video, or text instead."
+    // - `audio` → correct for 3.1+
     return JSON.stringify({
       realtimeInput: {
-        media: {
-          mimeType: "audio/pcm;rate=16000",
+        audio: {
+          mimeType: "audio/pcm",
           data: resampled,
         },
       },
@@ -283,7 +367,7 @@ export class GeminiProtocolAdapter {
   private _buildConversationItem(data: any): string {
     const item = data.item || {};
 
-    // Tool result → toolResponse envelope
+    // Tool result → toolResponse envelope (same for all Gemini versions)
     if (item.type === "function_call_output") {
       return JSON.stringify({
         toolResponse: {
@@ -295,9 +379,18 @@ export class GeminiProtocolAdapter {
       });
     }
 
-    // Text message or context injection → clientContent
-    const role = item.role === "assistant" ? "model" : "user";
     const text = item.content?.[0]?.text || "";
+
+    // Gemini 3.1+: use realtimeInput.text for ALL text input
+    // (clientContent is only for initial history seeding in 3.1)
+    if (this._usesRealtimeInputText) {
+      return JSON.stringify({
+        realtimeInput: { text },
+      });
+    }
+
+    // Gemini 2.5: use clientContent.turns (legacy format)
+    const role = item.role === "assistant" ? "model" : "user";
     const isContext = item.role === "system" || text.startsWith("[CONTEXT]") || text.startsWith("[SCREEN]");
 
     return JSON.stringify({
@@ -306,8 +399,6 @@ export class GeminiProtocolAdapter {
           role,
           parts: [{ text }],
         }],
-        // turnComplete: false for context injection (don't trigger response)
-        // turnComplete: true for user messages (trigger response)
         turnComplete: !isContext,
       },
     });
@@ -344,6 +435,22 @@ export class GeminiProtocolAdapter {
       events.push({
         type: "response.done",
         response: { status: "completed" },
+      });
+    }
+
+    // Output transcription (Gemini 3.1 sends this under serverContent)
+    if (content.outputTranscription?.text) {
+      events.push({
+        type: "response.audio_transcript.delta",
+        delta: content.outputTranscription.text,
+      });
+    }
+
+    // Input transcription (Gemini 3.1 sends this under serverContent)
+    if (content.inputTranscription?.text) {
+      events.push({
+        type: "conversation.item.input_audio_transcription.completed",
+        transcript: content.inputTranscription.text,
       });
     }
 

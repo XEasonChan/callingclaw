@@ -4,7 +4,8 @@
 import { test, expect, describe } from "bun:test";
 import { GeminiProtocolAdapter, resampleAudio24kTo16k } from "./gemini-adapter";
 
-const adapter = new GeminiProtocolAdapter();
+const adapter = new GeminiProtocolAdapter();  // defaults to 3.1
+const adapter25 = new GeminiProtocolAdapter("gemini-2.5-flash-live-preview");
 
 // ── Helper: create base64 PCM16 from Int16Array ──────────────────
 function int16ToBase64(samples: Int16Array): string {
@@ -60,41 +61,59 @@ describe("transformOutbound", () => {
     expect(parsed.realtimeInput.media.data).toBeTruthy(); // resampled data
   });
 
-  test("response.create → clientContent.turnComplete", () => {
-    const result = adapter.transformOutbound("response.create", {});
-    expect(result).not.toBeNull();
+  test("response.create → null for 3.1 (auto-response), turnComplete for 2.5", () => {
+    // Gemini 3.1+: auto-responds, no explicit trigger needed
+    const result31 = adapter.transformOutbound("response.create", {});
+    expect(result31).toBeNull();
 
-    const parsed = JSON.parse(result!);
+    // Gemini 2.5: sending turnComplete signals "I'm done talking"
+    const result25 = adapter25.transformOutbound("response.create", {});
+    expect(result25).not.toBeNull();
+    const parsed = JSON.parse(result25!);
     expect(parsed.clientContent.turnComplete).toBe(true);
   });
 
-  test("conversation.item.create (user message) → clientContent with turnComplete true", () => {
-    const result = adapter.transformOutbound("conversation.item.create", {
+  test("conversation.item.create (user message) → realtimeInput.text for 3.1, clientContent for 2.5", () => {
+    const data = {
       item: {
         type: "message",
         role: "user",
         content: [{ type: "input_text", text: "Hello world" }],
       },
-    });
+    };
 
-    const parsed = JSON.parse(result!);
-    expect(parsed.clientContent.turns[0].role).toBe("user");
-    expect(parsed.clientContent.turns[0].parts[0].text).toBe("Hello world");
-    expect(parsed.clientContent.turnComplete).toBe(true);
+    // Gemini 3.1+: uses realtimeInput.text
+    const result31 = adapter.transformOutbound("conversation.item.create", data);
+    const parsed31 = JSON.parse(result31!);
+    expect(parsed31.realtimeInput.text).toBe("Hello world");
+
+    // Gemini 2.5: uses clientContent.turns
+    const result25 = adapter25.transformOutbound("conversation.item.create", data);
+    const parsed25 = JSON.parse(result25!);
+    expect(parsed25.clientContent.turns[0].role).toBe("user");
+    expect(parsed25.clientContent.turns[0].parts[0].text).toBe("Hello world");
+    expect(parsed25.clientContent.turnComplete).toBe(true);
   });
 
-  test("conversation.item.create (system context) → clientContent with turnComplete false", () => {
-    const result = adapter.transformOutbound("conversation.item.create", {
+  test("conversation.item.create (system context) → realtimeInput.text for 3.1, clientContent for 2.5", () => {
+    const data = {
       item: {
         type: "message",
         role: "system",
         content: [{ type: "input_text", text: "[CONTEXT] Meeting is about Q3 revenue" }],
       },
-    });
+    };
 
-    const parsed = JSON.parse(result!);
-    expect(parsed.clientContent.turns[0].role).toBe("user"); // Gemini has no system role
-    expect(parsed.clientContent.turnComplete).toBe(false); // Don't trigger response
+    // Gemini 3.1+: uses realtimeInput.text (same as user messages)
+    const result31 = adapter.transformOutbound("conversation.item.create", data);
+    const parsed31 = JSON.parse(result31!);
+    expect(parsed31.realtimeInput.text).toBe("[CONTEXT] Meeting is about Q3 revenue");
+
+    // Gemini 2.5: uses clientContent with turnComplete=false (don't trigger response)
+    const result25 = adapter25.transformOutbound("conversation.item.create", data);
+    const parsed25 = JSON.parse(result25!);
+    expect(parsed25.clientContent.turns[0].role).toBe("user"); // Gemini has no system role
+    expect(parsed25.clientContent.turnComplete).toBe(false);
   });
 
   test("conversation.item.create (tool result) → toolResponse envelope", () => {

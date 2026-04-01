@@ -36,7 +36,7 @@ import type { OpenClawBridge } from "./openclaw_bridge";
 import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief } from "./voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
@@ -166,9 +166,15 @@ export function startConfigServer(services: Services) {
       throw new Error("OpenAI API key not configured");
     }
 
+    // Validate Gemini API key
+    if (provider === "gemini" && !CONFIG.gemini.apiKey) {
+      throw new Error("Gemini API key not configured (set GEMINI_API_KEY in .env)");
+    }
+
     // Apply voice selection
     if (opts.voice && provider === "grok") CONFIG.grok.voice = opts.voice;
     else if (opts.voice && provider === "openai") CONFIG.openai.voice = opts.voice;
+    else if (opts.voice && provider === "gemini") CONFIG.gemini.voice = opts.voice;
 
     const transport = opts.transport || "meet_bridge";
     const mode = opts.mode || "default";
@@ -195,6 +201,14 @@ export function startConfigServer(services: Services) {
       provider: services.realtime.provider,
     });
     services.eventBus.emit("voice.started", { audio_mode: transport, mode, topic: opts.topic || null });
+
+    // Notify all voice-test browser clients that voice is now connected.
+    // Critical for Gemini: the initial WS status may have been sent before Gemini connected
+    // (retry loop adds delay), so clients missed the transition to connected=true.
+    const statusMsg = JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider });
+    for (const ws of browserVoiceClients) {
+      try { ws.send(statusMsg); } catch {}
+    }
 
     return {
       ok: true,
@@ -335,11 +349,19 @@ export function startConfigServer(services: Services) {
                 services.realtime.start(instructions, provider).then(() => {
                   ws.send(JSON.stringify({ type: "status", voiceConnected: true, provider: services.realtime.provider }));
                   services.eventBus.emit("voice.started", { audio_mode: "browser", provider });
+                  // Activate TranscriptAuditor for Talk Locally mode too (not just meetings).
+                  // Grok Voice API doesn't fire function_call events, so Haiku detects intent
+                  // from transcript and executes tools, then injects results back to Grok.
+                  if (services.transcriptAuditor && !services.transcriptAuditor.active) {
+                    services.transcriptAuditor.activate(services.realtime);
+                    console.log("[VoiceTest] TranscriptAuditor activated for Talk Locally");
+                  }
                 }).catch((e: any) => {
                   ws.send(JSON.stringify({ type: "error", message: e.message }));
                 });
               }
             } else if (data.type === "stop") {
+              services.transcriptAuditor?.deactivate();
               services.realtime.stop();
               ws.send(JSON.stringify({ type: "status", voiceConnected: false }));
               services.eventBus.emit("voice.stopped", {});
@@ -573,6 +595,9 @@ export function startConfigServer(services: Services) {
             anthropic: CONFIG.anthropic.apiKey
               ? `sk-ant-...${CONFIG.anthropic.apiKey.slice(-4)}`
               : "",
+            gemini: CONFIG.gemini.apiKey
+              ? `AIza...${CONFIG.gemini.apiKey.slice(-4)}`
+              : "",
             openrouter: CONFIG.openrouter.apiKey
               ? `sk-or-...${CONFIG.openrouter.apiKey.slice(-4)}`
               : "",
@@ -601,6 +626,8 @@ export function startConfigServer(services: Services) {
           }
           if (envKey === "OPENAI_API_KEY") CONFIG.openai.apiKey = value;
           if (envKey === "XAI_API_KEY") CONFIG.grok.apiKey = value;
+          if (envKey === "GEMINI_API_KEY") CONFIG.gemini.apiKey = value;
+          if (envKey === "GOOGLE_AI_API_KEY") CONFIG.gemini.apiKey = value;
           if (envKey === "ANTHROPIC_API_KEY") CONFIG.anthropic.apiKey = value;
           if (envKey === "OPENROUTER_API_KEY") CONFIG.openrouter.apiKey = value;
         }
@@ -617,6 +644,8 @@ export function startConfigServer(services: Services) {
             audio: CONFIG.audio,
             openai_model: CONFIG.openai.realtimeModel,
             openai_voice: CONFIG.openai.voice,
+            gemini_model: CONFIG.gemini.realtimeModel,
+            gemini_voice: CONFIG.gemini.voice,
             anthropic_model: CONFIG.anthropic.model,
             openrouter_model: CONFIG.openrouter.model,
           },
@@ -1320,7 +1349,7 @@ export function startConfigServer(services: Services) {
       // POST /api/meeting/join — Join a meeting by URL (Google Meet or Zoom)
       // Integrated flow: start Voice AI → join meeting → bridge audio
       if (url.pathname === "/api/meeting/join" && req.method === "POST") {
-        const body = (await req.json()) as { url: string; instructions?: string };
+        const body = (await req.json()) as { url: string; instructions?: string; provider?: string; voice?: string; topic?: string };
         if (!body.url) {
           return Response.json({ error: "url is required" }, { status: 400, headers });
         }
@@ -1370,13 +1399,24 @@ export function startConfigServer(services: Services) {
 
         // Step 1: Start voice session (if not already running)
         // Uses CORE_IDENTITY as system prompt; meeting context injected later via injectMeetingBrief()
+        const joinProvider = (body.provider || CONFIG.voiceProvider) as any;
+        if (body.voice) {
+          if (joinProvider === "gemini") CONFIG.gemini.voice = body.voice;
+          else if (joinProvider === "grok") CONFIG.grok.voice = body.voice;
+          else if (joinProvider === "openai") CONFIG.openai.voice = body.voice;
+        }
+
         let voiceStarted = false;
-        if (!services.realtime.connected && CONFIG.openai.apiKey) {
+        const hasApiKey = joinProvider === "gemini" ? !!CONFIG.gemini.apiKey
+          : joinProvider === "grok" ? !!CONFIG.grok.apiKey
+          : !!CONFIG.openai.apiKey;
+
+        if (!services.realtime.connected && hasApiKey) {
           try {
             const voiceInstructions = buildVoiceInstructions();
-            await services.realtime.start(voiceInstructions);
+            await services.realtime.start(voiceInstructions, joinProvider);
             voiceStarted = true;
-            console.log("[Meeting] Voice AI started with CORE_IDENTITY");
+            console.log(`[Meeting] Voice AI started with ${joinProvider}`);
           } catch (e: any) {
             console.warn("[Meeting] Voice start failed:", e.message);
           }
@@ -1522,14 +1562,14 @@ export function startConfigServer(services: Services) {
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
 
-          // Auto-greeting: AI speaks first to confirm audio pipeline is working
+          // Self-introduction: tell participants who CallingClaw is and why it's here
           if (services.realtime.connected) {
             setTimeout(() => {
-              const greeting = prepBrief
-                ? "大家好，我是 CallingClaw 会议助手，已准备好参与会议。"
-                : "Hello, CallingClaw meeting assistant is ready.";
-              services.realtime.sendText(greeting);
-              console.log("[Meeting] Auto-greeting sent to verify audio pipeline");
+              const ownerName = CONFIG.userEmail?.split("@")[0] || "";
+              const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
+              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
+              services.realtime.sendText(intro);
+              console.log("[Meeting] Self-introduction sent");
             }, 2000); // Wait 2s for audio bridge to fully initialize
           }
         };

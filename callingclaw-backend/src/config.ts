@@ -64,8 +64,8 @@ export const CONFIG = {
   // Limit: 15min audio / 2min video per session (session resumption extends transparently)
   // Vision: native real-time screen capture + narration (1 FPS JPEG)
   gemini: {
-    apiKey: process.env.GOOGLE_AI_API_KEY || "",
-    realtimeModel: "gemini-3.1-flash-live-preview",
+    apiKey: process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY || "",
+    realtimeModel: process.env.GEMINI_LIVE_MODEL || "gemini-3.1-flash-live-preview",
     realtimeUrl: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
     voice: "Kore",  // options: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr
   },
