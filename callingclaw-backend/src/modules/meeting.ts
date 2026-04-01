@@ -47,6 +47,8 @@ export class MeetingModule {
    */
   startRecording() {
     this._meetingStartTime = Date.now();
+    this._summaryCount = 0;
+    this._lastSummaryHash = "";
     console.log("[Meeting] Recording started");
 
     // Extract action items every 2 minutes
@@ -155,8 +157,33 @@ export class MeetingModule {
    * Generate a full meeting summary — delegates to OpenClaw for deep context.
    * OpenClaw can cross-reference MEMORY.md, project files, and meeting history.
    */
+  private _summaryGenerating = false;
+  private _summaryCount = 0;
+  private _lastSummaryHash = "";
+
   async generateSummary(): Promise<MeetingSummary> {
+    // Circuit breaker: prevent infinite extraction loop (P0 bug — was consuming Opus tokens)
+    if (this._summaryGenerating) {
+      console.warn("[Meeting] Summary already generating — skipping duplicate request");
+      return { title: "Meeting", duration: "unknown", participants: [], keyPoints: ["Summary in progress"], actionItems: [], decisions: [], followUps: [] };
+    }
+    if (this._summaryCount >= 3) {
+      console.warn(`[Meeting] Circuit breaker: ${this._summaryCount} summaries already generated — refusing`);
+      return { title: "Meeting", duration: "unknown", participants: [], keyPoints: ["Circuit breaker: too many summary attempts"], actionItems: [], decisions: [], followUps: [] };
+    }
+
     const transcript = this.context.getConversationText(200);
+
+    // Idempotency: skip if transcript hasn't changed
+    const hash = Bun.hash(transcript).toString(16);
+    if (hash === this._lastSummaryHash && this._summaryCount > 0) {
+      console.warn(`[Meeting] Transcript unchanged (hash ${hash}) — skipping duplicate summary`);
+      return { title: "Meeting", duration: "unknown", participants: [], keyPoints: ["Duplicate request (same transcript)"], actionItems: [], decisions: [], followUps: [] };
+    }
+
+    this._summaryGenerating = true;
+    this._summaryCount++;
+    this._lastSummaryHash = hash;
     const notes = this.context.meetingNotes;
     const duration = this._meetingStartTime
       ? `${Math.round((Date.now() - this._meetingStartTime) / 60000)} minutes`
@@ -218,6 +245,8 @@ export class MeetingModule {
         keyPoints: [`Error: ${e.message}`],
         actionItems: [], decisions: [], followUps: [],
       };
+    } finally {
+      this._summaryGenerating = false;
     }
   }
 
@@ -242,29 +271,29 @@ export class MeetingModule {
 
 **Date:** ${now.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
 **Duration:** ${summary.duration}
-**Participants:** ${summary.participants.length > 0 ? summary.participants.join(", ") : "N/A"}
+**Participants:** ${summary.participants?.length > 0 ? summary.participants.join(", ") : "N/A"}
 
 ---
 
 ## Key Points
 
-${summary.keyPoints.map((p) => `- ${p}`).join("\n")}
+${(summary.keyPoints || []).map((p) => `- ${p}`).join("\n")}
 
 ## Decisions
 
-${summary.decisions.length > 0 ? summary.decisions.map((d) => `- ${d}`).join("\n") : "_No decisions recorded._"}
+${(summary.decisions || []).length > 0 ? summary.decisions.map((d) => `- ${d}`).join("\n") : "_No decisions recorded._"}
 
 ## Action Items
 
 | Task | Assignee | Deadline |
 |------|----------|----------|
-${summary.actionItems.length > 0
+${(summary.actionItems || []).length > 0
   ? summary.actionItems.map((a) => `| ${a.task} | ${a.assignee || "TBD"} | ${a.deadline || "TBD"} |`).join("\n")
   : "| _No action items_ | — | — |"}
 
 ## Follow-ups
 
-${summary.followUps.length > 0 ? summary.followUps.map((f, i) => `${i + 1}. ${f}`).join("\n") : "_No follow-ups recorded._"}
+${(summary.followUps || []).length > 0 ? summary.followUps.map((f, i) => `${i + 1}. ${f}`).join("\n") : "_No follow-ups recorded._"}
 
 ---
 
