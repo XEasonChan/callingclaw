@@ -804,12 +804,22 @@ calendar.connect().then(() => {
   }
 }).catch(async (e) => {
   console.warn("[Init] Google Calendar initial connect failed:", e.message);
-  // Auto-scan credentials and retry (token in .env may be stale)
+  // Auto-scan credentials and retry — but only if env vars are missing.
+  // If env vars are set, they take priority (may be newer than local files).
+  const hasEnvCreds = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN);
+  if (hasEnvCreds) {
+    console.log("[Init] Google env vars are set — retrying connect (not scanning local files)");
+    try {
+      await calendar.connect();
+      console.log("[Init] Google Calendar connected on retry");
+      return;
+    } catch {}
+  }
   try {
     const { scanForGoogleCredentials } = await import("./mcp_client/google_cal");
     const { credentials } = await scanForGoogleCredentials();
     if (credentials) {
-      console.log("[Init] Found fresh Google credentials via auto-scan — retrying...");
+      console.log("[Init] Found Google credentials via auto-scan — retrying...");
       calendar.setCredentials(credentials);
       await calendar.connect();
       console.log("[Init] Google Calendar connected via auto-scan");

@@ -4,6 +4,42 @@
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
+/**
+ * Fetch that bypasses HTTPS_PROXY for Google APIs.
+ * Bun caches HTTPS_PROXY at startup (from .env) and ignores runtime changes.
+ * Google OAuth/Calendar endpoints need direct access (proxy breaks TLS).
+ * Solution: shell out to curl which doesn't inherit Bun's proxy config.
+ */
+async function googleFetch(url: string, init?: RequestInit): Promise<Response> {
+  const method = init?.method || "GET";
+  const headers = init?.headers as Record<string, string> || {};
+  const body = init?.body?.toString() || "";
+
+  const args = ["curl", "-s", "-X", method, url, "--noproxy", "*"];
+  for (const [k, v] of Object.entries(headers)) {
+    args.push("-H", `${k}: ${v}`);
+  }
+  if (body) {
+    args.push("-d", body);
+  }
+  args.push("-w", "\n%{http_code}");
+  console.log(`[googleFetch] ${method} ${url}`);
+  console.log(`[googleFetch] body: ${body.slice(0, 300)}`);
+
+  const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
+  const output = await new Response(proc.stdout).text();
+  await proc.exited;
+
+  const lines = output.trimEnd().split("\n");
+  const statusCode = parseInt(lines.pop()!) || 500;
+  const responseBody = lines.join("\n");
+
+  return new Response(responseBody, {
+    status: statusCode,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export interface CalendarAttendee {
   email: string;
   displayName?: string;
@@ -172,7 +208,7 @@ export class GoogleCalendarClient {
 
   /** Refresh the OAuth2 access token using the refresh token */
   private async refreshAccessToken(): Promise<void> {
-    const res = await fetch(TOKEN_URL, {
+    const res = await googleFetch(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Connection: "close" },
       body: new URLSearchParams({
@@ -222,7 +258,7 @@ export class GoogleCalendarClient {
   private async calendarFetch(path: string, options: RequestInit = {}, retry = 1): Promise<any> {
     const token = await this.getToken();
     try {
-      const res = await fetch(`${CALENDAR_API}${path}`, {
+      const res = await googleFetch(`${CALENDAR_API}${path}`, {
         ...options,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -448,7 +484,7 @@ export class GoogleCalendarClient {
       const timeMax = new Date(Date.now() + withinHours * 3600000).toISOString();
 
       const token = await this.getToken();
-      const res = await fetch(`${CALENDAR_API}/freeBusy`, {
+      const res = await googleFetch(`${CALENDAR_API}/freeBusy`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
