@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CallingClaw Test Hub</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #eee; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 32px; min-height: 100vh; }
+h1 { font-size: 28px; margin-bottom: 8px; }
+h1 span { color: #E63946; }
+.subtitle { color: #888; font-size: 14px; margin-bottom: 32px; }
+.status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace; }
+.status-ok { background: rgba(16,185,129,0.15); color: #10b981; }
+.status-off { background: rgba(239,68,68,0.15); color: #ef4444; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-bottom: 32px; }
+.section-title { font-size: 18px; color: #E63946; margin: 24px 0 12px; border-bottom: 1px solid #2a2a4a; padding-bottom: 6px; }
+.card { background: #16213e; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+.card:hover { border-color: #E63946; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(230,57,70,0.15); }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.card-title .icon { font-size: 20px; }
+.card-desc { color: #aaa; font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+.card-url { font-family: monospace; font-size: 11px; color: #666; word-break: break-all; }
+.card-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-family: monospace; }
+.tag-phase { background: rgba(230,57,70,0.15); color: #E63946; }
+.tag-feature { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.tag-new { background: rgba(16,185,129,0.15); color: #10b981; }
+.footer { margin-top: 40px; color: #555; font-size: 12px; text-align: center; }
+.footer a { color: #E63946; text-decoration: none; }
+.backend-status { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.dot-red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+</style>
+</head>
+<body>
+<h1><span>CallingClaw</span> Test Hub</h1>
+<p class="subtitle">All E2E test pages in one place. Click any card to open.</p>
+
+<div class="backend-status">
+  <span class="dot" id="backend-dot"></span>
+  <span id="backend-text" style="font-size:13px;color:#888">Checking...</span>
+</div>
+
+<div class="section-title">Core Testing (Voice + Meeting)</div>
+<div class="grid">
+  <div class="card" onclick="go('/voice-test')">
+    <div class="card-title"><span class="icon">🎙</span> Voice Test</div>
+    <div class="card-desc">Full voice session: provider switching (OpenAI/Grok/Gemini), transcript, audio bridge, tool layer toggles, mic visualization</div>
+    <div class="card-tags"><span class="tag tag-phase">Phase 2/3</span><span class="tag tag-feature">2.5 2.10 3.2.1</span></div>
+    <div class="card-url">/voice-test</div>
+  </div>
+  <div class="card" onclick="go('/meeting-join-test')">
+    <div class="card-title"><span class="icon">📞</span> Meeting Join Test</div>
+    <div class="card-desc">Chrome join flow: URL validation, Playwright automation, admit flow, Browser Action Loop (Haiku model-driven)</div>
+    <div class="card-tags"><span class="tag tag-phase">Phase 2</span><span class="tag tag-feature">2.3 2.4 2.8</span></div>
+    <div class="card-url">/meeting-join-test</div>
+  </div>
+  <div class="card" onclick="go('/meeting-view')">
+    <div class="card-title"><span class="icon">👁</span> Meeting View</div>
+    <div class="card-desc">Live meeting monitoring: transcript display, tool execution visualization, speaker identification</div>
+    <div class="card-tags"><span class="tag tag-phase">Phase 3</span><span class="tag tag-feature">3.5.1 3.5.4</span></div>
+    <div class="card-url">/meeting-view</div>
+  </div>
+  <div class="card" onclick="go('/panel')">
+    <div class="card-title"><span class="icon">🏠</span> CallingClaw Panel</div>
+    <div class="card-desc">Main control panel: onboarding, API keys, meeting status, system health, calendar events</div>
+    <div class="card-tags"><span class="tag tag-phase">Phase 0/1</span><span class="tag tag-feature">0.3-0.7 1.1</span></div>
+    <div class="card-url">/panel</div>
+  </div>
+</div>
+
+<div class="section-title">Standalone Module Tests (No Meeting Required)</div>
+<div class="grid">
+  <div class="card" onclick="go('/test-automation-router')">
+    <div class="card-title"><span class="icon">🤖</span> AutomationRouter <span class="status status-ok">NEW</span></div>
+    <div class="card-desc">4-layer intent classification + execution. Test regex fast lane, AI file search, layer fallback chain. Presets for Chinese + English commands.</div>
+    <div class="card-tags"><span class="tag tag-new">standalone</span><span class="tag tag-feature">3.4.1 3.4.2</span></div>
+    <div class="card-url">/test-automation-router</div>
+  </div>
+  <div class="card" onclick="go('/test-transcript-auditor')">
+    <div class="card-title"><span class="icon">📝</span> TranscriptAuditor <span class="status status-ok">NEW</span></div>
+    <div class="card-desc">Inject fake transcript entries, watch auditor classify intent via Haiku. Test fast-lane regex + medium-lane LLM classification.</div>
+    <div class="card-tags"><span class="tag tag-new">standalone</span><span class="tag tag-feature">3.5.1 3.4.1</span></div>
+    <div class="card-url">/test-transcript-auditor</div>
+  </div>
+  <div class="card" onclick="go('/test-presentation-engine')">
+    <div class="card-title"><span class="icon">📊</span> PresentationEngine <span class="status status-ok">NEW</span></div>
+    <div class="card-desc">Scene planning + multi-page navigation. Build slide plans from URLs, test scene sequencing + scroll targets.</div>
+    <div class="card-tags"><span class="tag tag-new">standalone</span><span class="tag tag-feature">3.3.2 3.3.3</span></div>
+    <div class="card-url">/test-presentation-engine</div>
+  </div>
+  <div class="card" onclick="go('/test-context-retriever')">
+    <div class="card-title"><span class="icon">🔍</span> ContextRetriever <span class="status status-ok">NEW</span></div>
+    <div class="card-desc">Simulate conversation, trigger gap analysis, observe knowledge retrieval from MEMORY.md. Test topic shift detection.</div>
+    <div class="card-tags"><span class="tag tag-new">standalone</span><span class="tag tag-feature">3.5.3</span></div>
+    <div class="card-url">/test-context-retriever</div>
+  </div>
+</div>
+
+<div class="section-title">API Quick Tests</div>
+<div class="grid">
+  <div class="card" onclick="apiTest('/api/status', 'status')">
+    <div class="card-title"><span class="icon">💓</span> Health Check</div>
+    <div class="card-desc">Backend status: engine, voice, calendar, OpenClaw, meeting state, uptime</div>
+    <div class="card-url">GET /api/status</div>
+  </div>
+  <div class="card" onclick="apiTest('/api/automation/status', 'auto-status')">
+    <div class="card-title"><span class="icon">⚡</span> Automation Layers</div>
+    <div class="card-desc">Check availability of all 4 layers: Shortcuts, Playwright, Peekaboo, Computer Use</div>
+    <div class="card-url">GET /api/automation/status</div>
+  </div>
+  <div class="card" onclick="apiTest('/api/voice/session/status', 'voice-status')">
+    <div class="card-title"><span class="icon">🔊</span> Voice Session</div>
+    <div class="card-desc">Current voice session: provider, transport, mode, connected status</div>
+    <div class="card-url">GET /api/voice/session/status</div>
+  </div>
+  <div class="card" onclick="apiTest('/api/calendar/events', 'cal-events')">
+    <div class="card-title"><span class="icon">📅</span> Calendar Events</div>
+    <div class="card-desc">Upcoming calendar events with prep brief status</div>
+    <div class="card-url">GET /api/calendar/events</div>
+  </div>
+</div>
+
+<div id="api-result" style="display:none;margin-top:16px;background:#16213e;border-radius:8px;padding:16px;max-height:300px;overflow:auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <span id="api-result-title" style="font-size:13px;color:#888;font-family:monospace;"></span>
+    <button onclick="document.getElementById('api-result').style.display='none'" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px;">&times;</button>
+  </div>
+  <pre id="api-result-body" style="font-size:12px;font-family:monospace;color:#ddd;white-space:pre-wrap;"></pre>
+</div>
+
+<div class="footer">
+  CallingClaw 2.0 &mdash; <a href="/panel">Back to Panel</a> &mdash;
+  E2E Acceptance: <a href="javascript:void(0)" onclick="apiRun('/api/automation/run','POST',{instruction:'open the E2E acceptance test plan'})">Open Test Plan</a>
+</div>
+
+<script>
+function go(path) { window.open(path, '_blank'); }
+
+async function apiTest(url, id) {
+  var el = document.getElementById('api-result');
+  var title = document.getElementById('api-result-title');
+  var body = document.getElementById('api-result-body');
+  el.style.display = 'block';
+  title.textContent = 'GET ' + url;
+  body.textContent = 'Loading...';
+  try {
+    var resp = await fetch(url);
+    var data = await resp.json();
+    body.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    body.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function apiRun(url, method, body) {
+  try {
+    await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch (e) { console.error(e); }
+}
+
+// Check backend status
+(async function() {
+  var dot = document.getElementById('backend-dot');
+  var txt = document.getElementById('backend-text');
+  try {
+    var resp = await fetch('/api/status');
+    var d = await resp.json();
+    dot.className = 'dot dot-green';
+    txt.textContent = 'Backend running (v' + d.version + ', uptime ' + Math.round(d.uptime) + 's) — ' +
+      'Voice: ' + d.realtime + ' | Calendar: ' + d.calendar + ' | OpenClaw: ' + d.openclaw;
+  } catch (e) {
+    dot.className = 'dot dot-red';
+    txt.textContent = 'Backend offline — start with ./scripts/start.sh';
+  }
+})();
+</script>
+</body>
+</html>
+</content>
+</invoke>

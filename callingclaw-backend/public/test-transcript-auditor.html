@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw - TranscriptAuditor Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --card: #16213e; --accent: #E63946; --text: #eee;
+      --text2: #aaa; --border: #2a2a4a; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    h2 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 600; }
+    .subtitle { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .full { grid-column: 1 / -1; }
+    textarea, input[type="text"], select {
+      width: 100%; padding: 8px 10px; background: #0e1628; border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; outline: none;
+    }
+    textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+    textarea { min-height: 50px; resize: vertical; }
+    select { cursor: pointer; }
+    button {
+      padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #2a2a4a; color: var(--text); }
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .presets button { font-size: 11px; padding: 4px 8px; background: #1e2d4a; color: var(--text2); border: 1px solid var(--border); }
+    .presets button:hover { color: var(--text); border-color: var(--accent); }
+
+    .status-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.active { background: var(--green); }
+    .status-dot.standby { background: var(--yellow); }
+    .status-dot.off { background: var(--red); }
+
+    .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .form-row > * { flex: 1; }
+    .form-row > .small { flex: 0 0 120px; }
+
+    /* Transcript feed */
+    .transcript-feed { max-height: 300px; overflow-y: auto; }
+    .t-entry { padding: 4px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 12px; }
+    .t-entry.user { background: rgba(230,57,70,0.1); border-left: 3px solid var(--accent); }
+    .t-entry.participant { background: rgba(59,130,246,0.1); border-left: 3px solid #3b82f6; }
+    .t-entry.assistant { background: rgba(34,197,94,0.1); border-left: 3px solid var(--green); }
+    .t-role { font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    .t-speaker { color: var(--text2); font-size: 11px; }
+    .t-text { margin-top: 2px; color: var(--text); }
+
+    /* Auditor events */
+    .auditor-events { max-height: 300px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 11px; }
+    .aud-entry { padding: 6px 8px; border-bottom: 1px solid #1e2d4a; }
+    .aud-type { color: var(--accent); font-weight: 600; }
+    .aud-time { color: #555; margin-right: 6px; }
+    .confidence-bar { height: 5px; border-radius: 3px; margin-top: 4px; background: #0e1628; overflow: hidden; }
+    .confidence-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .aud-detail { color: var(--text2); margin-top: 2px; white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>TranscriptAuditor Test</h1>
+  <p class="subtitle">Fast-lane regex + Haiku medium-lane intent detection from transcript stream</p>
+
+  <div class="grid">
+    <!-- Status -->
+    <div class="card full">
+      <div class="status-bar">
+        <span class="status-dot off" id="auditorDot"></span>
+        <span id="auditorLabel">Auditor: checking...</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text2)" id="statusDetail"></span>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="card">
+      <h2>Transcript Input</h2>
+      <div class="form-row">
+        <select id="roleSelect" class="small">
+          <option value="user">user</option>
+          <option value="participant">participant</option>
+          <option value="assistant">assistant</option>
+        </select>
+        <input type="text" id="speakerInput" placeholder="Speaker name" value="TestUser">
+      </div>
+      <textarea id="transcriptInput" placeholder="Enter transcript text..."></textarea>
+      <div class="btn-row">
+        <button class="btn-accent" onclick="injectTranscript()">Inject</button>
+        <button class="btn-secondary" onclick="clearFeed()">Clear Feed</button>
+      </div>
+      <div class="presets" id="presets"></div>
+    </div>
+
+    <!-- Transcript Feed -->
+    <div class="card">
+      <h2>Transcript Feed</h2>
+      <div class="transcript-feed" id="transcriptFeed">
+        <div style="font-size:12px;color:var(--text2);">No transcripts yet. Inject one to start.</div>
+      </div>
+    </div>
+
+    <!-- Auditor Events -->
+    <div class="card full">
+      <h2>Auditor Events</h2>
+      <div class="auditor-events" id="auditorEvents">
+        <div class="aud-entry"><span class="aud-time">--:--:--</span> Waiting for events...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var BASE = window.location.origin;
+    var WS_URL = 'ws://' + window.location.host + '/ws/events';
+    var ws = null;
+    var transcripts = [];
+    var presetList = [
+      '帮我点击那个按钮', '打开PRD文件', '投屏这个页面',
+      '停止投屏', 'mute mic', 'scroll down', 'next meeting time'
+    ];
+
+    function init() {
+      var container = document.getElementById('presets');
+      presetList.forEach(function(p) {
+        var btn = document.createElement('button');
+        btn.textContent = p;
+        btn.onclick = function() { document.getElementById('transcriptInput').value = p; };
+        container.appendChild(btn);
+      });
+      pollStatus();
+      setInterval(pollStatus, 5000);
+      connectWS();
+    }
+
+    function pollStatus() {
+      fetch(BASE + '/api/status').then(function(r) { return r.json(); }).then(function(data) {
+        var auditor = data.auditor || data.transcriptAuditor;
+        var dot = document.getElementById('auditorDot');
+        var label = document.getElementById('auditorLabel');
+        var detail = document.getElementById('statusDetail');
+        if (auditor) {
+          var state = auditor.active ? 'active' : 'standby';
+          dot.className = 'status-dot ' + state;
+          label.textContent = 'Auditor: ' + state;
+          detail.textContent = JSON.stringify(auditor).substring(0, 100);
+        } else {
+          dot.className = 'status-dot off';
+          label.textContent = 'Auditor: not found in status';
+          detail.textContent = '';
+        }
+      }).catch(function() {
+        document.getElementById('auditorDot').className = 'status-dot off';
+        document.getElementById('auditorLabel').textContent = 'Auditor: backend unreachable';
+      });
+    }
+
+    function injectTranscript() {
+      var text = document.getElementById('transcriptInput').value.trim();
+      var role = document.getElementById('roleSelect').value;
+      var speaker = document.getElementById('speakerInput').value.trim() || 'Unknown';
+      if (!text) return;
+
+      var entry = {text: text, role: role, speaker: speaker, ts: new Date()};
+      transcripts.push(entry);
+      renderFeed();
+      document.getElementById('transcriptInput').value = '';
+
+      fetch(BASE + '/api/test/transcript-inject', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({text: text, role: role, speaker: speaker})
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        addAuditorEvent('inject.response', data);
+      }).catch(function(e) {
+        addAuditorEvent('inject.error', {error: e.message});
+      });
+    }
+
+    function renderFeed() {
+      var feed = document.getElementById('transcriptFeed');
+      feed.innerHTML = '';
+      transcripts.forEach(function(t) {
+        var div = document.createElement('div');
+        div.className = 't-entry ' + t.role;
+        var ts = t.ts.toLocaleTimeString();
+        div.innerHTML = '<span class="t-role" style="color:' +
+          (t.role === 'user' ? 'var(--accent)' : t.role === 'assistant' ? 'var(--green)' : '#3b82f6') +
+          '">' + t.role + '</span> <span class="t-speaker">' + t.speaker + ' ' + ts + '</span>' +
+          '<div class="t-text">' + escHtml(t.text) + '</div>';
+        feed.appendChild(div);
+      });
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function clearFeed() {
+      transcripts = [];
+      document.getElementById('transcriptFeed').innerHTML = '<div style="font-size:12px;color:var(--text2);">Cleared.</div>';
+    }
+
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+      ws.onopen = function() { addAuditorEvent('system', {msg: 'WebSocket connected'}); };
+      ws.onclose = function() { addAuditorEvent('system', {msg: 'Disconnected, reconnecting...'}); setTimeout(connectWS, 3000); };
+      ws.onmessage = function(evt) {
+        try {
+          var msg = JSON.parse(evt.data);
+          var type = msg.type || msg.event || '';
+          if (type.indexOf('auditor') === 0) {
+            addAuditorEvent(type, msg.data || msg.payload || msg);
+          }
+        } catch(e) {}
+      };
+    }
+
+    function addAuditorEvent(type, data) {
+      var container = document.getElementById('auditorEvents');
+      var now = new Date();
+      var ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(function(n){return String(n).padStart(2,'0')}).join(':');
+      var div = document.createElement('div');
+      div.className = 'aud-entry';
+
+      var conf = data ? (data.confidence || data.conf) : null;
+      var confHtml = '';
+      if (typeof conf === 'number') {
+        var color = conf > 0.8 ? 'var(--green)' : conf > 0.5 ? 'var(--yellow)' : 'var(--red)';
+        confHtml = '<div class="confidence-bar"><div class="confidence-fill" style="width:' +
+          (conf * 100) + '%;background:' + color + '"></div></div>';
+      }
+
+      div.innerHTML = '<span class="aud-time">' + ts + '</span><span class="aud-type">' + type + '</span>' +
+        confHtml + '<div class="aud-detail">' + escHtml(JSON.stringify(data, null, 2)) + '</div>';
+      container.insertBefore(div, container.firstChild);
+      if (container.children.length > 200) container.removeChild(container.lastChild);
+    }
+
+    function escHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s || '';
+      return d.innerHTML;
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw - ContextRetriever Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --card: #16213e; --accent: #E63946; --text: #eee;
+      --text2: #aaa; --border: #2a2a4a; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    h2 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 600; }
+    .subtitle { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .full { grid-column: 1 / -1; }
+    textarea, input[type="text"], select {
+      width: 100%; padding: 8px 10px; background: #0e1628; border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; outline: none;
+    }
+    textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+    textarea { min-height: 50px; resize: vertical; }
+    button {
+      padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #2a2a4a; color: var(--text); }
+    .btn-small { padding: 4px 10px; font-size: 11px; }
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .presets button { font-size: 11px; padding: 4px 8px; background: #1e2d4a; color: var(--text2); border: 1px solid var(--border); }
+    .presets button:hover { color: var(--text); border-color: var(--accent); }
+    label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .form-row > * { flex: 1; }
+    .form-row > .small { flex: 0 0 120px; }
+
+    /* Status */
+    .status-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .status-dot.active { background: var(--green); }
+    .status-dot.inactive { background: var(--red); }
+    .status-dot.unknown { background: var(--yellow); }
+
+    /* Character counter bar */
+    .char-bar-wrap { margin-top: 8px; }
+    .char-bar-label { font-size: 11px; color: var(--text2); display: flex; justify-content: space-between; margin-bottom: 3px; }
+    .char-bar { height: 8px; border-radius: 4px; background: #0e1628; overflow: hidden; }
+    .char-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s, background 0.3s; }
+
+    /* Conversation entries */
+    .conv-feed { max-height: 220px; overflow-y: auto; }
+    .conv-entry { padding: 4px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 12px; }
+    .conv-entry.user { background: rgba(230,57,70,0.1); border-left: 3px solid var(--accent); }
+    .conv-entry.participant { background: rgba(59,130,246,0.1); border-left: 3px solid #3b82f6; }
+    .conv-entry.assistant { background: rgba(34,197,94,0.1); border-left: 3px solid var(--green); }
+    .conv-role { font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    .conv-text { margin-top: 2px; color: var(--text); }
+
+    /* Result panels */
+    .result-box {
+      background: #0e1628; border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--text2);
+      max-height: 240px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    }
+    .gap-item { padding: 6px 0; border-bottom: 1px solid #1e2d4a; }
+    .gap-label { font-size: 11px; color: var(--accent); font-weight: 600; }
+    .gap-value { font-size: 12px; color: var(--text); margin-top: 2px; }
+    .gap-queries { list-style: none; padding: 0; margin-top: 4px; }
+    .gap-queries li { font-size: 11px; color: var(--text2); padding: 2px 0; font-family: 'SF Mono', monospace; }
+    .gap-queries li::before { content: "-> "; color: var(--accent); }
+
+    /* Event log */
+    .event-log { max-height: 180px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 11px; }
+    .ev-entry { padding: 4px 0; border-bottom: 1px solid #1e2d4a; color: var(--text2); }
+    .ev-type { color: var(--accent); }
+    .ev-time { color: #555; margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <h1>ContextRetriever Test</h1>
+  <p class="subtitle">Gap detection (300-char threshold) + knowledge retrieval via Haiku</p>
+
+  <div class="grid">
+    <!-- Status -->
+    <div class="card full">
+      <div class="status-bar">
+        <span class="status-dot unknown" id="retrieverDot"></span>
+        <span id="retrieverLabel">Retriever: checking...</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text2)" id="statusExtra"></span>
+      </div>
+    </div>
+
+    <!-- Conversation Simulator -->
+    <div class="card">
+      <h2>Conversation Simulator</h2>
+      <div class="form-row">
+        <select id="roleSelect" class="small">
+          <option value="user">user</option>
+          <option value="participant">participant</option>
+          <option value="assistant">assistant</option>
+        </select>
+        <input type="text" id="speakerInput" placeholder="Speaker" value="TestUser">
+      </div>
+      <textarea id="convInput" placeholder="Enter conversation turn..."></textarea>
+      <div class="btn-row">
+        <button class="btn-accent" onclick="addTurn()">Add</button>
+        <button class="btn-secondary" onclick="clearConv()">Clear</button>
+      </div>
+      <div class="char-bar-wrap">
+        <div class="char-bar-label">
+          <span>Conversation chars</span>
+          <span id="charCount">0 / 300</span>
+        </div>
+        <div class="char-bar">
+          <div class="char-bar-fill" id="charFill" style="width:0%;background:var(--red);"></div>
+        </div>
+      </div>
+      <div class="presets">
+        <button onclick="loadPreset('product_review')">Product Review (3 turns)</button>
+        <button onclick="loadPreset('topic_shift')">Topic Shift (A->B)</button>
+        <button onclick="loadPreset('user_question')">User Question</button>
+      </div>
+    </div>
+
+    <!-- Conversation Feed -->
+    <div class="card">
+      <h2>Conversation Feed</h2>
+      <div class="conv-feed" id="convFeed">
+        <div style="font-size:12px;color:var(--text2);">Empty. Add turns or load a preset.</div>
+      </div>
+    </div>
+
+    <!-- Gap Analysis -->
+    <div class="card">
+      <h2>Gap Analysis</h2>
+      <div class="result-box" id="gapResult">Waiting for gap detection...</div>
+    </div>
+
+    <!-- Retrieved Context -->
+    <div class="card">
+      <h2>Retrieved Context</h2>
+      <div class="result-box" id="contextResult">No retrieval yet.</div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card full">
+      <h2>Event Log (retriever.*)</h2>
+      <div class="event-log" id="eventLog">
+        <div class="ev-entry"><span class="ev-time">--:--:--</span> Connecting...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var BASE = window.location.origin;
+    var WS_URL = 'ws://' + window.location.host + '/ws/events';
+    var ws = null;
+    var turns = [];
+    var totalChars = 0;
+    var THRESHOLD = 300;
+
+    var presets = {
+      product_review: [
+        {role:'participant', speaker:'PM', text:'Let me walk through the Q1 product metrics. DAU is up 15% but retention dropped to 38%.'},
+        {role:'user', speaker:'You', text:'What was our target retention for Q1? I think we set it at 45%.'},
+        {role:'participant', speaker:'PM', text:'Yes, 45% was the target. The drop is mainly in the onboarding funnel, step 3 has a 60% drop-off.'}
+      ],
+      topic_shift: [
+        {role:'participant', speaker:'Alice', text:'The API latency has been stable at p99 200ms this sprint.'},
+        {role:'user', speaker:'You', text:'Good. Let\'s switch to the hiring plan. How many backend engineers do we need in Q2?'},
+        {role:'participant', speaker:'Bob', text:'We budgeted for 3 senior and 2 mid-level. Two candidates are in final rounds.'}
+      ],
+      user_question: [
+        {role:'user', speaker:'You', text:'Can someone remind me what we decided about the migration timeline in last week\'s meeting?'}
+      ]
+    };
+
+    function init() {
+      pollStatus();
+      setInterval(pollStatus, 5000);
+      connectWS();
+    }
+
+    function pollStatus() {
+      fetch(BASE + '/api/status').then(function(r) { return r.json(); }).then(function(data) {
+        var ret = data.retriever || data.contextRetriever;
+        var dot = document.getElementById('retrieverDot');
+        var label = document.getElementById('retrieverLabel');
+        var extra = document.getElementById('statusExtra');
+        if (ret) {
+          var active = ret.active || ret.enabled;
+          dot.className = 'status-dot ' + (active ? 'active' : 'inactive');
+          label.textContent = 'Retriever: ' + (active ? 'active' : 'inactive');
+          extra.textContent = JSON.stringify(ret).substring(0, 120);
+        } else {
+          dot.className = 'status-dot unknown';
+          label.textContent = 'Retriever: not found in status';
+          extra.textContent = '';
+        }
+      }).catch(function() {
+        document.getElementById('retrieverDot').className = 'status-dot inactive';
+        document.getElementById('retrieverLabel').textContent = 'Retriever: backend unreachable';
+      });
+    }
+
+    function addTurn() {
+      var text = document.getElementById('convInput').value.trim();
+      var role = document.getElementById('roleSelect').value;
+      var speaker = document.getElementById('speakerInput').value.trim() || 'Unknown';
+      if (!text) return;
+
+      turns.push({role: role, speaker: speaker, text: text, ts: new Date()});
+      totalChars += text.length;
+      updateCharBar();
+      renderFeed();
+      document.getElementById('convInput').value = '';
+
+      fetch(BASE + '/api/test/transcript-inject', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({text: text, role: role, speaker: speaker})
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.gap || data.gapAnalysis || data.needsRetrieval !== undefined) {
+          showGap(data);
+        }
+        if (data.context || data.retrieved) {
+          showContext(data.context || data.retrieved);
+        }
+      }).catch(function(e) {
+        addEvent('inject.error', e.message);
+      });
+    }
+
+    function loadPreset(name) {
+      var list = presets[name];
+      if (!list) return;
+      turns = [];
+      totalChars = 0;
+      list.forEach(function(t) {
+        turns.push({role: t.role, speaker: t.speaker, text: t.text, ts: new Date()});
+        totalChars += t.text.length;
+      });
+      updateCharBar();
+      renderFeed();
+
+      // Inject all turns
+      list.forEach(function(t) {
+        fetch(BASE + '/api/test/transcript-inject', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({text: t.text, role: t.role, speaker: t.speaker})
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          if (data.gap || data.gapAnalysis || data.needsRetrieval !== undefined) showGap(data);
+          if (data.context || data.retrieved) showContext(data.context || data.retrieved);
+        }).catch(function() {});
+      });
+    }
+
+    function updateCharBar() {
+      var pct = Math.min(100, (totalChars / THRESHOLD) * 100);
+      var fill = document.getElementById('charFill');
+      fill.style.width = pct + '%';
+      fill.style.background = pct >= 100 ? 'var(--green)' : pct >= 66 ? 'var(--yellow)' : 'var(--red)';
+      document.getElementById('charCount').textContent = totalChars + ' / ' + THRESHOLD;
+    }
+
+    function renderFeed() {
+      var feed = document.getElementById('convFeed');
+      feed.innerHTML = '';
+      turns.forEach(function(t) {
+        var div = document.createElement('div');
+        div.className = 'conv-entry ' + t.role;
+        var roleColor = t.role === 'user' ? 'var(--accent)' : t.role === 'assistant' ? 'var(--green)' : '#3b82f6';
+        div.innerHTML = '<span class="conv-role" style="color:' + roleColor + '">' + t.role + '</span> ' +
+          '<span style="font-size:11px;color:var(--text2)">' + t.speaker + '</span>' +
+          '<div class="conv-text">' + escHtml(t.text) + '</div>';
+        feed.appendChild(div);
+      });
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function clearConv() {
+      turns = [];
+      totalChars = 0;
+      updateCharBar();
+      document.getElementById('convFeed').innerHTML = '<div style="font-size:12px;color:var(--text2);">Cleared.</div>';
+      document.getElementById('gapResult').textContent = 'Waiting for gap detection...';
+      document.getElementById('contextResult').textContent = 'No retrieval yet.';
+    }
+
+    function showGap(data) {
+      var box = document.getElementById('gapResult');
+      var gap = data.gap || data.gapAnalysis || data;
+      var needs = gap.needsRetrieval || data.needsRetrieval;
+      var queries = gap.queries || data.queries || [];
+      var reasoning = gap.reasoning || data.reasoning || '';
+
+      var html = '';
+      html += 'needsRetrieval: ' + (needs ? 'YES' : 'NO') + '\n\n';
+      if (queries.length) {
+        html += 'queries:\n';
+        queries.forEach(function(q) { html += '  -> ' + q + '\n'; });
+        html += '\n';
+      }
+      if (reasoning) html += 'reasoning: ' + reasoning + '\n';
+      html += '\n--- raw ---\n' + JSON.stringify(gap, null, 2);
+      box.textContent = html;
+    }
+
+    function showContext(ctx) {
+      var box = document.getElementById('contextResult');
+      if (typeof ctx === 'string') {
+        box.textContent = ctx;
+      } else {
+        box.textContent = JSON.stringify(ctx, null, 2);
+      }
+    }
+
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+      ws.onopen = function() { addEvent('system', 'WebSocket connected'); };
+      ws.onclose = function() { addEvent('system', 'Disconnected, reconnecting...'); setTimeout(connectWS, 3000); };
+      ws.onmessage = function(evt) {
+        try {
+          var msg = JSON.parse(evt.data);
+          var type = msg.type || msg.event || '';
+          if (type.indexOf('retriever') === 0) {
+            addEvent(type, JSON.stringify(msg.data || msg.payload || msg));
+            var payload = msg.data || msg.payload || {};
+            if (type === 'retriever.gap_detected' || type === 'retriever.analysis') {
+              showGap(payload);
+            }
+            if (type === 'retriever.context_retrieved' || type === 'retriever.result') {
+              showContext(payload.context || payload);
+            }
+          }
+        } catch(e) {}
+      };
+    }
+
+    function addEvent(type, detail) {
+      var log = document.getElementById('eventLog');
+      var now = new Date();
+      var ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(function(n){return String(n).padStart(2,'0')}).join(':');
+      var div = document.createElement('div');
+      div.className = 'ev-entry';
+      div.innerHTML = '<span class="ev-time">' + ts + '</span><span class="ev-type">' + type + '</span> ' + escHtml(detail);
+      log.insertBefore(div, log.firstChild);
+      if (log.children.length > 200) log.removeChild(log.lastChild);
+    }
+
+    function escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    init();
+  </script>
+</body>
+</html>

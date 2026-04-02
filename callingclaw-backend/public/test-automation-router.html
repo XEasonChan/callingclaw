@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw - AutomationRouter Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --card: #16213e; --accent: #E63946; --text: #eee;
+      --text2: #aaa; --border: #2a2a4a; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    h2 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 600; }
+    .subtitle { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .full { grid-column: 1 / -1; }
+    textarea, input[type="text"] {
+      width: 100%; padding: 8px 10px; background: #0e1628; border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px; font-family: 'SF Mono', 'Menlo', monospace; resize: vertical; outline: none;
+    }
+    textarea:focus, input:focus { border-color: var(--accent); }
+    textarea { min-height: 60px; }
+    button {
+      padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #2a2a4a; color: var(--text); }
+    .btn-small { padding: 4px 10px; font-size: 11px; }
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .presets button { font-size: 11px; padding: 4px 8px; background: #1e2d4a; color: var(--text2); border: 1px solid var(--border); }
+    .presets button:hover { color: var(--text); border-color: var(--accent); }
+
+    /* Layer status */
+    .layers { display: flex; gap: 10px; flex-wrap: wrap; }
+    .layer-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-family: 'SF Mono', monospace; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.on { background: var(--green); }
+    .dot.off { background: var(--red); }
+
+    /* Results */
+    .result-box {
+      background: #0e1628; border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--text2);
+      max-height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    }
+    .confidence-bar { height: 6px; border-radius: 3px; margin-top: 6px; background: #0e1628; overflow: hidden; }
+    .confidence-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: 'SF Mono', monospace; }
+    .badge-l1 { background: rgba(34,197,94,0.2); color: var(--green); }
+    .badge-l2 { background: rgba(59,130,246,0.2); color: #3b82f6; }
+    .badge-l3 { background: rgba(234,179,8,0.2); color: var(--yellow); }
+    .badge-l4 { background: rgba(230,57,70,0.2); color: var(--accent); }
+
+    /* Event log */
+    .event-log { max-height: 220px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 11px; }
+    .event-entry { padding: 4px 0; border-bottom: 1px solid #1e2d4a; color: var(--text2); }
+    .event-entry .ev-type { color: var(--accent); }
+    .event-entry .ev-time { color: #555; margin-right: 6px; }
+
+    .meta-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>AutomationRouter Test</h1>
+  <p class="subtitle">4-layer intent classification + execution (L1 NativeBridge, L2 Playwright, L3 ComputerUse, L4 Agent)</p>
+
+  <div class="grid" style="margin-top: 12px;">
+    <!-- Layer Status -->
+    <div class="card full">
+      <h2>Layer Status</h2>
+      <div class="layers" id="layerStatus">
+        <div class="layer-item"><span class="dot off" id="dot-l1"></span>L1 NativeBridge</div>
+        <div class="layer-item"><span class="dot off" id="dot-l2"></span>L2 Playwright</div>
+        <div class="layer-item"><span class="dot off" id="dot-l3"></span>L3 ComputerUse</div>
+        <div class="layer-item"><span class="dot off" id="dot-l4"></span>L4 Agent</div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="card">
+      <h2>Instruction Input</h2>
+      <textarea id="instrInput" placeholder="Enter instruction to classify or execute..."></textarea>
+      <div class="btn-row">
+        <button class="btn-accent" onclick="classify()">Classify</button>
+        <button class="btn-secondary" onclick="execute()">Execute</button>
+      </div>
+      <div class="presets" id="presets"></div>
+    </div>
+
+    <!-- Classification Result -->
+    <div class="card">
+      <h2>Classification Result</h2>
+      <div class="meta-row" id="resultMeta" style="display:none;">
+        <span class="badge" id="layerBadge">--</span>
+        <span style="font-size:12px;color:var(--text2)" id="actionLabel">--</span>
+      </div>
+      <div class="confidence-bar" id="confBar" style="display:none;">
+        <div class="confidence-fill" id="confFill"></div>
+      </div>
+      <div id="confValue" style="font-size:11px;color:var(--text2);margin-top:4px;"></div>
+      <div class="result-box" id="classifyResult" style="margin-top:8px;">Waiting for classification...</div>
+    </div>
+
+    <!-- Execution Result -->
+    <div class="card">
+      <h2>Execution Result</h2>
+      <div class="result-box" id="execResult">Waiting for execution...</div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card">
+      <h2>Event Log (automation.*, auditor.*)</h2>
+      <div class="event-log" id="eventLog">
+        <div class="event-entry"><span class="ev-time">--:--:--</span> Connecting to WebSocket...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var BASE = window.location.origin;
+    var WS_URL = 'ws://' + window.location.host + '/ws/events';
+    var ws = null;
+    var presetList = [
+      'click submit button', 'open https://google.com', 'mute mic',
+      'search PRD file', 'take screenshot', 'scroll down', 'open Slack',
+      '帮我打开会议总结', '打开prep文件', '投屏这个页面'
+    ];
+
+    function init() {
+      var container = document.getElementById('presets');
+      presetList.forEach(function(p) {
+        var btn = document.createElement('button');
+        btn.textContent = p;
+        btn.onclick = function() { document.getElementById('instrInput').value = p; };
+        container.appendChild(btn);
+      });
+      fetchLayerStatus();
+      connectWS();
+    }
+
+    function fetchLayerStatus() {
+      fetch(BASE + '/api/automation/status').then(function(r) { return r.json(); }).then(function(data) {
+        var layers = data.layers || data;
+        ['l1','l2','l3','l4'].forEach(function(id) {
+          var dot = document.getElementById('dot-' + id);
+          var active = layers[id] || layers[id.toUpperCase()] || false;
+          dot.className = 'dot ' + (active ? 'on' : 'off');
+        });
+      }).catch(function(e) {
+        console.warn('Layer status fetch failed:', e);
+      });
+    }
+
+    function classify() {
+      var instruction = document.getElementById('instrInput').value.trim();
+      if (!instruction) return;
+      document.getElementById('classifyResult').textContent = 'Classifying...';
+      fetch(BASE + '/api/automation/classify', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({instruction: instruction})
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        showClassification(data);
+      }).catch(function(e) {
+        document.getElementById('classifyResult').textContent = 'Error: ' + e.message;
+      });
+    }
+
+    function showClassification(data) {
+      var conf = data.confidence || 0;
+      var layer = data.layer || '?';
+      var action = data.action || data.intent || '--';
+
+      document.getElementById('resultMeta').style.display = 'flex';
+      var badge = document.getElementById('layerBadge');
+      badge.textContent = layer;
+      badge.className = 'badge badge-' + (layer || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+
+      document.getElementById('actionLabel').textContent = action;
+
+      document.getElementById('confBar').style.display = 'block';
+      var fill = document.getElementById('confFill');
+      fill.style.width = (conf * 100) + '%';
+      fill.style.background = conf > 0.8 ? 'var(--green)' : conf > 0.5 ? 'var(--yellow)' : 'var(--red)';
+      document.getElementById('confValue').textContent = 'Confidence: ' + (conf * 100).toFixed(1) + '%';
+
+      document.getElementById('classifyResult').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function execute() {
+      var instruction = document.getElementById('instrInput').value.trim();
+      if (!instruction) return;
+      document.getElementById('execResult').textContent = 'Executing...';
+      fetch(BASE + '/api/automation/run', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({instruction: instruction})
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        document.getElementById('execResult').textContent = JSON.stringify(data, null, 2);
+      }).catch(function(e) {
+        document.getElementById('execResult').textContent = 'Error: ' + e.message;
+      });
+    }
+
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+      ws.onopen = function() { addEvent('system', 'WebSocket connected'); };
+      ws.onclose = function() { addEvent('system', 'WebSocket disconnected, reconnecting...'); setTimeout(connectWS, 3000); };
+      ws.onerror = function() { addEvent('system', 'WebSocket error'); };
+      ws.onmessage = function(evt) {
+        try {
+          var msg = JSON.parse(evt.data);
+          var type = msg.type || msg.event || '';
+          if (type.indexOf('automation') === 0 || type.indexOf('auditor') === 0) {
+            addEvent(type, JSON.stringify(msg.data || msg.payload || msg));
+          }
+        } catch(e) {}
+      };
+    }
+
+    function addEvent(type, detail) {
+      var log = document.getElementById('eventLog');
+      var now = new Date();
+      var ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(function(n){return String(n).padStart(2,'0')}).join(':');
+      var div = document.createElement('div');
+      div.className = 'event-entry';
+      div.innerHTML = '<span class="ev-time">' + ts + '</span><span class="ev-type">' + type + '</span> ' + detail;
+      log.insertBefore(div, log.firstChild);
+      if (log.children.length > 200) log.removeChild(log.lastChild);
+    }
+
+    init();
+  </script>
+</body>
+</html>

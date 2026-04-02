@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw - PresentationEngine Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --card: #16213e; --accent: #E63946; --text: #eee;
+      --text2: #aaa; --border: #2a2a4a; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    h2 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight: 600; }
+    .subtitle { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .full { grid-column: 1 / -1; }
+    textarea, input[type="text"], input[type="number"] {
+      width: 100%; padding: 8px 10px; background: #0e1628; border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px; font-family: 'SF Mono', monospace; outline: none;
+    }
+    textarea:focus, input:focus { border-color: var(--accent); }
+    textarea { min-height: 50px; resize: vertical; }
+    button {
+      padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #2a2a4a; color: var(--text); }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-yellow { background: var(--yellow); color: #000; }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-small { padding: 4px 10px; font-size: 11px; }
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .presets button { font-size: 11px; padding: 4px 8px; background: #1e2d4a; color: var(--text2); border: 1px solid var(--border); }
+    .presets button:hover { color: var(--text); border-color: var(--accent); }
+    label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .form-row > * { flex: 1; }
+    .form-row > .small { flex: 0 0 100px; }
+
+    /* Scene cards */
+    .scene-list { max-height: 320px; overflow-y: auto; }
+    .scene-card {
+      background: #0e1628; border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; margin-bottom: 8px; position: relative;
+    }
+    .scene-card.active { border-color: var(--accent); box-shadow: 0 0 8px rgba(230,57,70,0.3); }
+    .scene-idx { font-size: 11px; color: var(--accent); font-weight: 700; font-family: 'SF Mono', monospace; }
+    .scene-url { font-size: 12px; color: #3b82f6; margin-top: 2px; word-break: break-all; }
+    .scene-target { font-size: 11px; color: var(--text2); margin-top: 2px; font-family: 'SF Mono', monospace; }
+    .scene-points { font-size: 11px; color: var(--text2); margin-top: 4px; }
+    .scene-dur { font-size: 11px; color: var(--yellow); }
+    .scene-actions { display: flex; gap: 4px; margin-top: 6px; }
+
+    /* Playback controls */
+    .playback { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .playback-status { font-size: 12px; font-family: 'SF Mono', monospace; color: var(--text2); }
+
+    /* Event log */
+    .event-log { max-height: 200px; overflow-y: auto; font-family: 'SF Mono', monospace; font-size: 11px; }
+    .ev-entry { padding: 4px 0; border-bottom: 1px solid #1e2d4a; color: var(--text2); }
+    .ev-type { color: var(--accent); }
+    .ev-time { color: #555; margin-right: 6px; }
+    .result-box {
+      background: #0e1628; border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; font-family: 'SF Mono', monospace; font-size: 12px; color: var(--text2);
+      max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>PresentationEngine Test</h1>
+  <p class="subtitle">Scene planning, navigation, and playback control</p>
+
+  <div class="grid">
+    <!-- Build Plan -->
+    <div class="card">
+      <h2>Build Presentation Plan</h2>
+      <label>Target URL</label>
+      <input type="text" id="planUrl" placeholder="https://example.com">
+      <div class="presets" style="margin-top:4px;margin-bottom:8px;">
+        <button onclick="document.getElementById('planUrl').value='http://localhost:4000/voice-test.html'">voice-test</button>
+        <button onclick="document.getElementById('planUrl').value='https://example.com'">example.com</button>
+        <button onclick="document.getElementById('planUrl').value='http://localhost:4000/callingclaw-panel.html'">panel</button>
+      </div>
+      <label>Topic / Context</label>
+      <textarea id="planTopic" placeholder="What should CallingClaw present about this page?"></textarea>
+      <div class="btn-row">
+        <button class="btn-accent" onclick="buildPlan()">Build Plan</button>
+      </div>
+      <div class="result-box" id="planResult" style="margin-top:8px;">No plan yet.</div>
+    </div>
+
+    <!-- Manual Scene Builder -->
+    <div class="card">
+      <h2>Manual Scene Builder</h2>
+      <label>URL</label>
+      <input type="text" id="sceneUrl" placeholder="https://...">
+      <label style="margin-top:6px">Scroll Target (CSS selector)</label>
+      <input type="text" id="sceneTarget" placeholder="#section-2, .hero, etc.">
+      <label style="margin-top:6px">Talking Points (one per line)</label>
+      <textarea id="sceneTalkingPoints" placeholder="Point 1\nPoint 2"></textarea>
+      <div class="form-row" style="margin-top:6px">
+        <div class="small">
+          <label>Duration (ms)</label>
+          <input type="number" id="sceneDuration" value="5000" min="1000" step="1000">
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+          <button class="btn-accent" onclick="addScene()">Add Scene</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene List + Playback -->
+    <div class="card full">
+      <h2>Scene Sequence</h2>
+      <div class="playback">
+        <button class="btn-green btn-small" onclick="playScenes()">Play</button>
+        <button class="btn-yellow btn-small" onclick="pauseScenes()">Pause</button>
+        <button class="btn-red btn-small" onclick="stopScenes()">Stop</button>
+        <span class="playback-status" id="playbackStatus">stopped</span>
+        <button class="btn-secondary btn-small" style="margin-left:auto;" onclick="clearScenes()">Clear All</button>
+      </div>
+      <div class="scene-list" id="sceneList">
+        <div style="font-size:12px;color:var(--text2);">No scenes. Build a plan or add manually.</div>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card full">
+      <h2>Event Log (presentation.*)</h2>
+      <div class="event-log" id="eventLog">
+        <div class="ev-entry"><span class="ev-time">--:--:--</span> Connecting...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var BASE = window.location.origin;
+    var WS_URL = 'ws://' + window.location.host + '/ws/events';
+    var ws = null;
+    var scenes = [];
+    var activeIdx = -1;
+    var playTimer = null;
+    var paused = false;
+
+    function init() { connectWS(); }
+
+    function buildPlan() {
+      var url = document.getElementById('planUrl').value.trim();
+      var topic = document.getElementById('planTopic').value.trim();
+      if (!url) { alert('URL required'); return; }
+      document.getElementById('planResult').textContent = 'Building plan...';
+      fetch(BASE + '/api/screen/present', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({url: url, topic: topic})
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        document.getElementById('planResult').textContent = JSON.stringify(data, null, 2);
+        if (data.scenes && Array.isArray(data.scenes)) {
+          scenes = data.scenes.map(function(s, i) {
+            return {
+              idx: i, url: s.url || url, scrollTarget: s.scrollTarget || s.target || '',
+              talkingPoints: s.talkingPoints || s.talking_points || [],
+              durationMs: s.durationMs || s.duration_ms || 5000
+            };
+          });
+          renderScenes();
+        }
+      }).catch(function(e) {
+        document.getElementById('planResult').textContent = 'Error: ' + e.message;
+      });
+    }
+
+    function addScene() {
+      var url = document.getElementById('sceneUrl').value.trim();
+      var target = document.getElementById('sceneTarget').value.trim();
+      var points = document.getElementById('sceneTalkingPoints').value.trim().split('\n').filter(Boolean);
+      var dur = parseInt(document.getElementById('sceneDuration').value) || 5000;
+      scenes.push({idx: scenes.length, url: url, scrollTarget: target, talkingPoints: points, durationMs: dur});
+      renderScenes();
+    }
+
+    function renderScenes() {
+      var list = document.getElementById('sceneList');
+      if (scenes.length === 0) {
+        list.innerHTML = '<div style="font-size:12px;color:var(--text2);">No scenes.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      scenes.forEach(function(s, i) {
+        var div = document.createElement('div');
+        div.className = 'scene-card' + (i === activeIdx ? ' active' : '');
+        div.innerHTML =
+          '<span class="scene-idx">Scene ' + (i + 1) + '</span> <span class="scene-dur">' + s.durationMs + 'ms</span>' +
+          (s.url ? '<div class="scene-url">' + escHtml(s.url) + '</div>' : '') +
+          (s.scrollTarget ? '<div class="scene-target">target: ' + escHtml(s.scrollTarget) + '</div>' : '') +
+          '<div class="scene-points">' + s.talkingPoints.map(function(p){return '- ' + escHtml(p)}).join('<br>') + '</div>' +
+          '<div class="scene-actions">' +
+          '<button class="btn-secondary btn-small" onclick="navigateScene(' + i + ')">Navigate</button>' +
+          '<button class="btn-secondary btn-small" onclick="removeScene(' + i + ')">Remove</button>' +
+          '</div>';
+        list.appendChild(div);
+      });
+    }
+
+    function navigateScene(idx) {
+      var s = scenes[idx];
+      if (!s) return;
+      activeIdx = idx;
+      renderScenes();
+      addEvent('navigate', 'Scene ' + (idx+1) + ' -> ' + (s.scrollTarget || s.url));
+      if (s.scrollTarget) {
+        fetch(BASE + '/api/screen/scroll', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({target: s.scrollTarget})
+        }).then(function(r) { return r.json(); }).then(function(data) {
+          addEvent('scroll.result', JSON.stringify(data));
+        }).catch(function(e) { addEvent('scroll.error', e.message); });
+      }
+    }
+
+    function removeScene(idx) {
+      scenes.splice(idx, 1);
+      scenes.forEach(function(s, i) { s.idx = i; });
+      if (activeIdx >= scenes.length) activeIdx = scenes.length - 1;
+      renderScenes();
+    }
+
+    function clearScenes() { scenes = []; activeIdx = -1; stopScenes(); renderScenes(); }
+
+    function playScenes() {
+      if (scenes.length === 0) return;
+      paused = false;
+      if (activeIdx < 0) activeIdx = 0;
+      document.getElementById('playbackStatus').textContent = 'playing scene ' + (activeIdx + 1) + '/' + scenes.length;
+      navigateScene(activeIdx);
+      scheduleNext();
+    }
+
+    function scheduleNext() {
+      if (playTimer) clearTimeout(playTimer);
+      if (activeIdx < 0 || activeIdx >= scenes.length) { stopScenes(); return; }
+      var dur = scenes[activeIdx].durationMs || 5000;
+      playTimer = setTimeout(function() {
+        if (paused) return;
+        activeIdx++;
+        if (activeIdx >= scenes.length) { stopScenes(); return; }
+        document.getElementById('playbackStatus').textContent = 'playing scene ' + (activeIdx + 1) + '/' + scenes.length;
+        navigateScene(activeIdx);
+        scheduleNext();
+      }, dur);
+    }
+
+    function pauseScenes() {
+      paused = true;
+      if (playTimer) clearTimeout(playTimer);
+      document.getElementById('playbackStatus').textContent = 'paused at scene ' + (activeIdx + 1);
+    }
+
+    function stopScenes() {
+      paused = false;
+      if (playTimer) clearTimeout(playTimer);
+      playTimer = null;
+      activeIdx = -1;
+      document.getElementById('playbackStatus').textContent = 'stopped';
+      renderScenes();
+    }
+
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+      ws.onopen = function() { addEvent('system', 'WebSocket connected'); };
+      ws.onclose = function() { addEvent('system', 'Disconnected, reconnecting...'); setTimeout(connectWS, 3000); };
+      ws.onmessage = function(evt) {
+        try {
+          var msg = JSON.parse(evt.data);
+          var type = msg.type || msg.event || '';
+          if (type.indexOf('presentation') === 0) {
+            addEvent(type, JSON.stringify(msg.data || msg.payload || msg));
+          }
+        } catch(e) {}
+      };
+    }
+
+    function addEvent(type, detail) {
+      var log = document.getElementById('eventLog');
+      var now = new Date();
+      var ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(function(n){return String(n).padStart(2,'0')}).join(':');
+      var div = document.createElement('div');
+      div.className = 'ev-entry';
+      div.innerHTML = '<span class="ev-time">' + ts + '</span><span class="ev-type">' + type + '</span> ' + escHtml(detail);
+      log.insertBefore(div, log.firstChild);
+      if (log.children.length > 200) log.removeChild(log.lastChild);
+    }
+
+    function escHtml(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    init();
+  </script>
+</body>
+</html>
