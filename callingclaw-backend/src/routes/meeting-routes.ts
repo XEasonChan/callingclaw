@@ -101,7 +101,7 @@ export function meetingRoutes(services: Services): RouteHandler {
       // POST /api/meeting/join — Join a meeting by URL (Google Meet or Zoom)
       // Integrated flow: start Voice AI → join meeting → bridge audio
       if (url.pathname === "/api/meeting/join" && req.method === "POST") {
-        const body = (await req.json()) as { url: string; instructions?: string };
+        const body = (await req.json()) as { url: string; instructions?: string; provider?: string; voice?: string; topic?: string };
         if (!body.url) {
           return Response.json({ error: "url is required" }, { status: 400, headers });
         }
@@ -114,26 +114,7 @@ export function meetingRoutes(services: Services): RouteHandler {
           }, { status: 400, headers });
         }
 
-        // Step 1: Start OpenAI Realtime voice session (if not already running)
-        // Build topic-aware instructions so AI knows what the meeting is about
-        let voiceStarted = false;
-        if (!services.realtime.connected && CONFIG.openai.apiKey) {
-          try {
-            const meetTopic0 = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic;
-            const instructions = body.instructions || (meetTopic0
-              ? `You are CallingClaw, an AI meeting assistant. This meeting's topic is: "${meetTopic0}". Focus your conversation on this topic. Ask clarifying questions, confirm decisions, and track action items related to it. Speak naturally and concisely.`
-              : undefined);
-            await services.realtime.start(instructions);
-            voiceStarted = true;
-            console.log(`[Meeting] Voice AI started${meetTopic0 ? ` (topic: ${meetTopic0})` : ""}`);
-          } catch (e: any) {
-            console.warn("[Meeting] Voice start failed:", e.message);
-          }
-        } else if (services.realtime.connected) {
-          voiceStarted = true;
-        }
-
-        // Look up calendar event to get attendees
+        // Look up calendar event FIRST (needed for voice instructions + attendees)
         let meetAttendees: any[] = [];
         let calEvent: any = null;
         if (services.calendar?.connected) {
@@ -143,7 +124,30 @@ export function meetingRoutes(services: Services): RouteHandler {
           } catch {}
         }
 
-        const meetTopic = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
+        const meetTopic = calEvent?.summary || body.topic || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
+
+        // Step 1: Start voice session (any configured provider, not just OpenAI)
+        const voiceProvider = (body.provider || CONFIG.voiceProvider) as string;
+        const hasVoiceKey = (voiceProvider === "gemini" && CONFIG.gemini.apiKey)
+          || (voiceProvider === "grok" && CONFIG.grok.apiKey)
+          || (voiceProvider === "openai" && CONFIG.openai.apiKey)
+          || CONFIG.openai.apiKey || CONFIG.gemini.apiKey || CONFIG.grok.apiKey;
+        let voiceStarted = false;
+        if (!services.realtime.connected && hasVoiceKey) {
+          try {
+            const instructions = body.instructions || (meetTopic && meetTopic !== "Meeting"
+              ? `You are CallingClaw, an AI meeting assistant. This meeting's topic is: "${meetTopic}". Focus your conversation on this topic. Ask clarifying questions, confirm decisions, and track action items related to it. Speak naturally and concisely.`
+              : undefined);
+            await services.realtime.start(instructions, voiceProvider);
+            voiceStarted = true;
+            console.log(`[Meeting] Voice AI started (provider: ${voiceProvider}, topic: ${meetTopic})`);
+          } catch (e: any) {
+            console.warn("[Meeting] Voice start failed:", e.message);
+          }
+        } else if (services.realtime.connected) {
+          voiceStarted = true;
+        }
+
         // Use SessionManager for dedup + session creation
         const session = services.sessionManager!.findOrCreate({ topic: meetTopic, meetUrl: validated.url });
         const meetingId = session.meetingId;

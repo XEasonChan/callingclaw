@@ -172,7 +172,7 @@ export class MeetingModule {
       return { title: "Meeting", duration: "unknown", participants: [], keyPoints: ["Circuit breaker: too many summary attempts"], actionItems: [], decisions: [], followUps: [] };
     }
 
-    const transcript = this.context.getConversationText(200);
+    const transcript = this.context.getConversationText(1000); // Full meeting transcript (was 200, ~5min only)
 
     // Idempotency: skip if transcript hasn't changed
     const hash = Bun.hash(transcript).toString(16);
@@ -266,7 +266,7 @@ export class MeetingModule {
     const filepath = `${NOTES_DIR}/${fname}`;
 
     // Build markdown content — conversation only (no tool/system noise)
-    const transcript = this.context.getConversationText(200);
+    const transcript = this.context.getConversationText(1000); // Full meeting (was 200)
     const md = `# ${summary.title}
 
 **Date:** ${now.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}

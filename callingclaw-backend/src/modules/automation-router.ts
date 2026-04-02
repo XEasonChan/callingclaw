@@ -1,30 +1,37 @@
 // CallingClaw 2.0 — Module: Automation Router
-// Intelligent 4-layer routing for computer actions.
+// Intelligent 5-layer routing for computer actions.
 //
-// Layer 1: API / Shortcuts  (instant, 100% reliable)
+// Layer 1:   API / Shortcuts  (instant, 100% reliable)
 //   → Google Calendar API, Zoom/Meet keyboard shortcuts, bash open
 //
-// Layer 2: Playwright CLI    (fast, CLI-based browser automation via accessibility tree)
-//   → Browser tab switching, web app interaction, Notion, GitHub, Google Slides
+// Layer 1.5: OpenCLI          (deterministic web adapters, ~200ms, $0)
+//   → GitHub, HN, Google, Notion — zero LLM cost, fault-isolated Chrome #2
 //
-// Layer 3: Peekaboo          (macOS native, AX tree + screenshots)
+// Layer 2:   Playwright CLI   (fast, CLI-based browser automation via accessibility tree)
+//   → Browser tab switching, web app interaction on Chrome #1
+//
+// Layer 3:   Peekaboo         (macOS native, AX tree + screenshots)
 //   → Native app window management, non-browser GUI, System Settings
 //
-// Layer 4: Computer Use      (slow, vision-based fallback)
+// Layer 4:   Computer Use     (slow, vision-based fallback)
 //   → Canvas/WebGL, Figma design surface, non-standard UI, last resort
 //
 // The router classifies each instruction and attempts the fastest layer first,
 // falling back to the next layer on failure.
+//
+// FAULT ISOLATION: OpenCLI runs on Chrome #2 (separate process from Playwright's
+// Chrome #1 which handles Meet audio). Execution crashes don't kill audio.
 
 import type { PythonBridge } from "../bridge";
 import type { EventBus } from "./event-bus";
 import { ZoomSkill, type ZoomAction } from "../skills/zoom";
 import { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import { PeekabooClient } from "../mcp_client/peekaboo";
+import type { OpenCLIBridge } from "./opencli-bridge";
 
 // ── Intent Classification ──
 
-export type AutomationLayer = "shortcuts" | "playwright" | "peekaboo" | "computer_use";
+export type AutomationLayer = "shortcuts" | "opencli" | "playwright" | "peekaboo" | "computer_use";
 
 export interface ClassifiedIntent {
   layer: AutomationLayer;
@@ -69,13 +76,17 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { match: /meet.*(?:静音|mute)/i, layer: "shortcuts", action: "meet:toggle_mute", confidence: 0.95 },
   { match: /meet.*(?:摄像头|camera|视频|video)/i, layer: "shortcuts", action: "meet:toggle_video", confidence: 0.95 },
 
-  // App launch (bash open)
-  { match: /(?:打开|open|启动|launch)\s+(?:app|应用)?\s*["""']?(\w[\w\s.]+)/i, layer: "shortcuts", action: "open_app",
-    extractParams: (m) => ({ app: m[1]?.trim() }), confidence: 0.85 },
-
-  // Open URL (bash open)
+  // Open URL (bash open) — highest priority for URLs
   { match: /(?:打开|open)\s+(https?:\/\/[^\s]+)/i, layer: "shortcuts", action: "open_url",
     extractParams: (m) => ({ url: m[1] }), confidence: 0.95 },
+
+  // Open file/document (fuzzy search + open) — before open_app to catch file-related instructions
+  { match: /(?:打开|open|找|find|搜索|search)\s*.*(?:文件|file|文档|document|page|页面|markdown|\.md|\.html|\.pdf|\.txt|PRD|spec|plan|prep|summary|brief|notes|todo|roadmap|changelog)/i, layer: "shortcuts", action: "open_file",
+    extractParams: (m) => ({ query: m[0]?.replace(/^(?:打开|open|找|find|搜索|search)\s*/i, "").trim() }), confidence: 0.9 },
+
+  // App launch (bash open) — lowest priority among "open" actions, for actual app names
+  { match: /(?:打开|open|启动|launch)\s+(?:app|应用)?\s*["""']?(\w[\w\s.]+)/i, layer: "shortcuts", action: "open_app",
+    extractParams: (m) => ({ app: m[1]?.trim() }), confidence: 0.85 },
 
   // ── Layer 2: Playwright (browser operations) ──
 
@@ -435,26 +446,29 @@ export class AutomationRouter {
   private async searchLocalFile(query: string): Promise<string | null> {
     if (!query || query.length < 2) return null;
 
-    // Normalize query: lowercase, extract keywords
-    const keywords = query.toLowerCase().replace(/[^\w\s\u4e00-\u9fff]/g, " ").split(/\s+/).filter(k => k.length > 1);
+    // Normalize query: lowercase, extract keywords, filter stop words
+    const STOP_WORDS = new Set(["the", "a", "an", "this", "that", "my", "our", "its", "for", "and", "or", "of", "in", "to", "is", "it", "please", "最近", "最近的", "那个", "这个"]);
+    const keywords = query.toLowerCase().replace(/[^\w\s\u4e00-\u9fff]/g, " ").split(/\s+/)
+      .filter(k => k.length > 1 && !STOP_WORDS.has(k));
     if (keywords.length === 0) return null;
 
     // Search directories
     const { homedir } = await import("os");
     const { resolve } = await import("path");
+    const projectRoot = resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0");
     const searchDirs = [
       resolve(homedir(), ".callingclaw", "shared"),
-      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public"),
-      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs"),
-      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-desktop"),
+      resolve(projectRoot, "callingclaw-backend/public"),
+      resolve(projectRoot, "docs"),
+      projectRoot, // project root for TODOS.md, ROADMAP.md, etc.
     ];
 
     try {
-      // Use find to get all html/md/pdf files, then fuzzy match
+      // Use find to get all html/md/pdf files (exclude node_modules), then fuzzy match
       const results: string[] = [];
       for (const dir of searchDirs) {
         try {
-          const output = await Bun.$`find ${dir} -maxdepth 3 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) 2>/dev/null`.text();
+          const output = await Bun.$`find ${dir} -maxdepth 3 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null`.text();
           for (const line of output.split("\n")) {
             const path = line.trim();
             if (!path) continue;
