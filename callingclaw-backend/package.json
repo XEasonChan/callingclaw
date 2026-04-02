@@ -1,6 +1,6 @@
 {
   "name": "callingclaw",
-  "description": "CallingClaw 2.0 \u2014 Voice + Vision + Computer Use AI Agent",
+  "description": "CallingClaw 2.0 — Voice + Vision + Computer Use AI Agent",
   "module": "src/callingclaw.ts",
   "type": "module",
   "license": "MIT",
@@ -12,6 +12,7 @@
     "check": "bun scripts/check-wiring.ts"
   },
   "devDependencies": {
+    "@jackwener/opencli": "1.6.1",
     "@types/bun": "latest"
   },
   "peerDependencies": {

@@ -1,0 +1,121 @@
+{
+  "timestamp": "2026-04-02T15:30:59.323Z",
+  "openCliVersion": "1.6.1",
+  "daemonAlive": false,
+  "runsPerTask": 3,
+  "results": [
+    {
+      "taskId": 1,
+      "taskName": "GitHub: list open issues",
+      "mode": "adapter",
+      "run": 1,
+      "latencyMs": 3238,
+      "success": false,
+      "output": "error: unknown command 'github'"
+    },
+    {
+      "taskId": 1,
+      "taskName": "GitHub: list open issues",
+      "mode": "adapter",
+      "run": 2,
+      "latencyMs": 1901,
+      "success": false,
+      "output": "error: unknown command 'github'"
+    },
+    {
+      "taskId": 1,
+      "taskName": "GitHub: list open issues",
+      "mode": "adapter",
+      "run": 3,
+      "latencyMs": 1777,
+      "success": false,
+      "output": "error: unknown command 'github'"
+    },
+    {
+      "taskId": 2,
+      "taskName": "Google: search query",
+      "mode": "adapter",
+      "run": 1,
+      "latencyMs": 30006,
+      "success": false,
+      "output": "opencli timeout (30000ms)"
+    },
+    {
+      "taskId": 2,
+      "taskName": "Google: search query",
+      "mode": "adapter",
+      "run": 2,
+      "latencyMs": 2134,
+      "success": false,
+      "output": "🔌 Browser Bridge not connected\n\n  Daemon    ✓ running\n  Extension ✗ not connected\n\n  Install the Browser Bridge extension to continue:\n    1. Download from github.com/jackwener/opencli/releases\n    2"
+    },
+    {
+      "taskId": 2,
+      "taskName": "Google: search query",
+      "mode": "adapter",
+      "run": 3,
+      "latencyMs": 2156,
+      "success": false,
+      "output": "🔌 Browser Bridge not connected\n\n  Daemon    ✓ running\n  Extension ✗ not connected\n\n  Install the Browser Bridge extension to continue:\n    1. Download from github.com/jackwener/opencli/releases\n    2"
+    },
+    {
+      "taskId": 3,
+      "taskName": "HackerNews: top stories",
+      "mode": "adapter",
+      "run": 1,
+      "latencyMs": 1961,
+      "success": false,
+      "output": "error: unknown command 'trending'"
+    },
+    {
+      "taskId": 3,
+      "taskName": "HackerNews: top stories",
+      "mode": "adapter",
+      "run": 2,
+      "latencyMs": 1974,
+      "success": false,
+      "output": "error: unknown command 'trending'"
+    },
+    {
+      "taskId": 3,
+      "taskName": "HackerNews: top stories",
+      "mode": "adapter",
+      "run": 3,
+      "latencyMs": 1754,
+      "success": false,
+      "output": "error: unknown command 'trending'"
+    },
+    {
+      "taskId": 4,
+      "taskName": "GitHub PR: read latest",
+      "mode": "adapter",
+      "run": 1,
+      "latencyMs": 1773,
+      "success": false,
+      "output": "error: unknown command 'github'"
+    },
+    {
+      "taskId": 4,
+      "taskName": "GitHub PR: read latest",
+      "mode": "adapter",
+      "run": 2,
+      "latencyMs": 1788,
+      "success": false,
+      "output": "error: unknown command 'github'"
+    },
+    {
+      "taskId": 4,
+      "taskName": "GitHub PR: read latest",
+      "mode": "adapter",
+      "run": 3,
+      "latencyMs": 2827,
+      "success": false,
+      "output": "error: unknown command 'github'"
+    }
+  ],
+  "summary": {
+    "totalRuns": 12,
+    "successRate": 0,
+    "avgLatencyMs": 4441
+  }
+}

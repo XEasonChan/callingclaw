@@ -1,30 +1,37 @@
 // CallingClaw 2.0 — Module: Automation Router
-// Intelligent 4-layer routing for computer actions.
+// Intelligent 5-layer routing for computer actions.
 //
-// Layer 1: API / Shortcuts  (instant, 100% reliable)
-//   → Google Calendar API, Zoom/Meet keyboard shortcuts, bash open
+// Layer 1:   Shortcuts        (instant, 100% reliable)
+//   → Zoom/Meet keyboard shortcuts, bash open, file/URL launch
 //
-// Layer 2: Playwright CLI    (fast, CLI-based browser automation via accessibility tree)
-//   → Browser tab switching, web app interaction, Notion, GitHub, Google Slides
+// Layer 1.5: OpenCLI          (deterministic web + Haiku command generation, ~1-2s, $0)
+//   → 66+ web adapters, CLI hub, Haiku generates opencli commands for unknown tasks
+//   → Fault-isolated on Chrome #2 (separate from Meet audio on Chrome #1)
 //
-// Layer 3: Peekaboo          (macOS native, AX tree + screenshots)
-//   → Native app window management, non-browser GUI, System Settings
+// Layer 2:   Playwright CLI   (AI-driven browser automation, ~500ms/step + Haiku)
+//   → Browser tab switching, web app interaction on Chrome #1
 //
-// Layer 4: Computer Use      (slow, vision-based fallback)
+// Layer 3:   Peekaboo         (macOS native, AX tree — dormant, see docs/opencli-experiment-findings.md)
+//
+// Layer 4:   Computer Use     (slow, vision-based fallback)
 //   → Canvas/WebGL, Figma design surface, non-standard UI, last resort
 //
 // The router classifies each instruction and attempts the fastest layer first,
 // falling back to the next layer on failure.
+//
+// FAULT ISOLATION: OpenCLI runs on Chrome #2 (separate process from Playwright's
+// Chrome #1 which handles Meet audio). Execution crashes don't kill audio.
 
 import type { PythonBridge } from "../bridge";
 import type { EventBus } from "./event-bus";
 import { ZoomSkill, type ZoomAction } from "../skills/zoom";
 import { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import { PeekabooClient } from "../mcp_client/peekaboo";
+import type { OpenCLIBridge } from "./opencli-bridge";
 
 // ── Intent Classification ──
 
-export type AutomationLayer = "shortcuts" | "playwright" | "peekaboo" | "computer_use";
+export type AutomationLayer = "shortcuts" | "opencli" | "playwright" | "peekaboo" | "computer_use";
 
 export interface ClassifiedIntent {
   layer: AutomationLayer;
@@ -80,7 +87,41 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { match: /(?:帮我)?(?:打开|open|启动|launch)\s+(?:app|应用)?\s*["""']?(.+)/i, layer: "shortcuts", action: "open_app",
     extractParams: (m) => ({ app: m[1]?.trim() }), confidence: 0.4 },
 
-  // ── Layer 2: Playwright (browser operations) ──
+  // ── Layer 1.5: OpenCLI (deterministic web adapters + Haiku command gen) ──
+  // Fault-isolated on Chrome #2. Zero LLM cost for known adapters.
+  // For unknown tasks, Haiku generates the opencli command (single LLM call).
+
+  // GitHub
+  { match: /(?:check|查看|list|列出).*(?:github|gh)\s*(?:issues?|问题)/i, layer: "opencli", action: "github_issues",
+    extractParams: (_, inst) => {
+      const repoMatch = inst.match(/(?:repo|仓库)\s*[=:]\s*(\S+)/i);
+      return repoMatch ? { repo: repoMatch[1] } : {};
+    }, confidence: 0.9 },
+  { match: /(?:check|查看).*(?:github|gh)\s*(?:pr|pull.?request)/i, layer: "opencli", action: "github_prs",
+    extractParams: (_, inst) => {
+      const repoMatch = inst.match(/(?:repo|仓库)\s*[=:]\s*(\S+)/i);
+      return repoMatch ? { repo: repoMatch[1] } : {};
+    }, confidence: 0.9 },
+
+  // HackerNews
+  { match: /(?:check|查看|看看).*(?:hacker\s*news|HN|hn)\s*(?:trending|top|热门)?/i, layer: "opencli", action: "hackernews_trending",
+    extractParams: (_, inst) => {
+      const limitMatch = inst.match(/(?:top|前)\s*(\d+)/);
+      return limitMatch ? { limit: limitMatch[1] } : { limit: "5" };
+    }, confidence: 0.9 },
+
+  // Google search / news
+  { match: /(?:google|谷歌)\s*(?:news|新闻)/i, layer: "opencli", action: "google_news", confidence: 0.9 },
+  { match: /(?:search|搜索|google|谷歌).*(?:for|关于)?\s*[""\u201c](.+?)[""\u201d]/i, layer: "opencli", action: "google_search",
+    extractParams: (m) => ({ query: m[1] }), confidence: 0.85 },
+
+  // arXiv / Wikipedia / StackOverflow
+  { match: /(?:arxiv|论文).*(?:search|搜索|find|找)/i, layer: "opencli", action: "arxiv_search",
+    extractParams: (_, inst) => ({ query: inst.replace(/.*(?:search|搜索|find|找)\s*/i, "").trim() }), confidence: 0.85 },
+  { match: /(?:wikipedia|维基).*(?:search|搜索|look up|查)/i, layer: "opencli", action: "wikipedia_search",
+    extractParams: (_, inst) => ({ query: inst.replace(/.*(?:search|搜索|look up|查)\s*/i, "").trim() }), confidence: 0.85 },
+
+  // ── Layer 2: Playwright (browser operations — Chrome #1) ──
 
   // Tab management
   { match: /(?:切.?到|switch|切换).*(tab|标签|第\s*\d)/i, layer: "playwright", action: "switch_tab", confidence: 0.9 },
@@ -145,18 +186,21 @@ export class AutomationRouter {
   private zoom: ZoomSkill;
   private browser: PlaywrightCLIClient;
   private peekaboo: PeekabooClient;
+  private opencli: OpenCLIBridge | null;
 
   constructor(
     bridge: PythonBridge,
     eventBus?: EventBus,
     browser?: PlaywrightCLIClient,
     peekaboo?: PeekabooClient,
+    opencli?: OpenCLIBridge,
   ) {
     this.bridge = bridge;
     this.eventBus = eventBus;
     this.zoom = new ZoomSkill(bridge);
     this.browser = browser || new PlaywrightCLIClient();
     this.peekaboo = peekaboo || new PeekabooClient();
+    this.opencli = opencli || null;
   }
 
   /** Classify an instruction into an automation layer + action */
@@ -263,6 +307,8 @@ export class AutomationRouter {
     switch (intent.layer) {
       case "shortcuts":
         return this.executeShortcuts(intent);
+      case "opencli":
+        return this.executeOpenCLI(intent);
       case "playwright":
         return this.executePlaywright(intent);
       case "peekaboo":
@@ -551,11 +597,77 @@ export class AutomationRouter {
     }
   }
 
+  // ── Layer 1.5: OpenCLI (deterministic adapters + Haiku command gen) ──
+
+  private async executeOpenCLI(intent: ClassifiedIntent): Promise<string> {
+    if (!this.opencli?.available) {
+      throw new Error("OpenCLI not available — falling back");
+    }
+
+    const { action, params } = intent;
+
+    switch (action) {
+      case "github_issues": {
+        const args = ["issues", "--state", "open", "--limit", "10"];
+        if (params.repo) args.unshift("--repo", params.repo);
+        const result = await this.opencli.cli("gh", ["issue", "list", ...args, "--json", "title,state,url"]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output.slice(0, 500)}`;
+      }
+
+      case "github_prs": {
+        const args = ["pr", "list", "--state", "open", "--limit", "10", "--json", "title,state,url"];
+        if (params.repo) args.push("--repo", params.repo);
+        const result = await this.opencli.cli("gh", args);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output.slice(0, 500)}`;
+      }
+
+      case "hackernews_trending": {
+        const limit = params.limit || "5";
+        const result = await this.opencli.adapter("hackernews", ["best", "--limit", limit]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "google_news": {
+        const result = await this.opencli.adapter("google", ["news", "--limit", "5"]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "google_search": {
+        if (!params.query) throw new Error("No search query provided");
+        const result = await this.opencli.adapter("google", ["search", params.query]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "arxiv_search": {
+        if (!params.query) throw new Error("No search query");
+        const result = await this.opencli.adapter("arxiv", ["search", params.query, "--limit", "3"]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "wikipedia_search": {
+        if (!params.query) throw new Error("No search query");
+        const result = await this.opencli.adapter("wikipedia", ["search", params.query]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      default:
+        throw new Error(`Unknown OpenCLI action: ${action}`);
+    }
+  }
+
   // ── Fallback logic ──
 
   private getFallbackLayer(current: AutomationLayer): AutomationLayer | null {
     switch (current) {
-      case "shortcuts":    return "playwright";
+      case "shortcuts":    return "opencli";
+      case "opencli":      return "playwright";
       case "playwright":   return "peekaboo";
       case "peekaboo":     return "computer_use";
       case "computer_use": return null; // no further fallback
@@ -566,6 +678,12 @@ export class AutomationRouter {
   getStatus(): Record<AutomationLayer, { available: boolean; detail: string }> {
     return {
       shortcuts: { available: true, detail: "Always available (keyboard shortcuts + bash)" },
+      opencli: {
+        available: this.opencli?.available || false,
+        detail: this.opencli?.available
+          ? `OpenCLI ${this.opencli.health.version || "ready"} (Chrome #2, fault-isolated)`
+          : "Not available — web tasks fall through to Playwright",
+      },
       playwright: {
         available: this.browser.connected,
         detail: this.browser.connected
