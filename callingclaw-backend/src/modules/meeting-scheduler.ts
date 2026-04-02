@@ -152,7 +152,9 @@ export class MeetingScheduler {
                 this.eventBus.emit("scheduler.invite_accepted", {
                   summary: event.summary,
                   start: event.start,
+                  endTime: event.end || null,
                   eventId: event.id,
+                  meetUrl: event.meetLink || null,
                 });
               }
             }).catch(() => {}); // Non-blocking, best-effort
@@ -209,7 +211,11 @@ export class MeetingScheduler {
             this.eventBus.emit("scheduler.meeting_scheduled", {
               summary: event.summary,
               meetUrl: event.meetLink,
+              calendarEventId: event.id || null,
+              startTime: event.start,
+              endTime: event.end || null,
               joinAt: joinAtISO,
+              meetingId: this.sessionManager?.findByMeetUrl(event.meetLink!)?.meetingId || null,
             });
 
             // Trigger pre-meeting research in the background

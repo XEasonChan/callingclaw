@@ -2366,7 +2366,7 @@ function routeWsEvent(msg) {
   if (msg.timestamp) lastEventTs = Math.max(lastEventTs, msg.timestamp);
 
   // Dashboard-level events (meeting lifecycle → refresh calendar/status)
-  if (eventType === 'meeting.started' || eventType === 'meeting.ended' || eventType === 'meeting.agenda' || eventType === 'meeting.prep_ready') {
+  if (eventType === 'meeting.started' || eventType === 'meeting.ended' || eventType === 'meeting.agenda' || eventType === 'meeting.prep_ready' || eventType === 'scheduler.meeting_scheduled') {
     setTimeout(refreshAll, 500);
   }
 
@@ -2385,6 +2385,45 @@ function routeWsEvent(msg) {
   // ── Route to unified meeting panel if active ──
   if (S.meetingMode) {
     handleMeetingEvent({ type: eventType, data: msg.data || {} , timestamp: msg.timestamp });
+  }
+
+  // ── Scheduler events: sync calendar-detected meetings to Desktop ──
+  // When MeetingScheduler detects a calendar event and schedules auto-join,
+  // create/update a meetingFiles entry so Desktop shows the prep status.
+  if (eventType === 'scheduler.meeting_scheduled' && msg.data) {
+    var schData = msg.data;
+    var schMeetUrl = schData.meetUrl;
+    var schSummary = schData.summary || '';
+
+    // Find existing entry by meetUrl or calendarEventId (dedup)
+    var schMid = schData.meetingId || null;
+    if (!schMid) {
+      for (var sid in S.meetingFiles) {
+        var sd = S.meetingFiles[sid];
+        if ((schMeetUrl && sd.meetUrl === schMeetUrl) ||
+            (schData.calendarEventId && sd.calendarEventId === schData.calendarEventId)) {
+          schMid = sid;
+          break;
+        }
+      }
+    }
+
+    if (schMid) {
+      // Update existing entry
+      var schEntry = getMeetingData(schMid);
+      schEntry.topic = schEntry.topic || schSummary;
+      schEntry.meetUrl = schEntry.meetUrl || schMeetUrl;
+      schEntry.startTime = schEntry.startTime || schData.startTime;
+      schEntry.calendarEventId = schEntry.calendarEventId || schData.calendarEventId;
+    }
+    // If no existing entry and no meetingId, the scheduler hasn't created a session yet.
+    // Desktop will pick this up on next refreshAll via calendar events or manifest sync.
+    // Don't create a new card without a meetingId (avoids orphan entries).
+  }
+
+  // When scheduler auto-accepts an invite, refresh calendar to show updated status
+  if (eventType === 'scheduler.invite_accepted') {
+    setTimeout(refreshAll, 1000);
   }
 
   // ── Prep pipeline events (update meetingFiles data model) ──
