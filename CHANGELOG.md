@@ -3,6 +3,11 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.5] - 2026-04-02
+
+### Fixed
+- **Duplicate meeting cards** — calendar poll and WebSocket events raced, creating two cards for the same meeting. Added three-layer dedup (topic + calendarEventId + meetUrl) plus time-proximity fallback and reverse cross-linking in refreshAll
+
 ## [2.8.4] - 2026-04-02
 
 ### Added
