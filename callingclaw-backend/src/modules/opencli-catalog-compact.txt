@@ -1,0 +1,100 @@
+  opencli 36kr news [--limit] — Latest tech/startup news from 36kr (36氪)
+  opencli apple-podcasts episodes <id> [--limit] — List recent episodes of an Apple Podcast (use ID from search)
+  opencli apple-podcasts search <query> [--limit] — Search Apple Podcasts
+  opencli apple-podcasts top [--limit] [--country] — Top podcasts chart on Apple Podcasts
+  opencli arxiv paper <id> — Get arXiv paper details by ID
+  opencli arxiv search <query> [--limit] — Search arXiv papers
+  opencli bbc news [--limit] — BBC News headlines (RSS)
+  opencli bloomberg businessweek [--limit] — Bloomberg Businessweek top stories (RSS)
+  opencli bloomberg economics [--limit] — Bloomberg Economics top stories (RSS)
+  opencli bloomberg feeds — List the Bloomberg RSS feed aliases used by the adapter
+  opencli bloomberg industries [--limit] — Bloomberg Industries top stories (RSS)
+  opencli bloomberg main [--limit] — Bloomberg homepage top stories (RSS)
+  opencli bloomberg markets [--limit] — Bloomberg Markets top stories (RSS)
+  opencli bloomberg opinions [--limit] — Bloomberg Opinion top stories (RSS)
+  opencli bloomberg politics [--limit] — Bloomberg Politics top stories (RSS)
+  opencli bloomberg tech [--limit] — Bloomberg Tech top stories (RSS)
+  opencli bluesky feeds [--limit] — Popular Bluesky feed generators
+  opencli bluesky followers <handle> [--limit] — List followers of a Bluesky user
+  opencli bluesky following <handle> [--limit] — List accounts a Bluesky user is following
+  opencli bluesky profile <handle> — Get Bluesky user profile info
+  opencli bluesky search <query> [--limit] — Search Bluesky users
+  opencli bluesky starter-packs <handle> [--limit] — Get starter packs created by a Bluesky user
+  opencli bluesky thread <uri> [--limit] — Get a Bluesky post thread with replies
+  opencli bluesky trending [--limit] — Trending topics on Bluesky
+  opencli bluesky user <handle> [--limit] — Get recent posts from a Bluesky user
+  opencli chatgpt ask <text> [--model] [--timeout] — Send a prompt and wait for the AI response (send + wait + read)
+  opencli chatgpt model <model> — Switch ChatGPT Desktop model/mode (auto, instant, thinking, 5.2-instant, 5.2-thinking)
+  opencli chatgpt new — Open a new chat in ChatGPT Desktop App
+  opencli chatgpt read — Read the last visible message from the focused ChatGPT Desktop window
+  opencli chatgpt send <text> [--model] — Send a message to the active ChatGPT Desktop App window
+  opencli chatgpt status — Check if ChatGPT Desktop App is running natively on macOS
+  opencli ctrip search <query> [--limit] — 搜索携程目的地、景区和酒店联想结果
+  opencli devto tag <tag> [--limit] — Latest DEV.to articles for a specific tag
+  opencli devto top [--limit] — Top DEV.to articles of the day
+  opencli devto user <username> [--limit] — Recent DEV.to articles from a specific user
+  opencli dictionary examples <word> — Read real-world example sentences utilizing the word
+  opencli dictionary search <word> — Search the Free Dictionary API for definitions, parts of speech, and pronunciations.
+  opencli dictionary synonyms <word> — Find synonyms for a specific word
+  opencli google news [--keyword] [--limit] [--lang] [--region] — Get Google News headlines
+  opencli google suggest <keyword> [--lang] — Get Google search suggestions
+  opencli google trends [--region] [--limit] — Get Google Trends daily trending searches
+  opencli hackernews ask [--limit] — Hacker News Ask HN posts
+  opencli hackernews best [--limit] — Hacker News best stories
+  opencli hackernews jobs [--limit] — Hacker News job postings
+  opencli hackernews new [--limit] — Hacker News newest stories
+  opencli hackernews search <query> [--limit] [--sort] — Search Hacker News stories
+  opencli hackernews show [--limit] — Hacker News Show HN posts
+  opencli hackernews top [--limit] — Hacker News top stories
+  opencli hackernews user <username> — Hacker News user profile
+  opencli hf top [--limit] [--all] [--date] [--period] — Top upvoted Hugging Face papers
+  opencli lobsters active [--limit] — Lobste.rs most active discussions
+  opencli lobsters hot [--limit] — Lobste.rs hottest stories
+  opencli lobsters newest [--limit] — Lobste.rs newest stories
+  opencli lobsters tag <tag> [--limit] — Lobste.rs stories by tag
+  opencli paperreview feedback <token> <helpfulness> <critical-error> <actionable-suggestions> [--additional-comments] — Submit feedback for a paperreview.ai review token
+  opencli paperreview review <token> — Fetch a paperreview.ai review by token
+  opencli paperreview submit <pdf> <email> [--venue] [--dry-run] [--prepare-only] — Submit a PDF to paperreview.ai for review
+  opencli producthunt posts [--limit] [--category] — Latest Product Hunt launches (optional category filter)
+  opencli producthunt today [--limit] — Today's Product Hunt launches (most recent day in feed)
+  opencli sinablog search <keyword> [--limit] — 搜索新浪博客文章（通过新浪搜索）
+  opencli sinafinance news [--limit] [--type] — 新浪财经 7x24 小时实时快讯
+  opencli sinafinance stock <key> [--market] — 新浪财经行情（A股/港股/美股）
+  opencli spotify auth — Authenticate with Spotify (OAuth — run once)
+  opencli spotify next — Skip to next track
+  opencli spotify pause — Pause playback
+  opencli spotify play [--query] — Resume playback or search and play a track/artist
+  opencli spotify prev — Skip to previous track
+  opencli spotify queue <query> — Add a track to the playback queue
+  opencli spotify repeat [--mode] — Set repeat mode (off / track / context)
+  opencli spotify search <query> [--limit] — Search for tracks
+  opencli spotify shuffle [--state] — Toggle shuffle on/off
+  opencli spotify status — Show current playback status
+  opencli spotify volume <level> — Set playback volume (0-100)
+  opencli stackoverflow bounties [--limit] — Active bounties on Stack Overflow
+  opencli stackoverflow hot [--limit] — Hot Stack Overflow questions
+  opencli stackoverflow search <query> [--limit] — Search Stack Overflow questions
+  opencli stackoverflow unanswered [--limit] — Top voted unanswered questions on Stack Overflow
+  opencli steam top-sellers [--limit] — Steam top selling games
+  opencli substack search <keyword> [--type] [--limit] — 搜索 Substack 文章和 Newsletter
+  opencli v2ex hot [--limit] — V2EX 热门话题
+  opencli v2ex latest [--limit] — V2EX 最新话题
+  opencli v2ex member <username> — V2EX 用户资料
+  opencli v2ex node <name> [--limit] — V2EX 节点话题列表
+  opencli v2ex nodes [--limit] — V2EX 所有节点列表
+  opencli v2ex replies <id> [--limit] — V2EX 主题回复列表
+  opencli v2ex topic <id> — V2EX 主题详情和回复
+  opencli v2ex user <username> [--limit] — V2EX 用户发帖列表
+  opencli weread ranking [--category] [--limit] — WeRead book rankings by category
+  opencli weread search <query> [--limit] — Search books on WeRead
+  opencli wikipedia random [--lang] — Get a random Wikipedia article
+  opencli wikipedia search <query> [--limit] [--lang] — Search Wikipedia articles
+  opencli wikipedia summary <title> [--lang] — Get Wikipedia article summary
+  opencli wikipedia trending [--limit] [--lang] — Most-read Wikipedia articles (yesterday)
+  opencli xiaoyuzhou episode <id> — View details of a Xiaoyuzhou podcast episode
+  opencli xiaoyuzhou podcast <id> — View a Xiaoyuzhou podcast profile
+  opencli xiaoyuzhou podcast-episodes <id> [--limit] — List recent episodes of a Xiaoyuzhou podcast (up to 15, SSR limit)
+  opencli yollomi models [--type] — List available Yollomi AI models (image, video, tools)
+  opencli gh issue list [--repo owner/repo] [--state open|closed] [--limit N] [--json fields] — List GitHub issues
+  opencli gh pr list [--repo owner/repo] [--state open|closed] [--limit N] [--json fields] — List GitHub pull requests
+  opencli gh repo view [owner/repo] [--json fields] — View GitHub repo details

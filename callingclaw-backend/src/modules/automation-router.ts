@@ -28,6 +28,7 @@ import { ZoomSkill, type ZoomAction } from "../skills/zoom";
 import { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import { PeekabooClient } from "../mcp_client/peekaboo";
 import type { OpenCLIBridge } from "./opencli-bridge";
+import { FileAliasIndex } from "./file-alias-index";
 
 // ── Intent Classification ──
 
@@ -187,6 +188,7 @@ export class AutomationRouter {
   private browser: PlaywrightCLIClient;
   private peekaboo: PeekabooClient;
   private opencli: OpenCLIBridge | null;
+  private _fileIndex = new FileAliasIndex();
 
   constructor(
     bridge: PythonBridge,
@@ -202,6 +204,9 @@ export class AutomationRouter {
     this.peekaboo = peekaboo || new PeekabooClient();
     this.opencli = opencli || null;
   }
+
+  /** File alias index for instant voice-to-file lookup during meetings */
+  get fileIndex(): FileAliasIndex { return this._fileIndex; }
 
   /** Classify an instruction into an automation layer + action */
   classify(instruction: string): ClassifiedIntent {
@@ -484,6 +489,13 @@ export class AutomationRouter {
   private async searchLocalFile(query: string): Promise<string | null> {
     if (!query || query.length < 2) return null;
 
+    // Fast path: check pre-built file alias index (~2ms, no LLM)
+    if (this._fileIndex.ready) {
+      const match = this._fileIndex.search(query);
+      if (match) return match.path;
+    }
+
+    // Slow path: directory scan + Haiku fuzzy match (fallback)
     const { homedir } = await import("os");
     const { resolve } = await import("path");
     const projectRoot = resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0");

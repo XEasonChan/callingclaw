@@ -1,0 +1,2231 @@
+{
+  "note": "Auto-generated from opencli list. Used by Haiku to generate commands.",
+  "public_count": 97,
+  "browser_count": 356,
+  "external_count": 3,
+  "public": [
+    {
+      "cmd": "opencli 36kr news",
+      "desc": "Latest tech/startup news from 36kr (36氪)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli apple-podcasts episodes",
+      "desc": "List recent episodes of an Apple Podcast (use ID from search)",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli apple-podcasts search",
+      "desc": "Search Apple Podcasts",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli apple-podcasts top",
+      "desc": "Top podcasts chart on Apple Podcasts",
+      "args": "[--limit] [--country]"
+    },
+    {
+      "cmd": "opencli arxiv paper",
+      "desc": "Get arXiv paper details by ID",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli arxiv search",
+      "desc": "Search arXiv papers",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli bbc news",
+      "desc": "BBC News headlines (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg businessweek",
+      "desc": "Bloomberg Businessweek top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg economics",
+      "desc": "Bloomberg Economics top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg feeds",
+      "desc": "List the Bloomberg RSS feed aliases used by the adapter"
+    },
+    {
+      "cmd": "opencli bloomberg industries",
+      "desc": "Bloomberg Industries top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg main",
+      "desc": "Bloomberg homepage top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg markets",
+      "desc": "Bloomberg Markets top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg opinions",
+      "desc": "Bloomberg Opinion top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg politics",
+      "desc": "Bloomberg Politics top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bloomberg tech",
+      "desc": "Bloomberg Tech top stories (RSS)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bluesky feeds",
+      "desc": "Popular Bluesky feed generators",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bluesky followers",
+      "desc": "List followers of a Bluesky user",
+      "args": "<handle> [--limit]"
+    },
+    {
+      "cmd": "opencli bluesky following",
+      "desc": "List accounts a Bluesky user is following",
+      "args": "<handle> [--limit]"
+    },
+    {
+      "cmd": "opencli bluesky profile",
+      "desc": "Get Bluesky user profile info",
+      "args": "<handle>"
+    },
+    {
+      "cmd": "opencli bluesky search",
+      "desc": "Search Bluesky users",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli bluesky starter-packs",
+      "desc": "Get starter packs created by a Bluesky user",
+      "args": "<handle> [--limit]"
+    },
+    {
+      "cmd": "opencli bluesky thread",
+      "desc": "Get a Bluesky post thread with replies",
+      "args": "<uri> [--limit]"
+    },
+    {
+      "cmd": "opencli bluesky trending",
+      "desc": "Trending topics on Bluesky",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bluesky user",
+      "desc": "Get recent posts from a Bluesky user",
+      "args": "<handle> [--limit]"
+    },
+    {
+      "cmd": "opencli chatgpt ask",
+      "desc": "Send a prompt and wait for the AI response (send + wait + read)",
+      "args": "<text> [--model] [--timeout]"
+    },
+    {
+      "cmd": "opencli chatgpt model",
+      "desc": "Switch ChatGPT Desktop model/mode (auto, instant, thinking, 5.2-instant, 5.2-thinking)",
+      "args": "<model>"
+    },
+    {
+      "cmd": "opencli chatgpt new",
+      "desc": "Open a new chat in ChatGPT Desktop App"
+    },
+    {
+      "cmd": "opencli chatgpt read",
+      "desc": "Read the last visible message from the focused ChatGPT Desktop window"
+    },
+    {
+      "cmd": "opencli chatgpt send",
+      "desc": "Send a message to the active ChatGPT Desktop App window",
+      "args": "<text> [--model]"
+    },
+    {
+      "cmd": "opencli chatgpt status",
+      "desc": "Check if ChatGPT Desktop App is running natively on macOS"
+    },
+    {
+      "cmd": "opencli ctrip search",
+      "desc": "搜索携程目的地、景区和酒店联想结果",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli devto tag",
+      "desc": "Latest DEV.to articles for a specific tag",
+      "args": "<tag> [--limit]"
+    },
+    {
+      "cmd": "opencli devto top",
+      "desc": "Top DEV.to articles of the day",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli devto user",
+      "desc": "Recent DEV.to articles from a specific user",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli dictionary examples",
+      "desc": "Read real-world example sentences utilizing the word",
+      "args": "<word>"
+    },
+    {
+      "cmd": "opencli dictionary search",
+      "desc": "Search the Free Dictionary API for definitions, parts of speech, and pronunciations.",
+      "args": "<word>"
+    },
+    {
+      "cmd": "opencli dictionary synonyms",
+      "desc": "Find synonyms for a specific word",
+      "args": "<word>"
+    },
+    {
+      "cmd": "opencli google news",
+      "desc": "Get Google News headlines",
+      "args": "[--keyword] [--limit] [--lang] [--region]"
+    },
+    {
+      "cmd": "opencli google suggest",
+      "desc": "Get Google search suggestions",
+      "args": "<keyword> [--lang]"
+    },
+    {
+      "cmd": "opencli google trends",
+      "desc": "Get Google Trends daily trending searches",
+      "args": "[--region] [--limit]"
+    },
+    {
+      "cmd": "opencli hackernews ask",
+      "desc": "Hacker News Ask HN posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli hackernews best",
+      "desc": "Hacker News best stories",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli hackernews jobs",
+      "desc": "Hacker News job postings",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli hackernews new",
+      "desc": "Hacker News newest stories",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli hackernews search",
+      "desc": "Search Hacker News stories",
+      "args": "<query> [--limit] [--sort]"
+    },
+    {
+      "cmd": "opencli hackernews show",
+      "desc": "Hacker News Show HN posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli hackernews top",
+      "desc": "Hacker News top stories",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli hackernews user",
+      "desc": "Hacker News user profile",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli hf top",
+      "desc": "Top upvoted Hugging Face papers",
+      "args": "[--limit] [--all] [--date] [--period]"
+    },
+    {
+      "cmd": "opencli lobsters active",
+      "desc": "Lobste.rs most active discussions",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli lobsters hot",
+      "desc": "Lobste.rs hottest stories",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli lobsters newest",
+      "desc": "Lobste.rs newest stories",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli lobsters tag",
+      "desc": "Lobste.rs stories by tag",
+      "args": "<tag> [--limit]"
+    },
+    {
+      "cmd": "opencli paperreview feedback",
+      "desc": "Submit feedback for a paperreview.ai review token",
+      "args": "<token> <helpfulness> <critical-error> <actionable-suggestions> [--additional-comments]"
+    },
+    {
+      "cmd": "opencli paperreview review",
+      "desc": "Fetch a paperreview.ai review by token",
+      "args": "<token>"
+    },
+    {
+      "cmd": "opencli paperreview submit",
+      "desc": "Submit a PDF to paperreview.ai for review",
+      "args": "<pdf> <email> [--venue] [--dry-run] [--prepare-only]"
+    },
+    {
+      "cmd": "opencli producthunt posts",
+      "desc": "Latest Product Hunt launches (optional category filter)",
+      "args": "[--limit] [--category]"
+    },
+    {
+      "cmd": "opencli producthunt today",
+      "desc": "Today's Product Hunt launches (most recent day in feed)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli sinablog search",
+      "desc": "搜索新浪博客文章（通过新浪搜索）",
+      "args": "<keyword> [--limit]"
+    },
+    {
+      "cmd": "opencli sinafinance news",
+      "desc": "新浪财经 7x24 小时实时快讯",
+      "args": "[--limit] [--type]"
+    },
+    {
+      "cmd": "opencli sinafinance stock",
+      "desc": "新浪财经行情（A股/港股/美股）",
+      "args": "<key> [--market]"
+    },
+    {
+      "cmd": "opencli spotify auth",
+      "desc": "Authenticate with Spotify (OAuth — run once)"
+    },
+    {
+      "cmd": "opencli spotify next",
+      "desc": "Skip to next track"
+    },
+    {
+      "cmd": "opencli spotify pause",
+      "desc": "Pause playback"
+    },
+    {
+      "cmd": "opencli spotify play",
+      "desc": "Resume playback or search and play a track/artist",
+      "args": "[--query]"
+    },
+    {
+      "cmd": "opencli spotify prev",
+      "desc": "Skip to previous track"
+    },
+    {
+      "cmd": "opencli spotify queue",
+      "desc": "Add a track to the playback queue",
+      "args": "<query>"
+    },
+    {
+      "cmd": "opencli spotify repeat",
+      "desc": "Set repeat mode (off / track / context)",
+      "args": "[--mode]"
+    },
+    {
+      "cmd": "opencli spotify search",
+      "desc": "Search for tracks",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli spotify shuffle",
+      "desc": "Toggle shuffle on/off",
+      "args": "[--state]"
+    },
+    {
+      "cmd": "opencli spotify status",
+      "desc": "Show current playback status"
+    },
+    {
+      "cmd": "opencli spotify volume",
+      "desc": "Set playback volume (0-100)",
+      "args": "<level>"
+    },
+    {
+      "cmd": "opencli stackoverflow bounties",
+      "desc": "Active bounties on Stack Overflow",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli stackoverflow hot",
+      "desc": "Hot Stack Overflow questions",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli stackoverflow search",
+      "desc": "Search Stack Overflow questions",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli stackoverflow unanswered",
+      "desc": "Top voted unanswered questions on Stack Overflow",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli steam top-sellers",
+      "desc": "Steam top selling games",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli substack search",
+      "desc": "搜索 Substack 文章和 Newsletter",
+      "args": "<keyword> [--type] [--limit]"
+    },
+    {
+      "cmd": "opencli v2ex hot",
+      "desc": "V2EX 热门话题",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli v2ex latest",
+      "desc": "V2EX 最新话题",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli v2ex member",
+      "desc": "V2EX 用户资料",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli v2ex node",
+      "desc": "V2EX 节点话题列表",
+      "args": "<name> [--limit]"
+    },
+    {
+      "cmd": "opencli v2ex nodes",
+      "desc": "V2EX 所有节点列表",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli v2ex replies",
+      "desc": "V2EX 主题回复列表",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli v2ex topic",
+      "desc": "V2EX 主题详情和回复",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli v2ex user",
+      "desc": "V2EX 用户发帖列表",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli weread ranking",
+      "desc": "WeRead book rankings by category",
+      "args": "[--category] [--limit]"
+    },
+    {
+      "cmd": "opencli weread search",
+      "desc": "Search books on WeRead",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli wikipedia random",
+      "desc": "Get a random Wikipedia article",
+      "args": "[--lang]"
+    },
+    {
+      "cmd": "opencli wikipedia search",
+      "desc": "Search Wikipedia articles",
+      "args": "<query> [--limit] [--lang]"
+    },
+    {
+      "cmd": "opencli wikipedia summary",
+      "desc": "Get Wikipedia article summary",
+      "args": "<title> [--lang]"
+    },
+    {
+      "cmd": "opencli wikipedia trending",
+      "desc": "Most-read Wikipedia articles (yesterday)",
+      "args": "[--limit] [--lang]"
+    },
+    {
+      "cmd": "opencli xiaoyuzhou episode",
+      "desc": "View details of a Xiaoyuzhou podcast episode",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli xiaoyuzhou podcast",
+      "desc": "View a Xiaoyuzhou podcast profile",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli xiaoyuzhou podcast-episodes",
+      "desc": "List recent episodes of a Xiaoyuzhou podcast (up to 15, SSR limit)",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli yollomi models",
+      "desc": "List available Yollomi AI models (image, video, tools)",
+      "args": "[--type]"
+    }
+  ],
+  "external": [
+    {
+      "cmd": "opencli gh issue list",
+      "desc": "List GitHub issues",
+      "args": "[--repo owner/repo] [--state open|closed] [--limit N] [--json fields]"
+    },
+    {
+      "cmd": "opencli gh pr list",
+      "desc": "List GitHub pull requests",
+      "args": "[--repo owner/repo] [--state open|closed] [--limit N] [--json fields]"
+    },
+    {
+      "cmd": "opencli gh repo view",
+      "desc": "View GitHub repo details",
+      "args": "[owner/repo] [--json fields]"
+    }
+  ],
+  "browser": [
+    {
+      "cmd": "opencli 36kr article",
+      "desc": "获取36氪文章正文内容",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli 36kr hot",
+      "desc": "36氪热榜 — trending articles (renqi/zonghe/shoucang/catalog)",
+      "args": "[--limit] [--type]"
+    },
+    {
+      "cmd": "opencli 36kr search",
+      "desc": "搜索36氪文章",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli amazon bestsellers",
+      "desc": "Amazon Best Sellers pages for category candidate discovery",
+      "args": "[--input] [--limit]"
+    },
+    {
+      "cmd": "opencli amazon discussion",
+      "desc": "Amazon review summary and sample customer discussion from product review pages",
+      "args": "<input> [--limit]"
+    },
+    {
+      "cmd": "opencli amazon offer",
+      "desc": "Amazon seller, buy box, and fulfillment facts from the product page",
+      "args": "<input>"
+    },
+    {
+      "cmd": "opencli amazon product",
+      "desc": "Amazon product page facts for candidate validation",
+      "args": "<input>"
+    },
+    {
+      "cmd": "opencli amazon search",
+      "desc": "Amazon search results for product discovery and coarse filtering",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli antigravity dump",
+      "desc": "Dump the DOM to help AI understand the UI"
+    },
+    {
+      "cmd": "opencli antigravity extract-code",
+      "desc": "Extract multi-line code blocks from the current Antigravity conversation"
+    },
+    {
+      "cmd": "opencli antigravity model",
+      "desc": "Switch the active LLM model in Antigravity",
+      "args": "<name>"
+    },
+    {
+      "cmd": "opencli antigravity new",
+      "desc": "Start a new conversation / clear context in Antigravity"
+    },
+    {
+      "cmd": "opencli antigravity read",
+      "desc": "Read the latest chat messages from Antigravity AI",
+      "args": "[--last]"
+    },
+    {
+      "cmd": "opencli antigravity send",
+      "desc": "Send a message to Antigravity AI via the internal Lexical editor",
+      "args": "<message>"
+    },
+    {
+      "cmd": "opencli antigravity status",
+      "desc": "Check Antigravity CDP connection and get current page state"
+    },
+    {
+      "cmd": "opencli antigravity watch",
+      "desc": "Stream new chat messages from Antigravity in real-time"
+    },
+    {
+      "cmd": "opencli band bands",
+      "desc": "List all Bands you belong to"
+    },
+    {
+      "cmd": "opencli band mentions",
+      "desc": "Show Band notifications where you are @mentioned",
+      "args": "[--filter] [--limit] [--unread]"
+    },
+    {
+      "cmd": "opencli band post",
+      "desc": "Export full content of a post including comments",
+      "args": "<band_no> <post_no> [--output] [--comments]"
+    },
+    {
+      "cmd": "opencli band posts",
+      "desc": "List posts from a Band",
+      "args": "<band_no> [--limit]"
+    },
+    {
+      "cmd": "opencli barchart flow",
+      "desc": "Barchart unusual options activity / options flow",
+      "args": "[--type] [--limit]"
+    },
+    {
+      "cmd": "opencli barchart greeks",
+      "desc": "Barchart options greeks overview (IV, delta, gamma, theta, vega)",
+      "args": "<symbol> [--expiration] [--limit]"
+    },
+    {
+      "cmd": "opencli barchart options",
+      "desc": "Barchart options chain with greeks, IV, volume, and open interest",
+      "args": "<symbol> [--type] [--limit]"
+    },
+    {
+      "cmd": "opencli barchart quote",
+      "desc": "Barchart stock quote with price, volume, and key metrics",
+      "args": "<symbol>"
+    },
+    {
+      "cmd": "opencli bilibili comments",
+      "desc": "获取 B站视频评论（使用官方 API + WBI 签名）",
+      "args": "<bvid> [--limit]"
+    },
+    {
+      "cmd": "opencli bilibili download",
+      "desc": "下载B站视频（需要 yt-dlp）",
+      "args": "<bvid> [--output] [--quality]"
+    },
+    {
+      "cmd": "opencli bilibili dynamic",
+      "desc": "Get Bilibili user dynamic feed",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bilibili favorite",
+      "desc": "我的默认收藏夹",
+      "args": "[--limit] [--page]"
+    },
+    {
+      "cmd": "opencli bilibili feed",
+      "desc": "关注的人的动态时间线",
+      "args": "[--limit] [--type]"
+    },
+    {
+      "cmd": "opencli bilibili following",
+      "desc": "获取 Bilibili 用户的关注列表",
+      "args": "[--uid] [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli bilibili history",
+      "desc": "我的观看历史",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bilibili hot",
+      "desc": "B站热门视频",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bilibili me",
+      "desc": "My Bilibili profile info"
+    },
+    {
+      "cmd": "opencli bilibili ranking",
+      "desc": "Get Bilibili video ranking board",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli bilibili search",
+      "desc": "Search Bilibili videos or users",
+      "args": "<query> [--type] [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli bilibili subtitle",
+      "desc": "获取 Bilibili 视频的字幕",
+      "args": "<bvid> [--lang]"
+    },
+    {
+      "cmd": "opencli bilibili user-videos",
+      "desc": "查看指定用户的投稿视频",
+      "args": "<uid> [--limit] [--order] [--page]"
+    },
+    {
+      "cmd": "opencli bloomberg news",
+      "desc": "Read a Bloomberg story/article page and return title, full content, and media links",
+      "args": "<link>"
+    },
+    {
+      "cmd": "opencli boss batchgreet",
+      "desc": "BOSS直聘批量向推荐候选人发送招呼",
+      "args": "[--job-id] [--limit] [--text]"
+    },
+    {
+      "cmd": "opencli boss chatlist",
+      "desc": "BOSS直聘查看聊天列表（招聘端）",
+      "args": "[--page] [--limit] [--job-id]"
+    },
+    {
+      "cmd": "opencli boss chatmsg",
+      "desc": "BOSS直聘查看与候选人的聊天消息",
+      "args": "<uid> [--page]"
+    },
+    {
+      "cmd": "opencli boss detail",
+      "desc": "BOSS直聘查看职位详情",
+      "args": "<security-id>"
+    },
+    {
+      "cmd": "opencli boss exchange",
+      "desc": "BOSS直聘交换联系方式（请求手机/微信）",
+      "args": "<uid> [--type]"
+    },
+    {
+      "cmd": "opencli boss greet",
+      "desc": "BOSS直聘向新候选人发送招呼（开始聊天）",
+      "args": "<uid> <security-id> <job-id> [--text]"
+    },
+    {
+      "cmd": "opencli boss invite",
+      "desc": "BOSS直聘发送面试邀请",
+      "args": "<uid> <time> [--address] [--contact]"
+    },
+    {
+      "cmd": "opencli boss joblist",
+      "desc": "BOSS直聘查看我发布的职位列表"
+    },
+    {
+      "cmd": "opencli boss mark",
+      "desc": "BOSS直聘给候选人添加标签",
+      "args": "<uid> <label> [--remove]"
+    },
+    {
+      "cmd": "opencli boss recommend",
+      "desc": "BOSS直聘查看推荐候选人（新招呼列表）",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli boss resume",
+      "desc": "BOSS直聘查看候选人简历（招聘端）",
+      "args": "<uid>"
+    },
+    {
+      "cmd": "opencli boss search",
+      "desc": "BOSS直聘搜索职位",
+      "args": "<query> [--city] [--experience] [--degree] [--salary] [--industry] [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli boss send",
+      "desc": "BOSS直聘发送聊天消息",
+      "args": "<uid> <text>"
+    },
+    {
+      "cmd": "opencli boss stats",
+      "desc": "BOSS直聘职位数据统计",
+      "args": "[--job-id]"
+    },
+    {
+      "cmd": "opencli chaoxing assignments",
+      "desc": "学习通作业列表",
+      "args": "[--course] [--status] [--limit]"
+    },
+    {
+      "cmd": "opencli chaoxing exams",
+      "desc": "学习通考试列表",
+      "args": "[--course] [--status] [--limit]"
+    },
+    {
+      "cmd": "opencli chatwise ask",
+      "desc": "Send a prompt and wait for the AI response (send + wait + read)",
+      "args": "<text> [--timeout]"
+    },
+    {
+      "cmd": "opencli chatwise export",
+      "desc": "Export the current ChatWise conversation to a Markdown file",
+      "args": "[--output]"
+    },
+    {
+      "cmd": "opencli chatwise history",
+      "desc": "List conversation history in ChatWise sidebar"
+    },
+    {
+      "cmd": "opencli chatwise model",
+      "desc": "Get or switch the active AI model in ChatWise",
+      "args": "[--model-name]"
+    },
+    {
+      "cmd": "opencli chatwise read",
+      "desc": "Read the current ChatWise conversation history"
+    },
+    {
+      "cmd": "opencli chatwise send",
+      "desc": "Send a message to the active ChatWise conversation",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli codex ask",
+      "desc": "Send a prompt and wait for the AI response (send + wait + read)",
+      "args": "<text> [--timeout]"
+    },
+    {
+      "cmd": "opencli codex export",
+      "desc": "Export the current Codex conversation to a Markdown file",
+      "args": "[--output]"
+    },
+    {
+      "cmd": "opencli codex extract-diff",
+      "desc": "Extract visual code review diff patches from Codex"
+    },
+    {
+      "cmd": "opencli codex history",
+      "desc": "List recent conversation threads in Codex"
+    },
+    {
+      "cmd": "opencli codex model",
+      "desc": "Get or switch the currently active AI model in Codex Desktop",
+      "args": "[--model-name]"
+    },
+    {
+      "cmd": "opencli codex read",
+      "desc": "Read the contents of the current Codex conversation thread"
+    },
+    {
+      "cmd": "opencli codex send",
+      "desc": "Send text/commands to the Codex AI composer",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli coupang add-to-cart",
+      "desc": "Add a Coupang product to cart using logged-in browser session",
+      "args": "[--product-id] [--url]"
+    },
+    {
+      "cmd": "opencli coupang search",
+      "desc": "Search Coupang products with logged-in browser session",
+      "args": "<query> [--page] [--limit] [--filter]"
+    },
+    {
+      "cmd": "opencli cursor ask",
+      "desc": "Send a prompt and wait for the AI response (send + wait + read)",
+      "args": "<text> [--timeout]"
+    },
+    {
+      "cmd": "opencli cursor composer",
+      "desc": "Send a prompt directly into Cursor Composer (Cmd+I shortcut)",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli cursor export",
+      "desc": "Export the current cursor conversation to a Markdown file",
+      "args": "[--output]"
+    },
+    {
+      "cmd": "opencli cursor extract-code",
+      "desc": "Extract multi-line code blocks from the current Cursor conversation"
+    },
+    {
+      "cmd": "opencli cursor history",
+      "desc": "List recent chat sessions from the Cursor sidebar"
+    },
+    {
+      "cmd": "opencli cursor model",
+      "desc": "Get or switch the currently active AI model in Cursor",
+      "args": "[--model-name]"
+    },
+    {
+      "cmd": "opencli cursor read",
+      "desc": "Read the current Cursor chat/composer conversation history"
+    },
+    {
+      "cmd": "opencli cursor send",
+      "desc": "Send a prompt directly into Cursor Composer/Chat",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli discord-app channels",
+      "desc": "List channels in the current Discord server"
+    },
+    {
+      "cmd": "opencli discord-app members",
+      "desc": "List online members in the current Discord channel"
+    },
+    {
+      "cmd": "opencli discord-app read",
+      "desc": "Read recent messages from the active Discord channel",
+      "args": "[--count]"
+    },
+    {
+      "cmd": "opencli discord-app search",
+      "desc": "Search messages in the current Discord server/channel (Cmd+F)",
+      "args": "<query>"
+    },
+    {
+      "cmd": "opencli discord-app send",
+      "desc": "Send a message in the active Discord channel",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli discord-app servers",
+      "desc": "List all Discord servers (guilds) in the sidebar"
+    },
+    {
+      "cmd": "opencli discord-app status",
+      "desc": "Check active CDP connection to Discord Desktop"
+    },
+    {
+      "cmd": "opencli douban book-hot",
+      "desc": "豆瓣图书热门榜单",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli douban download",
+      "desc": "下载电影海报/剧照图片",
+      "args": "<id> [--type] [--limit] [--photo-id] [--output]"
+    },
+    {
+      "cmd": "opencli douban marks",
+      "desc": "导出个人观影标记",
+      "args": "[--status] [--limit] [--uid]"
+    },
+    {
+      "cmd": "opencli douban movie-hot",
+      "desc": "豆瓣电影热门榜单",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli douban photos",
+      "desc": "获取电影海报/剧照图片列表",
+      "args": "<id> [--type] [--limit]"
+    },
+    {
+      "cmd": "opencli douban reviews",
+      "desc": "导出个人影评",
+      "args": "[--limit] [--uid] [--full]"
+    },
+    {
+      "cmd": "opencli douban search",
+      "desc": "搜索豆瓣电影、图书或音乐",
+      "args": "[--type] <keyword> [--limit]"
+    },
+    {
+      "cmd": "opencli douban subject",
+      "desc": "获取电影详情",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli douban top250",
+      "desc": "豆瓣电影 Top250",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli doubao-app ask",
+      "desc": "Send a message to Doubao desktop app and wait for the AI response",
+      "args": "<text> [--timeout]"
+    },
+    {
+      "cmd": "opencli doubao-app dump",
+      "desc": "Dump Doubao desktop app DOM and snapshot to /tmp for debugging"
+    },
+    {
+      "cmd": "opencli doubao-app new",
+      "desc": "Start a new chat in Doubao desktop app"
+    },
+    {
+      "cmd": "opencli doubao-app read",
+      "desc": "Read chat history from Doubao desktop app"
+    },
+    {
+      "cmd": "opencli doubao-app screenshot",
+      "desc": "Capture a screenshot of the Doubao desktop app window",
+      "args": "[--output]"
+    },
+    {
+      "cmd": "opencli doubao-app send",
+      "desc": "Send a message to Doubao desktop app",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli doubao-app status",
+      "desc": "Check CDP connection to Doubao desktop app"
+    },
+    {
+      "cmd": "opencli doubao ask",
+      "desc": "Send a prompt and wait for the Doubao response",
+      "args": "<text> [--timeout]"
+    },
+    {
+      "cmd": "opencli doubao detail",
+      "desc": "Read a specific Doubao conversation by ID",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli doubao history",
+      "desc": "List conversation history from Doubao sidebar",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli doubao meeting-summary",
+      "desc": "Get meeting summary and chapters from a Doubao conversation",
+      "args": "<id> [--chapters]"
+    },
+    {
+      "cmd": "opencli doubao meeting-transcript",
+      "desc": "Get or download the meeting transcript from a Doubao conversation",
+      "args": "<id> [--download]"
+    },
+    {
+      "cmd": "opencli doubao new",
+      "desc": "Start a new conversation in Doubao web chat"
+    },
+    {
+      "cmd": "opencli doubao read",
+      "desc": "Read the current Doubao conversation history"
+    },
+    {
+      "cmd": "opencli doubao send",
+      "desc": "Send a message to Doubao web chat",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli doubao status",
+      "desc": "Check Doubao chat page availability and login state"
+    },
+    {
+      "cmd": "opencli douyin activities",
+      "desc": "官方活动列表"
+    },
+    {
+      "cmd": "opencli douyin collections",
+      "desc": "合集列表",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli douyin delete",
+      "desc": "删除作品",
+      "args": "<aweme_id>"
+    },
+    {
+      "cmd": "opencli douyin draft",
+      "desc": "上传视频并保存为草稿",
+      "args": "<video> <title> [--caption] [--cover] [--visibility]"
+    },
+    {
+      "cmd": "opencli douyin drafts",
+      "desc": "获取草稿列表",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli douyin hashtag",
+      "desc": "话题搜索 / AI推荐 / 热点词",
+      "args": "<action> [--keyword] [--cover] [--limit]"
+    },
+    {
+      "cmd": "opencli douyin location",
+      "desc": "地理位置 POI 搜索",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli douyin profile",
+      "desc": "获取账号信息"
+    },
+    {
+      "cmd": "opencli douyin publish",
+      "desc": "定时发布视频到抖音（必须设置 2h ~ 14天后的发布时间）",
+      "args": "<video> <title> <schedule> [--caption] [--cover] [--visibility] [--allow_download] [--collection] [--activity] [--poi_id] [--poi_name] [--hotspot] [--no_safety_check] [--sync_toutiao]"
+    },
+    {
+      "cmd": "opencli douyin stats",
+      "desc": "作品数据分析",
+      "args": "<aweme_id>"
+    },
+    {
+      "cmd": "opencli douyin update",
+      "desc": "更新视频信息",
+      "args": "<aweme_id> [--reschedule] [--caption]"
+    },
+    {
+      "cmd": "opencli douyin user-videos",
+      "desc": "获取指定用户的视频列表（含下载地址和热门评论）",
+      "args": "<sec_uid> [--limit] [--with_comments] [--comment_limit]"
+    },
+    {
+      "cmd": "opencli douyin videos",
+      "desc": "获取作品列表",
+      "args": "[--limit] [--page] [--status]"
+    },
+    {
+      "cmd": "opencli facebook add-friend",
+      "desc": "Send a friend request on Facebook",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli facebook events",
+      "desc": "Browse Facebook event categories",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli facebook feed",
+      "desc": "Get your Facebook news feed",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli facebook friends",
+      "desc": "Get Facebook friend suggestions",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli facebook groups",
+      "desc": "List your Facebook groups",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli facebook join-group",
+      "desc": "Join a Facebook group",
+      "args": "<group>"
+    },
+    {
+      "cmd": "opencli facebook memories",
+      "desc": "Get your Facebook memories (On This Day)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli facebook notifications",
+      "desc": "Get recent Facebook notifications",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli facebook profile",
+      "desc": "Get Facebook user/page profile info",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli facebook search",
+      "desc": "Search Facebook for people, pages, or posts",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli gemini ask",
+      "desc": "Send a prompt to Gemini and return only the assistant response",
+      "args": "<prompt> [--timeout] [--new]"
+    },
+    {
+      "cmd": "opencli gemini image",
+      "desc": "Generate images with Gemini web and save them locally",
+      "args": "<prompt> [--rt] [--st] [--op] [--sd]"
+    },
+    {
+      "cmd": "opencli gemini new",
+      "desc": "Start a new conversation in Gemini web chat"
+    },
+    {
+      "cmd": "opencli google search",
+      "desc": "Search Google",
+      "args": "<keyword> [--limit] [--lang]"
+    },
+    {
+      "cmd": "opencli grok ask",
+      "desc": "Send a message to Grok and get response",
+      "args": "<prompt> [--timeout] [--new] [--web]"
+    },
+    {
+      "cmd": "opencli imdb person",
+      "desc": "Get actor or director info",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli imdb reviews",
+      "desc": "Get user reviews for a movie or TV show",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli imdb search",
+      "desc": "Search IMDb for movies, TV shows, and people",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli imdb title",
+      "desc": "Get movie or TV show details",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli imdb top",
+      "desc": "IMDb Top 250 Movies",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli imdb trending",
+      "desc": "IMDb Most Popular Movies",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli instagram comment",
+      "desc": "Comment on an Instagram post",
+      "args": "<username> <text> [--index]"
+    },
+    {
+      "cmd": "opencli instagram download",
+      "desc": "Download images and videos from Instagram posts and reels",
+      "args": "<url> [--path]"
+    },
+    {
+      "cmd": "opencli instagram explore",
+      "desc": "Instagram explore/discover trending posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli instagram follow",
+      "desc": "Follow an Instagram user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli instagram followers",
+      "desc": "List followers of an Instagram user",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli instagram following",
+      "desc": "List accounts an Instagram user is following",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli instagram like",
+      "desc": "Like an Instagram post",
+      "args": "<username> [--index]"
+    },
+    {
+      "cmd": "opencli instagram profile",
+      "desc": "Get Instagram user profile info",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli instagram save",
+      "desc": "Save (bookmark) an Instagram post",
+      "args": "<username> [--index]"
+    },
+    {
+      "cmd": "opencli instagram saved",
+      "desc": "Get your saved Instagram posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli instagram search",
+      "desc": "Search Instagram users",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli instagram unfollow",
+      "desc": "Unfollow an Instagram user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli instagram unlike",
+      "desc": "Unlike an Instagram post",
+      "args": "<username> [--index]"
+    },
+    {
+      "cmd": "opencli instagram unsave",
+      "desc": "Unsave (remove bookmark) an Instagram post",
+      "args": "<username> [--index]"
+    },
+    {
+      "cmd": "opencli instagram user",
+      "desc": "Get recent posts from an Instagram user",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli jd item",
+      "desc": "京东商品详情（价格、店铺、规格参数、AVIF 图片）",
+      "args": "<sku> [--images]"
+    },
+    {
+      "cmd": "opencli jike comment",
+      "desc": "评论即刻帖子",
+      "args": "<id> <text>"
+    },
+    {
+      "cmd": "opencli jike create",
+      "desc": "发布即刻动态",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli jike feed",
+      "desc": "即刻首页动态流",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli jike like",
+      "desc": "点赞即刻帖子",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli jike notifications",
+      "desc": "即刻通知",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli jike post",
+      "desc": "即刻帖子详情及评论",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli jike repost",
+      "desc": "转发即刻帖子",
+      "args": "<id> [--text]"
+    },
+    {
+      "cmd": "opencli jike search",
+      "desc": "搜索即刻帖子",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli jike topic",
+      "desc": "即刻话题/圈子帖子",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli jike user",
+      "desc": "即刻用户动态",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli jimeng generate",
+      "desc": "即梦AI 文生图 — 输入 prompt 生成图片",
+      "args": "<prompt> [--model] [--wait]"
+    },
+    {
+      "cmd": "opencli jimeng history",
+      "desc": "即梦AI 查看最近生成的作品",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli linkedin search",
+      "desc": "Search LinkedIn jobs",
+      "args": "<query> [--location] [--limit] [--start] [--details] [--company] [--experience-level] [--job-type] [--date-posted] [--remote]"
+    },
+    {
+      "cmd": "opencli linkedin timeline",
+      "desc": "Read LinkedIn home timeline posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli linux-do categories",
+      "desc": "linux.do 分类列表",
+      "args": "[--subcategories] [--limit]"
+    },
+    {
+      "cmd": "opencli linux-do category",
+      "desc": "linux.do 分类内话题",
+      "args": "<slug> <id> [--limit]"
+    },
+    {
+      "cmd": "opencli linux-do feed",
+      "desc": "linux.do 话题列表（需登录；支持全站、标签、分类）",
+      "args": "[--view] [--tag] [--category] [--limit] [--order] [--ascending] [--period]"
+    },
+    {
+      "cmd": "opencli linux-do hot",
+      "desc": "linux.do 热门话题",
+      "args": "[--limit] [--period]"
+    },
+    {
+      "cmd": "opencli linux-do latest",
+      "desc": "linux.do 最新话题",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli linux-do search",
+      "desc": "搜索 linux.do",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli linux-do tags",
+      "desc": "linux.do 标签列表",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli linux-do topic",
+      "desc": "linux.do 帖子详情和回复（首页）",
+      "args": "<id> [--limit] [--main_only]"
+    },
+    {
+      "cmd": "opencli linux-do user-posts",
+      "desc": "linux.do 用户的帖子",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli linux-do user-topics",
+      "desc": "linux.do 用户创建的话题",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli medium feed",
+      "desc": "Medium 热门文章 Feed",
+      "args": "[--topic] [--limit]"
+    },
+    {
+      "cmd": "opencli medium search",
+      "desc": "搜索 Medium 文章",
+      "args": "<keyword> [--limit]"
+    },
+    {
+      "cmd": "opencli medium user",
+      "desc": "获取 Medium 用户的文章列表",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli notebooklm current",
+      "desc": "Show metadata for the currently opened NotebookLM notebook tab"
+    },
+    {
+      "cmd": "opencli notebooklm get",
+      "desc": "Get rich metadata for the currently opened NotebookLM notebook"
+    },
+    {
+      "cmd": "opencli notebooklm history",
+      "desc": "List NotebookLM conversation history threads in the current notebook"
+    },
+    {
+      "cmd": "opencli notebooklm list",
+      "desc": "List NotebookLM notebooks via in-page batchexecute RPC in the current logged-in session"
+    },
+    {
+      "cmd": "opencli notebooklm note-list",
+      "desc": "List saved notes from the Studio panel of the current NotebookLM notebook"
+    },
+    {
+      "cmd": "opencli notebooklm notes-get",
+      "desc": "Get one note from the current NotebookLM notebook by title from the visible note editor",
+      "args": "<note>"
+    },
+    {
+      "cmd": "opencli notebooklm open",
+      "desc": "Open one NotebookLM notebook in the automation workspace by id or URL",
+      "args": "<notebook>"
+    },
+    {
+      "cmd": "opencli notebooklm source-fulltext",
+      "desc": "Get the extracted fulltext for one source in the currently opened NotebookLM notebook",
+      "args": "<source>"
+    },
+    {
+      "cmd": "opencli notebooklm source-get",
+      "desc": "Get one source from the currently opened NotebookLM notebook by id or title",
+      "args": "<source>"
+    },
+    {
+      "cmd": "opencli notebooklm source-guide",
+      "desc": "Get the guide summary and keywords for one source in the currently opened NotebookLM notebook",
+      "args": "<source>"
+    },
+    {
+      "cmd": "opencli notebooklm source-list",
+      "desc": "List sources for the currently opened NotebookLM notebook"
+    },
+    {
+      "cmd": "opencli notebooklm status",
+      "desc": "Check NotebookLM page availability and login state in the current Chrome session"
+    },
+    {
+      "cmd": "opencli notebooklm summary",
+      "desc": "Get the summary block from the currently opened NotebookLM notebook"
+    },
+    {
+      "cmd": "opencli notion export",
+      "desc": "Export the current Notion page as Markdown",
+      "args": "[--output]"
+    },
+    {
+      "cmd": "opencli notion favorites",
+      "desc": "List pages from the Notion Favorites section in the sidebar"
+    },
+    {
+      "cmd": "opencli notion new",
+      "desc": "Create a new page in Notion",
+      "args": "[--title]"
+    },
+    {
+      "cmd": "opencli notion read",
+      "desc": "Read the content of the currently open Notion page"
+    },
+    {
+      "cmd": "opencli notion search",
+      "desc": "Search pages and databases in Notion via Quick Find (Cmd+P)",
+      "args": "<query>"
+    },
+    {
+      "cmd": "opencli notion sidebar",
+      "desc": "List pages and databases from the Notion sidebar"
+    },
+    {
+      "cmd": "opencli notion status",
+      "desc": "Check active CDP connection to Notion Desktop"
+    },
+    {
+      "cmd": "opencli notion write",
+      "desc": "Append text content to the currently open Notion page",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli ones login",
+      "desc": "ONES Project API — login via Chrome Bridge (POST auth/login); stderr prints export hints for ONES_USER_ID / TOKEN",
+      "args": "[--email] [--phone] [--password]"
+    },
+    {
+      "cmd": "opencli ones logout",
+      "desc": "ONES Project API — invalidate current token (GET auth/logout) via Chrome Bridge"
+    },
+    {
+      "cmd": "opencli ones me",
+      "desc": "ONES Project API — current user (GET users/me) via Chrome Bridge"
+    },
+    {
+      "cmd": "opencli ones my-tasks",
+      "desc": "ONES — my work items (filters/peek + strict must query). Default: assignee=me. Use --mode if your site uses field004 for assignee.",
+      "args": "[--team] [--limit] [--mode]"
+    },
+    {
+      "cmd": "opencli ones task",
+      "desc": "ONES — work item detail (GET team/:team/task/:id/info); id is URL segment after …/task/",
+      "args": "<id> [--team]"
+    },
+    {
+      "cmd": "opencli ones tasks",
+      "desc": "ONES Project API — list work items (POST team/:team/filters/peek); use token-info -f json for team uuid",
+      "args": "[--team] [--project] [--assign] [--limit]"
+    },
+    {
+      "cmd": "opencli ones token-info",
+      "desc": "ONES Project API — session detail (GET auth/token_info) via Chrome Bridge: user, teams, org"
+    },
+    {
+      "cmd": "opencli ones worklog",
+      "desc": "ONES — log work hours on a task (defaults to today; use --date to backfill; endpoint falls back by deployment).",
+      "args": "<task> <hours> [--team] [--date] [--note] [--owner]"
+    },
+    {
+      "cmd": "opencli pixiv detail",
+      "desc": "View illustration details (tags, stats, URLs)",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli pixiv download",
+      "desc": "Download illustration images from Pixiv",
+      "args": "<illust-id> [--output]"
+    },
+    {
+      "cmd": "opencli pixiv illusts",
+      "desc": "List a Pixiv artist's illustrations",
+      "args": "<user-id> [--limit]"
+    },
+    {
+      "cmd": "opencli pixiv ranking",
+      "desc": "Pixiv illustration rankings (daily/weekly/monthly)",
+      "args": "[--mode] [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli pixiv search",
+      "desc": "Search Pixiv illustrations by keyword",
+      "args": "<query> [--limit] [--order] [--mode] [--page]"
+    },
+    {
+      "cmd": "opencli pixiv user",
+      "desc": "View Pixiv artist profile",
+      "args": "<uid>"
+    },
+    {
+      "cmd": "opencli producthunt browse",
+      "desc": "Best products in a Product Hunt category",
+      "args": "<category> [--limit]"
+    },
+    {
+      "cmd": "opencli producthunt hot",
+      "desc": "Today's top Product Hunt launches with vote counts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli reddit comment",
+      "desc": "Post a comment on a Reddit post",
+      "args": "<post-id> <text>"
+    },
+    {
+      "cmd": "opencli reddit frontpage",
+      "desc": "Reddit Frontpage / r/all",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli reddit hot",
+      "desc": "Reddit 热门帖子",
+      "args": "[--subreddit] [--limit]"
+    },
+    {
+      "cmd": "opencli reddit popular",
+      "desc": "Reddit Popular posts (/r/popular)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli reddit read",
+      "desc": "Read a Reddit post and its comments",
+      "args": "<post-id> [--sort] [--limit] [--depth] [--replies] [--max-length]"
+    },
+    {
+      "cmd": "opencli reddit save",
+      "desc": "Save or unsave a Reddit post",
+      "args": "<post-id> [--undo]"
+    },
+    {
+      "cmd": "opencli reddit saved",
+      "desc": "Browse your saved Reddit posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli reddit search",
+      "desc": "Search Reddit Posts",
+      "args": "<query> [--subreddit] [--sort] [--time] [--limit]"
+    },
+    {
+      "cmd": "opencli reddit subreddit",
+      "desc": "Get posts from a specific Subreddit",
+      "args": "<name> [--sort] [--time] [--limit]"
+    },
+    {
+      "cmd": "opencli reddit subscribe",
+      "desc": "Subscribe or unsubscribe to a subreddit",
+      "args": "<subreddit> [--undo]"
+    },
+    {
+      "cmd": "opencli reddit upvote",
+      "desc": "Upvote or downvote a Reddit post",
+      "args": "<post-id> [--direction]"
+    },
+    {
+      "cmd": "opencli reddit upvoted",
+      "desc": "Browse your upvoted Reddit posts",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli reddit user",
+      "desc": "View a Reddit user profile",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli reddit user-comments",
+      "desc": "View a Reddit user's comment history",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli reddit user-posts",
+      "desc": "View a Reddit user's submitted posts",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli reuters search",
+      "desc": "Reuters 路透社新闻搜索",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli sinablog article",
+      "desc": "获取新浪博客单篇文章详情",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli sinablog hot",
+      "desc": "获取新浪博客热门文章/推荐",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli sinablog user",
+      "desc": "获取新浪博客用户的文章列表",
+      "args": "<uid> [--limit]"
+    },
+    {
+      "cmd": "opencli sinafinance rolling-news",
+      "desc": "新浪财经滚动新闻"
+    },
+    {
+      "cmd": "opencli smzdm search",
+      "desc": "什么值得买搜索好价",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli substack feed",
+      "desc": "Substack 热门文章 Feed",
+      "args": "[--category] [--limit]"
+    },
+    {
+      "cmd": "opencli substack publication",
+      "desc": "获取特定 Substack Newsletter 的最新文章",
+      "args": "<url> [--limit]"
+    },
+    {
+      "cmd": "opencli tieba hot",
+      "desc": "Tieba hot topics",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli tieba posts",
+      "desc": "Browse posts in a tieba forum",
+      "args": "<forum> [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli tieba read",
+      "desc": "Read a tieba thread",
+      "args": "<id> [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli tieba search",
+      "desc": "Search posts across tieba",
+      "args": "<keyword> [--page] [--limit]"
+    },
+    {
+      "cmd": "opencli tiktok comment",
+      "desc": "Comment on a TikTok video",
+      "args": "<url> <text>"
+    },
+    {
+      "cmd": "opencli tiktok explore",
+      "desc": "Get trending TikTok videos from explore page",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli tiktok follow",
+      "desc": "Follow a TikTok user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli tiktok following",
+      "desc": "List accounts you follow on TikTok",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli tiktok friends",
+      "desc": "Get TikTok friend suggestions",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli tiktok like",
+      "desc": "Like a TikTok video",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli tiktok live",
+      "desc": "Browse live streams on TikTok",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli tiktok notifications",
+      "desc": "Get TikTok notifications (likes, comments, mentions, followers)",
+      "args": "[--limit] [--type]"
+    },
+    {
+      "cmd": "opencli tiktok profile",
+      "desc": "Get TikTok user profile info",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli tiktok save",
+      "desc": "Add a TikTok video to Favorites",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli tiktok search",
+      "desc": "Search TikTok videos",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli tiktok unfollow",
+      "desc": "Unfollow a TikTok user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli tiktok unlike",
+      "desc": "Unlike a TikTok video",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli tiktok unsave",
+      "desc": "Remove a TikTok video from Favorites",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli tiktok user",
+      "desc": "Get recent videos from a TikTok user",
+      "args": "<username> [--limit]"
+    },
+    {
+      "cmd": "opencli twitter accept",
+      "desc": "Auto-accept DM requests containing specific keywords",
+      "args": "<query> [--max]"
+    },
+    {
+      "cmd": "opencli twitter article",
+      "desc": "Fetch a Twitter Article (long-form content) and export as Markdown",
+      "args": "<tweet-id>"
+    },
+    {
+      "cmd": "opencli twitter block",
+      "desc": "Block a Twitter user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli twitter bookmark",
+      "desc": "Bookmark a tweet",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli twitter bookmarks",
+      "desc": "Fetch Twitter/X bookmarks",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli twitter delete",
+      "desc": "Delete a specific tweet by URL",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli twitter download",
+      "desc": "下载 Twitter/X 媒体（图片和视频）",
+      "args": "[--username] [--tweet-url] [--limit] [--output]"
+    },
+    {
+      "cmd": "opencli twitter follow",
+      "desc": "Follow a Twitter user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli twitter followers",
+      "desc": "Get accounts following a Twitter/X user",
+      "args": "[--user] [--limit]"
+    },
+    {
+      "cmd": "opencli twitter following",
+      "desc": "Get accounts a Twitter/X user is following",
+      "args": "[--user] [--limit]"
+    },
+    {
+      "cmd": "opencli twitter hide-reply",
+      "desc": "Hide a reply on your tweet (useful for hiding bot/spam replies)",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli twitter like",
+      "desc": "Like a specific tweet",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli twitter likes",
+      "desc": "Fetch liked tweets of a Twitter user",
+      "args": "[--username] [--limit]"
+    },
+    {
+      "cmd": "opencli twitter notifications",
+      "desc": "Get Twitter/X notifications",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli twitter post",
+      "desc": "Post a new tweet/thread",
+      "args": "<text>"
+    },
+    {
+      "cmd": "opencli twitter profile",
+      "desc": "Fetch a Twitter user profile (bio, stats, etc.)",
+      "args": "[--username]"
+    },
+    {
+      "cmd": "opencli twitter reply",
+      "desc": "Reply to a specific tweet",
+      "args": "<url> <text>"
+    },
+    {
+      "cmd": "opencli twitter reply-dm",
+      "desc": "Send a message to recent DM conversations",
+      "args": "<text> [--max] [--skip-replied]"
+    },
+    {
+      "cmd": "opencli twitter search",
+      "desc": "Search Twitter/X for tweets",
+      "args": "<query> [--filter] [--limit]"
+    },
+    {
+      "cmd": "opencli twitter thread",
+      "desc": "Get a tweet thread (original + all replies)",
+      "args": "<tweet-id> [--limit]"
+    },
+    {
+      "cmd": "opencli twitter timeline",
+      "desc": "Fetch Twitter timeline (for-you or following)",
+      "args": "[--type] [--limit]"
+    },
+    {
+      "cmd": "opencli twitter trending",
+      "desc": "Twitter/X trending topics",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli twitter unblock",
+      "desc": "Unblock a Twitter user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli twitter unbookmark",
+      "desc": "Remove a tweet from bookmarks",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli twitter unfollow",
+      "desc": "Unfollow a Twitter user",
+      "args": "<username>"
+    },
+    {
+      "cmd": "opencli v2ex daily",
+      "desc": "V2EX 每日签到并领取铜币"
+    },
+    {
+      "cmd": "opencli v2ex me",
+      "desc": "V2EX 获取个人资料 (余额/未读提醒)"
+    },
+    {
+      "cmd": "opencli v2ex notifications",
+      "desc": "V2EX 获取提醒 (回复/由于)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli web read",
+      "desc": "Fetch any web page and export as Markdown",
+      "args": "<url> [--output] [--download-images] [--wait]"
+    },
+    {
+      "cmd": "opencli weibo comments",
+      "desc": "Get comments on a Weibo post",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli weibo feed",
+      "desc": "Weibo home timeline (posts from followed users)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli weibo hot",
+      "desc": "微博热搜",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli weibo me",
+      "desc": "My Weibo profile info"
+    },
+    {
+      "cmd": "opencli weibo post",
+      "desc": "Get a single Weibo post",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli weibo search",
+      "desc": "搜索微博",
+      "args": "<keyword> [--limit]"
+    },
+    {
+      "cmd": "opencli weibo user",
+      "desc": "Get Weibo user profile",
+      "args": "<id>"
+    },
+    {
+      "cmd": "opencli weixin download",
+      "desc": "下载微信公众号文章为 Markdown 格式",
+      "args": "<url> [--output] [--download-images]"
+    },
+    {
+      "cmd": "opencli weread book",
+      "desc": "View book details on WeRead",
+      "args": "<book-id>"
+    },
+    {
+      "cmd": "opencli weread highlights",
+      "desc": "List your highlights (underlines) in a book",
+      "args": "<book-id> [--limit]"
+    },
+    {
+      "cmd": "opencli weread notebooks",
+      "desc": "List books that have highlights or notes"
+    },
+    {
+      "cmd": "opencli weread notes",
+      "desc": "List your notes (thoughts) on a book",
+      "args": "<book-id> [--limit]"
+    },
+    {
+      "cmd": "opencli weread shelf",
+      "desc": "List books on your WeRead bookshelf",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli xiaohongshu comments",
+      "desc": "获取小红书笔记评论（支持楼中楼子回复）",
+      "args": "<note-id> [--limit] [--with-replies]"
+    },
+    {
+      "cmd": "opencli xiaohongshu creator-note-detail",
+      "desc": "小红书单篇笔记详情页数据 (笔记信息 + 核心/互动数据 + 观看来源 + 观众画像 + 趋势数据)",
+      "args": "<note-id>"
+    },
+    {
+      "cmd": "opencli xiaohongshu creator-notes",
+      "desc": "小红书创作者笔记列表 + 每篇数据 (标题/日期/观看/点赞/收藏/评论)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli xiaohongshu creator-notes-summary",
+      "desc": "小红书最近笔记批量摘要 (列表 + 单篇关键数据汇总)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli xiaohongshu creator-profile",
+      "desc": "小红书创作者账号信息 (粉丝/关注/获赞/成长等级)"
+    },
+    {
+      "cmd": "opencli xiaohongshu creator-stats",
+      "desc": "小红书创作者数据总览 (观看/点赞/收藏/评论/分享/涨粉，含每日趋势)",
+      "args": "[--period]"
+    },
+    {
+      "cmd": "opencli xiaohongshu download",
+      "desc": "下载小红书笔记中的图片和视频",
+      "args": "<note-id> [--output]"
+    },
+    {
+      "cmd": "opencli xiaohongshu feed",
+      "desc": "小红书首页推荐 Feed (via Pinia Store Action)",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli xiaohongshu note",
+      "desc": "获取小红书笔记正文和互动数据",
+      "args": "<note-id>"
+    },
+    {
+      "cmd": "opencli xiaohongshu notifications",
+      "desc": "小红书通知 (mentions/likes/connections)",
+      "args": "[--type] [--limit]"
+    },
+    {
+      "cmd": "opencli xiaohongshu publish",
+      "desc": "小红书发布图文笔记 (creator center UI automation)",
+      "args": "<title> <content> <images> [--topics] [--draft]"
+    },
+    {
+      "cmd": "opencli xiaohongshu search",
+      "desc": "搜索小红书笔记",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli xiaohongshu user",
+      "desc": "Get public notes from a Xiaohongshu user profile",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli xueqiu comments",
+      "desc": "获取单只股票的讨论动态",
+      "args": "<symbol> [--limit]"
+    },
+    {
+      "cmd": "opencli xueqiu earnings-date",
+      "desc": "获取股票预计财报发布日期（公司大事）",
+      "args": "<symbol> [--next] [--limit]"
+    },
+    {
+      "cmd": "opencli xueqiu feed",
+      "desc": "获取雪球首页时间线（关注用户的动态）",
+      "args": "[--page] [--limit]"
+    },
+    {
+      "cmd": "opencli xueqiu fund-holdings",
+      "desc": "获取蛋卷基金持仓明细（可用 --account 按子账户过滤）",
+      "args": "[--account]"
+    },
+    {
+      "cmd": "opencli xueqiu fund-snapshot",
+      "desc": "获取蛋卷基金快照（总资产、子账户、持仓，推荐 -f json 输出）"
+    },
+    {
+      "cmd": "opencli xueqiu hot",
+      "desc": "获取雪球热门动态",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli xueqiu hot-stock",
+      "desc": "获取雪球热门股票榜",
+      "args": "[--limit] [--type]"
+    },
+    {
+      "cmd": "opencli xueqiu search",
+      "desc": "搜索雪球股票（代码或名称）",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli xueqiu stock",
+      "desc": "获取雪球股票实时行情",
+      "args": "<symbol>"
+    },
+    {
+      "cmd": "opencli xueqiu watchlist",
+      "desc": "获取雪球自选股列表",
+      "args": "[--category] [--limit]"
+    },
+    {
+      "cmd": "opencli yahoo-finance quote",
+      "desc": "Yahoo Finance 股票行情",
+      "args": "<symbol>"
+    },
+    {
+      "cmd": "opencli yollomi background",
+      "desc": "Generate AI background for a product/object image (5 credits)",
+      "args": "<image> [--prompt] [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi edit",
+      "desc": "Edit images with AI text prompts (Qwen image edit)",
+      "args": "<image> <prompt> [--model] [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi face-swap",
+      "desc": "Swap faces between two photos (3 credits)",
+      "args": "<source> <target> [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi generate",
+      "desc": "Generate images with AI (text-to-image or image-to-image)",
+      "args": "<prompt> [--model] [--ratio] [--image] [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi object-remover",
+      "desc": "Remove unwanted objects from images (3 credits)",
+      "args": "<image> <mask> [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi remove-bg",
+      "desc": "Remove image background with AI (free)",
+      "args": "<image> [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi restore",
+      "desc": "Restore old or damaged photos with AI (4 credits)",
+      "args": "<image> [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi try-on",
+      "desc": "Virtual try-on — see how clothes look on a person (3 credits)",
+      "args": "<person> <cloth> [--cloth-type] [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi upload",
+      "desc": "Upload an image or video to Yollomi (returns URL for other commands)",
+      "args": "<file>"
+    },
+    {
+      "cmd": "opencli yollomi upscale",
+      "desc": "Upscale image resolution with AI (1 credit)",
+      "args": "<image> [--scale] [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli yollomi video",
+      "desc": "Generate videos with AI (text-to-video or image-to-video)",
+      "args": "<prompt> [--model] [--image] [--ratio] [--output] [--no-download]"
+    },
+    {
+      "cmd": "opencli youtube channel",
+      "desc": "Get YouTube channel info and recent videos",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli youtube comments",
+      "desc": "Get YouTube video comments",
+      "args": "<url> [--limit]"
+    },
+    {
+      "cmd": "opencli youtube search",
+      "desc": "Search YouTube videos",
+      "args": "<query> [--limit] [--type] [--upload] [--sort]"
+    },
+    {
+      "cmd": "opencli youtube transcript",
+      "desc": "Get YouTube video transcript/subtitles",
+      "args": "<url> [--lang] [--mode]"
+    },
+    {
+      "cmd": "opencli youtube video",
+      "desc": "Get YouTube video metadata (title, views, description, etc.)",
+      "args": "<url>"
+    },
+    {
+      "cmd": "opencli zhihu download",
+      "desc": "导出知乎文章为 Markdown 格式",
+      "args": "<url> [--output] [--download-images]"
+    },
+    {
+      "cmd": "opencli zhihu hot",
+      "desc": "知乎热榜",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli zhihu question",
+      "desc": "知乎问题详情和回答",
+      "args": "<id> [--limit]"
+    },
+    {
+      "cmd": "opencli zhihu search",
+      "desc": "知乎搜索",
+      "args": "<query> [--limit]"
+    },
+    {
+      "cmd": "opencli zsxq dynamics",
+      "desc": "获取所有星球的最新动态",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli zsxq groups",
+      "desc": "列出当前账号加入的星球",
+      "args": "[--limit]"
+    },
+    {
+      "cmd": "opencli zsxq search",
+      "desc": "搜索星球内容",
+      "args": "<keyword> [--limit] [--group_id]"
+    },
+    {
+      "cmd": "opencli zsxq topic",
+      "desc": "获取单个话题详情和评论",
+      "args": "<id> [--comment_limit]"
+    },
+    {
+      "cmd": "opencli zsxq topics",
+      "desc": "获取当前星球的话题列表",
+      "args": "[--limit] [--group_id]"
+    }
+  ]
+}
