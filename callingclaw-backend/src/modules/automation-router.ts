@@ -159,12 +159,14 @@ export class AutomationRouter {
     eventBus?: EventBus,
     browser?: PlaywrightCLIClient,
     peekaboo?: PeekabooClient,
+    opencli?: OpenCLIBridge,
   ) {
     this.bridge = bridge;
     this.eventBus = eventBus;
     this.zoom = new ZoomSkill(bridge);
     this.browser = browser || new PlaywrightCLIClient();
     this.peekaboo = peekaboo || new PeekabooClient();
+    this.opencli = opencli || null;
   }
 
   /** Classify an instruction into an automation layer + action */
@@ -271,6 +273,8 @@ export class AutomationRouter {
     switch (intent.layer) {
       case "shortcuts":
         return this.executeShortcuts(intent);
+      case "opencli":
+        return this.executeOpenCLI(intent);
       case "playwright":
         return this.executePlaywright(intent);
       case "peekaboo":
@@ -553,10 +557,58 @@ export class AutomationRouter {
 
   private getFallbackLayer(current: AutomationLayer): AutomationLayer | null {
     switch (current) {
-      case "shortcuts":    return "playwright";
+      case "shortcuts":    return "opencli";
+      case "opencli":      return "playwright";
       case "playwright":   return "peekaboo";
       case "peekaboo":     return "computer_use";
       case "computer_use": return null; // no further fallback
+    }
+  }
+
+  // ── Layer 1.5: OpenCLI (deterministic web adapters — Chrome #2) ──
+
+  private async executeOpenCLI(intent: ClassifiedIntent): Promise<string> {
+    if (!this.opencli?.available) {
+      throw new Error("OpenCLI not available — falling back");
+    }
+
+    const { action, params } = intent;
+
+    switch (action) {
+      case "github_issues": {
+        const args = ["issues"];
+        if (params.repo) args.push("--repo", params.repo);
+        args.push("--state", "open", "--limit", "10");
+        const result = await this.opencli.adapter("github", args);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "github_prs": {
+        const args = ["prs"];
+        if (params.repo) args.push("--repo", params.repo);
+        args.push("--state", "open", "--limit", "10");
+        const result = await this.opencli.adapter("github", args);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "hackernews_trending": {
+        const limit = params.limit || "5";
+        const result = await this.opencli.adapter("hackernews", ["trending", "--limit", limit]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      case "google_search": {
+        if (!params.query) throw new Error("No search query provided");
+        const result = await this.opencli.adapter("google", ["search", params.query]);
+        if (!result.success) throw new Error(result.output);
+        return `[opencli, ${result.durationMs}ms] ${result.output}`;
+      }
+
+      default:
+        throw new Error(`Unknown OpenCLI action: ${action}`);
     }
   }
 
@@ -564,10 +616,16 @@ export class AutomationRouter {
   getStatus(): Record<AutomationLayer, { available: boolean; detail: string }> {
     return {
       shortcuts: { available: true, detail: "Always available (keyboard shortcuts + bash)" },
+      opencli: {
+        available: this.opencli?.available || false,
+        detail: this.opencli?.available
+          ? `OpenCLI ${this.opencli.health.version || "ready"} (Chrome #2, fault-isolated)`
+          : "Not available — web tasks fall through to Playwright",
+      },
       playwright: {
         available: this.browser.connected,
         detail: this.browser.connected
-          ? "Playwright CLI ready"
+          ? "Playwright CLI ready (Chrome #1)"
           : "Not started",
       },
       peekaboo: {
