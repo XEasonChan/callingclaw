@@ -1349,6 +1349,27 @@ async function refreshAll() {
   }
   S.notes = Array.isArray(notes) ? notes : (notes?.files || []);
   S.tasks = Array.isArray(tasks) ? tasks : (tasks?.tasks || []);
+
+  // Cross-link: when a calendar event arrives, find any preparing meetingFiles
+  // with the same meetUrl and link them (calendarEventId + topic update).
+  // This prevents the duplicate card problem when calendar poll is faster than WS events.
+  for (var ci = 0; ci < S.meetings.length; ci++) {
+    var calEvt = S.meetings[ci];
+    if (!calEvt.hangoutLink) continue;
+    for (var mfid in S.meetingFiles) {
+      var mfd = S.meetingFiles[mfid];
+      if (mfd.meetUrl === calEvt.hangoutLink && !mfd.calendarEventId && calEvt.id) {
+        mfd.calendarEventId = calEvt.id;
+        // Also update topic to LLM-extracted title if prep card still has the raw user input
+        if (calEvt.summary && calEvt.summary !== 'Meeting' && mfd.topic && mfd.topic.length > 60) {
+          mfd.topic = calEvt.summary;
+          var titleEl = document.querySelector('#' + CSS.escape(mfid) + ' .meet-title');
+          if (titleEl) titleEl.textContent = calEvt.summary;
+        }
+      }
+    }
+  }
+
   // Sync manifest sessions into meetingFiles data model for past meetings
   if (S.manifest && S.manifest.sessions) {
     for (var si = 0; si < S.manifest.sessions.length; si++) {
@@ -1513,6 +1534,7 @@ function buildMeetingListHTML() {
   // (prep cards are -wrap elements rendered separately above the meeting list)
   var activePrepTopics = {};
   var activePrepCalIds = {};
+  var activePrepMeetUrls = {};
   var listEl = document.getElementById('meeting-list');
   if (listEl) {
     var wraps = listEl.querySelectorAll('[id$="-wrap"]');
@@ -1522,14 +1544,30 @@ function buildMeetingListHTML() {
       if (wd) {
         if (wd.topic) activePrepTopics[wd.topic] = true;
         if (wd.calendarEventId) activePrepCalIds[wd.calendarEventId] = true;
+        if (wd.meetUrl) activePrepMeetUrls[wd.meetUrl] = true;
       }
     }
   }
   var upcoming = S.meetings.filter(function(e) {
     if (new Date(e.start?.dateTime || e.start?.date) <= now - 3600000) return false;
     // Skip if this calendar event has an active prep card visible in the DOM
+    // Dedup by: topic match, calendarEventId match, meetUrl match, OR time proximity
     if (activePrepTopics[e.summary]) return false;
     if (e.id && activePrepCalIds[e.id]) return false;
+    if (e.hangoutLink && activePrepMeetUrls[e.hangoutLink]) return false;
+    // Time-proximity fallback: if a prep card was created recently (< 5 min ago)
+    // and this calendar event starts at about the same time, it's likely the same meeting.
+    // This handles the case where WS hasn't delivered meetUrl/calendarEventId yet.
+    var evtStart = new Date(e.start?.dateTime || e.start?.date).getTime();
+    for (var pid in S.meetingFiles) {
+      var pd = S.meetingFiles[pid];
+      if (pd.status !== 'preparing') continue;
+      if (pd.calendarEventId || pd.meetUrl) continue; // already linked, let other checks handle it
+      if (pd.startTime) {
+        var prepStart = new Date(pd.startTime).getTime();
+        if (Math.abs(evtStart - prepStart) < 5 * 60000) return false; // within 5 min = same meeting
+      }
+    }
     return true;
   });
   if (upcoming.length > 0) {
