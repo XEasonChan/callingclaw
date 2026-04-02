@@ -3056,6 +3056,20 @@ STEP-BY-STEP FLOW:
         return Response.json({ error: "Frame not found" }, { status: 404, headers });
       }
 
+      // GET /api/meeting/summary/:meetingId — Serve branded HTML meeting summary
+      if (url.pathname.startsWith("/api/meeting/summary/") && req.method === "GET") {
+        const meetingId = url.pathname.replace("/api/meeting/summary/", "");
+        if (!meetingId) {
+          return Response.json({ error: "meetingId required" }, { status: 400, headers });
+        }
+        const summaryPath = resolve(homedir(), ".callingclaw", "shared", "meetings", meetingId, "summary.html");
+        const file = Bun.file(summaryPath);
+        if (await file.exists()) {
+          return new Response(file, { headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
+        }
+        return Response.json({ error: "Summary not found" }, { status: 404, headers });
+      }
+
       // GET /api/shared/prep — List available prep brief files
       if (url.pathname === "/api/shared/prep" && req.method === "GET") {
         const files = await listPrepFiles();
@@ -3573,6 +3587,8 @@ STEP-BY-STEP FLOW:
         "/test-transcript-auditor": "/test-transcript-auditor.html",
         "/test-presentation-engine": "/test-presentation-engine.html",
         "/test-context-retriever": "/test-context-retriever.html",
+        "/test-hub": "/test-hub.html",
+        "/tests": "/test-hub.html",
       };
       const resolvedPath = pathnameAlias[url.pathname] ?? url.pathname;
       const publicPath = `${import.meta.dir}/../public${resolvedPath === "/" ? "/callingclaw-panel.html" : resolvedPath}`;

@@ -23,6 +23,7 @@ import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
 import { MeetingPrepSkill } from "./skills/meeting-prep";
 import { buildVoiceInstructions, pushContextUpdate, notifyTaskCompletion, prepareMeeting, getPostMeetingSummary, resetContextInjectionState, injectMeetingBrief } from "./voice-persona";
 import { KeyFrameStore } from "./modules/key-frame-store";
+import { generateMeetingSummaryHtml } from "./modules/meeting-summary-html";
 import { OpenClawDispatcher } from "./openclaw-dispatcher";
 import { createAgentAdapter, type AgentAdapter, type AgentPlatform } from "./agent-adapter";
 import { startConfigServer } from "./config_server";
@@ -575,18 +576,46 @@ async function autoLeaveMeeting() {
 
     // Finalize key frame timeline for screenshot delivery
     let keyFrameResult: { htmlFile?: string; frameCount?: number } | null = null;
+    let summaryHtmlPath: string | undefined;
+    const meetingIdForHtml = activeMeetingId || `mtg_${Date.now()}`;
+
     if (keyFrameStore.active) {
       const timeline = await keyFrameStore.finalize(summary.title || "Meeting").catch(() => null);
       if (timeline) {
         keyFrameResult = { htmlFile: timeline.htmlFile, frameCount: timeline.frameCount };
         console.log(`[AutoLeave] Timeline: ${timeline.frameCount} frames → ${timeline.htmlFile}`);
       }
+    }
+
+    // Generate branded HTML meeting summary (always — with or without screenshots)
+    try {
+      const meetingDir = keyFrameStore.meetingDir
+        || `${process.env.CALLINGCLAW_HOME || process.env.HOME + "/.callingclaw"}/shared/meetings/${meetingIdForHtml}`;
+      await Bun.$`mkdir -p ${meetingDir}`;
+
+      summaryHtmlPath = await generateMeetingSummaryHtml({
+        summary,
+        meetingId: keyFrameStore.meetingId || meetingIdForHtml,
+        meetingDir,
+        timelineEntries: [...keyFrameStore.timelineEntries],
+        transcript: context.getRecentTranscript(200),
+        startTs: keyFrameStore.startTs || Date.now(),
+        endTs: Date.now(),
+        version: (await Bun.file(`${import.meta.dir}/../VERSION`).text().catch(() => "2.0")).trim(),
+      });
+      console.log(`[AutoLeave] Summary HTML: ${summaryHtmlPath}`);
+      eventBus.emit("meeting.summary_html_ready", { htmlPath: summaryHtmlPath, meetingId: meetingIdForHtml });
+    } catch (e: any) {
+      console.error(`[AutoLeave] Summary HTML generation failed: ${e.message}`);
+    }
+
+    if (keyFrameStore.active) {
       await keyFrameStore.stop();
     }
 
-    // Post-meeting delivery (now includes screenshots)
+    // Post-meeting delivery (now includes screenshots + summary HTML)
     const prepSummary = getPostMeetingSummary(meetingPrepSkill);
-    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult }).catch((e: any) => {
+    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult, summaryHtmlPath }).catch((e: any) => {
       console.error("[AutoLeave] Delivery failed:", e.message);
     });
 

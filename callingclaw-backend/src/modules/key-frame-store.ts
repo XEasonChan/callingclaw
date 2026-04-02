@@ -89,7 +89,10 @@ export class KeyFrameStore {
 
   get active(): boolean { return this._meetingId !== null; }
   get meetingId(): string | null { return this._meetingId; }
+  get meetingDir(): string | null { return this._meetingDir; }
   get frameCount(): number { return this._frameCount; }
+  get startTs(): number { return this._startTs; }
+  get timelineEntries(): readonly TimelineEntry[] { return this._timelineEntries; }
 
   // ══════════════════════════════════════════════════════════════
   // Lifecycle

@@ -53,7 +53,7 @@ All services instantiate once in `callingclaw.ts` and inject cross-module depend
 2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Haiku during meetings, Sonnet outside), ContextRetriever (Haiku gap detection)
 3. **Meeting** — MeetingModule (recording+action items), MeetingScheduler (calendar auto-join), PostMeetingDelivery, KeyFrameStore
 4. **Skills** — MeetingPrepSkill, OpenClawBridge (System 2 deep reasoning), BrowserActionLoop (Haiku + Playwright snapshot)
-5. **Browser** — ChromeLauncher (Playwright library: Meet join + audio injection + admission monitor + screen share), PlaywrightCLIClient (legacy fallback)
+5. **Browser (Dual Chrome)** — Chrome #1: ChromeLauncher (Playwright library: Meet join + audio injection + admission monitor + screen share). Chrome #2: OpenCLIBridge (fault-isolated execution: deterministic web adapters, CLI hub, operate mode). See `docs/opencli-experiment-findings.md` for architecture decision.
 6. **HTTP Server** — `config_server.ts` takes a `Services` interface, builds REST + WebSocket APIs via `Bun.serve()`
 
 ### Multi-Provider Voice (ai_gateway/)

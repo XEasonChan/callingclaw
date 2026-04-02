@@ -40,6 +40,8 @@ interface MeetingDelivery {
   completedTasks: string[];
   /** Path to key frame timeline HTML (from KeyFrameStore.finalize()) */
   timelineHtmlPath?: string;
+  /** Path to branded meeting summary HTML (from generateMeetingSummaryHtml()) */
+  summaryHtmlPath?: string;
   /** Number of captured key frames */
   frameCount?: number;
 }
@@ -75,13 +77,15 @@ export class PostMeetingDelivery {
       htmlFile?: string;
       frameCount?: number;
     } | null;
+    /** Path to branded HTML meeting summary */
+    summaryHtmlPath?: string;
   }): Promise<MeetingDelivery | null> {
     if (!this.adapter.connected) {
       console.warn(`[PostMeeting] Agent adapter (${this.adapter.name}) not connected — cannot deliver todos`);
       return null;
     }
 
-    const { summary, notesFilePath, prepSummary, keyFrameResult } = opts;
+    const { summary, notesFilePath, prepSummary, keyFrameResult, summaryHtmlPath } = opts;
     const meetingId = `mtg_${Date.now()}`;
     const topic = prepSummary?.topic || summary.title || "Meeting";
 
@@ -125,6 +129,7 @@ export class PostMeetingDelivery {
       requirements: prepSummary?.requirements || [],
       completedTasks: prepSummary?.completedTasks || [],
       timelineHtmlPath: keyFrameResult?.htmlFile,
+      summaryHtmlPath,
       frameCount: keyFrameResult?.frameCount || 0,
     };
 
@@ -202,7 +207,7 @@ export class PostMeetingDelivery {
           assignee: t.assignee,
           deadline: t.deadline,
         })),
-        htmlPath: delivery.timelineHtmlPath,
+        htmlPath: delivery.summaryHtmlPath || delivery.timelineHtmlPath,
       });
       console.log(`[PostMeeting] Todo message sent via ${this.adapter.name} (${todos.length} items, ${delivery.frameCount || 0} frames)`);
 
