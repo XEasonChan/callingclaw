@@ -1,5 +1,60 @@
 [
   {
+    "id": "task_mnhchvt0_o2gm",
+    "task": "检查音频注入的采样率和增益：Whisper 碎片化输出（'a hor M I d a n g r y...'）通常意味着 SNR 过低或采样率不匹配。确认 addInitScript 输出的 PCM 格式与 Realtime API 期望一致",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-04",
+    "sourceMeetingId": "mtg_mnhcg2am_1u2j",
+    "createdAt": 1775126518596,
+    "updatedAt": 1775126518596
+  },
+  {
+    "id": "task_mnhchvt0_8ajh",
+    "task": "增加音频 RMS 日志：在 Whisper 输入端记录每秒 RMS 值，RMS < 阈值时标记为低质量音频，便于区分'无音频'和'音频质量差'两种故障模式",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-05",
+    "sourceMeetingId": "mtg_mnhcg2am_1u2j",
+    "createdAt": 1775126518596,
+    "updatedAt": 1775126518596
+  },
+  {
+    "id": "task_mnhchvt0_dh8m",
+    "task": "Meet CC 字幕 DOM fallback 优先级提升：Whisper 中文识别不可靠时，Meet 自带 CC（Google ASR）可能中文识别更好，可作为主源而非 fallback",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-05",
+    "sourceMeetingId": "mtg_mnhcg2am_1u2j",
+    "createdAt": 1775126518596,
+    "updatedAt": 1775126518596
+  },
+  {
+    "id": "task_mnhchvt0_1oxf",
+    "task": "Whisper 幻觉检测过滤器：当输出包含大量单字符碎片（如 'n n n n n'）或明显语种矛盾时，自动丢弃该段 transcript 而非写入记录",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnhcg2am_1u2j",
+    "createdAt": 1775126518596,
+    "updatedAt": 1775126518596
+  },
+  {
+    "id": "task_mnhchvsz_0bxt",
+    "task": "紧急：在 Realtime API 初始化时设置 language='zh' 参数强制中文模式，避免 Whisper auto-detect 将中文误判为英文导致幻觉输出",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-03",
+    "sourceMeetingId": "mtg_mnhcg2am_1u2j",
+    "createdAt": 1775126518595,
+    "updatedAt": 1775126518595
+  },
+  {
     "id": "task_mn8l0m9e_x8rl",
     "task": "Join Google Meet meeting (testing callingclaw)",
     "status": "pending",

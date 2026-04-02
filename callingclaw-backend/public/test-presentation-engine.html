@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw — PresentationEngine Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460;
+      --border: #2a3a5e; --text: #e5e5e5; --text2: #8899bb; --text3: #556688;
+      --accent: #E63946; --accent-dim: #c62e3a; --accent-glow: rgba(230,57,70,0.15);
+      --green: #22c55e; --red: #ef4444; --yellow: #eab308; --blue: #3b82f6;
+      --radius: 12px; --radius-sm: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+      background: var(--bg); color: var(--text); height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      padding: 14px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px; background: var(--surface);
+    }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: var(--surface2); color: var(--text2);
+    }
+    .header .badge.connected { background: rgba(34,197,94,0.15); color: var(--green); }
+    .header .badge.error { background: rgba(239,68,68,0.15); color: var(--red); }
+    .header .back { color: var(--text2); text-decoration: none; font-size: 13px; margin-right: 8px; }
+    .header .back:hover { color: var(--text); }
+
+    /* Main layout */
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .panel-left {
+      width: 420px; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .panel-right { flex: 1; display: flex; flex-direction: column; }
+
+    /* Sections */
+    .section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .section-title {
+      font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 10px;
+    }
+
+    /* Form elements */
+    input[type="text"], input[type="number"], textarea {
+      width: 100%; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 13px; outline: none;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; line-height: 1.5; font-size: 12px; }
+    label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; font-weight: 500; }
+
+    .btn {
+      padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.15s; display: inline-flex;
+      align-items: center; gap: 6px;
+    }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-accent:hover { background: var(--accent-dim); }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-green:hover { background: #16a34a; }
+    .btn-yellow { background: var(--yellow); color: #000; }
+    .btn-yellow:hover { background: #ca8a04; }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-red:hover { background: #dc2626; }
+    .btn-ghost {
+      background: transparent; color: var(--text2); border: 1px solid var(--border);
+      padding: 6px 12px; font-size: 12px;
+    }
+    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+    /* Scene cards */
+    .scene-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px 14px; margin-bottom: 8px; transition: border-color 0.2s;
+    }
+    .scene-card.active { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+    .scene-card-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+    }
+    .scene-card-title { font-size: 13px; font-weight: 600; }
+    .scene-card-index { font-size: 11px; color: var(--text3); }
+    .scene-card-meta { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+    .scene-card-meta span { margin-right: 12px; }
+    .scene-card-points { font-size: 12px; color: var(--text); line-height: 1.5; margin-bottom: 6px; }
+    .scene-card-url { font-size: 11px; color: var(--text3); word-break: break-all; }
+    .scene-card-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+    /* Event log */
+    .event-log {
+      flex: 1; overflow-y: auto; padding: 12px 16px; font-family: 'SF Mono', 'Menlo', monospace;
+      font-size: 11px; line-height: 1.6; background: var(--bg);
+    }
+    .event-entry { padding: 3px 0; border-bottom: 1px solid rgba(42,58,94,0.3); }
+    .event-time { color: var(--text3); margin-right: 8px; }
+    .event-type { color: var(--accent); font-weight: 600; margin-right: 8px; }
+    .event-data { color: var(--text2); }
+    .event-log-header {
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--surface);
+    }
+    .event-log-header .section-title { margin-bottom: 0; }
+
+    /* Preset buttons */
+    .preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .preset-btn {
+      padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+      transition: all 0.15s;
+    }
+    .preset-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Plan status */
+    .plan-status {
+      padding: 8px 12px; border-radius: var(--radius-sm); font-size: 12px;
+      margin-bottom: 10px; display: none;
+    }
+    .plan-status.loading { display: block; background: rgba(59,130,246,0.1); color: var(--blue); }
+    .plan-status.success { display: block; background: rgba(34,197,94,0.1); color: var(--green); }
+    .plan-status.error { display: block; background: rgba(239,68,68,0.1); color: var(--red); }
+
+    /* Controls bar */
+    .controls-bar {
+      padding: 10px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px; background: var(--surface);
+    }
+    .controls-bar .label { font-size: 12px; color: var(--text2); margin-right: 8px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+    /* Empty state */
+    .empty-state {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: var(--text3); font-size: 13px; padding: 40px;
+      text-align: center; line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a class="back" href="/">← Panel</a>
+    <h1>PresentationEngine Test</h1>
+    <span class="badge" id="ws-badge">WS: --</span>
+    <span class="badge" id="api-badge">API: --</span>
+  </div>
+
+  <div class="main">
+    <!-- Left Panel: Scene Builder + Manual Input -->
+    <div class="panel-left">
+
+      <!-- Scene Builder -->
+      <div class="section">
+        <div class="section-title">Scene Builder</div>
+        <label for="present-url">URL to present</label>
+        <input type="text" id="present-url" placeholder="https://example.com or localhost:4000/voice-test.html" value="">
+        <div style="height:8px"></div>
+        <label for="present-topic">Topic / Brief</label>
+        <textarea id="present-topic" rows="3" placeholder="What this presentation is about..."></textarea>
+        <div class="btn-row">
+          <button class="btn btn-accent" id="btn-build-plan" onclick="buildPlan()">Build Plan</button>
+        </div>
+        <div class="plan-status" id="plan-status"></div>
+      </div>
+
+      <!-- Preset URLs -->
+      <div class="section">
+        <div class="section-title">Preset URLs</div>
+        <div class="preset-row">
+          <button class="preset-btn" onclick="setPreset('http://localhost:4000/voice-test.html', 'Local voice test page')">localhost:4000/voice-test.html</button>
+          <button class="preset-btn" onclick="setPreset('https://example.com', 'Simple external page')">example.com</button>
+          <button class="preset-btn" onclick="setPreset('http://localhost:4000/callingclaw-panel.html', 'CallingClaw control panel')">CallingClaw Panel</button>
+        </div>
+      </div>
+
+      <!-- Manual Scene Input -->
+      <div class="section">
+        <div class="section-title">Manual Scene Input</div>
+        <label for="manual-url">URL</label>
+        <input type="text" id="manual-url" placeholder="https://...">
+        <div style="height:6px"></div>
+        <label for="manual-scroll">Scroll Target</label>
+        <input type="text" id="manual-scroll" placeholder="Heading text or CSS selector">
+        <div style="height:6px"></div>
+        <label for="manual-points">Talking Points</label>
+        <textarea id="manual-points" rows="2" placeholder="What to say at this scene..."></textarea>
+        <div style="height:6px"></div>
+        <label for="manual-duration">Duration (ms)</label>
+        <input type="number" id="manual-duration" value="8000" min="1000" step="1000">
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="addManualScene()">+ Add Scene</button>
+          <button class="btn btn-ghost" onclick="clearScenes()">Clear All</button>
+        </div>
+      </div>
+
+      <!-- Scene List -->
+      <div class="section" style="flex:1; overflow-y:auto; border-bottom:none;">
+        <div class="section-title">
+          Scenes (<span id="scene-count">0</span>)
+          <span style="font-weight:400; color:var(--text3); text-transform:none;">
+            Total: <span id="total-duration">0</span>s
+          </span>
+        </div>
+        <div id="scene-list">
+          <div class="empty-state" style="height:auto; padding:20px;">
+            No scenes yet. Build a plan or add scenes manually.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Controls + Event Log -->
+    <div class="panel-right">
+      <!-- Playback controls -->
+      <div class="controls-bar">
+        <span class="label">Playback:</span>
+        <button class="btn btn-green" id="btn-play" onclick="playSequence()" disabled>Play</button>
+        <button class="btn btn-yellow" id="btn-pause" onclick="pauseSequence()" disabled>Pause</button>
+        <button class="btn btn-red" id="btn-stop" onclick="stopSequence()" disabled>Stop</button>
+        <span style="flex:1"></span>
+        <span class="label">Current slide: <span id="current-slide-label">--</span></span>
+      </div>
+
+      <!-- Event Log -->
+      <div class="event-log-header">
+        <span class="section-title" style="margin-bottom:0;">Event Log</span>
+        <button class="btn btn-ghost" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="event-log" id="event-log">
+        <div class="empty-state">
+          Waiting for events... Connect via WebSocket to see presentation.* events.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    // CallingClaw — PresentationEngine Test Page (vanilla JS)
+    // ══════════════════════════════════════════════════════════════
+
+    var API = 'http://localhost:4000';
+    var scenes = [];
+    var ws = null;
+    var isPlaying = false;
+    var isPaused = false;
+    var currentSceneIdx = -1;
+
+    // ── API helpers ──
+
+    function apiPost(path, body) {
+      return fetch(API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(function(r) { return r.json(); });
+    }
+
+    function apiGet(path) {
+      return fetch(API + path).then(function(r) { return r.json(); });
+    }
+
+    // ── Preset URLs ──
+
+    function setPreset(url, topic) {
+      document.getElementById('present-url').value = url;
+      document.getElementById('present-topic').value = topic;
+    }
+
+    // ── Build Plan via API ──
+
+    function buildPlan() {
+      var url = document.getElementById('present-url').value.trim();
+      var topic = document.getElementById('present-topic').value.trim();
+
+      if (!url) {
+        showPlanStatus('error', 'URL is required');
+        return;
+      }
+
+      var btn = document.getElementById('btn-build-plan');
+      btn.disabled = true;
+      btn.textContent = 'Building...';
+      showPlanStatus('loading', 'Sending to PresentationEngine... (Haiku reads DOM + builds plan)');
+
+      apiPost('/api/screen/present', { url: url, topic: topic || 'presentation' })
+        .then(function(data) {
+          btn.disabled = false;
+          btn.textContent = 'Build Plan';
+
+          if (data.error) {
+            showPlanStatus('error', 'Error: ' + data.error);
+            logEvent('presentation.error', { error: data.error });
+            return;
+          }
+
+          showPlanStatus('success', 'Plan built: ' + data.slides + ' slides, ~' + Math.round(data.totalEstimatedMs / 1000) + 's total');
+          logEvent('presentation.plan_built', { slides: data.slides, totalMs: data.totalEstimatedMs });
+
+          // Populate scene list from the returned plan
+          if (data.plan && data.plan.length > 0) {
+            scenes = data.plan.map(function(s) {
+              return {
+                url: url,
+                scrollTarget: s.title || '',
+                talkingPoints: s.title || '',
+                durationMs: s.durationMs || 8000,
+              };
+            });
+            renderScenes();
+          }
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          btn.textContent = 'Build Plan';
+          showPlanStatus('error', 'Network error: ' + err.message);
+          logEvent('presentation.error', { error: err.message });
+        });
+    }
+
+    function showPlanStatus(type, msg) {
+      var el = document.getElementById('plan-status');
+      el.className = 'plan-status ' + type;
+      el.textContent = msg;
+    }
+
+    // ── Manual Scene Management ──
+
+    function addManualScene() {
+      var url = document.getElementById('manual-url').value.trim();
+      var scroll = document.getElementById('manual-scroll').value.trim();
+      var points = document.getElementById('manual-points').value.trim();
+      var duration = parseInt(document.getElementById('manual-duration').value) || 8000;
+
+      if (!points) {
+        logEvent('ui.warn', { message: 'Talking points are required' });
+        return;
+      }
+
+      scenes.push({
+        url: url || document.getElementById('present-url').value.trim() || 'https://example.com',
+        scrollTarget: scroll,
+        talkingPoints: points,
+        durationMs: duration,
+      });
+
+      // Clear inputs
+      document.getElementById('manual-scroll').value = '';
+      document.getElementById('manual-points').value = '';
+
+      renderScenes();
+      logEvent('scene.added', { index: scenes.length - 1, url: url, scrollTarget: scroll });
+    }
+
+    function removeScene(index) {
+      scenes.splice(index, 1);
+      renderScenes();
+    }
+
+    function clearScenes() {
+      scenes = [];
+      renderScenes();
+      logEvent('scene.cleared', {});
+    }
+
+    function navigateScene(index) {
+      var scene = scenes[index];
+      if (!scene) return;
+
+      logEvent('scene.navigate', { index: index, target: scene.scrollTarget });
+
+      apiPost('/api/screen/scroll', { target: scene.scrollTarget })
+        .then(function(data) {
+          logEvent('scene.scroll_result', data);
+        })
+        .catch(function(err) {
+          logEvent('scene.scroll_error', { error: err.message });
+        });
+    }
+
+    function renderScenes() {
+      var container = document.getElementById('scene-list');
+      var count = document.getElementById('scene-count');
+      var totalDur = document.getElementById('total-duration');
+
+      count.textContent = scenes.length;
+      var totalMs = scenes.reduce(function(sum, s) { return sum + s.durationMs; }, 0);
+      totalDur.textContent = Math.round(totalMs / 1000);
+
+      if (scenes.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="height:auto; padding:20px;">No scenes yet. Build a plan or add scenes manually.</div>';
+        document.getElementById('btn-play').disabled = true;
+        return;
+      }
+
+      document.getElementById('btn-play').disabled = false;
+
+      var html = '';
+      for (var i = 0; i < scenes.length; i++) {
+        var s = scenes[i];
+        var isActive = (i === currentSceneIdx) ? ' active' : '';
+        html += '<div class="scene-card' + isActive + '" id="scene-' + i + '">';
+        html += '<div class="scene-card-header">';
+        html += '<div class="scene-card-title">' + escapeHtml(s.scrollTarget || 'Scene ' + (i + 1)) + '</div>';
+        html += '<div class="scene-card-index">#' + (i + 1) + '</div>';
+        html += '</div>';
+        html += '<div class="scene-card-meta">';
+        html += '<span>' + Math.round(s.durationMs / 1000) + 's</span>';
+        html += '</div>';
+        html += '<div class="scene-card-points">' + escapeHtml(s.talkingPoints) + '</div>';
+        html += '<div class="scene-card-url">' + escapeHtml(s.url) + '</div>';
+        html += '<div class="scene-card-actions">';
+        html += '<button class="btn btn-ghost" onclick="navigateScene(' + i + ')">Navigate</button>';
+        html += '<button class="btn btn-ghost" onclick="removeScene(' + i + ')" style="color:var(--red)">Remove</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+      container.innerHTML = html;
+    }
+
+    // ── Playback Controls ──
+
+    function playSequence() {
+      if (scenes.length === 0) return;
+
+      if (isPaused) {
+        // Resume
+        isPaused = false;
+        document.getElementById('btn-pause').textContent = 'Pause';
+        logEvent('playback.resumed', { fromScene: currentSceneIdx });
+        runNextScene();
+        return;
+      }
+
+      isPlaying = true;
+      isPaused = false;
+      currentSceneIdx = 0;
+      document.getElementById('btn-play').disabled = true;
+      document.getElementById('btn-pause').disabled = false;
+      document.getElementById('btn-stop').disabled = false;
+      logEvent('playback.started', { totalScenes: scenes.length });
+
+      runNextScene();
+    }
+
+    function runNextScene() {
+      if (!isPlaying || isPaused) return;
+      if (currentSceneIdx >= scenes.length) {
+        stopSequence();
+        logEvent('playback.completed', { scenesPlayed: scenes.length });
+        return;
+      }
+
+      var scene = scenes[currentSceneIdx];
+      document.getElementById('current-slide-label').textContent = (currentSceneIdx + 1) + '/' + scenes.length;
+      renderScenes();
+
+      logEvent('playback.scene', { index: currentSceneIdx, scrollTarget: scene.scrollTarget });
+
+      // Navigate to scene
+      apiPost('/api/screen/scroll', { target: scene.scrollTarget })
+        .then(function(data) {
+          logEvent('scene.scrolled', { index: currentSceneIdx, result: data });
+        })
+        .catch(function() {});
+
+      // Advance after duration
+      setTimeout(function() {
+        if (!isPlaying || isPaused) return;
+        currentSceneIdx++;
+        runNextScene();
+      }, scene.durationMs);
+    }
+
+    function pauseSequence() {
+      if (!isPlaying) return;
+      isPaused = !isPaused;
+      document.getElementById('btn-pause').textContent = isPaused ? 'Resume' : 'Pause';
+      document.getElementById('btn-play').disabled = !isPaused;
+      logEvent('playback.' + (isPaused ? 'paused' : 'resumed'), { atScene: currentSceneIdx });
+
+      if (!isPaused) {
+        runNextScene();
+      }
+    }
+
+    function stopSequence() {
+      isPlaying = false;
+      isPaused = false;
+      currentSceneIdx = -1;
+      document.getElementById('btn-play').disabled = scenes.length === 0;
+      document.getElementById('btn-pause').disabled = true;
+      document.getElementById('btn-stop').disabled = true;
+      document.getElementById('btn-pause').textContent = 'Pause';
+      document.getElementById('current-slide-label').textContent = '--';
+      renderScenes();
+      logEvent('playback.stopped', {});
+    }
+
+    // ── Event Log ──
+
+    function logEvent(type, data) {
+      var log = document.getElementById('event-log');
+      // Clear empty state on first event
+      if (log.querySelector('.empty-state')) {
+        log.innerHTML = '';
+      }
+
+      var entry = document.createElement('div');
+      entry.className = 'event-entry';
+
+      var now = new Date();
+      var time = now.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+      var dataStr = '';
+      try { dataStr = JSON.stringify(data); } catch (e) { dataStr = String(data); }
+
+      entry.innerHTML = '<span class="event-time">' + time + '</span>' +
+        '<span class="event-type">' + escapeHtml(type) + '</span>' +
+        '<span class="event-data">' + escapeHtml(dataStr) + '</span>';
+
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('event-log').innerHTML = '<div class="empty-state">Log cleared.</div>';
+    }
+
+    // ── WebSocket ──
+
+    function connectWS() {
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var host = location.host || 'localhost:4000';
+      ws = new WebSocket(proto + '//' + host + '/ws/events');
+
+      ws.onopen = function() {
+        document.getElementById('ws-badge').textContent = 'WS: Connected';
+        document.getElementById('ws-badge').classList.add('connected');
+        logEvent('ws.connected', { url: proto + '//' + host + '/ws/events' });
+      };
+
+      ws.onmessage = function(e) {
+        try {
+          var msg = JSON.parse(e.data);
+          var type = msg.type || msg.event || 'unknown';
+          var data = msg.data || msg.payload || msg;
+
+          // Only show presentation-related events prominently
+          if (type.indexOf('presentation.') === 0) {
+            logEvent(type, data);
+
+            // Update UI based on event type
+            if (type === 'presentation.slide') {
+              currentSceneIdx = data.index || 0;
+              document.getElementById('current-slide-label').textContent =
+                (data.index + 1) + '/' + (data.total || scenes.length);
+              renderScenes();
+            }
+            if (type === 'presentation.done') {
+              stopSequence();
+              logEvent('playback.completed_via_event', data);
+            }
+          } else {
+            // Log other events more quietly
+            logEvent(type, data);
+          }
+        } catch (err) {
+          logEvent('ws.parse_error', { raw: e.data.substring(0, 200) });
+        }
+      };
+
+      ws.onclose = function() {
+        document.getElementById('ws-badge').textContent = 'WS: Disconnected';
+        document.getElementById('ws-badge').classList.remove('connected');
+        logEvent('ws.disconnected', {});
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onerror = function() {
+        document.getElementById('ws-badge').textContent = 'WS: Error';
+        document.getElementById('ws-badge').classList.add('error');
+      };
+    }
+
+    // ── Health check ──
+
+    function checkAPI() {
+      apiGet('/api/status')
+        .then(function(data) {
+          document.getElementById('api-badge').textContent = 'API: OK';
+          document.getElementById('api-badge').classList.add('connected');
+          logEvent('api.status', { status: 'ok' });
+        })
+        .catch(function() {
+          document.getElementById('api-badge').textContent = 'API: Offline';
+          document.getElementById('api-badge').classList.add('error');
+        });
+    }
+
+    // ── Util ──
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Init ──
+
+    connectWS();
+    checkAPI();
+    renderScenes();
+  </script>
+</body>
+</html>

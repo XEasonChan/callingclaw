@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw — TranscriptAuditor Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460;
+      --border: #2a2a4a; --text: #e5e5e5; --text2: #8888aa; --text3: #555577;
+      --accent: #E63946; --accent-dim: #c62d39;
+      --green: #22c55e; --red: #ef4444; --yellow: #eab308; --blue: #3b82f6;
+      --purple: #a855f7; --cyan: #06b6d4;
+      --radius: 12px; --radius-sm: 8px;
+      --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background: var(--bg); color: var(--text); height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 14px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+      background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+    }
+    .header .back { color: var(--text2); text-decoration: none; font-size: 13px; margin-right: 4px; }
+    .header .back:hover { color: var(--text); }
+    .header .logo {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: var(--accent); display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff;
+    }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header h1 span { color: var(--accent); }
+    .header .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: var(--surface2); color: var(--text2);
+    }
+    .header .badge.active { background: rgba(34,197,94,0.15); color: var(--green); }
+    .header .badge.standby { background: rgba(234,179,8,0.15); color: var(--yellow); }
+    .header .spacer { flex: 1; }
+
+    /* ── Main layout ── */
+    .main { flex: 1; display: flex; overflow: hidden; }
+    .panel-left {
+      width: 420px; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; background: var(--surface);
+    }
+    .panel-right { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--text2); padding: 12px 20px 8px; border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Transcript input ── */
+    .input-area { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .input-row.fields { flex-wrap: wrap; }
+
+    select, input[type="text"] {
+      padding: 8px 12px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 13px; outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    input[type="text"] { flex: 1; min-width: 0; }
+
+    .input-utterance {
+      width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;
+      font-family: var(--mono);
+    }
+    .input-utterance:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(230,57,70,0.2); }
+    .input-utterance::placeholder { color: var(--text3); }
+
+    .btn {
+      padding: 8px 18px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.15s; display: inline-flex;
+      align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .btn-inject { background: var(--accent); color: #fff; }
+    .btn-inject:hover { background: var(--accent-dim); }
+    .btn-inject:active { transform: scale(0.97); }
+    .btn-clear { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+    .btn-clear:hover { background: var(--surface2); color: var(--text); }
+
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-label { font-size: 11px; color: var(--text3); font-weight: 500; }
+
+    /* ── Quick test phrases ── */
+    .quick-area { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    .quick-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .quick-btn {
+      padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text2);
+      transition: all 0.15s; font-family: var(--mono);
+    }
+    .quick-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+    .quick-btn:active { transform: scale(0.96); }
+    .quick-btn .lane-tag {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 1px 4px; border-radius: 3px; margin-left: 4px;
+    }
+    .quick-btn .lane-tag.fast { background: rgba(239,68,68,0.2); color: var(--red); }
+    .quick-btn .lane-tag.medium { background: rgba(234,179,8,0.2); color: var(--yellow); }
+    .quick-btn .lane-tag.skill { background: rgba(168,85,247,0.2); color: var(--purple); }
+    .quick-btn .lane-tag.shortcut { background: rgba(6,182,212,0.2); color: var(--cyan); }
+
+    /* ── Transcript feed ── */
+    .transcript-feed { flex: 1; overflow-y: auto; padding: 12px 20px; }
+    .transcript-entry {
+      margin-bottom: 10px; padding: 8px 12px; border-radius: var(--radius-sm);
+      background: var(--bg); border-left: 3px solid var(--border);
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .transcript-entry.role-user { border-left-color: var(--blue); }
+    .transcript-entry.role-participant { border-left-color: var(--purple); }
+    .transcript-entry.role-assistant { border-left-color: var(--green); }
+    .transcript-meta {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 4px;
+    }
+    .transcript-role {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .transcript-entry.role-user .transcript-role { color: var(--blue); }
+    .transcript-entry.role-participant .transcript-role { color: var(--purple); }
+    .transcript-entry.role-assistant .transcript-role { color: var(--green); }
+    .transcript-speaker { font-size: 10px; color: var(--text3); }
+    .transcript-time { font-size: 10px; color: var(--text3); margin-left: auto; }
+    .transcript-text { font-size: 13px; line-height: 1.5; color: var(--text); font-family: var(--mono); }
+    .transcript-empty {
+      display: flex; align-items: center; justify-content: center; height: 100%;
+      color: var(--text3); font-size: 13px;
+    }
+
+    /* ── Events panel (right) ── */
+    .events-area { flex: 1; overflow-y: auto; padding: 12px 20px; }
+    .event-entry {
+      margin-bottom: 8px; padding: 10px 14px; border-radius: var(--radius-sm);
+      background: var(--surface); border: 1px solid var(--border);
+      animation: fadeIn 0.2s ease; font-family: var(--mono);
+    }
+    .event-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .event-type {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 2px 6px; border-radius: 4px;
+    }
+    .event-type.intent { background: rgba(99,102,241,0.2); color: #818cf8; }
+    .event-type.fast_lane { background: rgba(239,68,68,0.2); color: var(--red); }
+    .event-type.executing { background: rgba(234,179,8,0.2); color: var(--yellow); }
+    .event-type.task_done { background: rgba(34,197,94,0.2); color: var(--green); }
+    .event-type.activated { background: rgba(34,197,94,0.2); color: var(--green); }
+    .event-type.deactivated { background: rgba(136,136,170,0.2); color: var(--text2); }
+    .event-type.suggest { background: rgba(168,85,247,0.2); color: var(--purple); }
+    .event-type.error { background: rgba(239,68,68,0.2); color: var(--red); }
+    .event-time { font-size: 10px; color: var(--text3); margin-left: auto; }
+    .event-body { font-size: 12px; color: var(--text2); line-height: 1.5; }
+    .event-body .key { color: var(--text3); }
+    .event-body .val { color: var(--text); }
+
+    /* Confidence bar */
+    .confidence-bar-wrap {
+      margin-top: 6px; display: flex; align-items: center; gap: 8px;
+    }
+    .confidence-bar {
+      flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%; border-radius: 3px; transition: width 0.3s ease;
+    }
+    .confidence-fill.high { background: var(--green); }
+    .confidence-fill.medium { background: var(--yellow); }
+    .confidence-fill.low { background: var(--red); }
+    .confidence-label { font-size: 11px; font-weight: 600; min-width: 40px; text-align: right; }
+    .confidence-label.high { color: var(--green); }
+    .confidence-label.medium { color: var(--yellow); }
+    .confidence-label.low { color: var(--red); }
+
+    /* Events empty */
+    .events-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; color: var(--text3); font-size: 13px; gap: 8px;
+    }
+    .events-empty .hint { font-size: 11px; color: var(--text3); opacity: 0.6; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      padding: 8px 24px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px; font-size: 11px;
+      background: var(--surface); color: var(--text2);
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px;
+    }
+    .status-dot.green { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+    .status-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px rgba(234,179,8,0.4); }
+    .status-dot.red { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+    .status-item { display: flex; align-items: center; gap: 2px; }
+    .status-spacer { flex: 1; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <a class="back" href="/">← Panel</a>
+    <div class="logo">C</div>
+    <h1><span>TranscriptAuditor</span> Test</h1>
+    <div class="spacer"></div>
+    <span class="badge" id="auditor-badge">Checking...</span>
+    <span class="badge" id="ws-badge">WS: --</span>
+  </div>
+
+  <!-- ── Main split layout ── -->
+  <div class="main">
+
+    <!-- Left panel: Input + Transcript feed -->
+    <div class="panel-left">
+
+      <!-- Transcript input -->
+      <div class="section-title">Transcript Simulator</div>
+      <div class="input-area">
+        <input type="text" class="input-utterance" id="utterance-input"
+               placeholder="Type an utterance to inject..." autocomplete="off">
+        <div class="input-row fields" style="margin-top: 10px;">
+          <div class="field-group">
+            <div class="field-label">Role</div>
+            <select id="role-select">
+              <option value="user" selected>user</option>
+              <option value="participant">participant</option>
+              <option value="assistant">assistant</option>
+            </select>
+          </div>
+          <div class="field-group" style="flex:1;">
+            <div class="field-label">Speaker (optional)</div>
+            <input type="text" id="speaker-input" placeholder="e.g. Xeason">
+          </div>
+          <div class="field-group" style="align-self: flex-end;">
+            <button class="btn btn-inject" id="inject-btn">Inject</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick test phrases -->
+      <div class="quick-area">
+        <div class="section-title" style="padding: 0 0 6px; border: none;">Quick Test Phrases</div>
+        <div class="quick-grid" id="quick-grid"></div>
+      </div>
+
+      <!-- Transcript feed -->
+      <div class="section-title">Transcript Feed</div>
+      <div class="transcript-feed" id="transcript-feed">
+        <div class="transcript-empty" id="transcript-empty">
+          No transcript entries yet. Inject an utterance above.
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel: Auditor events -->
+    <div class="panel-right">
+      <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        Auditor Events
+        <span style="margin-left: auto;">
+          <button class="btn btn-clear" id="clear-events-btn" style="padding: 3px 10px; font-size: 11px;">Clear</button>
+        </span>
+      </div>
+      <div class="events-area" id="events-area">
+        <div class="events-empty" id="events-empty">
+          <div>Listening for auditor events...</div>
+          <div class="hint">Connect via WebSocket to /ws/events</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Status bar ── -->
+  <div class="status-bar">
+    <div class="status-item" id="status-server">
+      <span class="status-dot red"></span>
+      Server: --
+    </div>
+    <div class="status-item" id="status-auditor">
+      <span class="status-dot red"></span>
+      Auditor: --
+    </div>
+    <div class="status-item" id="status-meeting">
+      <span class="status-dot red"></span>
+      Meeting: --
+    </div>
+    <div class="status-item" id="status-transcript">
+      Transcript: 0 entries
+    </div>
+    <div class="status-spacer"></div>
+    <div class="status-item" id="status-version">v--</div>
+  </div>
+
+<script>
+  // ── Config ──
+  var BASE = location.origin;
+  var WS_BASE = BASE.replace(/^http/, 'ws');
+
+  // ── Quick test phrases ──
+  var QUICK_PHRASES = [
+    { text: '\u5e2e\u6211\u70b9\u51fb\u90a3\u4e2a\u6309\u94ae',       lane: 'fast',     label: 'fast' },
+    { text: '\u6253\u5f00\u90a3\u4e2a PRD \u6587\u4ef6',              lane: 'medium',   label: 'medium' },
+    { text: '\u5e2e\u6211\u6295\u5c4f\u8fd9\u4e2a\u9875\u9762',       lane: 'skill',    label: 'skill' },
+    { text: '\u505c\u6b62\u6295\u5c4f',                               lane: 'skill',    label: 'skill' },
+    { text: 'mute the mic',                                           lane: 'shortcut', label: 'shortcut' },
+    { text: 'scroll down',                                            lane: 'fast',     label: 'fast' },
+    { text: 'what time is the next meeting',                          lane: 'medium',   label: 'medium' },
+  ];
+
+  // ── State ──
+  var transcriptEntries = [];
+  var eventEntries = [];
+  var ws = null;
+  var reconnectTimer = null;
+
+  // ── DOM refs ──
+  var utteranceInput   = document.getElementById('utterance-input');
+  var roleSelect       = document.getElementById('role-select');
+  var speakerInput     = document.getElementById('speaker-input');
+  var injectBtn        = document.getElementById('inject-btn');
+  var quickGrid        = document.getElementById('quick-grid');
+  var transcriptFeed   = document.getElementById('transcript-feed');
+  var transcriptEmpty  = document.getElementById('transcript-empty');
+  var eventsArea       = document.getElementById('events-area');
+  var eventsEmpty      = document.getElementById('events-empty');
+  var clearEventsBtn   = document.getElementById('clear-events-btn');
+  var auditorBadge     = document.getElementById('auditor-badge');
+  var wsBadge          = document.getElementById('ws-badge');
+
+  // ── Quick phrase buttons ──
+  QUICK_PHRASES.forEach(function(p) {
+    var btn = document.createElement('button');
+    btn.className = 'quick-btn';
+    btn.innerHTML = p.text + ' <span class="lane-tag ' + p.lane + '">' + p.label + '</span>';
+    btn.addEventListener('click', function() {
+      utteranceInput.value = p.text;
+      doInject();
+    });
+    quickGrid.appendChild(btn);
+  });
+
+  // ── Inject transcript ──
+  function doInject() {
+    var text = utteranceInput.value.trim();
+    if (!text) return;
+
+    var role = roleSelect.value;
+    var speaker = speakerInput.value.trim() || undefined;
+
+    var payload = { text: text, role: role };
+    if (speaker) payload.speaker = speaker;
+
+    // Add to local feed immediately (optimistic)
+    addTranscriptEntry({ text: text, role: role, speaker: speaker, time: new Date().toISOString() });
+
+    // POST to backend
+    fetch(BASE + '/api/test/transcript-inject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(function(res) {
+      if (!res.ok) {
+        return res.text().then(function(t) {
+          addEventEntry({
+            type: 'error',
+            data: { error: 'Inject failed: ' + res.status + ' ' + t },
+            time: new Date().toISOString(),
+          });
+        });
+      }
+      return res.json().then(function(data) {
+        if (data && data.ok) {
+          // success — already shown in feed
+        }
+      });
+    }).catch(function(err) {
+      addEventEntry({
+        type: 'error',
+        data: { error: 'Network error: ' + err.message },
+        time: new Date().toISOString(),
+      });
+    });
+
+    utteranceInput.value = '';
+    utteranceInput.focus();
+  }
+
+  injectBtn.addEventListener('click', doInject);
+  utteranceInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      doInject();
+    }
+  });
+
+  // ── Transcript feed rendering ──
+  function addTranscriptEntry(entry) {
+    transcriptEntries.push(entry);
+    transcriptEmpty.style.display = 'none';
+
+    var el = document.createElement('div');
+    el.className = 'transcript-entry role-' + entry.role;
+
+    var meta = document.createElement('div');
+    meta.className = 'transcript-meta';
+
+    var roleEl = document.createElement('span');
+    roleEl.className = 'transcript-role';
+    roleEl.textContent = entry.role;
+    meta.appendChild(roleEl);
+
+    if (entry.speaker) {
+      var speakerEl = document.createElement('span');
+      speakerEl.className = 'transcript-speaker';
+      speakerEl.textContent = entry.speaker;
+      meta.appendChild(speakerEl);
+    }
+
+    var timeEl = document.createElement('span');
+    timeEl.className = 'transcript-time';
+    timeEl.textContent = formatTime(entry.time);
+    meta.appendChild(timeEl);
+
+    var textEl = document.createElement('div');
+    textEl.className = 'transcript-text';
+    textEl.textContent = entry.text;
+
+    el.appendChild(meta);
+    el.appendChild(textEl);
+    transcriptFeed.appendChild(el);
+    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+  }
+
+  // ── Events panel rendering ──
+  function addEventEntry(entry) {
+    eventEntries.push(entry);
+    eventsEmpty.style.display = 'none';
+
+    var el = document.createElement('div');
+    el.className = 'event-entry';
+
+    // Header row
+    var header = document.createElement('div');
+    header.className = 'event-header';
+
+    var typeEl = document.createElement('span');
+    typeEl.className = 'event-type ' + getEventTypeClass(entry.type);
+    typeEl.textContent = entry.type;
+    header.appendChild(typeEl);
+
+    var timeEl = document.createElement('span');
+    timeEl.className = 'event-time';
+    timeEl.textContent = formatTime(entry.time);
+    header.appendChild(timeEl);
+
+    el.appendChild(header);
+
+    // Body — render data fields
+    var body = document.createElement('div');
+    body.className = 'event-body';
+    var data = entry.data || {};
+
+    Object.keys(data).forEach(function(key) {
+      if (key === 'confidence') return; // rendered as bar
+      var line = document.createElement('div');
+      line.innerHTML = '<span class="key">' + escapeHtml(key) + ':</span> <span class="val">' + escapeHtml(String(data[key])) + '</span>';
+      body.appendChild(line);
+    });
+    el.appendChild(body);
+
+    // Confidence bar (if present)
+    if (typeof data.confidence === 'number') {
+      var conf = data.confidence;
+      var level = conf >= 0.8 ? 'high' : conf >= 0.5 ? 'medium' : 'low';
+
+      var wrap = document.createElement('div');
+      wrap.className = 'confidence-bar-wrap';
+
+      var bar = document.createElement('div');
+      bar.className = 'confidence-bar';
+      var fill = document.createElement('div');
+      fill.className = 'confidence-fill ' + level;
+      fill.style.width = (conf * 100) + '%';
+      bar.appendChild(fill);
+      wrap.appendChild(bar);
+
+      var label = document.createElement('span');
+      label.className = 'confidence-label ' + level;
+      label.textContent = (conf * 100).toFixed(0) + '%';
+      wrap.appendChild(label);
+
+      el.appendChild(wrap);
+    }
+
+    eventsArea.appendChild(el);
+    eventsArea.scrollTop = eventsArea.scrollHeight;
+  }
+
+  function getEventTypeClass(type) {
+    if (type === 'auditor.intent') return 'intent';
+    if (type === 'auditor.fast_lane') return 'fast_lane';
+    if (type === 'auditor.executing') return 'executing';
+    if (type === 'computer.task_done') return 'task_done';
+    if (type === 'auditor.activated') return 'activated';
+    if (type === 'auditor.deactivated') return 'deactivated';
+    if (type === 'auditor.suggest') return 'suggest';
+    if (type === 'auditor.error' || type === 'error') return 'error';
+    return '';
+  }
+
+  clearEventsBtn.addEventListener('click', function() {
+    eventEntries = [];
+    eventsArea.innerHTML = '';
+    eventsArea.appendChild(eventsEmpty);
+    eventsEmpty.style.display = '';
+  });
+
+  // ── WebSocket connection to /ws/events ──
+  var WATCHED_EVENTS = [
+    'auditor.intent',
+    'auditor.fast_lane',
+    'auditor.executing',
+    'auditor.activated',
+    'auditor.deactivated',
+    'auditor.suggest',
+    'auditor.error',
+    'computer.task_done',
+  ];
+
+  function connectWS() {
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+
+    ws = new WebSocket(WS_BASE + '/ws/events');
+    wsBadge.textContent = 'WS: connecting';
+    wsBadge.className = 'badge';
+
+    ws.onopen = function() {
+      wsBadge.textContent = 'WS: connected';
+      wsBadge.className = 'badge active';
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
+
+    ws.onmessage = function(evt) {
+      try {
+        var msg = JSON.parse(evt.data);
+        // EventBus messages come as { event: "...", data: {...}, ts: "..." }
+        var eventName = msg.event || msg.type || '';
+        if (WATCHED_EVENTS.indexOf(eventName) !== -1) {
+          addEventEntry({
+            type: eventName,
+            data: msg.data || msg,
+            time: msg.ts || new Date().toISOString(),
+          });
+
+          // Auto-update auditor badge on activation events
+          if (eventName === 'auditor.activated') {
+            auditorBadge.textContent = 'Active';
+            auditorBadge.className = 'badge active';
+          } else if (eventName === 'auditor.deactivated') {
+            auditorBadge.textContent = 'Standby';
+            auditorBadge.className = 'badge standby';
+          }
+        }
+      } catch (e) {
+        // ignore non-JSON frames
+      }
+    };
+
+    ws.onclose = function() {
+      wsBadge.textContent = 'WS: disconnected';
+      wsBadge.className = 'badge';
+      scheduleReconnect();
+    };
+
+    ws.onerror = function() {
+      wsBadge.textContent = 'WS: error';
+      wsBadge.className = 'badge';
+    };
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function() {
+      reconnectTimer = null;
+      connectWS();
+    }, 3000);
+  }
+
+  // ── Status polling ──
+  function pollStatus() {
+    fetch(BASE + '/api/status')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        // Server status
+        var serverEl = document.getElementById('status-server');
+        serverEl.innerHTML = '<span class="status-dot green"></span> Server: ' + (data.callingclaw || 'running');
+
+        // Auditor status
+        var auditorStatus = data.transcriptAuditor || 'unknown';
+        var auditorEl = document.getElementById('status-auditor');
+        var auditorDotClass = auditorStatus === 'active' ? 'green' : 'yellow';
+        auditorEl.innerHTML = '<span class="status-dot ' + auditorDotClass + '"></span> Auditor: ' + auditorStatus;
+
+        // Update header badge too
+        if (auditorStatus === 'active') {
+          auditorBadge.textContent = 'Active';
+          auditorBadge.className = 'badge active';
+        } else {
+          auditorBadge.textContent = 'Standby';
+          auditorBadge.className = 'badge standby';
+        }
+
+        // Meeting status
+        var meetingStatus = data.meeting || 'idle';
+        var meetingEl = document.getElementById('status-meeting');
+        var meetingDot = meetingStatus === 'recording' ? 'green' : 'yellow';
+        meetingEl.innerHTML = '<span class="status-dot ' + meetingDot + '"></span> Meeting: ' + meetingStatus;
+
+        // Transcript count
+        var transcriptCountEl = document.getElementById('status-transcript');
+        transcriptCountEl.textContent = 'Transcript: ' + (data.transcriptLength || 0) + ' entries';
+
+        // Version
+        var versionEl = document.getElementById('status-version');
+        versionEl.textContent = data.version || 'v--';
+      })
+      .catch(function() {
+        var serverEl = document.getElementById('status-server');
+        serverEl.innerHTML = '<span class="status-dot red"></span> Server: offline';
+        var auditorEl = document.getElementById('status-auditor');
+        auditorEl.innerHTML = '<span class="status-dot red"></span> Auditor: --';
+        auditorBadge.textContent = 'Offline';
+        auditorBadge.className = 'badge';
+      });
+  }
+
+  // ── Helpers ──
+  function formatTime(isoStr) {
+    try {
+      var d = new Date(isoStr);
+      return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) {
+      return '--:--:--';
+    }
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ── Init ──
+  connectWS();
+  pollStatus();
+  setInterval(pollStatus, 5000);
+  utteranceInput.focus();
+</script>
+</body>
+</html>

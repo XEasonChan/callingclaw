@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw — AutomationRouter Test</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    :root {
+      --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460;
+      --border: #2a2a4a; --text: #eee; --text2: #999; --text3: #666;
+      --accent: #E63946; --accent-dim: #c5303c;
+      --green: #22c55e; --red: #ef4444; --yellow: #eab308; --blue: #3b82f6;
+      --radius: 12px; --radius-sm: 8px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .header .logo {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: var(--accent); display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0;
+    }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header h1 span { color: var(--accent); }
+    .header .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      background: var(--surface2); color: var(--text2);
+    }
+    .header .badge.connected { background: rgba(34,197,94,0.15); color: var(--green); }
+    .header .back {
+      color: var(--text2); text-decoration: none; font-size: 13px; margin-right: 8px;
+    }
+    .header .back:hover { color: var(--text); }
+
+    /* Main layout */
+    .main {
+      flex: 1; display: grid;
+      grid-template-columns: 420px 1fr;
+      grid-template-rows: auto 1fr;
+      overflow: hidden; height: calc(100vh - 53px);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin: 12px;
+    }
+    .card-title {
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--text2); margin-bottom: 12px;
+    }
+
+    /* Layer Status Panel */
+    .status-panel { grid-column: 1; grid-row: 1; }
+    .layer-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .layer-row:last-child { border-bottom: none; }
+    .layer-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .layer-dot.available { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+    .layer-dot.unavailable { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+    .layer-name { font-size: 13px; font-weight: 600; min-width: 110px; }
+    .layer-detail { font-size: 12px; color: var(--text2); }
+    .layer-num {
+      font-size: 10px; font-weight: 700; color: var(--accent);
+      background: rgba(230,57,70,0.15); padding: 1px 6px; border-radius: 4px;
+    }
+
+    /* Input Panel */
+    .input-panel { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; }
+    .input-panel .card { flex: 1; display: flex; flex-direction: column; }
+    textarea {
+      width: 100%; padding: 12px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      outline: none; resize: none; line-height: 1.5; min-height: 80px;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text3); }
+
+    .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+    .btn {
+      padding: 10px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.15s; display: inline-flex;
+      align-items: center; gap: 6px;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-classify {
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border); flex: 1;
+    }
+    .btn-classify:hover:not(:disabled) { background: var(--border); }
+    .btn-execute { background: var(--accent); color: #fff; flex: 1; }
+    .btn-execute:hover:not(:disabled) { background: var(--accent-dim); }
+
+    /* Presets */
+    .presets { margin-top: 16px; }
+    .presets-label {
+      font-size: 11px; color: var(--text3); margin-bottom: 8px; text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .preset-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .preset-btn {
+      padding: 5px 10px; border-radius: 6px; font-size: 11px;
+      background: rgba(230,57,70,0.1); color: var(--accent); border: 1px solid rgba(230,57,70,0.25);
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .preset-btn:hover { background: rgba(230,57,70,0.2); border-color: var(--accent); }
+
+    /* Results Panel */
+    .results-panel { grid-column: 2; grid-row: 1; overflow: auto; }
+    .results-panel .card { min-height: 100%; }
+
+    .result-empty {
+      color: var(--text3); font-size: 13px; text-align: center; padding: 40px 0;
+    }
+
+    /* Classification result */
+    .classify-result { animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .result-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+    .result-layer-badge {
+      padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .layer-shortcuts { background: rgba(34,197,94,0.15); color: var(--green); }
+    .layer-playwright { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .layer-peekaboo { background: rgba(234,179,8,0.15); color: var(--yellow); }
+    .layer-computer_use { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    .confidence-bar {
+      width: 80px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%; border-radius: 3px; transition: width 0.3s ease;
+    }
+    .confidence-fill.high { background: var(--green); }
+    .confidence-fill.mid { background: var(--yellow); }
+    .confidence-fill.low { background: var(--red); }
+    .confidence-text { font-size: 12px; font-weight: 600; }
+    .confidence-text.high { color: var(--green); }
+    .confidence-text.mid { color: var(--yellow); }
+    .confidence-text.low { color: var(--red); }
+
+    .result-fields { display: grid; gap: 8px; }
+    .result-field { display: flex; gap: 8px; }
+    .result-field-label {
+      font-size: 11px; color: var(--text3); text-transform: uppercase;
+      letter-spacing: 0.5px; min-width: 70px; padding-top: 2px;
+    }
+    .result-field-value {
+      font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--text); word-break: break-word;
+    }
+
+    /* JSON block */
+    .json-block {
+      margin-top: 16px; padding: 12px; background: var(--bg); border-radius: var(--radius-sm);
+      border: 1px solid var(--border); overflow-x: auto;
+    }
+    .json-block pre {
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+      line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+    }
+    .json-key { color: #7dd3fc; }
+    .json-string { color: #86efac; }
+    .json-number { color: #fbbf24; }
+    .json-bool { color: #c084fc; }
+    .json-null { color: var(--text3); }
+
+    /* Execution result */
+    .exec-result {
+      margin-top: 16px; padding: 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); animation: fadeIn 0.2s ease;
+    }
+    .exec-result.success { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.3); }
+    .exec-result.failure { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3); }
+    .exec-result-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+    .exec-result.success .exec-result-label { color: var(--green); }
+    .exec-result.failure .exec-result-label { color: var(--red); }
+    .exec-result-body {
+      font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--text); word-break: break-word;
+    }
+    .exec-duration {
+      font-size: 11px; color: var(--text3); margin-top: 6px;
+    }
+
+    /* Event Log */
+    .event-log { grid-column: 2; grid-row: 2; overflow: hidden; }
+    .event-log .card { height: 100%; display: flex; flex-direction: column; }
+    .event-log-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    .event-log-header .card-title { margin-bottom: 0; }
+    .btn-clear {
+      padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+      background: transparent; color: var(--text3); border: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .btn-clear:hover { color: var(--text2); background: var(--surface2); }
+
+    .event-list {
+      flex: 1; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px; line-height: 1.7;
+    }
+    .event-entry { padding: 2px 0; border-bottom: 1px solid rgba(42,42,74,0.5); animation: fadeIn 0.15s ease; }
+    .event-time { color: var(--text3); margin-right: 8px; }
+    .event-name { font-weight: 600; margin-right: 8px; }
+    .event-name.automation { color: var(--accent); }
+    .event-name.auditor { color: var(--yellow); }
+    .event-name.computer { color: var(--blue); }
+    .event-name.other { color: var(--text2); }
+    .event-data { color: var(--text2); }
+    .event-empty { color: var(--text3); text-align: center; padding: 30px 0; font-family: -apple-system, sans-serif; font-size: 12px; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <a href="/callingclaw-panel.html" class="back">< Panel</a>
+    <div class="logo">C</div>
+    <h1><span>AutomationRouter</span> Test</h1>
+    <div class="badge" id="ws-badge">WS Disconnected</div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="main">
+
+    <!-- Left: Status + Input -->
+    <div class="status-panel">
+      <div class="card">
+        <div class="card-title">Layer Status</div>
+        <div id="layer-status">
+          <div class="layer-row">
+            <span class="layer-num">L1</span>
+            <span class="layer-dot unavailable" id="dot-shortcuts"></span>
+            <span class="layer-name">Shortcuts</span>
+            <span class="layer-detail" id="detail-shortcuts">Loading...</span>
+          </div>
+          <div class="layer-row">
+            <span class="layer-num">L2</span>
+            <span class="layer-dot unavailable" id="dot-playwright"></span>
+            <span class="layer-name">Playwright</span>
+            <span class="layer-detail" id="detail-playwright">Loading...</span>
+          </div>
+          <div class="layer-row">
+            <span class="layer-num">L3</span>
+            <span class="layer-dot unavailable" id="dot-peekaboo"></span>
+            <span class="layer-name">Peekaboo</span>
+            <span class="layer-detail" id="detail-peekaboo">Loading...</span>
+          </div>
+          <div class="layer-row">
+            <span class="layer-num">L4</span>
+            <span class="layer-dot unavailable" id="dot-computer_use"></span>
+            <span class="layer-name">Computer Use</span>
+            <span class="layer-detail" id="detail-computer_use">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-panel">
+      <div class="card">
+        <div class="card-title">Instruction</div>
+        <textarea id="instruction-input" placeholder="Type an instruction to classify or execute...&#10;e.g. &quot;click the submit button&quot;" rows="3"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-classify" id="btn-classify" onclick="doClassify()">Classify</button>
+          <button class="btn btn-execute" id="btn-execute" onclick="doExecute()">Execute</button>
+        </div>
+
+        <div class="presets">
+          <div class="presets-label">Quick presets</div>
+          <div class="preset-grid">
+            <button class="preset-btn" onclick="fillPreset('click the submit button')">click the submit button</button>
+            <button class="preset-btn" onclick="fillPreset('open https://google.com')">open https://google.com</button>
+            <button class="preset-btn" onclick="fillPreset('mute the microphone')">mute the microphone</button>
+            <button class="preset-btn" onclick="fillPreset('search for the PRD file')">search for the PRD file</button>
+            <button class="preset-btn" onclick="fillPreset('take a screenshot')">take a screenshot</button>
+            <button class="preset-btn" onclick="fillPreset('switch to Slack')">switch to Slack</button>
+            <button class="preset-btn" onclick="fillPreset('scroll down')">scroll down</button>
+            <button class="preset-btn" onclick="fillPreset('open Figma')">open Figma</button>
+            <button class="preset-btn" onclick="fillPreset('zoom mute')">zoom mute</button>
+            <button class="preset-btn" onclick="fillPreset('next slide')">next slide</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Results + Event Log -->
+    <div class="results-panel">
+      <div class="card">
+        <div class="card-title">Results</div>
+        <div id="results-area">
+          <div class="result-empty">Run a classification or execution to see results here</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="event-log">
+      <div class="card">
+        <div class="event-log-header">
+          <div class="card-title">Event Log</div>
+          <button class="btn-clear" onclick="clearEvents()">Clear</button>
+        </div>
+        <div class="event-list" id="event-list">
+          <div class="event-empty">Listening for automation events...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Config ──
+    var API_BASE = 'http://localhost:4000';
+    var WS_URL = 'ws://localhost:4000/ws/events';
+
+    // ── DOM refs ──
+    var instructionInput = document.getElementById('instruction-input');
+    var btnClassify = document.getElementById('btn-classify');
+    var btnExecute = document.getElementById('btn-execute');
+    var resultsArea = document.getElementById('results-area');
+    var eventList = document.getElementById('event-list');
+    var wsBadge = document.getElementById('ws-badge');
+
+    // ── Layer Status ──
+    function fetchLayerStatus() {
+      fetch(API_BASE + '/api/automation/status')
+        .then(function(res) { return res.json(); })
+        .then(function(status) {
+          var layers = ['shortcuts', 'playwright', 'peekaboo', 'computer_use'];
+          for (var i = 0; i < layers.length; i++) {
+            var key = layers[i];
+            var info = status[key];
+            var dot = document.getElementById('dot-' + key);
+            var detail = document.getElementById('detail-' + key);
+            if (dot && info) {
+              dot.className = 'layer-dot ' + (info.available ? 'available' : 'unavailable');
+            }
+            if (detail && info) {
+              detail.textContent = info.detail || (info.available ? 'Ready' : 'Unavailable');
+            }
+          }
+        })
+        .catch(function(err) {
+          console.warn('Failed to fetch layer status:', err);
+          var layers = ['shortcuts', 'playwright', 'peekaboo', 'computer_use'];
+          for (var i = 0; i < layers.length; i++) {
+            var detail = document.getElementById('detail-' + layers[i]);
+            if (detail) detail.textContent = 'Backend offline';
+          }
+        });
+    }
+
+    // ── Preset fill ──
+    function fillPreset(text) {
+      instructionInput.value = text;
+      instructionInput.focus();
+    }
+
+    // ── Classify ──
+    function doClassify() {
+      var instruction = instructionInput.value.trim();
+      if (!instruction) return;
+
+      btnClassify.disabled = true;
+      btnClassify.innerHTML = '<span class="spinner"></span> Classifying...';
+
+      fetch(API_BASE + '/api/automation/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: instruction })
+      })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          renderClassifyResult(data, instruction);
+        })
+        .catch(function(err) {
+          renderError('Classification failed: ' + err.message);
+        })
+        .finally(function() {
+          btnClassify.disabled = false;
+          btnClassify.innerHTML = 'Classify';
+        });
+    }
+
+    // ── Execute ──
+    function doExecute() {
+      var instruction = instructionInput.value.trim();
+      if (!instruction) return;
+
+      btnExecute.disabled = true;
+      btnExecute.innerHTML = '<span class="spinner"></span> Executing...';
+
+      // First classify to show intent, then execute
+      var classifyPromise = fetch(API_BASE + '/api/automation/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: instruction })
+      }).then(function(res) { return res.json(); });
+
+      var executePromise = fetch(API_BASE + '/api/automation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: instruction })
+      }).then(function(res) { return res.json(); });
+
+      Promise.all([classifyPromise, executePromise])
+        .then(function(results) {
+          var classifyData = results[0];
+          var execData = results[1];
+          renderClassifyResult(classifyData, instruction);
+          renderExecResult(execData);
+        })
+        .catch(function(err) {
+          renderError('Execution failed: ' + err.message);
+        })
+        .finally(function() {
+          btnExecute.disabled = false;
+          btnExecute.innerHTML = 'Execute';
+        });
+    }
+
+    // ── Render: classify result ──
+    function renderClassifyResult(data, instruction) {
+      if (data.error) {
+        renderError(data.error);
+        return;
+      }
+
+      var confidence = data.confidence || 0;
+      var level = confidence >= 0.8 ? 'high' : confidence >= 0.5 ? 'mid' : 'low';
+      var pct = Math.round(confidence * 100);
+
+      var html = '<div class="classify-result">';
+
+      // Header: layer badge + confidence
+      html += '<div class="result-header">';
+      html += '<span class="result-layer-badge layer-' + data.layer + '">' + formatLayerName(data.layer) + '</span>';
+      html += '<div class="confidence-bar"><div class="confidence-fill ' + level + '" style="width:' + pct + '%"></div></div>';
+      html += '<span class="confidence-text ' + level + '">' + pct + '%</span>';
+      html += '</div>';
+
+      // Fields
+      html += '<div class="result-fields">';
+      html += renderField('Layer', data.layer);
+      html += renderField('Action', data.action);
+      html += renderField('Conf.', pct + '% (' + level + ')');
+      html += renderField('Reason', data.reason);
+      if (data.params && Object.keys(data.params).length > 0) {
+        html += renderField('Params', JSON.stringify(data.params));
+      }
+      html += '</div>';
+
+      // Raw JSON
+      html += '<div class="json-block"><pre>' + syntaxHighlight(data) + '</pre></div>';
+
+      html += '</div>';
+
+      // Keep any existing exec result
+      var existingExec = resultsArea.querySelector('.exec-result');
+      resultsArea.innerHTML = html;
+      if (existingExec) resultsArea.appendChild(existingExec);
+    }
+
+    // ── Render: execution result ──
+    function renderExecResult(data) {
+      // Remove old exec result
+      var old = resultsArea.querySelector('.exec-result');
+      if (old) old.remove();
+
+      var success = data.success !== false && !data.error;
+      var cls = success ? 'success' : 'failure';
+
+      var html = '<div class="exec-result ' + cls + '">';
+      html += '<div class="exec-result-label">' + (success ? 'Execution Succeeded' : 'Execution Failed') + '</div>';
+
+      if (data.error) {
+        html += '<div class="exec-result-body">' + escapeHtml(data.error) + '</div>';
+      } else {
+        html += '<div class="exec-result-body">' + escapeHtml(data.result || JSON.stringify(data)) + '</div>';
+        if (data.layer) {
+          html += '<div class="exec-duration">Layer: ' + data.layer + (data.fallback ? ' (fallback)' : '') + '</div>';
+        }
+        if (typeof data.durationMs === 'number') {
+          html += '<div class="exec-duration">Duration: ' + data.durationMs + 'ms</div>';
+        }
+      }
+
+      // Raw JSON
+      html += '<div class="json-block" style="margin-top:10px"><pre>' + syntaxHighlight(data) + '</pre></div>';
+
+      html += '</div>';
+
+      var container = document.createElement('div');
+      container.innerHTML = html;
+      resultsArea.appendChild(container.firstChild);
+    }
+
+    // ── Render: error ──
+    function renderError(msg) {
+      resultsArea.innerHTML = '<div class="exec-result failure">' +
+        '<div class="exec-result-label">Error</div>' +
+        '<div class="exec-result-body">' + escapeHtml(msg) + '</div>' +
+        '</div>';
+    }
+
+    // ── Helpers ──
+    function renderField(label, value) {
+      return '<div class="result-field">' +
+        '<span class="result-field-label">' + label + '</span>' +
+        '<span class="result-field-value">' + escapeHtml(String(value)) + '</span>' +
+        '</div>';
+    }
+
+    function formatLayerName(layer) {
+      var names = {
+        shortcuts: 'L1 Shortcuts',
+        playwright: 'L2 Playwright',
+        peekaboo: 'L3 Peekaboo',
+        computer_use: 'L4 Computer Use'
+      };
+      return names[layer] || layer;
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function syntaxHighlight(obj) {
+      var json = JSON.stringify(obj, null, 2);
+      if (!json) return '';
+      json = escapeHtml(json);
+      return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?|\bnull\b)/g,
+        function(match) {
+          var cls = 'json-number';
+          if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+              cls = 'json-key';
+              // Remove the trailing colon for wrapping, add it back
+              return '<span class="' + cls + '">' + match.slice(0, -1) + '</span>:';
+            } else {
+              cls = 'json-string';
+            }
+          } else if (/true|false/.test(match)) {
+            cls = 'json-bool';
+          } else if (/null/.test(match)) {
+            cls = 'json-null';
+          }
+          return '<span class="' + cls + '">' + match + '</span>';
+        }
+      );
+    }
+
+    // ── WebSocket: Event Log ──
+    var ws = null;
+    var wsReconnectTimer = null;
+    var eventCount = 0;
+
+    function connectWS() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+      try {
+        ws = new WebSocket(WS_URL);
+      } catch (e) {
+        console.warn('WS connection failed:', e);
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = function() {
+        wsBadge.textContent = 'WS Connected';
+        wsBadge.className = 'badge connected';
+        // Subscribe to automation events
+        try {
+          ws.send(JSON.stringify({ type: 'subscribe', patterns: ['automation.*', 'auditor.*', 'computer.*'] }));
+        } catch (e) { /* ignore */ }
+      };
+
+      ws.onmessage = function(evt) {
+        try {
+          var msg = JSON.parse(evt.data);
+          // Some backends wrap in {type, event, data} or just {event, data}
+          var eventName = msg.event || msg.type || 'unknown';
+          var eventData = msg.data || msg.payload || msg;
+
+          // Filter to relevant events
+          if (isAutomationEvent(eventName)) {
+            addEventEntry(eventName, eventData);
+          }
+        } catch (e) {
+          // Non-JSON message, show raw
+          addEventEntry('raw', evt.data);
+        }
+      };
+
+      ws.onclose = function() {
+        wsBadge.textContent = 'WS Disconnected';
+        wsBadge.className = 'badge';
+        scheduleReconnect();
+      };
+
+      ws.onerror = function() {
+        wsBadge.textContent = 'WS Error';
+        wsBadge.className = 'badge';
+      };
+    }
+
+    function isAutomationEvent(name) {
+      return name.indexOf('automation') !== -1 ||
+             name.indexOf('auditor') !== -1 ||
+             name.indexOf('computer') !== -1 ||
+             name.indexOf('routed') !== -1 ||
+             name.indexOf('intent') !== -1;
+    }
+
+    function scheduleReconnect() {
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = setTimeout(connectWS, 3000);
+    }
+
+    function addEventEntry(name, data) {
+      // Remove empty placeholder
+      var empty = eventList.querySelector('.event-empty');
+      if (empty) empty.remove();
+
+      var now = new Date();
+      var time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds()) + '.' + pad3(now.getMilliseconds());
+
+      var cls = 'other';
+      if (name.indexOf('automation') !== -1) cls = 'automation';
+      else if (name.indexOf('auditor') !== -1) cls = 'auditor';
+      else if (name.indexOf('computer') !== -1) cls = 'computer';
+
+      var dataStr = typeof data === 'string' ? data : JSON.stringify(data);
+      // Truncate long data
+      if (dataStr.length > 200) dataStr = dataStr.substring(0, 200) + '...';
+
+      var entry = document.createElement('div');
+      entry.className = 'event-entry';
+      entry.innerHTML = '<span class="event-time">' + time + '</span>' +
+        '<span class="event-name ' + cls + '">' + escapeHtml(name) + '</span>' +
+        '<span class="event-data">' + escapeHtml(dataStr) + '</span>';
+
+      eventList.insertBefore(entry, eventList.firstChild);
+      eventCount++;
+
+      // Cap at 200 entries
+      while (eventList.children.length > 200) {
+        eventList.removeChild(eventList.lastChild);
+      }
+    }
+
+    function clearEvents() {
+      eventList.innerHTML = '<div class="event-empty">Listening for automation events...</div>';
+      eventCount = 0;
+    }
+
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function pad3(n) { return n < 10 ? '00' + n : n < 100 ? '0' + n : '' + n; }
+
+    // ── Keyboard shortcut ──
+    instructionInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (e.metaKey || e.ctrlKey) {
+          doExecute();
+        } else {
+          doClassify();
+        }
+      }
+    });
+
+    // ── Init ──
+    fetchLayerStatus();
+    connectWS();
+    // Refresh status every 10s
+    setInterval(fetchLayerStatus, 10000);
+  </script>
+
+</body>
+</html>

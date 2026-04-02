@@ -343,8 +343,45 @@ export function startConfigServer(services: Services) {
               if (data.text && services.realtime.connected) {
                 const text = String(data.text).trim();
                 if (text.length > 5) {
+                  // ── Filter 1: Skip Meet UI tooltip noise ──
+                  if (/^Press the|^Escape to|hover tray|down arrow to open/i.test(text)) {
+                    // Meet accessibility announcements — not real speech
+                    return;
+                  }
+
+                  // ── Filter 2: Skip AI echo (caption of CallingClaw's own speech) ──
+                  // Meet captions include ALL speakers. If CallingClaw speaks, Meet transcribes it
+                  // back as a caption. Without filtering, the AI receives its own words as user input
+                  // and responds again, creating an echo loop.
+                  const recentAI = services.context.getRecentTranscript(10)
+                    .filter(e => e.role === "assistant" && (Date.now() - e.ts) < 30_000)
+                    .map(e => e.text.toLowerCase());
+                  if (recentAI.length > 0) {
+                    const captionLower = text.toLowerCase();
+                    const isEcho = recentAI.some(aiText => {
+                      // Check if caption is a substring of recent AI output or vice versa
+                      if (aiText.includes(captionLower) || captionLower.includes(aiText)) return true;
+                      // Check word overlap ratio (>60% overlap = likely echo)
+                      const captionWords = new Set(captionLower.split(/\s+/));
+                      const aiWords = aiText.split(/\s+/);
+                      const overlap = aiWords.filter(w => captionWords.has(w)).length;
+                      return aiWords.length > 0 && overlap / aiWords.length > 0.6;
+                    });
+                    if (isEcho) {
+                      console.log(`[VoiceTest] Caption echo filtered: "${text.substring(0, 60)}"`);
+                      return;
+                    }
+                  }
+
+                  // ── Filter 3: Skip if speaker is CallingClaw ──
+                  const speaker = data.speaker ? String(data.speaker).trim().toLowerCase() : "";
+                  if (speaker && (speaker.includes("callingclaw") || speaker.includes("calling claw"))) {
+                    console.log(`[VoiceTest] Caption from self filtered: "${text.substring(0, 60)}"`);
+                    return;
+                  }
+
                   // Add to transcript for notes/summary
-                  services.context.addTranscript({ role: "user", text, ts: data.ts || Date.now() });
+                  services.context.addTranscript({ role: "user", text, speaker: data.speaker, ts: data.ts || Date.now() });
                   // Inject into Realtime API so AI sees reliable text of what was said
                   // Uses conversation.item.create (passive context, does NOT trigger a response)
                   services.realtime.sendEvent("conversation.item.create", {
@@ -949,6 +986,31 @@ export function startConfigServer(services: Services) {
         }
         const intent = services.automationRouter.classify(body.instruction);
         return Response.json(intent, { headers });
+      }
+
+      // ── Test Endpoints (for standalone test pages) ──
+
+      // POST /api/test/transcript-inject — Inject fake transcript entry for testing
+      // Used by test-transcript-auditor.html and test-context-retriever.html
+      if (url.pathname === "/api/test/transcript-inject" && req.method === "POST") {
+        const body = (await req.json()) as { text: string; role?: string; speaker?: string };
+        if (!body.text) {
+          return Response.json({ error: "text is required" }, { status: 400, headers });
+        }
+        const entry = {
+          role: (body.role as any) || "user",
+          text: body.text,
+          speaker: body.speaker,
+          ts: Date.now(),
+        };
+        services.context.addTranscript(entry);
+        // If TranscriptAuditor is active, it will automatically process this via SharedContext listener
+        const auditorActive = services.transcriptAuditor?.active || false;
+        const retrieverActive = services.contextRetriever?.active || false;
+        return Response.json({
+          ok: true, entry, auditorActive, retrieverActive,
+          transcriptLength: services.context.transcript.length,
+        }, { headers });
       }
 
       // POST /api/automation/browser — Run a goal through the model-driven browser action loop
@@ -1975,6 +2037,29 @@ STEP-BY-STEP FLOW:
               }
             }
 
+            // ── Step 0.5: Check if meeting is too soon for prep ──
+            const MIN_PREP_LEAD_MS = 10 * 60 * 1000; // 10 minutes — CallingClaw needs time to research + generate prep
+            if (parsedStart) {
+              const leadMs = new Date(parsedStart).getTime() - Date.now();
+              if (leadMs > 0 && leadMs < MIN_PREP_LEAD_MS) {
+                const minsAway = Math.round(leadMs / 60000);
+                const deferred = new Date(Date.now() + MIN_PREP_LEAD_MS);
+                deferred.setMinutes(Math.ceil(deferred.getMinutes() / 5) * 5, 0, 0); // round to next 5-min mark
+                const deferredTime = deferred.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+
+                const deferredIso = deferred.toISOString();
+                const deferredEndIso = new Date(deferred.getTime() + parsedDuration * 60000).toISOString();
+                services.eventBus.emit("meeting.prep_progress", {
+                  meetingId, step: "deferred",
+                  message: `会议太近（${minsAway}分钟后），CallingClaw 需要至少 10 分钟准备调研和 Playbook。已自动推迟到 ${deferredTime}`,
+                  originalStart: parsedStart,
+                  startTime: deferredIso, endTime: deferredEndIso, // update Desktop card
+                });
+                parsedStart = deferredIso;
+                console.log(`[Delegate] Meeting too soon (${minsAway}min away), deferred to ${deferredTime}`);
+              }
+            }
+
             // ── Step 1: Create calendar event ──
             let meetUrl: string | null = null;
             let calEventId: string | null = null;
@@ -2179,7 +2264,8 @@ STEP-BY-STEP FLOW:
           return Response.json({ error: "topic is required" }, { status: 400, headers });
         }
 
-        const { getMeetingFilePath, SHARED_DIR: SD } = await import("./modules/shared-documents");
+        const { getMeetingFilePath } = await import("./modules/shared-documents");
+        const { SHARED_DIR: SD } = await import("./config");
         const sm = services.sessionManager!;
 
         // meetingId must be provided (generated by /api/meeting/delegate)
@@ -2193,12 +2279,12 @@ STEP-BY-STEP FLOW:
         let mdContent = "";
         try { mdContent = await Bun.file(filePath).text(); } catch {
           // Try the path OpenClaw might have used
-          try { mdContent = await Bun.file(resolve(SHARED_DIR, meetingId + "_prep.md")).text(); } catch {}
+          try { mdContent = await Bun.file(resolve(SD, meetingId + "_prep.md")).text(); } catch {}
         }
 
         // Check if presentation plan was also written
         let presentationPlan: any = null;
-        const presentationPath = resolve(SHARED_DIR, meetingId + "_presentation.json");
+        const presentationPath = resolve(SD, meetingId + "_presentation.json");
         try {
           const raw = await Bun.file(presentationPath).text();
           presentationPlan = JSON.parse(raw);
@@ -2538,8 +2624,11 @@ STEP-BY-STEP FLOW:
         const body = (await req.json().catch(() => ({}))) as { topic?: string };
         const topic = body.topic || "Local Conversation";
 
-        // Generate stable meetingId for session tracking
-        const session = services.sessionManager!.create({ topic, status: "active" });
+        // Dedup: reuse existing active/preparing session instead of creating duplicates
+        // (Bug: rapid clicks or WS race created multiple empty "Meeting" cards)
+        const existing = services.sessionManager!.list({ status: "active" })[0]
+          || services.sessionManager!.list({ status: "preparing" })[0];
+        const session = existing || services.sessionManager!.create({ topic, status: "active" });
         const meetingId = session.meetingId;
 
         // Voice session is now started by the browser client via /ws/voice-test WebSocket.
@@ -3498,6 +3587,10 @@ STEP-BY-STEP FLOW:
         "/panel": "/callingclaw-panel.html",
         "/voice-test": "/voice-test.html",
         "/meeting-join-test": "/meeting-join-test.html",
+        "/test-automation-router": "/test-automation-router.html",
+        "/test-transcript-auditor": "/test-transcript-auditor.html",
+        "/test-presentation-engine": "/test-presentation-engine.html",
+        "/test-context-retriever": "/test-context-retriever.html",
       };
       const resolvedPath = pathnameAlias[url.pathname] ?? url.pathname;
       const publicPath = `${import.meta.dir}/../public${resolvedPath === "/" ? "/callingclaw-panel.html" : resolvedPath}`;
