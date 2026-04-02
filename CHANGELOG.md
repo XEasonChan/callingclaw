@@ -3,6 +3,15 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.6] - 2026-04-02
+
+### Added
+- **Calendar→Desktop sync** — MeetingScheduler emits enriched `scheduler.meeting_scheduled` events (meetingId, calendarEventId, startTime, meetUrl) when it detects calendar events from any source. Desktop WS handler syncs these to meetingFiles for unified card display and dedup
+- **E2E acceptance test plan** — `docs/E2E-ACCEPTANCE.md` with 47 checkpoints across onboarding, meeting creation (multi-entry), join (calendar-driven), in-meeting, and post-meeting phases
+
+### Fixed
+- **Scheduler invite_accepted** — now includes meetUrl and endTime for proper Desktop cross-linking
+
 ## [2.8.5] - 2026-04-02
 
 ### Fixed
