@@ -92,6 +92,14 @@
 **Context:** Grok Voice API 支持 `{ type: "mcp", server_url: "..." }` 在 session.update 中注册 MCP server。服务端自动执行，零客户端延迟。可以把 CallingClaw 的 scroll_page/click_element/share_screen 注册为 MCP tools，让 Grok 直接调用（不需要经过 Haiku TranscriptAuditor）。
 **Added:** 2026-03-27
 
+## Gemini Meet Audio Input — Browser Transport Doesn't Receive Meet Audio
+**Priority:** P1
+**Owner:** Backend agent
+**Context:** When joining Meet with ChromeLauncher + Gemini voice (`transport: "browser"`), Gemini speaks the greeting successfully (audio output works) but does not hear user replies from Meet. Root cause: `transport: "browser"` routes audio input through `/ws/voice-test` WebSocket, but Meet audio is captured via Playwright injection script in ChromeLauncher — the two input paths are disconnected. The meet_bridge transport wires Playwright-captured audio → RealtimeClient, but browser transport only listens on the voice-test WebSocket.
+**Repro:** (1) Join Meet via `/api/meeting/join` (2) Start voice with `provider: "gemini", transport: "browser"` (3) Gemini greets → user speaks in Meet → no response.
+**Fix approach:** Either bridge Playwright-captured Meet audio into the voice-test WebSocket path, or use `transport: "meet_bridge"` with Gemini (verify Gemini provider works with meet_bridge audio format — 24kHz PCM16 chunks).
+**Added:** 2026-04-02
+
 ## Audio Capture Tooltip Noise Filter
 **Priority:** P2
 **Owner:** Backend agent
