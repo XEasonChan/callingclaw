@@ -3,6 +3,23 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.7] - 2026-04-02
+
+### Added
+- **Caption echo filter** — 3-layer filter prevents Meet captions from creating voice echo loops (tooltip noise skip, AI output word-overlap detection, self-speaker identification)
+- **Multi-provider meeting join** — `/api/meeting/join` accepts `provider`/`voice`/`topic` params, auto-detects any configured voice API key (Gemini, Grok, OpenAI)
+- **AI-powered file search** — automation router uses Haiku to fuzzy-match file open requests (any language, typos, vague descriptions), falls back to keyword matching
+- **Landing page redesign** — new messaging ("Your Agent Gets Its Own Meeting Room"), problem/solution storytelling, capability grid, teams page, design variants (gazette, pneuma, callingclaw-v2)
+- **Test pages** — standalone test UIs for transcript auditor, context retriever, automation router, presentation engine
+
+### Fixed
+- **Full meeting transcript** — summary and notes now use full transcript (1000 entries) instead of truncated 200-entry window
+- **Automation route priority** — reordered URL > file > app to prevent URL opens from matching as app launches
+
+### Changed
+- **Calendar lookup first** — meeting join now resolves calendar event before starting voice, so topic-aware instructions are always available
+- **E2E acceptance status** — marked completed checkpoints (Calendar OAuth, Desktop startup, health check, Desktop input, API join)
+
 ## [2.8.6] - 2026-04-02
 
 ### Added
