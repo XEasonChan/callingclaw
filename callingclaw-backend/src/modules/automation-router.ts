@@ -69,13 +69,16 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { match: /meet.*(?:静音|mute)/i, layer: "shortcuts", action: "meet:toggle_mute", confidence: 0.95 },
   { match: /meet.*(?:摄像头|camera|视频|video)/i, layer: "shortcuts", action: "meet:toggle_video", confidence: 0.95 },
 
-  // App launch (bash open)
-  { match: /(?:打开|open|启动|launch)\s+(?:app|应用)?\s*["""']?(\w[\w\s.]+)/i, layer: "shortcuts", action: "open_app",
-    extractParams: (m) => ({ app: m[1]?.trim() }), confidence: 0.85 },
-
-  // Open URL (bash open)
-  { match: /(?:打开|open)\s+(https?:\/\/[^\s]+)/i, layer: "shortcuts", action: "open_url",
+  // Open URL (bash open) — exact URL match, high confidence
+  { match: /(?:帮我)?(?:打开|open)\s+(https?:\/\/[^\s]+)/i, layer: "shortcuts", action: "open_url",
     extractParams: (m) => ({ url: m[1] }), confidence: 0.95 },
+
+  // App/file launch — LOW confidence so voice-originated ambiguous "open X" falls through
+  // to Haiku medium lane (transcript-auditor.ts), which has search_and_open tool + context.
+  // Regex can't reliably distinguish "open Slack" (app) from "open the prep file" (search).
+  // Haiku handles any language, typos, and vague descriptions natively.
+  { match: /(?:帮我)?(?:打开|open|启动|launch)\s+(?:app|应用)?\s*["""']?(.+)/i, layer: "shortcuts", action: "open_app",
+    extractParams: (m) => ({ app: m[1]?.trim() }), confidence: 0.4 },
 
   // ── Layer 2: Playwright (browser operations) ──
 
@@ -435,57 +438,70 @@ export class AutomationRouter {
   private async searchLocalFile(query: string): Promise<string | null> {
     if (!query || query.length < 2) return null;
 
-    // Normalize query: lowercase, extract keywords
-    const keywords = query.toLowerCase().replace(/[^\w\s\u4e00-\u9fff]/g, " ").split(/\s+/).filter(k => k.length > 1);
-    if (keywords.length === 0) return null;
-
-    // Search directories
     const { homedir } = await import("os");
     const { resolve } = await import("path");
+    const projectRoot = resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0");
     const searchDirs = [
       resolve(homedir(), ".callingclaw", "shared"),
-      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public"),
-      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs"),
-      resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-desktop"),
+      resolve(projectRoot, "callingclaw-backend/public"),
+      resolve(projectRoot, "docs"),
+      projectRoot,
     ];
 
-    try {
-      // Use find to get all html/md/pdf files, then fuzzy match
-      const results: string[] = [];
-      for (const dir of searchDirs) {
-        try {
-          const output = await Bun.$`find ${dir} -maxdepth 3 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) 2>/dev/null`.text();
-          for (const line of output.split("\n")) {
-            const path = line.trim();
-            if (!path) continue;
-            const lower = path.toLowerCase();
-            // Check if ALL keywords appear in the path
-            const matchCount = keywords.filter(k => lower.includes(k)).length;
-            if (matchCount >= Math.max(1, Math.ceil(keywords.length * 0.5))) {
-              results.push(path);
-            }
-          }
-        } catch {}
-      }
-
-      if (results.length === 0) return null;
-
-      // Prefer .html files, then by keyword match score
-      results.sort((a, b) => {
-        const aHtml = a.endsWith(".html") ? 1 : 0;
-        const bHtml = b.endsWith(".html") ? 1 : 0;
-        if (aHtml !== bHtml) return bHtml - aHtml;
-        // More keyword matches = better
-        const aScore = keywords.filter(k => a.toLowerCase().includes(k)).length;
-        const bScore = keywords.filter(k => b.toLowerCase().includes(k)).length;
-        return bScore - aScore;
-      });
-
-      console.log(`[Router] File search "${query}" → ${results.length} results, best: ${results[0]}`);
-      return results[0];
-    } catch {
-      return null;
+    // Collect candidate files (exclude node_modules/.git)
+    const allFiles: string[] = [];
+    for (const dir of searchDirs) {
+      try {
+        const output = await Bun.$`find ${dir} -maxdepth 3 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null`.text();
+        for (const line of output.split("\n")) {
+          const p = line.trim();
+          if (p) allFiles.push(p);
+        }
+      } catch {}
     }
+    if (allFiles.length === 0) return null;
+
+    // AI-native: Haiku picks the best match (any language, typos, vague descriptions)
+    const { CONFIG } = await import("../config");
+    if (CONFIG.openrouter.apiKey) {
+      try {
+        const home = homedir();
+        const short = allFiles.map(f => f.replace(projectRoot, ".").replace(home, "~"));
+        const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
+          body: JSON.stringify({
+            model: CONFIG.analysis?.model || "anthropic/claude-haiku-4-5",
+            messages: [{ role: "user", content: `Pick the file that best matches this request. Respond with ONLY the number.\n\nRequest: "${query}"\n\nFiles:\n${short.map((f, i) => `${i + 1}. ${f}`).join("\n")}` }],
+            max_tokens: 10, temperature: 0,
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await resp.json() as any;
+        const idx = parseInt(data.choices?.[0]?.message?.content?.trim() || "") - 1;
+        if (idx >= 0 && idx < allFiles.length) {
+          console.log(`[Router] AI file search "${query}" → ${short[idx]} (Haiku #${idx + 1}/${allFiles.length})`);
+          return allFiles[idx]!;
+        }
+      } catch (e: any) {
+        console.warn(`[Router] AI file search failed: ${e.message}`);
+      }
+    }
+
+    // Fallback: keyword match
+    const STOP = new Set(["the","a","an","this","that","my","for","and","or","of","in","to","is","it","please","打开","帮我","看看","最近的","那个","这个"]);
+    const ZH: Record<string,string> = {"文件":"file","文档":"doc","总结":"summary","准备":"prep","会议":"meeting","计划":"plan","测试":"test","待办":"todo"};
+    const raw = query.toLowerCase().replace(/[^\w\s\u4e00-\u9fff]/g," ").split(/\s+/).filter(k => k.length > 1 && !STOP.has(k));
+    const keywords = raw.flatMap(k => ZH[k] ? [k, ZH[k]] : [k]);
+    if (keywords.length === 0) return allFiles[0] || null;
+    const scored = allFiles.map(f => ({ path: f, score: keywords.filter(k => f.toLowerCase().includes(k)).length }))
+      .filter(r => r.score >= Math.max(1, Math.ceil(keywords.length * 0.3)));
+    scored.sort((a, b) => b.score - a.score);
+    if (scored.length > 0) {
+      console.log(`[Router] Keyword search "${query}" → ${scored[0]!.path}`);
+      return scored[0]!.path;
+    }
+    return null;
   }
 
   // ── Layer 3: Peekaboo ──
