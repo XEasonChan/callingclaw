@@ -42,7 +42,7 @@ OpenClaw has its own config at `~/.openclaw/openclaw.json` — manage it via `op
 ```
 callingclaw-backend/     Bun backend — AI orchestration, voice, meeting lifecycle
 callingclaw-desktop/     Electron desktop app — UI, audio bridge, tray
-callingclaw-landing/     Landing page (Vercel)
+# Website: github.com/XEasonChan/callingclaw-website (separate repo, Vercel)
 ```
 
 ### Backend: Module-Wired Pattern
