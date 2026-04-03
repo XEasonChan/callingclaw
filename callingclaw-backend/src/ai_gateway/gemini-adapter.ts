@@ -254,7 +254,13 @@ export class GeminiProtocolAdapter {
 
   /** Get deferred instruction for post-setup injection (empty if nothing was deferred) */
   getDeferredInstruction(): string {
-    return this._deferredInstruction;
+    // Append two-layer tool guidance so Gemini knows its capabilities
+    const toolGuide = `\n\n## Your Capabilities (two layers)
+DIRECT (call these tools yourself): recall_context, open_file, share_screen, save_meeting_notes.
+AGENT (say "let me have my agent handle that" and your background agent will execute):
+- join_meeting, schedule_meeting, check_calendar, computer_action, stop_sharing, click, scroll, navigate.
+When user asks to join a meeting, check calendar, or do complex computer actions, announce it naturally ("让我让agent帮你处理" / "let me have my agent check that") and your agent will act automatically.`;
+    return this._deferredInstruction + toolGuide;
   }
 
   // ── Private: Outbound message builders ────────────────────────────
@@ -297,30 +303,29 @@ export class GeminiProtocolAdapter {
       };
     }
 
-    // Function tools — Gemini 3.1 Live rejects setup with complex tool schemas.
-    // Keep only tools with simple parameter schemas; strip to essentials.
-    const essentialToolNames = new Set([
-      "recall_context", "save_meeting_notes",
-    ]);
-    const filteredTools = tools.length > 4
-      ? tools.filter((t: any) => essentialToolNames.has(t.name))
-      : tools;
-
+    // Gemini 3.1 Live tool limit: max 4 tools (5+ causes silent setup hang).
+    // Tested: 4 OK, 5+ HANG. No official docs on this limit.
+    //
+    // TWO-LAYER TOOL ARCHITECTURE:
+    //   Layer 1 (Gemini direct, <500ms): 4 highest-frequency tools with minimal schemas
+    //   Layer 2 (TranscriptAuditor → Haiku → AutomationRouter): everything else
+    //     Gemini says "let me have my agent handle that" → Haiku catches it → executes
+    //
+    // Layer 1 tools chosen by frequency: recall_context > open_file > share_screen > save_meeting_notes
     if (tools.length > 0) {
-      // Gemini 3.1 Live silently rejects setup if tools or instruction are too complex.
-      // PROVEN WORKING: exactly 2 tools with minimal schemas (tested in gemini-live-full-setup.ts).
-      // 4+ tools → silent hang. Actions like open_file, share_screen are handled by
-      // TranscriptAuditor (Haiku) which monitors the transcript and executes via AutomationRouter.
-      // Gemini just needs to SAY "let me have my agent open that" → Haiku catches it and acts.
       setup.tools = [{
         functionDeclarations: [
           { name: "recall_context", description: "Fetch facts from memory",
             parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
-          { name: "save_meeting_notes", description: "Save meeting notes",
+          { name: "open_file", description: "Open a file or webpage for discussion",
+            parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } },
+          { name: "share_screen", description: "Share a URL on screen in the meeting",
+            parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
+          { name: "save_meeting_notes", description: "Save notes from the meeting",
             parameters: { type: "object", properties: { notes: { type: "string" } }, required: ["notes"] } },
         ],
       }];
-      console.log(`[GeminiAdapter] Tools: 2 (Gemini 3.1 proven limit — open_file/share_screen via TranscriptAuditor)`);
+      console.log(`[GeminiAdapter] Tools: 4 (Gemini 3.1 max) — Layer 2 actions via TranscriptAuditor`);
     }
 
     // Input config (VAD, turnCoverage, transcription)
