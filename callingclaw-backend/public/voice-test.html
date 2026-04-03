@@ -243,6 +243,28 @@
           </div>
         </div>
 
+        <!-- Search Paths -->
+        <div class="control-group">
+          <div class="control-label">
+            Search Paths
+            <span class="collapsible-toggle" id="paths-toggle" onclick="togglePaths()">expand</span>
+          </div>
+          <div id="paths-section" style="display:none;">
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 11px; color: var(--text3); display: block; margin-bottom: 4px;">Meeting Prep Directory</label>
+              <input type="text" id="path-prep" placeholder="~/.callingclaw/shared">
+            </div>
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 11px; color: var(--text3); display: block; margin-bottom: 4px;">Local Knowledge Base</label>
+              <input type="text" id="path-knowledge" placeholder="Not set (disabled)">
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn btn-ghost" onclick="savePaths()">Save</button>
+              <span id="paths-status" style="font-size: 11px; color: var(--text3);"></span>
+            </div>
+          </div>
+        </div>
+
         <!-- Start/Stop -->
         <div class="control-group">
           <button class="btn btn-start" id="btn-start" onclick="startSession()">Start Voice Session</button>
@@ -416,6 +438,8 @@
       loadMeetingList();
       // Set initial mode UI
       onModeChange();
+      // Load search paths
+      loadPaths();
     });
 
     // ── Meeting list + context loading ──
@@ -577,6 +601,60 @@
         ta.rows = 3;
         toggle.textContent = 'expand';
       }
+    }
+
+    // ── Search paths config ──
+    function togglePaths() {
+      var section = document.getElementById('paths-section');
+      var toggle = document.getElementById('paths-toggle');
+      if (section.style.display === 'none') {
+        section.style.display = 'block';
+        toggle.textContent = 'collapse';
+      } else {
+        section.style.display = 'none';
+        toggle.textContent = 'expand';
+      }
+    }
+
+    async function loadPaths() {
+      try {
+        var r = await fetch(API + '/api/config/paths');
+        var d = await r.json();
+        document.getElementById('path-prep').value = d.prepDir || '';
+        document.getElementById('path-knowledge').value = d.knowledgeDir || '';
+        document.getElementById('path-prep').placeholder = d.defaults.prepDir || '~/.callingclaw/shared';
+      } catch (e) {
+        console.warn('[VoiceTest] Failed to load paths:', e);
+      }
+    }
+
+    async function savePaths() {
+      var statusEl = document.getElementById('paths-status');
+      var prepDir = document.getElementById('path-prep').value.trim();
+      var knowledgeDir = document.getElementById('path-knowledge').value.trim();
+      statusEl.textContent = 'saving...';
+      statusEl.style.color = 'var(--text3)';
+      try {
+        var r = await fetch(API + '/api/config/paths', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prepDir: prepDir, knowledgeDir: knowledgeDir })
+        });
+        var d = await r.json();
+        if (!r.ok) {
+          statusEl.textContent = d.error || 'failed';
+          statusEl.style.color = 'var(--red)';
+        } else {
+          statusEl.textContent = 'saved';
+          statusEl.style.color = 'var(--green)';
+          document.getElementById('path-prep').value = d.prepDir || '';
+          document.getElementById('path-knowledge').value = d.knowledgeDir || '';
+        }
+      } catch (e) {
+        statusEl.textContent = 'failed';
+        statusEl.style.color = 'var(--red)';
+      }
+      setTimeout(function() { statusEl.textContent = ''; }, 3000);
     }
 
     // ── Mic mute toggle ──

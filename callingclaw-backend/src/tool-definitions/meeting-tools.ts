@@ -196,11 +196,15 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           // Path B: No OpenClaw → load existing prep file from disk
           if (!prepInjected && deps.voice.connected) {
             try {
-              const { SHARED_DIR } = await import("../config");
+              const { SHARED_DIR, SEARCH_PATHS } = await import("../config");
               const { resolve } = await import("path");
-              // Search order: session file → prep/ subdirectory → SHARED_DIR root
+              const prepBase = SEARCH_PATHS.prepDir || SHARED_DIR;
+              // Search order: session file → prep/ subdirectory → prepDir root → SHARED_DIR root
               const candidates = [
+                toolSession.files?.prep ? resolve(prepBase, toolSession.files.prep) : "",
                 toolSession.files?.prep ? resolve(SHARED_DIR, toolSession.files.prep) : "",
+                resolve(prepBase, "prep", toolMeetingId + "_prep.md"),
+                resolve(prepBase, toolMeetingId + "_prep.md"),
                 resolve(SHARED_DIR, "prep", toolMeetingId + "_prep.md"),
                 resolve(SHARED_DIR, toolMeetingId + "_prep.md"),
               ].filter(Boolean);
@@ -208,7 +212,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               // Also scan prep/ directory for topic-matching files
               const { readdirSync } = await import("fs");
               try {
-                const prepDir = resolve(SHARED_DIR, "prep");
+                const prepDir = resolve(prepBase, "prep");
                 const prepFiles = readdirSync(prepDir).filter((f: string) => f.endsWith("_prep.md"));
                 for (const pf of prepFiles) {
                   if (!candidates.includes(resolve(prepDir, pf))) {
@@ -229,16 +233,22 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
                       || filePath.includes(toolMeetingId);
 
                     if (isMatch || candidates.indexOf(filePath) < 3) {
-                      // Inject markdown directly as Layer 2 context
+                      // Inject full markdown as Layer 2 context (up to ~8000 chars ≈ 2000 tokens)
                       const { MISSION_CONTEXT_PREFIX, MISSION_CONTEXT_SUFFIX } = await import("../prompt-constants");
                       const briefText = [
                         MISSION_CONTEXT_PREFIX,
                         `Topic: ${meetTopic}`,
                         "",
-                        content.slice(0, 4000), // Token budget ~1000 tokens
+                        content.slice(0, 8000),
                         "",
                         MISSION_CONTEXT_SUFFIX,
-                        "This is pre-vetted meeting prep material. Use it proactively when answering questions about meeting topics. Do not call recall_context for information already covered here.",
+                        "",
+                        "## Purpose of this prep material:",
+                        "This is background context to help you understand the meeting's topic, goals, history, and participants. Use it to:",
+                        "- Understand what this meeting is about and what decisions need to be made",
+                        "- Recognize references to past discussions, people, and technical terms",
+                        "- Provide informed, contextual responses when users ask questions related to the meeting topic",
+                        "- If the prep already contains a direct answer, use it naturally — but your primary role is contextual understanding, not reciting the prep",
                       ].join("\n");
 
                       deps.voice.injectContext(briefText);

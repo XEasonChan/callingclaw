@@ -168,9 +168,13 @@ export class VoiceModule {
             const lastAssistant = recent.filter(e => e.role === "assistant").pop();
             if (lastAssistant && lastAssistant.text === this._currentResponseTranscript) {
               // Add a correction entry noting what was actually heard
+              const unheardText = this._currentResponseTranscript.slice(heardLength).trim();
+              const recoveryHint = unheardText.length > 20
+                ? ` You were cut off mid-response. Key undelivered point: "${unheardText.slice(0, 120)}..." — weave it into your next reply if relevant, don't repeat what was already heard.`
+                : "";
               this.context.addTranscript({
                 role: "system",
-                text: `[HEARD] AI was interrupted. User heard: "${heardText.slice(0, 100)}..."`,
+                text: `[HEARD] AI was interrupted at ${Math.round(heardRatio * 100)}%. User heard: "${heardText.slice(0, 100)}..."${recoveryHint}`,
                 ts: Date.now(),
               });
             }
@@ -179,8 +183,18 @@ export class VoiceModule {
         }
       }
 
-      // Cancel in-progress AI response
-      this.client.sendEvent("response.cancel", {});
+      // Commit any buffered audio, then cancel in-progress AI response
+      this.client.sendEvent("input_audio_buffer.commit", {});
+      const cancelled = this.client.sendEvent("response.cancel", {});
+      if (!cancelled) {
+        // Retry if WebSocket wasn't ready
+        setTimeout(() => {
+          if (this.client.connected) {
+            this.client.sendEvent("response.cancel", {});
+            console.log("[Voice] Retry: sent delayed response.cancel");
+          }
+        }, 100);
+      }
 
       // Fire external speech-started callback
       if (this._onSpeechStarted) this._onSpeechStarted();

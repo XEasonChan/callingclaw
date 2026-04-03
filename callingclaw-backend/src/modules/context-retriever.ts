@@ -504,10 +504,20 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
   // Haiku/Gemini Flash — 10-50x faster, 100x cheaper.
 
   private static readonly WORKSPACE_DIR = `${process.env.HOME}/.openclaw/workspace`;
-  private static readonly SHARED_DIR = `${process.env.HOME}/.callingclaw/shared`;
-  private static readonly PREP_DIR = `${process.env.HOME}/.callingclaw/shared/prep`;
-  private static readonly MAX_TOOL_ROUNDS = 3; // Max agentic iterations
-  private static readonly AGENT_TIMEOUT_MS = 8_000; // Hard cap on total search time
+  private static readonly MAX_TOOL_ROUNDS = 5; // Max agentic iterations (increased from 3)
+  private static readonly AGENT_TIMEOUT_MS = 15_000; // 15s hard cap (increased from 8s)
+
+  /** Get prep dir and knowledge dir from user config, with defaults */
+  private static get SHARED_DIR(): string {
+    try { return require("../config").SEARCH_PATHS?.prepDir || `${process.env.HOME}/.callingclaw/shared`; } catch { return `${process.env.HOME}/.callingclaw/shared`; }
+  }
+  private static get PREP_DIR(): string {
+    const base = ContextRetriever.SHARED_DIR;
+    return `${base}/prep`;
+  }
+  private static get KNOWLEDGE_DIR(): string {
+    try { return require("../config").SEARCH_PATHS?.knowledgeDir || ""; } catch { return ""; }
+  }
 
   /** Tool definitions for the agentic search agent */
   private static readonly SEARCH_TOOLS = [
@@ -693,6 +703,8 @@ RULES:
    */
   private getSearchDirs(): string[] {
     const dirs = [ContextRetriever.WORKSPACE_DIR, ContextRetriever.SHARED_DIR, ContextRetriever.PREP_DIR];
+    const knowledgeDir = ContextRetriever.KNOWLEDGE_DIR;
+    if (knowledgeDir) dirs.push(knowledgeDir);
     return dirs;
   }
 

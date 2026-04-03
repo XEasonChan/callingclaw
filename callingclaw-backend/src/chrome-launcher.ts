@@ -901,14 +901,15 @@ export class ChromeLauncher {
       // Step B: Individual "Admit" first
       var admit = all.find(function(b) {
         var t = (b.textContent || '').trim();
-        return t === 'Admit' || t === '准许';
+        var a = (b.getAttribute('aria-label') || '');
+        return t === 'Admit' || t === '准许' || t === '允许加入' || a.includes('允许') || a.includes('Admit');
       });
       if (admit) { admit.click(); return 'admitted:' + admit.textContent.trim().substring(0, 60); }
 
       // Step B2: "Admit all" fallback
       var admitAll = all.find(function(b) {
         var t = (b.textContent || '').trim();
-        return t === 'Admit all' || t === '全部准许';
+        return t === 'Admit all' || t === '全部准许' || t === '全部允许';
       });
       if (admitAll) { admitAll.click(); return 'admitted:' + admitAll.textContent.trim().substring(0, 60); }
 

@@ -35,6 +35,17 @@ try {
   // File doesn't exist yet or is invalid — use defaults
 }
 
+// ── Configurable search paths ──
+// Path 1: Meeting prep materials directory (default: SHARED_DIR)
+// Path 2: Local knowledge base directory (CallingClaw can search files here)
+// Both are persisted in user-config.json and configurable via Desktop UI
+export const SEARCH_PATHS = {
+  /** Meeting prep materials directory. Default: ~/.callingclaw/shared */
+  prepDir: _userConfig.prepDir || SHARED_DIR,
+  /** Local knowledge base directory. CallingClaw can search all files here. Default: empty (disabled) */
+  knowledgeDir: _userConfig.knowledgeDir || "",
+};
+
 export const CONFIG = {
   // Server
   port: parseInt(process.env.PORT || "4000"),
@@ -150,6 +161,14 @@ export const CONFIG = {
   peekaboo: {
     // Peekaboo CLI path (defaults to system PATH)
     cliPath: process.env.PEEKABOO_PATH || "peekaboo",
+  },
+
+  // Recall.ai Bot API (optional — cloud-based meeting bot alternative)
+  recall: {
+    apiKey: process.env.RECALL_API_KEY || "",
+    baseUrl: process.env.RECALL_BASE_URL || "https://us-west-2.recall.ai/api/v1",
+    clientPageUrl: process.env.RECALL_CLIENT_PAGE_URL || "",
+    wsUrl: process.env.RECALL_WS_URL || "",
   },
 
   // Python sidecar REMOVED in v2.6.0 — NativeBridge handles all input actions

@@ -793,6 +793,57 @@ export function startConfigServer(services: Services) {
         return Response.json({ ok: true, email }, { headers });
       }
 
+      // GET /api/config/paths — Get configurable search paths
+      if (url.pathname === "/api/config/paths" && req.method === "GET") {
+        const { SEARCH_PATHS, SHARED_DIR: defaultPrepDir } = await import("./config");
+        return Response.json({
+          prepDir: SEARCH_PATHS.prepDir,
+          knowledgeDir: SEARCH_PATHS.knowledgeDir,
+          defaults: { prepDir: defaultPrepDir, knowledgeDir: "" },
+        }, { headers });
+      }
+
+      // POST /api/config/paths — Update configurable search paths
+      if (url.pathname === "/api/config/paths" && req.method === "POST") {
+        const body = await req.json();
+        const { SEARCH_PATHS, CALLINGCLAW_HOME: ccHome } = await import("./config");
+        const { resolve } = await import("path");
+        const { mkdirSync, existsSync } = await import("fs");
+
+        // Validate paths exist
+        if (body.prepDir !== undefined) {
+          const p = String(body.prepDir).trim();
+          if (p && !existsSync(p)) {
+            return Response.json({ error: `prepDir does not exist: ${p}` }, { status: 400, headers });
+          }
+          SEARCH_PATHS.prepDir = p || SHARED_DIR;
+        }
+        if (body.knowledgeDir !== undefined) {
+          const p = String(body.knowledgeDir).trim();
+          if (p && !existsSync(p)) {
+            return Response.json({ error: `knowledgeDir does not exist: ${p}` }, { status: 400, headers });
+          }
+          SEARCH_PATHS.knowledgeDir = p;
+        }
+
+        // Persist to user-config.json
+        try {
+          const configPath = resolve(ccHome, "user-config.json");
+          let existing: Record<string, string> = {};
+          const f = Bun.file(configPath);
+          if (await f.exists()) existing = await f.json();
+          existing.prepDir = SEARCH_PATHS.prepDir;
+          existing.knowledgeDir = SEARCH_PATHS.knowledgeDir;
+          mkdirSync(ccHome, { recursive: true });
+          await Bun.write(configPath, JSON.stringify(existing, null, 2));
+        } catch (e: any) {
+          console.warn("[Config] Failed to persist paths:", e.message);
+        }
+
+        console.log(`[Config] Paths updated: prepDir=${SEARCH_PATHS.prepDir}, knowledgeDir=${SEARCH_PATHS.knowledgeDir}`);
+        return Response.json({ ok: true, prepDir: SEARCH_PATHS.prepDir, knowledgeDir: SEARCH_PATHS.knowledgeDir }, { headers });
+      }
+
       // ══════════════════════════════════════════════════════════════
       // ── Voice API ──
       // ══════════════════════════════════════════════════════════════
@@ -1332,8 +1383,8 @@ export function startConfigServer(services: Services) {
           // Skip if already matched to a calendar event
           if (s.calendarEventId && calEventIds.has(s.calendarEventId)) continue;
           if (s.meetUrl && meetUrls.has(s.meetUrl)) continue;
-          // Skip ended sessions older than 24h
-          if (s.status === "ended" && s.endTime && now - new Date(s.endTime).getTime() > 86400000) continue;
+          // Skip ended sessions — only show active/upcoming meetings
+          if (s.status === "ended") continue;
           // Convert session to calendar-like event format for Desktop rendering
           enriched.push({
             id: s.meetingId,
