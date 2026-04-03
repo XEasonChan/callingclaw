@@ -1562,7 +1562,7 @@ export function startConfigServer(services: Services) {
 
         // Reuse existing session for the same Meet URL, or create new one
         const session = services.sessionManager!.findOrCreate({
-          topic: body.instructions?.slice(0, 200) || "Meeting",
+          topic: body.topic || body.instructions?.slice(0, 200) || "Meeting",
           meetUrl: validated.url,
         });
         const meetingId = session.meetingId;
@@ -1606,7 +1606,7 @@ export function startConfigServer(services: Services) {
         }
 
         // Generate meeting prep brief via OpenClaw — BACKGROUND, NEVER blocks join
-        const meetTopic = calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
+        const meetTopic = body.topic || calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
         let prepBrief: any = null;
         if (services.meetingPrepSkill && services.openclawBridge?.connected) {
           // Fire-and-forget: prep runs in background, injects when ready

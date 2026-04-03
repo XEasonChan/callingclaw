@@ -928,8 +928,7 @@ export class RealtimeClient {
         description: t.description,
         parameters: t.parameters,
       })),
-    });
-    });
+    }));
   }
 
   // ── Incremental Context Injection ─────────────────────────────────
