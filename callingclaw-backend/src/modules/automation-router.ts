@@ -55,7 +55,13 @@ interface RoutePattern {
 const ROUTE_PATTERNS: RoutePattern[] = [
   // ── Layer 1: Shortcuts & API (highest priority) ──
 
-  // Zoom
+  // ── Screen sharing / Presenting (platform-agnostic — actual routing uses activePlatform) ──
+  // These match WITHOUT a "zoom"/"meet" prefix so "投屏", "start presenting", etc. all work.
+  { match: /(?:开始|start)?\s*(?:投屏|共享屏幕|share\s*(?:my\s*)?screen|screen\s*shar)/i, layer: "shortcuts", action: "share_screen", confidence: 0.95 },
+  { match: /(?:开始|start)?\s*(?:演示|present|展示|presentation)/i, layer: "shortcuts", action: "share_screen", confidence: 0.95 },
+  { match: /(?:停止|stop)\s*(?:投屏|共享|shar|present|演示|展示)/i, layer: "shortcuts", action: "stop_sharing", confidence: 0.95 },
+
+  // Zoom-specific (require "zoom" prefix — for Zoom desktop app only)
   { match: /zoom.*(?:静音|mute)/i, layer: "shortcuts", action: "zoom:toggle_mute", confidence: 0.95 },
   { match: /zoom.*(?:取消静音|unmute)/i, layer: "shortcuts", action: "zoom:toggle_mute", confidence: 0.95 },
   { match: /zoom.*(?:摄像头|camera|视频|video)/i, layer: "shortcuts", action: "zoom:toggle_video", confidence: 0.95 },
@@ -73,9 +79,13 @@ const ROUTE_PATTERNS: RoutePattern[] = [
       return urlMatch ? { url: urlMatch[0] } : {};
     }, confidence: 0.9 },
 
-  // Meet shortcuts
+  // Meet-specific shortcuts
   { match: /meet.*(?:静音|mute)/i, layer: "shortcuts", action: "meet:toggle_mute", confidence: 0.95 },
   { match: /meet.*(?:摄像头|camera|视频|video)/i, layer: "shortcuts", action: "meet:toggle_video", confidence: 0.95 },
+
+  // Generic meeting controls (no platform prefix — works for both)
+  { match: /(?:静音|mute|unmute|取消静音)/i, layer: "shortcuts", action: "meet:toggle_mute", confidence: 0.85 },
+  { match: /(?:摄像头|camera|开关摄像头)/i, layer: "shortcuts", action: "meet:toggle_video", confidence: 0.85 },
 
   // Open URL (bash open) — exact URL match, high confidence
   { match: /(?:帮我)?(?:打开|open)\s+(https?:\/\/[^\s]+)/i, layer: "shortcuts", action: "open_url",
@@ -346,7 +356,9 @@ export class AutomationRouter {
       return result.success ? result.detail : `Zoom error: ${result.detail}`;
     }
 
-    // Meet shortcuts
+    // Meet shortcuts — use ChromeLauncher page evaluate (Python bridge removed in v2.6.0)
+    // AutomationRouter doesn't own ChromeLauncher, so callers (TranscriptAuditor) handle
+    // meet: actions directly. If we get here, try the legacy bridge as best-effort fallback.
     if (action.startsWith("meet:")) {
       const shortcutMap: Record<string, string> = {
         "meet:toggle_mute": "command+d",
@@ -354,9 +366,11 @@ export class AutomationRouter {
       };
       const key = shortcutMap[action];
       if (key) {
+        // Legacy bridge — will no-op on NativeBridge but won't crash
         this.bridge.sendAction("key", { key });
-        return `Meet: ${action.replace("meet:", "")}`;
+        return `Meet: ${action.replace("meet:", "")} (shortcut sent)`;
       }
+      throw new Error(`Unknown meet action: ${action}`);
     }
 
     // Open app

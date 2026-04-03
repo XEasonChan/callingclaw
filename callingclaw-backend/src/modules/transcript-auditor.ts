@@ -651,6 +651,37 @@ Respond with JSON only:
           break;
         }
 
+        // ── Meeting controls (mute/camera via ChromeLauncher DOM) ──
+        case "meet_mute": {
+          instruction = "toggle mute";
+          if (this.chromeLauncher?.page) {
+            const r = await this.chromeLauncher.page.evaluate(`(() => {
+              var btn = document.querySelector('[aria-label*="microphone" i], [aria-label*="麦克风"], [aria-label*="Mute" i], [aria-label*="静音"]');
+              if (btn) { btn.click(); return 'toggled'; }
+              return 'not_found';
+            })()`);
+            executionResult = String(r) === "toggled" ? "Toggled mute" : "Mute button not found";
+          } else {
+            executionResult = "No active meeting page";
+          }
+          break;
+        }
+
+        case "meet_camera": {
+          instruction = "toggle camera";
+          if (this.chromeLauncher?.page) {
+            const r = await this.chromeLauncher.page.evaluate(`(() => {
+              var btn = document.querySelector('[aria-label*="camera" i], [aria-label*="摄像头"], [aria-label*="视频"], [aria-label*="Turn off video" i], [aria-label*="Turn on video" i]');
+              if (btn) { btn.click(); return 'toggled'; }
+              return 'not_found';
+            })()`);
+            executionResult = String(r) === "toggled" ? "Toggled camera" : "Camera button not found";
+          } else {
+            executionResult = "No active meeting page";
+          }
+          break;
+        }
+
         case "click": {
           // Two-step click: snapshot clickable elements → resolve target → click by index
           instruction = `click: ${params.selector || params.instruction || ""}`;
