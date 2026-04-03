@@ -41,9 +41,10 @@ export interface AuditResult {
 export const AUDITOR_MANAGED_TOOLS = new Set([
   "computer_action",
   "browser_action",
-  "share_screen",
-  "stop_sharing",
-  "open_file",
+  // share_screen & stop_sharing: kept in Realtime tool list — users say "投屏/share screen"
+  // directly, and Realtime should handle it (not routed through Auditor's async pipeline).
+  // open_file: also kept — users say "打开文件" directly.
+  // Auditor manages only the autonomous tools (computer_action, browser_action).
 ]);
 
 // ── Module ──

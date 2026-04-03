@@ -57,6 +57,8 @@ const AUDIO_INIT_SCRIPT = `
     triedReceiverIdx: 0,
     captureSource: null,
     captureWorklet: null,
+    isPlaying: false,       // Echo suppression: true when AI audio is being played
+    echoSuppressed: 0,      // Counter: chunks suppressed by echo gate
   };
 
   var origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
@@ -150,6 +152,15 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
 
   function sendAudioChunk(int16) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // ── Echo suppression: mute capture while AI audio is playing ──
+    // When playbackNode is outputting AI audio → Meet mic → remote participants hear it
+    // → Meet SFU may echo it back → capture picks it up → Realtime API hears it as "user"
+    // Half-duplex gate: suppress capture during AI playback + 300ms tail guard
+    if (cc.isPlaying) {
+      cc.echoSuppressed++;
+      if (cc.echoSuppressed % 100 === 1) console.log('[CC-Audio] Echo suppressed: ' + cc.echoSuppressed + ' chunks');
+      return;
+    }
     // Downsample to 24kHz if needed
     if (captureRate !== SAMPLE_RATE && captureRate > SAMPLE_RATE) {
       var ratio = captureRate / SAMPLE_RATE;
@@ -220,6 +231,13 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       try {
         var data = JSON.parse(e.data);
         if (data.type === 'audio' && data.audio) {
+          // ── Echo suppression: mark AI as speaking ──
+          cc.isPlaying = true;
+          if (cc._playingTimer) clearTimeout(cc._playingTimer);
+          // Tail guard: keep suppression for 500ms after last audio chunk
+          // to catch echo propagation delay through Meet's SFU
+          cc._playingTimer = setTimeout(function() { cc.isPlaying = false; }, 500);
+
           var raw = atob(data.audio);
           var bytes = new Uint8Array(raw.length);
           for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
@@ -232,6 +250,9 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
           }
           playbackNode.port.postMessage(float32, [float32.buffer]);
         } else if (data.type === 'interrupt') {
+          // ── Echo suppression: AI interrupted, stop suppression immediately ──
+          cc.isPlaying = false;
+          if (cc._playingTimer) { clearTimeout(cc._playingTimer); cc._playingTimer = null; }
           playbackNode.port.postMessage('clear');
         }
       } catch(err) {}
@@ -279,7 +300,7 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
             for (var k = 0; k < d.length; k++) { var ab = Math.abs(d[k]); if (ab > amp) amp = ab; }
             if (amp > evtMaxAmp) evtMaxAmp = amp;
             if (evtChunks % 50 === 1) console.log('[CC-Track] chunk#' + evtChunks + ' maxAmp=' + amp + ' peak=' + evtMaxAmp);
-            sendAudioChunk(d);
+            sendAudioChunk(d);  // Echo suppression applied inside sendAudioChunk
           };
         }
       });

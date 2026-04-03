@@ -16,7 +16,7 @@ import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { ChromeLauncher } from "./chrome-launcher";
 import { PeekabooClient } from "./mcp_client/peekaboo";
 import { ZoomSkill } from "./skills/zoom";
-import { MeetJoiner } from "./meet_joiner";
+import { MeetJoiner, detectPlatform, type MeetingPlatform } from "./meet_joiner";
 import { OpenClawBridge } from "./openclaw_bridge";
 import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
@@ -140,6 +140,7 @@ meetingPrepSkill.setSessionManager(sessionManager);
 
 // Track active meeting ID for live log event emission
 let activeMeetingId: string | null = null;
+let activePlatform: MeetingPlatform = "unknown";
 
 // Forward live notes to EventBus for Desktop UI visibility + live log streaming
 meetingPrepSkill.onLiveNote((note, topic) => {
@@ -338,14 +339,33 @@ eventBus.on("meeting.started", (data) => {
   // Bun.spawn(["open", `http://localhost:${CONFIG.port}/meeting-view.html`]);
   // console.log("[Init] Meeting transparency view opened in browser");
 
+  // ── Detect meeting platform from meetUrl ──
+  const meetUrl = data?.meetUrl || sessionManager.get(activeMeetingId)?.meetUrl || "";
+  activePlatform = meetUrl ? detectPlatform(meetUrl) : "unknown";
+  console.log(`[Init] Meeting platform detected: ${activePlatform} (from ${meetUrl || "unknown"})`);
+
   // ── Activate TranscriptAuditor: take over automation from OpenAI ──
+  // Platform-aware tool filtering:
+  //   Google Meet: remove zoom_control (useless), keep share_screen (Playwright)
+  //   Zoom: remove share_screen (use zoom_control instead)
+  //   Unknown: remove zoom_control (safer default)
+  const PLATFORM_EXCLUDED_TOOLS: Record<MeetingPlatform, Set<string>> = {
+    google_meet: new Set(["zoom_control"]),
+    zoom: new Set(["share_screen", "stop_sharing"]),  // Zoom uses zoom_control for sharing
+    unknown: new Set(["zoom_control"]),
+  };
+  const platformExcluded = PLATFORM_EXCLUDED_TOOLS[activePlatform] || new Set();
+
   if (voice.connected) {
     // Remove automation tools from OpenAI session (auditor handles them now)
+    // ALSO remove platform-incompatible tools (e.g., zoom_control during Meet)
+    // NOTE: share_screen is kept for Realtime — it's a direct user command, not an
+    // autonomous auditor action. Auditor manages computer_action/browser_action.
     const meetingTools = voice.getAllTools().filter(
-      (t) => !AUDITOR_MANAGED_TOOLS.has(t.name)
+      (t) => !AUDITOR_MANAGED_TOOLS.has(t.name) && !platformExcluded.has(t.name)
     );
     voice.setActiveTools(meetingTools);
-    console.log(`[Init] Removed ${AUDITOR_MANAGED_TOOLS.size} automation tools from OpenAI (auditor takes over)`);
+    console.log(`[Init] Removed ${AUDITOR_MANAGED_TOOLS.size} auditor tools + ${platformExcluded.size} platform-excluded tools (platform: ${activePlatform})`);
 
     // Activate the auditor
     transcriptAuditor.activate(voice);
