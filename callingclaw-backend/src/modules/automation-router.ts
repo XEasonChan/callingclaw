@@ -81,6 +81,13 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { match: /(?:帮我)?(?:打开|open)\s+(https?:\/\/[^\s]+)/i, layer: "shortcuts", action: "open_url",
     extractParams: (m) => ({ url: m[1] }), confidence: 0.95 },
 
+  // Open file by fuzzy name — triggered by auditor's "open file: <query>" or user "打开文件/文档/html"
+  // Must be BEFORE open_app so "open file: ..." doesn't get misclassified as an app launch.
+  { match: /open file:\s*(.+)/i, layer: "shortcuts", action: "open_file",
+    extractParams: (m) => ({ query: m[1]?.trim() }), confidence: 0.9 },
+  { match: /(?:帮我)?(?:打开|open)\s*(?:一下\s*)?(?:那个|这个|the)?\s*(.+?)\s*(?:文件|文档|html|pdf|文件夹)/i, layer: "shortcuts", action: "open_file",
+    extractParams: (m) => ({ query: m[1]?.trim() }), confidence: 0.85 },
+
   // App/file launch — LOW confidence so voice-originated ambiguous "open X" falls through
   // to Haiku medium lane (transcript-auditor.ts), which has search_and_open tool + context.
   // Regex can't reliably distinguish "open Slack" (app) from "open the prep file" (search).

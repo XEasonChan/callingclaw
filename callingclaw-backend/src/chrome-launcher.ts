@@ -1347,6 +1347,28 @@ export class ChromeLauncher {
     this._googleLoginCache = null;
   }
 
+  /**
+   * Launch a standalone Playwright browser for presentation test mode.
+   * Creates a browser context WITHOUT joining Google Meet — just a plain Chrome window.
+   * After calling this, navigatePresentingPage() / evaluateOnPresentingPage() work normally.
+   */
+  async launchStandalone(): Promise<void> {
+    if (this._context) {
+      console.log("[ChromeLauncher] Already launched, reusing for standalone");
+      return;
+    }
+    const { chromium } = await import("playwright");
+    const context = await chromium.launchPersistentContext(this.profileDir, {
+      headless: false,
+      args: ["--no-sandbox", "--disable-web-security", "--disable-blink-features=AutomationControlled"],
+      viewport: { width: 1280, height: 900 },
+      ignoreDefaultArgs: ["--enable-automation"],
+    });
+    this._context = context;
+    this._page = context.pages()[0] || await context.newPage();
+    console.log("[ChromeLauncher] Standalone browser launched");
+  }
+
   /** Clean shutdown */
   async close(): Promise<void> {
     if (this._context) {

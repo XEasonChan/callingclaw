@@ -411,6 +411,53 @@ export function buildMeetingIntro(
   return parts.join("");
 }
 
+// ── Standalone Presentation Context (test mode, no meeting brief) ────
+
+/**
+ * Build Layer 2 context for standalone presentation test mode.
+ * Gives the voice AI full story context so it can present intelligently
+ * and handle questions/interruptions about the content.
+ */
+export function buildTestPresentationContext(
+  brief: { goal?: string; summary?: string; keyPoints?: string[]; architectureDecisions?: Array<{ decision: string; rationale: string }>; expectedQuestions?: Array<{ question: string; suggestedAnswer: string }> },
+  plan: { topic: string; slides: Array<{ sectionTitle: string; talkingPoints: string }> },
+): string {
+  const parts: string[] = [];
+  parts.push(`═══ PRESENTATION CONTEXT ═══`);
+  parts.push(`Topic: ${plan.topic}`);
+  if (brief.goal) parts.push(`Goal: ${brief.goal}`);
+  if (brief.summary) parts.push(`Summary: ${brief.summary}`);
+
+  if (plan.slides.length > 0) {
+    parts.push(`\nSPEAKING PLAN (${plan.slides.length} slides):`);
+    for (const [i, s] of plan.slides.entries()) {
+      parts.push(`${i + 1}. ${s.sectionTitle}: ${s.talkingPoints.slice(0, 80)}...`);
+    }
+  }
+
+  if (brief.keyPoints?.length) {
+    parts.push(`\nKEY POINTS (order of importance):`);
+    for (const p of brief.keyPoints) parts.push(`- ${p}`);
+  }
+
+  if (brief.architectureDecisions?.length) {
+    parts.push(`\nKEY DECISIONS:`);
+    for (const d of brief.architectureDecisions) parts.push(`- ${d.decision} — because: ${d.rationale}`);
+  }
+
+  if (brief.expectedQuestions?.length) {
+    parts.push(`\nQ&A STRATEGIES:`);
+    for (const q of brief.expectedQuestions.slice(0, 5)) parts.push(`Q: ${q.question} → ${q.suggestedAnswer}`);
+  }
+
+  parts.push(`\n═══ END PRESENTATION CONTEXT ═══`);
+  parts.push(`You are in PRESENTER mode. The user is watching your screen (Playwright browser).`);
+  parts.push(`Present each slide naturally. The user may interrupt to ask questions — answer from the context above.`);
+  parts.push(`The user may request actions: "scroll up", "click that button", "go back" — the system will execute these automatically.`);
+
+  return parts.join("\n");
+}
+
 // ── Small Talk → Presentation transition prompts ──────────────────
 // Provider-agnostic: injected into any voice model (Gemini, Grok, OpenAI)
 // when a meeting has prepared scenes but should start with casual chat.

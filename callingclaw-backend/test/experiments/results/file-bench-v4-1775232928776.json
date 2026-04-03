@@ -1,0 +1,134 @@
+{
+  "timestamp": "2026-04-03T16:15:28.776Z",
+  "version": "v4",
+  "runtime": "Node v22.17.0",
+  "query": "帮我找到 tanka action 的第一期 mcp 列表 html 文档",
+  "runsPerApproach": 2,
+  "searchDirs": [
+    "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka",
+    "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0",
+    "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public"
+  ],
+  "fixes": [
+    "Removed ANTHROPIC_API_KEY from env (was OpenRouter key, caused 401 on Claude CLI/SDK)",
+    "Improved DIY prompt with better search hints",
+    "Replaced OpenClaw Agent with deterministic baseline",
+    "Agent SDK uses embed mode with firstParty auth"
+  ],
+  "results": [
+    {
+      "approach": "1. DIY Agent Loop (OpenRouter Haiku)",
+      "durationMs": 33158,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "llmCalls": 6,
+      "tokenEstimate": 30605,
+      "costEstimate": "~$0.0306",
+      "run": 1
+    },
+    {
+      "approach": "1. DIY Agent Loop (OpenRouter Haiku)",
+      "durationMs": 25637,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "llmCalls": 6,
+      "tokenEstimate": 30605,
+      "costEstimate": "~$0.0306",
+      "run": 2
+    },
+    {
+      "approach": "2. Claude Code CLI (haiku)",
+      "durationMs": 120668,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "detail": "",
+      "run": 1
+    },
+    {
+      "approach": "2. Claude Code CLI (haiku)",
+      "durationMs": 24085,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "detail": "",
+      "run": 2
+    },
+    {
+      "approach": "3. Claude Agent SDK (embed)",
+      "durationMs": 12,
+      "foundPath": null,
+      "success": false,
+      "error": "Import attribute \"type\" with value \"file\" is not supported in file:///Users/admin/Library/Mobile%20Documents/com%7Eapple%7ECloudDocs/CallingClaw%202.0/callingclaw-backend/node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
+      "run": 1
+    },
+    {
+      "approach": "3. Claude Agent SDK (embed)",
+      "durationMs": 0,
+      "foundPath": null,
+      "success": false,
+      "error": "Import attribute \"type\" with value \"file\" is not supported in file:///Users/admin/Library/Mobile%20Documents/com%7Eapple%7ECloudDocs/CallingClaw%202.0/callingclaw-backend/node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
+      "run": 2
+    },
+    {
+      "approach": "4. Deterministic Search (baseline, no LLM)",
+      "durationMs": 56,
+      "foundPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/Action & Permission Phase I/PRD-Phase2-Action-Coverage.html",
+      "pathExists": true,
+      "success": false,
+      "llmCalls": 0,
+      "tokenEstimate": 0,
+      "costEstimate": "$0.0000",
+      "allMatches": [
+        "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/Action & Permission Phase I/PRD-Phase2-Action-Coverage.html",
+        "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/tanka-link-app-catalog.html",
+        "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/link2-phase2-testing-guide.html"
+      ],
+      "run": 1
+    },
+    {
+      "approach": "4. Deterministic Search (baseline, no LLM)",
+      "durationMs": 13,
+      "foundPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/Action & Permission Phase I/PRD-Phase2-Action-Coverage.html",
+      "pathExists": true,
+      "success": false,
+      "llmCalls": 0,
+      "tokenEstimate": 0,
+      "costEstimate": "$0.0000",
+      "allMatches": [
+        "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/Action & Permission Phase I/PRD-Phase2-Action-Coverage.html",
+        "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/tanka-link-app-catalog.html",
+        "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/link2-phase2-testing-guide.html"
+      ],
+      "run": 2
+    }
+  ],
+  "summary": [
+    {
+      "approach": "1. DIY Agent Loop (OpenRouter Haiku)",
+      "avgDurationMs": 29398,
+      "successRate": "0/2",
+      "avgLLMCalls": 6
+    },
+    {
+      "approach": "2. Claude Code CLI (haiku)",
+      "avgDurationMs": 72377,
+      "successRate": "0/2",
+      "avgLLMCalls": null
+    },
+    {
+      "approach": "3. Claude Agent SDK (embed)",
+      "avgDurationMs": 6,
+      "successRate": "0/2",
+      "avgLLMCalls": null
+    },
+    {
+      "approach": "4. Deterministic Search (baseline, no LLM)",
+      "avgDurationMs": 35,
+      "successRate": "0/2",
+      "avgLLMCalls": 0
+    }
+  ]
+}

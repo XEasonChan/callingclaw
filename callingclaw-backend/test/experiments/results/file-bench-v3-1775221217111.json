@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-04-03T13:00:17.111Z",
+  "runtime": "Node v22.17.0",
+  "query": "帮我找到 tanka action 的第一期 mcp 列表 html 文档",
+  "runsPerApproach": 2,
+  "searchDirs": [
+    "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka",
+    "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0",
+    "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public"
+  ],
+  "results": [
+    {
+      "approach": "1. DIY Agent Loop (OpenRouter Haiku)",
+      "durationMs": 29905,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "llmCalls": 8,
+      "tokenEstimate": 72768,
+      "costEstimate": "~$0.0728",
+      "run": 1
+    },
+    {
+      "approach": "1. DIY Agent Loop (OpenRouter Haiku)",
+      "durationMs": 29022,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "llmCalls": 8,
+      "tokenEstimate": 72768,
+      "costEstimate": "~$0.0728",
+      "run": 2
+    },
+    {
+      "approach": "2. Claude Code CLI (haiku)",
+      "durationMs": 4986,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "detail": "Invalid API key · Fix external API key",
+      "run": 1
+    },
+    {
+      "approach": "2. Claude Code CLI (haiku)",
+      "durationMs": 4908,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "detail": "Invalid API key · Fix external API key",
+      "run": 2
+    },
+    {
+      "approach": "3. OpenClaw Agent (--local)",
+      "durationMs": 2763,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "detail": "Error: Pass --to <E.164>, --session-id, or --agent to choose a session\n",
+      "run": 1
+    },
+    {
+      "approach": "3. OpenClaw Agent (--local)",
+      "durationMs": 1346,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "detail": "Error: Pass --to <E.164>, --session-id, or --agent to choose a session\n",
+      "run": 2
+    },
+    {
+      "approach": "4. Claude Agent SDK",
+      "durationMs": 9782,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "error": "Claude Code returned an error result: Failed to authenticate. API Error: 401 terminated",
+      "run": 1
+    },
+    {
+      "approach": "4. Claude Agent SDK",
+      "durationMs": 6762,
+      "foundPath": null,
+      "pathExists": false,
+      "success": false,
+      "error": "Claude Code returned an error result: Invalid API key · Fix external API key",
+      "run": 2
+    }
+  ],
+  "summary": [
+    {
+      "approach": "1. DIY Agent Loop (OpenRouter Haiku)",
+      "avgDurationMs": 29464,
+      "successRate": "0/2",
+      "avgLLMCalls": 8
+    },
+    {
+      "approach": "2. Claude Code CLI (haiku)",
+      "avgDurationMs": 4947,
+      "successRate": "0/2",
+      "avgLLMCalls": null
+    },
+    {
+      "approach": "3. OpenClaw Agent (--local)",
+      "avgDurationMs": 2055,
+      "successRate": "0/2",
+      "avgLLMCalls": null
+    },
+    {
+      "approach": "4. Claude Agent SDK",
+      "avgDurationMs": 8272,
+      "successRate": "0/2",
+      "avgLLMCalls": null
+    }
+  ]
+}

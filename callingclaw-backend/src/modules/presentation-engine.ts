@@ -50,7 +50,7 @@ export class PresentationEngine {
   private _running = false;
   private _paused = false;
   private _currentSlide = -1;
-  private _plan: PresentationPlan | null = null;
+  _plan: PresentationPlan | null = null;
 
   get running() { return this._running; }
   get paused() { return this._paused; }
@@ -78,6 +78,7 @@ export class PresentationEngine {
     // 1. Get DOM snapshot from the presenting page
     console.log(`[Presentation] Building plan for: ${url}`);
     const snapshot = await chromeLauncher.snapshotPresentingPage();
+    console.log(`[Presentation] Snapshot: ${snapshot?.length || 0} chars`);
 
     if (!snapshot || snapshot.length < 50) {
       throw new Error("Page snapshot too short — page may not be loaded");
@@ -87,26 +88,53 @@ export class PresentationEngine {
     const prompt = briefContext
       ? this._buildStoryDrivenPrompt(url, topic, extraContext, briefContext, snapshot)
       : this._buildDomDrivenPrompt(url, topic, extraContext, snapshot);
+    console.log(`[Presentation] Prompt: ${prompt.length} chars, calling Haiku (${CONFIG.analysis.model})...`);
 
-    // 3. Call Haiku
-    const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: CONFIG.analysis.model, // Haiku
+    // 3. Call Haiku (use curl fallback if fetch fails — Bun+Playwright conflict)
+    let content: string;
+    try {
+      const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${CONFIG.openrouter.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: CONFIG.analysis.model,
+          max_tokens: 2500,
+          temperature: 0.3,
+          messages: [{ role: "user", content: prompt }],
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!resp.ok) throw new Error(`Haiku API error: ${resp.status}`);
+      const data = await resp.json() as any;
+      content = data.choices?.[0]?.message?.content || "[]";
+    } catch (fetchErr: any) {
+      // Fallback: use curl when Bun fetch is broken (e.g., Playwright browser active)
+      console.warn(`[Presentation] fetch failed (${fetchErr.message}), falling back to curl`);
+      const reqBodyPath = "/tmp/callingclaw-present-req.json";
+      await Bun.write(reqBodyPath, JSON.stringify({
+        model: CONFIG.analysis.model,
         max_tokens: 2500,
         temperature: 0.3,
         messages: [{ role: "user", content: prompt }],
-      }),
-    });
+      }));
+      const apiUrl = `${CONFIG.openrouter.baseUrl}/chat/completions`;
+      const authHeader = `Bearer ${CONFIG.openrouter.apiKey}`;
+      const proc = Bun.spawn(["curl", "-s", "--noproxy", "*", "--max-time", "30", "-X", "POST", apiUrl,
+        "-H", "Content-Type: application/json",
+        "-H", `Authorization: ${authHeader}`,
+        "-d", `@${reqBodyPath}`,
+      ], { stderr: "pipe" });
+      const curlResult = await new Response(proc.stdout).text();
+      const curlErr = await new Response(proc.stderr).text();
+      if (curlErr) console.warn(`[Presentation] curl stderr: ${curlErr.slice(0, 200)}`);
+      const curlData = JSON.parse(curlResult);
+      if (curlData.error) throw new Error(`Haiku API error: ${JSON.stringify(curlData.error)}`);
+      content = curlData.choices?.[0]?.message?.content || "[]";
+    }
 
-    if (!resp.ok) throw new Error(`Haiku API error: ${resp.status}`);
-
-    const data = await resp.json() as any;
-    const content = data.choices?.[0]?.message?.content || "[]";
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("Haiku returned no JSON array");
 
@@ -120,6 +148,79 @@ export class PresentationEngine {
     }
 
     return this._plan;
+  }
+
+  // ── Story-First Brief Generation (analyze content → narrative arc) ──
+
+  /**
+   * Generate a PresentationBriefContext from raw HTML content.
+   * This is the "story-first" step: understand what matters (goal, key decisions,
+   * likely questions) BEFORE mapping to scroll positions.
+   * Used in test/standalone mode where no MeetingPrepBrief exists.
+   */
+  async generateBriefFromContent(opts: {
+    textSnapshot: string;
+    topic: string;
+    context?: string;
+  }): Promise<PresentationBriefContext> {
+    const { textSnapshot, topic, context: extraContext } = opts;
+
+    const prompt = `You are analyzing a document to create a presentation strategy.
+Think like an employee preparing to present work to their boss.
+
+## Document Content:
+${textSnapshot.substring(0, 5000)}
+
+## Topic: ${topic}
+${extraContext ? `## Additional Context: ${extraContext}` : ""}
+
+## Your Task:
+Create a presentation strategy. Identify:
+1. What is the GOAL of presenting this? (What should the audience understand or decide?)
+2. What are the 3-5 KEY POINTS in order of importance (not document order)?
+3. What key DECISIONS or trade-offs are described?
+4. What QUESTIONS will the audience likely ask?
+
+Return ONLY JSON:
+{
+  "goal": "one sentence",
+  "summary": "2-3 sentence overview",
+  "keyPoints": ["point1", "point2", "point3"],
+  "architectureDecisions": [{"decision": "what was decided", "rationale": "why"}],
+  "expectedQuestions": [{"question": "likely question", "suggestedAnswer": "how to answer"}]
+}`;
+
+    // Call Haiku with curl fallback (Bun fetch broken with HTTPS_PROXY)
+    let content: string;
+    try {
+      const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${CONFIG.openrouter.apiKey}` },
+        body: JSON.stringify({ model: CONFIG.analysis.model, max_tokens: 1500, temperature: 0.3, messages: [{ role: "user", content: prompt }] }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+      const data = await resp.json() as any;
+      content = data.choices?.[0]?.message?.content || "{}";
+    } catch {
+      console.warn("[Presentation] fetch failed for brief generation, falling back to curl");
+      const reqBodyPath = "/tmp/callingclaw-brief-req.json";
+      await Bun.write(reqBodyPath, JSON.stringify({ model: CONFIG.analysis.model, max_tokens: 1500, temperature: 0.3, messages: [{ role: "user", content: prompt }] }));
+      const apiUrl = `${CONFIG.openrouter.baseUrl}/chat/completions`;
+      const authHeader = `Bearer ${CONFIG.openrouter.apiKey}`;
+      const proc = Bun.spawn(["curl", "-s", "--noproxy", "*", "--max-time", "30", "-X", "POST", apiUrl, "-H", "Content-Type: application/json", "-H", `Authorization: ${authHeader}`, "-d", `@${reqBodyPath}`], { stderr: "pipe" });
+      const curlResult = await new Response(proc.stdout).text();
+      const curlErr = await new Response(proc.stderr).text();
+      if (curlErr) console.warn(`[Presentation] curl stderr: ${curlErr.slice(0, 200)}`);
+      const curlData = JSON.parse(curlResult);
+      if (curlData.error) throw new Error(`API error: ${JSON.stringify(curlData.error)}`);
+      content = curlData.choices?.[0]?.message?.content || "{}";
+    }
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const brief = JSON.parse(jsonMatch?.[0] || "{}") as PresentationBriefContext;
+    console.log(`[Presentation] Brief generated: goal="${brief.goal?.slice(0, 60)}", ${brief.keyPoints?.length || 0} key points`);
+    return brief;
   }
 
   // ── Story-Driven Prompt (normal flow: brief → story → page mapping) ──
@@ -279,9 +380,9 @@ Return ONLY a JSON array:
         // 2. Wait for scroll animation to settle
         await new Promise(r => setTimeout(r, 1000));
 
-        // 3. Speak talking points
+        // 3. Present talking points (system context → AI speaks FROM them)
         const transcriptBefore = sharedContext.transcript.length;
-        voice.sendText(slide.talkingPoints);
+        voice.presentSlide(slide.talkingPoints);
 
         // 4. Wait for ACTUAL speech completion (not fixed estimate)
         // waitForSpeechDone() resolves when voice transitions from speaking → listening,
@@ -416,9 +517,9 @@ Return ONLY a JSON array:
         onSceneAdvance?.(i, scene);
         console.log(`[Presentation] Scene ${i + 1}/${scenes.length}: ${scene.talkingPoints.slice(0, 60)}...`);
 
-        // 4. Speak talking points
+        // 4. Present talking points (system context → AI speaks FROM them)
         const transcriptBefore = sharedContext.transcript.length;
-        voice.sendText(scene.talkingPoints);
+        voice.presentSlide(scene.talkingPoints);
 
         // 5. Wait for speech completion
         await voice.waitForSpeechDone(scene.durationMs + 3000);
@@ -466,4 +567,185 @@ Return ONLY a JSON array:
     this._paused = false;
     console.log("[Presentation] Stopped");
   }
+
+  // ══════════════════════════════════════════════════════════════
+  // Script Runner (v1 spec — see docs/presentation-script-spec.md)
+  // ══════════════════════════════════════════════════════════════
+  //
+  // Consumes a PresentationScript produced by OpenClaw.
+  // Steps: navigate / scroll / click / idle — each with optional voice prompt.
+  // Supports interruption (user speaks → AI responds → resume next step).
+
+  async runScript(opts: {
+    script: PresentationScript;
+    chromeLauncher: any;
+    voice: VoiceModule;
+    context: SharedContext;
+    onStep?: (step: ScriptStep, index: number, total: number) => void;
+  }): Promise<{ completed: boolean; stepsExecuted: number }> {
+    const { script, chromeLauncher, voice, context: sharedContext, onStep } = opts;
+    if (this._running) throw new Error("Already presenting");
+    if (!script.steps?.length) return { completed: true, stepsExecuted: 0 };
+
+    this._running = true;
+    this._paused = false;
+    voice.presentationMode = true;
+    let stepsExecuted = 0;
+
+    console.log(`[Presentation] Running script: ${script.steps.length} steps, topic="${script.topic}"`);
+
+    try {
+      for (let i = 0; i < script.steps.length; i++) {
+        if (!this._running) break;
+
+        // Wait if paused (user interruption being handled)
+        while (this._paused && this._running) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+        if (!this._running) break;
+
+        const step = script.steps[i]!;
+        this._currentSlide = i;
+        onStep?.(step, i, script.steps.length);
+        console.log(`[Presentation] Step ${i + 1}/${script.steps.length}: ${step.action}${step.prompt ? " — " + step.prompt.slice(0, 50) + "..." : ""}`);
+
+        // ── Execute action ──
+        try {
+          switch (step.action) {
+            case "navigate":
+              if (step.url) {
+                await chromeLauncher.navigatePresentingPage(step.url);
+                await new Promise(r => setTimeout(r, step.waitMs || 2000));
+              }
+              break;
+
+            case "scroll":
+              if (step.target) {
+                await chromeLauncher.evaluateOnPresentingPage(`(() => {
+                  var target = ${JSON.stringify(step.target)};
+                  var all = document.querySelectorAll('h1,h2,h3,h4,h5,h6,section,[id],p,div');
+                  for (var el of all) {
+                    var text = (el.textContent || '').trim();
+                    if (text.toLowerCase().includes(target.toLowerCase()) && text.length < 300) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      return 'scrolled';
+                    }
+                  }
+                  window.scrollBy({ top: 400, behavior: 'smooth' });
+                  return 'fallback_scroll';
+                })()`);
+                await new Promise(r => setTimeout(r, 1000)); // scroll animation
+              }
+              break;
+
+            case "click":
+              if (step.selector) {
+                await chromeLauncher.evaluateOnPresentingPage(
+                  `document.querySelector(${JSON.stringify(step.selector)})?.click()`
+                );
+              } else if (step.fallbackText) {
+                await chromeLauncher.evaluateOnPresentingPage(`(() => {
+                  var target = ${JSON.stringify(step.fallbackText)};
+                  var els = document.querySelectorAll('button,a,[role="button"],input[type="submit"]');
+                  for (var el of els) {
+                    if ((el.textContent || '').trim().toLowerCase().includes(target.toLowerCase())) {
+                      el.click();
+                      return 'clicked';
+                    }
+                  }
+                  return 'not_found';
+                })()`);
+              }
+              await new Promise(r => setTimeout(r, 500));
+              break;
+
+            case "idle":
+              // No screen action — just voice
+              break;
+          }
+        } catch (e: any) {
+          console.warn(`[Presentation] Step ${i + 1} action failed: ${e.message}`);
+          // Continue — voice can still speak even if action fails
+        }
+
+        // ── Voice prompt ──
+        const transcriptBefore = sharedContext.transcript.length;
+        if (step.prompt) {
+          // Inject decision point context if present
+          const fullPrompt = step.decisionPoint
+            ? `${step.prompt}\n\n[DECISION POINT] ${step.decisionPoint}`
+            : step.prompt;
+          voice.presentSlide(fullPrompt);
+        }
+
+        // ── Wait for speech + optional duration ──
+        if (step.prompt) {
+          await voice.waitForSpeechDone((step.durationMs || 15000) + 3000);
+        } else if (step.durationMs) {
+          await new Promise(r => setTimeout(r, step.durationMs));
+        }
+
+        // ── Interruption handling ──
+        const newEntries = sharedContext.transcript.slice(transcriptBefore);
+        const userSpoke = newEntries.some(e =>
+          e.role === "user" && e.text.length > 5
+          && !e.text.includes("Press the down arrow")
+        );
+
+        if (userSpoke) {
+          console.log("[Presentation] User interrupted — waiting for AI response");
+          await voice.waitForSpeechDone(15000);
+          // If decision point, give extra time for discussion
+          if (step.decisionPoint) {
+            await voice.waitForSpeechDone(10000);
+          }
+        }
+
+        stepsExecuted++;
+        await new Promise(r => setTimeout(r, 800)); // pause between steps
+      }
+    } finally {
+      this._running = false;
+      this._currentSlide = -1;
+      voice.presentationMode = false;
+    }
+
+    console.log(`[Presentation] Script complete: ${stepsExecuted}/${script.steps.length} steps`);
+    return { completed: stepsExecuted === script.steps.length, stepsExecuted };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Presentation Script Types (v1 spec)
+// ══════════════════════════════════════════════════════════════
+
+export interface ScriptStep {
+  action: "navigate" | "scroll" | "click" | "idle";
+  // navigate
+  url?: string;
+  waitMs?: number;
+  // scroll
+  target?: string;
+  // click
+  selector?: string;
+  fallbackText?: string;
+  // voice
+  prompt?: string;
+  durationMs?: number;
+  decisionPoint?: string;
+}
+
+export interface PresentationScript {
+  version: number;
+  id: string;
+  topic: string;
+  goal: string;
+  totalDurationMs: number;
+  presenterContext: {
+    role: string;
+    keyDecisions: string[];
+    qaStrategies: Array<{ q: string; a: string }>;
+    tone?: string;
+  };
+  steps: ScriptStep[];
 }

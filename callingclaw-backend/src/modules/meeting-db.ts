@@ -363,6 +363,7 @@ export class MeetingDB {
           const dbNotes = m.files.find(f => f.type === "notes")?.path || null;
           const dbSummary = m.files.find(f => f.type === "summary")?.path || null;
           const dbLive = m.files.find(f => f.type === "live")?.path || null;
+          const dbScript = m.files.find(f => f.type === "presentation_script")?.path || null;
           // Fallback: check disk for convention-based files
           const { existsSync } = require("fs");
           const { resolve } = require("path");
@@ -375,6 +376,7 @@ export class MeetingDB {
             notes: dbNotes || checkDisk("_notes.md"),
             summary: dbSummary || checkDisk("_summary.md"),
             live: dbLive || checkDisk("_live.md"),
+            presentation_script: dbScript || checkDisk("_presentation_script.json"),
             transcript: null,
           };
         })(),

@@ -524,6 +524,23 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
+   * Present a slide — inject talking points as system context, then trigger AI to speak.
+   * Unlike sendText() (role:"user" → AI responds TO it), this uses role:"system"
+   * so the AI presents FROM the content in its own words.
+   */
+  presentSlide(text: string) {
+    this.context.addTranscript({ role: "system", text: `[Slide] ${text.slice(0, 100)}...`, ts: Date.now() });
+    this.client.sendEvent("conversation.item.create", {
+      item: {
+        type: "message",
+        role: "system",
+        content: [{ type: "input_text", text: `[PRESENT NOW] Present this naturally in your own words. Stay close to the content, make it conversational:\n${text}` }],
+      },
+    });
+    this.client.sendEvent("response.create", {});
+  }
+
+  /**
    * Wait for current speech to complete.
    * Resolves when audioState transitions from "speaking" to "listening" or "idle",
    * or when timeoutMs elapses (fallback for missed events).

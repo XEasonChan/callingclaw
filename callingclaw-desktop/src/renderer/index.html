@@ -977,6 +977,7 @@ function getMeetingData(meetingId) {
       meetingId: meetingId,
       topic: '', status: 'preparing', // preparing | live | ended
       prep: { status: 'none', content: null },    // none | loading | done
+      presentation_script: { status: 'none', content: null }, // none | loading | done
       summary: { status: 'none', content: null },  // none | loading | done
       agentFeed: [], meetUrl: null, calendarEventId: null, startTime: null, endTime: null,
       filePaths: {}, // { prep: '/abs/path.md', notes: '...', summary: '...' } from DB manifest
@@ -988,7 +989,7 @@ function getMeetingData(meetingId) {
 async function loadMeetingFile(meetingId, type) {
   if (!meetingId) return null;
   var data = getMeetingData(meetingId);
-  var fileObj = type === 'prep' ? data.prep : (type === 'summary' ? data.summary : data.prep);
+  var fileObj = type === 'prep' ? data.prep : type === 'summary' ? data.summary : type === 'presentation_script' ? data.presentation_script : data.prep;
   // Return cached content if already loaded
   if (fileObj.status === 'done' && fileObj.content) return fileObj.content;
   fileObj.status = 'loading';
@@ -1000,7 +1001,8 @@ async function loadMeetingFile(meetingId, type) {
   // Also try notes path for 'prep' type if no prep path exists
   if (type === 'notes' && data.filePaths && data.filePaths.notes) paths.push(data.filePaths.notes);
   // Fallback: convention-based path (works for cc_xxx meetingIds)
-  var suffix = type === 'prep' ? '_prep.md' : type === 'summary' ? '_summary.md' : '_notes.md';
+  var suffixMap = { prep: '_prep.md', summary: '_summary.md', presentation_script: '_presentation_script.json', notes: '_notes.md' };
+  var suffix = suffixMap[type] || '_notes.md';
   paths.push(meetingId + suffix);
 
   for (var pi = 0; pi < paths.length; pi++) {
@@ -1059,6 +1061,7 @@ function openMeetingPanel(meetingId, mode) {
     '<div class="sp-tabs" id="sp-tabs">',
     '  <button class="sp-tab active" data-tab="feed" onclick="switchPanelTab(\'feed\')">实时动态<span class="sp-tab-badge live" id="sp-tab-feed-badge"></span></button>',
     '  <button class="sp-tab" data-tab="prep" onclick="switchPanelTab(\'prep\')">会前调研' + (data.prep.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
+    '  <button class="sp-tab" data-tab="script" onclick="switchPanelTab(\'script\')">演讲稿' + (data.presentation_script && data.presentation_script.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
     '  <button class="sp-tab" data-tab="summary" onclick="switchPanelTab(\'summary\')">会议总结' + (data.summary.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '<span class="sp-tab-badge pending">…</span>') + '</button>',
     '</div>',
     // Tab: Live Feed
@@ -1074,6 +1077,12 @@ function openMeetingPanel(meetingId, mode) {
     // Tab: Prep Doc
     '<div class="sp-tab-content" id="sp-tab-prep">',
     '  <div style="padding:20px;" class="md" id="sp-prep-content">加载中...</div>',
+    '</div>',
+    // Tab: Presentation Script
+    '<div class="sp-tab-content" id="sp-tab-script">',
+    '  <div style="padding:20px;" class="md" id="sp-script-content">',
+    '    <div style="text-align:center;color:var(--text3);padding:40px 0;">尚未生成演讲稿</div>',
+    '  </div>',
     '</div>',
     // Tab: Summary
     '<div class="sp-tab-content" id="sp-tab-summary">',
@@ -1224,6 +1233,34 @@ function handleMeetingEvent(event) {
       if (data.meetingId) loadPrepBrief(data.meetingId);
       else if (S.activeMeetingId) loadPrepBrief(S.activeMeetingId);
       addMpActivity('done', '调研完成');
+      break;
+    case 'meeting.presentation_script_ready':
+      var scriptMid = data.meetingId || S.activeMeetingId;
+      if (scriptMid) {
+        var scriptData = getMeetingData(scriptMid);
+        scriptData.presentation_script.status = 'done';
+        loadMeetingFile(scriptMid, 'presentation_script').then(function(content) {
+          var scriptEl = document.getElementById('sp-script-content');
+          if (scriptEl && content) {
+            // Render script JSON as readable markdown
+            try {
+              var script = JSON.parse(content);
+              var md = '# ' + (script.topic || 'Presentation Script') + '\n\n';
+              md += '**Goal:** ' + (script.goal || '') + '\n\n';
+              md += '**Steps:** ' + (script.steps || []).length + ' | **Duration:** ~' + Math.round((script.totalDurationMs || 0) / 60000) + ' min\n\n---\n\n';
+              (script.steps || []).forEach(function(s, i) {
+                md += '### Step ' + (i + 1) + ': ' + s.action + (s.target ? ' → ' + s.target : '') + '\n';
+                if (s.prompt) md += s.prompt + '\n\n';
+                if (s.decisionPoint) md += '> **Decision:** ' + s.decisionPoint + '\n\n';
+              });
+              scriptEl.innerHTML = renderMd(md);
+            } catch(e) { scriptEl.innerHTML = renderMd(content); }
+          }
+          var scriptTab = document.querySelector('#sp-tabs .sp-tab[data-tab="script"]');
+          if (scriptTab) scriptTab.innerHTML = '演讲稿<span class="sp-tab-badge ready">✓</span>';
+        });
+      }
+      addMpActivity('done', '演讲稿已就绪');
       break;
     case 'meeting.vision':
       addMpActivity('delta', '[视觉] ' + (data.description || '').slice(0, 60));
@@ -1385,8 +1422,10 @@ async function refreshAll() {
         sessData.filePaths = sess.files;
         // Mark prep/summary as available if path exists
         if (sess.files.prep && sessData.prep.status === 'none') sessData.prep.status = 'done';
+        if (sess.files.presentation_script && sessData.presentation_script.status === 'none') sessData.presentation_script.status = 'done';
         if (sess.files.summary && sessData.summary.status === 'none') sessData.summary.status = 'done';
         if (sess.files.notes && !sessData.filePaths.notes) sessData.filePaths.notes = sess.files.notes;
+        if (sess.files.presentation_script && !sessData.filePaths.presentation_script) sessData.filePaths.presentation_script = sess.files.presentation_script;
       }
     }
   }

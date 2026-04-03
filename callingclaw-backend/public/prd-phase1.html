@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action & Permission Phase I — PRD v4.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary: #4B7BF5;
+            --primary-light: #EBF0FF;
+            --gray-900: #111827;
+            --gray-800: #1f2937;
+            --gray-700: #374151;
+            --gray-600: #4b5563;
+            --gray-500: #6b7280;
+            --gray-400: #9ca3af;
+            --gray-300: #d1d5db;
+            --gray-200: #e5e7eb;
+            --gray-100: #f3f4f6;
+            --gray-50: #f9fafb;
+            --white: #ffffff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--gray-50); color: var(--gray-900); line-height: 1.6; }
+        .nav { position: fixed; top: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--gray-200); padding: 12px 24px; z-index: 100; }
+        .nav-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .nav-logo { font-size: 1rem; font-weight: 700; color: var(--gray-900); display: flex; align-items: center; gap: 8px; }
+        .nav-logo-icon { width: 28px; height: 28px; background: var(--primary); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: 700; }
+        .nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
+        .nav-links a { padding: 6px 10px; color: var(--gray-600); text-decoration: none; font-size: 0.75rem; border-radius: 6px; transition: all 0.2s; white-space: nowrap; }
+        .nav-links a:hover { color: var(--primary); background: var(--primary-light); }
+        .main { max-width: 1400px; margin: 0 auto; padding: 80px 24px 60px; }
+        /* Split layout: content left + prototype right */
+        .split-layout { display: grid; grid-template-columns: 1fr 440px; gap: 32px; align-items: start; }
+        .split-content { min-width: 0; }
+        .split-demo { position: sticky; top: 70px; height: calc(100vh - 90px); background: var(--white); border: 1px solid var(--gray-200); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); display: flex; flex-direction: column; }
+        .split-demo iframe { flex: 1; width: 100%; border: none; }
+        .split-demo-header { padding: 10px 16px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .split-demo-header .demo-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .split-demo-nav { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--gray-200); background: var(--white); flex-shrink: 0; }
+        .step-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--gray-200); background: var(--white); font-size: 0.68rem; color: var(--gray-600); cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+        .step-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .step-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+        @media (max-width: 1100px) { .split-layout { grid-template-columns: 1fr; } .split-demo { position: static; height: 700px; } }
+        .hero { text-align: center; padding: 60px 0 40px; border-bottom: 1px solid var(--gray-200); margin-bottom: 40px; }
+        .hero-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--primary-light); color: var(--primary); padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; margin-bottom: 16px; }
+        .hero h1 { font-size: 2.25rem; font-weight: 700; color: var(--gray-900); margin-bottom: 12px; line-height: 1.3; }
+        .hero p { font-size: 1.1rem; color: var(--gray-600); max-width: 700px; margin: 0 auto; }
+        .hero-meta { display: flex; justify-content: center; gap: 24px; margin-top: 20px; font-size: 0.85rem; color: var(--gray-500); }
+        .prototype-open-btn { display: inline-block; margin-top: 20px; padding: 12px 24px; background: var(--primary); color: white; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+        .section { margin-bottom: 48px; }
+        .section-header { margin-bottom: 24px; }
+        .section-number { display: inline-block; font-size: 0.7rem; font-weight: 600; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .section-title { font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+        .subsection { margin-bottom: 28px; margin-top: 32px; }
+        .subsection-title { font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 12px; border-bottom: 2px solid var(--primary); display: inline-block; padding-bottom: 4px; }
+        .content-box { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .content-box h4 { font-size: 1rem; font-weight: 600; margin-bottom: 10px; color: var(--gray-900); }
+        .content-box p, .content-box li { font-size: 0.9rem; color: var(--gray-600); line-height: 1.7; }
+        .content-box ul, .content-box ol { padding-left: 20px; margin: 8px 0; }
+        .content-box li { margin-bottom: 6px; }
+        .content-box strong { color: var(--gray-800); }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+        .mermaid-container { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        .mermaid-header { padding: 16px 24px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; background: var(--gray-50); }
+        .mermaid-header h3 { font-size: 0.95rem; font-weight: 600; }
+        .mermaid-badge { background: var(--primary-light); color: var(--primary); padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; }
+        .mermaid-body { padding: 24px; display: flex; justify-content: center; overflow-x: auto; }
+        .mermaid-body .mermaid { width: 100%; }
+        .table-container { background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        .table-header { padding: 16px 24px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50); }
+        .table-header h4 { font-size: 0.95rem; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--gray-50); padding: 10px 16px; text-align: left; font-size: 0.8rem; font-weight: 600; color: var(--gray-600); border-bottom: 1px solid var(--gray-200); }
+        td { padding: 10px 16px; font-size: 0.85rem; color: var(--gray-700); border-bottom: 1px solid var(--gray-100); }
+        tr:last-child td { border-bottom: none; }
+        code { background: var(--gray-100); color: var(--primary); font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; }
+        pre { background: var(--gray-100); border-radius: 8px; padding: 16px 20px; overflow-x: auto; margin: 12px 0; font-size: 0.82rem; line-height: 1.6; }
+        pre code { background: none; padding: 0; color: var(--gray-800); }
+        .tag { display: inline-block; padding: 3px 10px; background: var(--primary-light); color: var(--primary); border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin: 2px; }
+        .divider { border-top: 1px solid var(--gray-200); margin: 32px 0; }
+        .footer { text-align: center; padding: 40px 24px; color: var(--gray-500); font-size: 0.8rem; border-top: 1px solid var(--gray-200); margin-top: 40px; }
+        /* Spec table: two-column function description table */
+        .spec-table td:first-child { width: 75%; vertical-align: top; }
+        .spec-table td:last-child { width: 25%; vertical-align: top; text-align: center; color: var(--gray-400); font-size: 0.8rem; }
+        .spec-table td { padding: 12px 16px; }
+        .spec-table td ul { padding-left: 18px; margin: 6px 0 0; }
+        .spec-table td li { font-size: 0.84rem; color: var(--gray-600); margin-bottom: 4px; }
+        .state-id { display: inline-block; font-weight: 700; color: var(--primary); font-size: 0.9rem; margin-bottom: 4px; }
+        blockquote { border-left: 3px solid var(--primary); padding: 8px 16px; margin: 12px 0; background: var(--primary-light); border-radius: 0 8px 8px 0; font-size: 0.88rem; color: var(--gray-700); }
+    </style>
+</head>
+<body>
+<nav class="nav">
+    <div class="nav-content">
+        <div class="nav-logo"><div class="nav-logo-icon">T</div>Phase I PRD v4.0</div>
+        <div class="nav-links">
+            <a href="#s1">1 背景与目标</a>
+            <a href="#s2">2 实体与状态</a>
+            <a href="#s3">3 卡片结构</a>
+            <a href="#s4">4 界面规格总表</a>
+            <a href="#s5">5 端到端示例</a>
+            <a href="#s6">6 数据模型</a>
+        </div>
+    </div>
+</nav>
+
+<div class="main">
+    <section class="hero">
+        <div class="hero-badge">Proactive AI Agent v5.0 &middot; Phase I 落地</div>
+        <h1>Action Card + Permission 控制</h1>
+        <p>60+ Tool 通用审核 + 两层编辑架构。<br>一套 Action Card 覆盖所有外部 MCP 和内建 Tool；Markdown 详情统一审核，内建功能可 Edit Manually 拉起原生表单。</p>
+        <div class="hero-meta">
+            <span>Version 4.0</span>
+            <span>2026-03-30</span>
+        </div>
+        <a href="./Phase1-Prototype.html" class="prototype-open-btn" target="_blank">打开交互原型 &rarr;</a>
+    </section>
+
+    <!-- Split layout: content + prototype demo -->
+    <div class="split-layout">
+    <div class="split-content">
+
+    <!-- ============================================================ -->
+    <!-- SECTION 1: 背景与目标 -->
+    <!-- ============================================================ -->
+    <section class="section" id="s1">
+        <div class="section-header">
+            <span class="section-number">Section 1</span>
+            <h2 class="section-title">背景与目标</h2>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">为什么需要通用的 Action Card</h3>
+            <div class="content-box">
+                <p>Tanka 在小助手和 Flow 中都需要越来越强的执行能力。目前已对接 <strong>50+ 外部 MCP</strong> 和各类 Tool，加上 Tanka 自建功能，共计 <strong>60+ 可执行 Action</strong>。逐个为每个 Tool 设计定制化表单不可维护、不可扩展。</p>
+                <p style="margin-top: 12px;">参考 Claude Code 的通用审核模式：AI 在执行任何外部操作前，先展示操作内容让用户确认。我们在此基础上增加了<strong>两层编辑</strong>的设计 &mdash; 默认的 Action Card 详情页以统一的 Markdown 格式展示 AI 即将执行的操作（适配所有第三方 Tool）；对于 Tanka 自建功能，用户还可以点击 "Edit Manually" 拉起原生表单进行精细编辑。这样既保持了架构的通用性，又不浪费 Tanka 已有的功能。</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">适用范围</h3>
+            <div class="content-box">
+                <p>Action Card 同时覆盖 <strong>AI 小助手</strong> 和 <strong>Flow</strong> 两个场景的 Action 能力。Permission 机制两边通用。</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">交付物</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>Phase I 交付物</h4></div>
+                <table>
+                    <thead><tr><th>交付物</th><th>说明</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Trigger</strong></td><td>AI 检测信号 &rarr; 对话气泡通知（内联半透明胶囊）</td></tr>
+                        <tr><td><strong>Action Card</strong></td><td>统一卡片组件，3 种语义：Connect / Permission / Vote</td></tr>
+                        <tr><td><strong>卡片状态机</strong></td><td>3 态：waiting / answered / skipped。没有 expired，卡片永不自动消失</td></tr>
+                        <tr><td><strong>Permission Dashboard</strong></td><td>管理 AI 工具权限的入口</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">核心原则</h3>
+            <div class="content-box">
+                <ul>
+                    <li>AI 执行任何外部操作前，<strong>必须通过 Action Card 让用户审核确认</strong></li>
+                    <li><strong>一套 Action Card + 一套 Markdown 详情</strong>覆盖所有 60+ Tool，无需逐个设计表单</li>
+                    <li>Tanka 自建功能额外提供 <strong>Edit Manually &rarr; 原生表单</strong>，精细编辑后发送</li>
+                    <li>同一时刻<strong>只有一张 waiting 卡片</strong>，逐张推送</li>
+                    <li>用户可随时<strong>跳过</strong>（直接发消息），交互不阻塞</li>
+                    <li>设计哲学：通过通用的 AI native 审核交互养成用户习惯，逐步建立信任，最终用户不再需要逐步审核</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 2: 实体与状态定义 -->
+    <!-- ============================================================ -->
+    <section class="section" id="s2">
+        <div class="section-header">
+            <span class="section-number">Section 2</span>
+            <h2 class="section-title">实体与状态定义</h2>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">实体清单</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>Phase I 实体</h4></div>
+                <table>
+                    <thead><tr><th>实体</th><th>状态枚举</th><th>说明</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>ActionCard</strong></td><td><code>waiting</code> &middot; <code>answered</code> &middot; <code>skipped</code></td><td>卡片 UI 状态</td></tr>
+                        <tr><td><strong>OAuthPopup</strong></td><td><code>idle</code> &middot; <code>loading</code> &middot; <code>success</code> &middot; <code>failed</code></td><td>复用现有 OAuth 业务逻辑</td></tr>
+                        <tr><td><strong>DetailPage</strong></td><td><code>closed</code> &middot; <code>open</code></td><td>详情页抽屉（第一层）</td></tr>
+                        <tr><td><strong>NativeForm</strong></td><td><code>closed</code> &middot; <code>open</code></td><td>内建功能表单抽屉（第二层，仅内建 Action 有）</td></tr>
+                        <tr><td><strong>PermissionRecord</strong></td><td><code>none</code> &middot; <code>session</code> &middot; <code>persistent</code></td><td>权限业务状态（与卡片 UI 独立）</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">ActionCard 状态转换</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>ActionCard 状态机</h4></div>
+                <table>
+                    <thead><tr><th>From</th><th>Event</th><th>To</th><th>Side Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>waiting</code></td><td>用户点击选项</td><td><code>answered</code></td><td>后端监听 &rarr; 触发 AI follow-up</td></tr>
+                        <tr><td><code>waiting</code></td><td>用户在详情页点击选项</td><td><code>answered</code></td><td>同上（所有 answered 入口结果完全一致）</td></tr>
+                        <tr><td><code>waiting</code></td><td>用户在详情页输入文本发送</td><td><code>answered</code></td><td>文本作为补充指令传给 AI</td></tr>
+                        <tr><td><code>waiting</code></td><td>用户在内建表单中发送</td><td><code>answered</code></td><td>表单数据作为确认结果传给 AI</td></tr>
+                        <tr><td><code>waiting</code></td><td>用户发送新消息（未点卡片）</td><td><code>skipped</code></td><td>卡片从 UI 删除；服务端标记 skipped，context 保留</td></tr>
+                        <tr><td><code>waiting</code></td><td>无操作</td><td><code>waiting</code></td><td><strong>永不自动消失</strong>，持续等待</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <blockquote><strong>Skip 精确定义</strong>：用户点击发送按钮 / 按回车<strong>发送了消息</strong>才触发。输入但未发送不算 skip。</blockquote>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">OAuthPopup 状态转换（Connect 语义专用）</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>OAuthPopup 状态机</h4></div>
+                <table>
+                    <thead><tr><th>From</th><th>Event</th><th>To</th><th>Side Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>idle</code></td><td>用户点击 App 选项</td><td><code>loading</code></td><td>弹出 OAuth 窗口（复用现有逻辑）</td></tr>
+                        <tr><td><code>loading</code></td><td>OAuth 回调成功</td><td><code>success</code></td><td>弹窗 &#10004; &rarr; 关闭 &rarr; 卡片 <code>answered</code></td></tr>
+                        <tr><td><code>loading</code></td><td>OAuth 回调失败/取消</td><td><code>failed</code></td><td>弹窗 &#10008; &rarr; 关闭 &rarr; 选项变 retry 按钮</td></tr>
+                        <tr><td><code>failed</code></td><td>用户点击 retry</td><td><code>loading</code></td><td>重新发起 OAuth</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">PermissionRecord 状态转换</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>PermissionRecord 状态机</h4></div>
+                <table>
+                    <thead><tr><th>From</th><th>Event</th><th>To</th><th>Side Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>none</code></td><td>用户选 Yes</td><td><code>session</code></td><td>本次对话有效，不写 Dashboard</td></tr>
+                        <tr><td><code>none</code></td><td>用户选 Always Allow</td><td><code>persistent</code></td><td><strong>联动 Dashboard</strong> 更新对应权限为 Auto</td></tr>
+                        <tr><td><code>none</code></td><td>用户选 No</td><td><code>none</code></td><td>不更新 Dashboard（保持 Ask），AI 提供降级方案</td></tr>
+                        <tr><td><code>persistent</code></td><td>用户在 Dashboard 修改</td><td>按用户选择</td><td>不影响已 answered 的卡片</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 3: 卡片结构规格 -->
+    <!-- ============================================================ -->
+    <section class="section" id="s3">
+        <div class="section-header">
+            <span class="section-number">Section 3</span>
+            <h2 class="section-title">卡片结构规格</h2>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">对话流卡片</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>卡片元素</h4></div>
+                <table>
+                    <thead><tr><th>元素</th><th>说明</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Header</strong></td><td>Icon（App 图标或 AI 头像）+ 标题</td></tr>
+                        <tr><td><strong>Markdown Preview</strong></td><td>最多 4 行截断，点击展开详情页</td></tr>
+                        <tr><td><strong>Options</strong></td><td>2&ndash;4 个选项（emoji + 标题）。<strong>仅标题，无副标题</strong></td></tr>
+                        <tr><td><strong>Footer</strong></td><td>类型标签（&#10003; Vote / &#128274; Permission）+ 时间戳</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">三种语义区分</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>语义 &rarr; 字段 &rarr; 行为</h4></div>
+                <table>
+                    <thead><tr><th>语义</th><th>字段区分</th><th>Footer</th><th>选项点击行为</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Connect</strong></td><td>无 <code>permission</code> 字段</td><td>&#10003; Vote</td><td>触发 OAuth &rarr; 成功才 answered</td></tr>
+                        <tr><td><strong>Permission</strong></td><td>有 <code>permission</code> 字段</td><td>&#128274; Permission</td><td>直接 answered</td></tr>
+                        <tr><td><strong>Vote</strong></td><td>有 <code>relatedPermissions</code></td><td>&#10003; Vote</td><td>建议先开详情页确认</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">详情页两层架构</h3>
+            <div class="content-box">
+<pre><code>详情页（第一层）                  原生表单（第二层）
+┌──────────────────┐            ┌──────────────────┐
+│ &larr; Back           │            │ &times; Meeting   Send │
+│                  │            │                  │
+│ ┌──────────────┐ │  点击 &rarr;    │ [AI prefill]     │
+│ │&#128197; Zoom       │ │  Edit      │ 标题、时间、     │
+│ │Create Meeting│ │  Manually  │ 参会人、Zoom...  │
+│ │ Edit Manually&rsaquo;│ │ ────────&rarr; │                  │
+│ └──────────────┘ │            │ 用户可修改       │
+│                  │            │                  │
+│ Markdown 详情... │            │ [Send]           │
+│                  │            └──────────────────┘
+│ [&#128077; 确认] [&#128078;]   │                    │
+└──────────────────┘                    │
+         &uarr;                              │
+         └──── 表单发送后回到小助手 ─────┘
+              卡片 answered + AI 继续</code></pre>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">Answered 外观</h3>
+            <div class="content-box">
+                <p>卡片收缩为：primary 1.5px 外边框 + Header + 仅选中选项（primary 描边）+ Footer。Markdown 和未选中选项移除。</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">长按消息菜单</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>Action Card 长按菜单能力</h4></div>
+                <table>
+                    <thead><tr><th>能力</th><th>Action Card</th></tr></thead>
+                    <tbody>
+                        <tr><td>多选</td><td>&#10004;&#65039;</td></tr>
+                        <tr><td>回复</td><td>&#10004;&#65039;</td></tr>
+                        <tr><td>删除</td><td>&#10004;&#65039;</td></tr>
+                        <tr><td>转发 / Vote / Pin / Follow-up / 撤回 / 翻译 / 复制 / Highlight / 存入 Memo</td><td>全部 &#10008;&#65039;</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 4: 全界面功能规格总表 -->
+    <!-- ============================================================ -->
+    <section class="section" id="s4">
+        <div class="section-header">
+            <span class="section-number">Section 4</span>
+            <h2 class="section-title">全界面功能规格总表</h2>
+        </div>
+        <p style="margin-bottom: 24px; font-size: 0.9rem; color: var(--gray-600);">每行 = 一个独立界面状态。功能描述列包含完整的 UI 元素、交互细节、数据来源和边界条件。</p>
+
+        <!-- ===== Trigger ===== -->
+        <div class="subsection">
+            <h3 class="subsection-title">Trigger</h3>
+
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">T-1</span> &middot; Trigger 气泡</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>AI 助手面板对话流中，作为普通 AI 消息气泡展示。气泡内容包含：</p>
+                        <ul>
+                            <li><strong>来源胶囊</strong>：内联半透明胶囊（<code>rgba(0,150,248,0.12)</code> 背景 + 群聊图标 + 群名，如 <code>[&#128309; AI Lab]</code>），与文字同行排列</li>
+                            <li><strong>摘要文案</strong>：个人化口吻，如"刚刚在讨论开会的事，大家提到了会议安排：'明天两点开个会讨论 Q2 计划'"</li>
+                            <li><strong>参会人信息</strong>："David, Sarah, Mike 已确认参会"</li>
+                            <li><strong>行动建议</strong>：primary 色文字，如"可能和你关注的事情相关，要不要我帮你安排？"</li>
+                            <li><strong>发起人</strong>：气泡底部左侧显示发起人头像（18px 圆形）+ 名字（11px 灰色）</li>
+                        </ul>
+                        <p style="margin-top:10px;"><strong>交互细节：</strong></p>
+                        <ul>
+                            <li>来源胶囊<strong>可点击</strong>，跳转到对应群聊的原始消息位置</li>
+                            <li>Push 通知复用 AI 助手消息的系统 push，无需单独实现</li>
+                        </ul>
+                        <p style="margin-top:10px;"><strong>数据来源：</strong></p>
+                        <ul>
+                            <li><code>signal.type = "meeting_intent"</code>，<code>confidence &ge; 0.7</code> 时触发</li>
+                            <li><code>source.channel_id</code> 用于渲染胶囊中的群聊名</li>
+                            <li><code>extracted_entities</code>（时间、参会人、主题）用于生成摘要文案</li>
+                        </ul>
+                        <p style="margin-top:10px;"><strong>群聊侧表现：</strong></p>
+                        <ul>
+                            <li>群聊对话流中<strong>不显示</strong>任何信号卡片或通知条</li>
+                            <li>AI 在后台静默记录，仅在小助手面板通知用户</li>
+                        </ul>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== Connect 卡片 ===== -->
+        <div class="subsection">
+            <h3 class="subsection-title">Connect 卡片</h3>
+
+            <!-- C-1 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-1</span> &middot; Connect &middot; waiting</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>AI 发送一条对话消息："你好！要帮你安排会议，需要先连接你的日历。你常用哪个日历？"，消息下方紧跟 Connect 卡片。</p>
+                        <p style="margin-top:8px;">卡片元素：</p>
+                        <ul>
+                            <li><strong>Header</strong>：日历图标（蓝色渐变 24px 圆形 <code>#4285F4</code>）+ "连接日历"</li>
+                            <li><strong>Markdown Preview</strong>：4 行截断，内容说明连接后 AI 能做什么（读取日历、检查冲突、创建会议日程、发送邀请）</li>
+                            <li><strong>Options</strong>：<code>&#128197; Google Calendar</code> / <code>&#128216; Outlook Calendar</code>（仅标题，无副标题）</li>
+                            <li><strong>Decline</strong>：<code>&#128078; 稍后再说</code>（灰色文字）</li>
+                            <li><strong>Footer</strong>：<code>&#10003; Vote &middot; 9:00 AM</code></li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>数据来源</strong>：AI 通过 MCP 识别到需要调用的工具，但用户尚未连接该 App 时触发。</p>
+                        <p><strong>交互细节</strong>：卡片永不自动消失。同一时刻只有此一张 waiting 卡片。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- C-2 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-2</span> &middot; OAuth &middot; loading</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户点击 App 选项（如 Google Calendar）后，弹出 OAuth 授权弹窗。</p>
+                        <p style="margin-top:8px;">弹窗元素：</p>
+                        <ul>
+                            <li><strong>遮罩</strong>：半透明黑色（<code>rgba(0,0,0,0.45)</code>）覆盖整个助手面板</li>
+                            <li><strong>卡片</strong>：白色圆角卡片（<code>border-radius: 20px</code>，宽 220px），居中显示</li>
+                            <li><strong>Provider Logo</strong>：52px 圆形，背景色取 Provider 品牌色（Google <code>#4285F4</code> / Outlook <code>#0078d4</code>）</li>
+                            <li><strong>文案</strong>："正在跳转到 {Provider} 授权" + 副文案"请在弹出窗口中完成授权..."</li>
+                            <li><strong>Spinner</strong>：24px 旋转圆环，<code>border-top-color: primary</code>，<code>animation: spin 0.8s linear infinite</code></li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>持续时间</strong>：~1.5s（等待 OAuth 回调）</p>
+                        <p><strong>数据来源</strong>：复用现有 OAuth 业务逻辑，前端发起 OAuth 跳转。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- C-3 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-3</span> &middot; OAuth &middot; success</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>OAuth 回调成功后，弹窗内容变更：</p>
+                        <ul>
+                            <li>Provider Logo 替换为<strong>绿色 &#10004; 图标</strong>（52px 圆形，<code>background: #16a34a</code>）</li>
+                            <li>文案变为"连接成功！"（绿色粗体）+ "{Provider} Calendar 已授权"</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>持续时间</strong>：~0.9s 后<strong>自动关闭</strong>弹窗</p>
+                        <p><strong>后续</strong>：弹窗关闭 &rarr; 卡片变为 C-5 answered 状态 &rarr; AI 发送 follow-up 消息："{Provider} Calendar 已成功连接 &#10004; 后面我会帮你创建对应的日程和邀请同事，有新的会议安排我会通知你。"</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- C-4 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-4</span> &middot; OAuth &middot; failed</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>OAuth 回调失败或用户主动取消授权后，弹窗内容变更：</p>
+                        <ul>
+                            <li>Provider Logo 替换为<strong>红色 &#10008; 图标</strong>（52px 圆形，<code>background: #ef4444</code>）</li>
+                            <li>文案变为"连接失败"（红色粗体）+ "请稍后重试"</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>持续时间</strong>：~1s 后<strong>自动关闭</strong>弹窗</p>
+                        <p style="margin-top:8px;"><strong>后续逻辑（含重试计数）：</strong></p>
+                        <ul>
+                            <li><strong>第 1 次失败</strong>：弹窗关闭后，卡片保持 waiting。用户之前点击的 App 选项变为 <strong>retry 按钮</strong>样式（可再次点击）。AI 发消息提示："连接失败，请重试。"</li>
+                            <li><strong>第 2 次失败</strong>：AI 提供 fallback 方案："连接暂时不成功，你也可以稍后在设置中连接。我先继续帮你推进其他步骤。" &rarr; AI 继续推进不依赖该连接的流程，不再阻塞在此步骤</li>
+                            <li>retry 无次数上限，用户可继续点击。但 AI 不再重复发失败提示</li>
+                        </ul>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- C-5 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-5</span> &middot; Connect &middot; answered</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>OAuth 成功后，卡片收缩为 answered 状态。</p>
+                        <ul>
+                            <li><strong>外边框</strong>：<code>1.5px solid var(--primary)</code></li>
+                            <li><strong>Header</strong>：保留（日历图标 + "连接日历"）</li>
+                            <li><strong>选中选项</strong>：仅保留用户选中的 App（如 <code>&#128197; Google Calendar</code>），<code>1.5px primary 描边</code></li>
+                            <li><strong>Footer</strong>：保留</li>
+                            <li>Markdown Preview 和未选中选项<strong>全部移除</strong></li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>后续</strong>：AI 发 follow-up &rarr; 推送下一张卡片（Permission / Vote）</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- C-6 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-6</span> &middot; Connect &middot; answered（稍后再说）</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户点击"&#128078; 稍后再说"，卡片收缩为 answered 状态，显示"稍后再说"。</p>
+                        <p><strong>后续</strong>：AI 不再引导连接。不发送 follow-up 消息。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- C-7 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">C-7</span> &middot; Connect &middot; skipped</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户在 Connect 卡片为 waiting 状态时，直接在输入框<strong>发送了新消息</strong>（点击发送 / 回车发送）。</p>
+                        <ul>
+                            <li>卡片<strong>立即从对话流 UI 中删除</strong></li>
+                            <li>卡片上方的 AI 消息文本<strong>保留</strong></li>
+                            <li>用户发送的消息正常显示在对话流（蓝色气泡，右对齐）</li>
+                            <li>AI 根据用户的新消息内容继续对话，回复"好的，需要帮助随时告诉我。"</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>数据处理</strong>：服务端将卡片标记为 <code>skipped</code>，卡片 context 保留，后续 AI 对话可引用。</p>
+                        <p><strong>注意</strong>：用户在输入框打字但未发送，<strong>不触发</strong> skip。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== Permission 卡片 ===== -->
+        <div class="subsection">
+            <h3 class="subsection-title">Permission 卡片</h3>
+
+            <!-- P-1 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">P-1</span> &middot; Permission &middot; waiting</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>AI 需要执行写入/删除操作时，发送消息说明需要什么权限，消息下方紧跟 Permission 卡片。</p>
+                        <p style="margin-top:8px;">卡片元素（以 Google Calendar Write 为例）：</p>
+                        <ul>
+                            <li><strong>Header</strong>：App 图标（24px 圆形，<code>background: #4285F4</code>，白色字母 "C"）+ "权限请求 &middot; Google Calendar"</li>
+                            <li><strong>Markdown Preview</strong>：4 行截断，展示请求权限 Write / 目标 App / 具体操作（创建日历事件、发送会议邀请）</li>
+                            <li><strong>Options</strong>：<code>&#10004; Yes</code> / <code>&#10004; Always Allow Write</code> / <code>&#10060; No</code>（仅标题）</li>
+                            <li><strong>Footer</strong>：<code>&#128274; Permission &middot; 14:36</code></li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>数据来源</strong>：<code>permission.tool</code> 由后端 MCP 调用时返回具体 tool 名。<code>permission.level</code> 标识权限级别。</p>
+                        <p><strong>交互细节</strong>：点击卡片 Markdown 区域可展开详情页（同 Vote 详情页结构）。多个权限逐张请求，前一张确认后才推送下一张。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- P-2 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">P-2</span> &middot; Permission &middot; answered（Yes）</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户选择 "&#10004; Yes"，卡片收缩为 answered 状态，仅显示选中的 "Yes"。</p>
+                        <p style="margin-top:8px;"><strong>权限行为</strong>：<code>PermissionRecord</code> &rarr; <code>session</code>（仅本次对话有效，session 结束清除）。<strong>不写入 Dashboard</strong>。</p>
+                        <p><strong>后续</strong>：AI follow-up "权限已授予 &#10003;" &rarr; 继续推送下一步（下一张 Permission 或 Vote 卡片）。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- P-3 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">P-3</span> &middot; Permission &middot; answered（Always Allow）</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户选择 "&#10004; Always Allow Write"，卡片收缩为 answered 状态。</p>
+                        <p style="margin-top:8px;"><strong>权限行为</strong>：<code>PermissionRecord</code> &rarr; <code>persistent</code>。<strong>联动更新 Dashboard</strong>：对应 App 的该权限自动切换为 Auto。</p>
+                        <p><strong>后续</strong>：同 P-2。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- P-4 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">P-4</span> &middot; Permission &middot; answered（No）+ 降级</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户选择 "&#10060; No"，卡片收缩为 answered 状态，显示 "No"。</p>
+                        <p style="margin-top:8px;"><strong>权限行为</strong>：<code>PermissionRecord</code> 不更新（保持 <code>none</code>），Dashboard 权限保持 Ask。</p>
+                        <p style="margin-top:8px;"><strong>AI 降级方案</strong>（不终止流程）：</p>
+                        <ul>
+                            <li>Calendar Write 拒绝 &rarr; AI："没有日历写入权限，我帮你生成会议信息，你自己创建日历事件？"</li>
+                            <li>Zoom Write 拒绝 &rarr; AI："没有 Zoom 权限，我帮你创建日历事件但不含 Zoom 链接，你手动添加？"</li>
+                            <li>全部拒绝 &rarr; AI："好的，需要帮助随时告诉我。" &rarr; 流程结束</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>交互细节</strong>：降级后的后续 Vote 卡片选项会<strong>动态调整</strong>，移除需要被拒权限的选项。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- P-5 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">P-5</span> &middot; Permission &middot; skipped</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>交互同 C-7。用户发送新消息 &rarr; 卡片删除 &rarr; AI 根据新消息继续。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== Vote 卡片 ===== -->
+        <div class="subsection">
+            <h3 class="subsection-title">Vote 卡片</h3>
+
+            <!-- V-1 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-1</span> &middot; Vote &middot; waiting</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>AI 收集完信息后生成执行方案，发送消息 "所有信息已收集完毕，请审批会议创建方案："，下方紧跟 Vote 卡片。</p>
+                        <p style="margin-top:8px;">卡片元素（以会议创建为例）：</p>
+                        <ul>
+                            <li><strong>Header</strong>：AI 头像（24px 圆形，紫色渐变 <code>#6366f1 &rarr; #8b5cf6</code>）+ "会议创建方案"</li>
+                            <li><strong>Markdown Preview</strong>：4 行截断，展示方案核心信息（主题、时间、参会人、工具、日历冲突）</li>
+                            <li><strong>Related Permission</strong>：灰色小字，如 "related permission: Zoom, Google Calendar, Tanka IM"</li>
+                            <li><strong>Options</strong>：<code>&#128077; A. 创建会议 + 发邀请 + 通知群聊</code> / <code>&#128077; B. 只创建会议，不发邀请</code> / <code>&#128078; Decline</code>（仅标题）</li>
+                            <li><strong>Footer</strong>：<code>&#10003; Vote &middot; 14:37</code></li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>数据来源</strong>：AI 后端生成 ActionCard JSON，<code>body</code> 为 Markdown 方案详情，<code>action</code> 字段标识即将执行的 Tool + API。</p>
+                        <p><strong>交互细节</strong>：点击 Markdown 区域 &rarr; 展开详情页 V-2。直接点击选项 &rarr; 跳到 V-5 answered。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-2 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-2</span> &middot; 详情页 &middot; 内建 Action</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>点击 Vote 卡片 Markdown 区域，展开第一层全屏抽屉（从底部滑入，<code>animation: 0.3s ease</code>）。</p>
+                        <p style="margin-top:8px;">抽屉元素（从上到下）：</p>
+                        <ul>
+                            <li><strong>顶栏</strong>：<code>&lsaquo; Back</code>（蓝色，点击关闭抽屉回到对话流）+ 标题（17px 粗体）</li>
+                            <li><strong>创建者信息</strong>：AI 头像（22px）+ "AI Assistant &middot; 14:37"</li>
+                            <li><strong>Action Entry 卡片</strong>：圆角卡片（<code>background: #f9fafb</code>，<code>border: 1px solid #e5e7eb</code>，<code>border-radius: 10px</code>），内含 Tool 图标（36px 圆角方形，品牌色背景）+ Tool 名 &middot; API 名（13px 粗体）+ <strong>"Edit Manually &rsaquo;"</strong>（primary 色，右侧对齐）</li>
+                            <li><strong>Markdown 全文</strong>：完整渲染方案内容（支持表格），可展开。<strong>不可编辑</strong>，纯展示让用户审核</li>
+                            <li><strong>"Show More"</strong> 按钮（primary 色文字，点击展开被截断的 Markdown）</li>
+                            <li><strong>底部固定栏</strong>：选项按钮（同卡片 Options，全宽排列，10px 圆角，<code>border: 1px solid #e8e9ed</code>）+ 自由输入框（placeholder: "Type something..."，输入时右侧出现发送按钮）</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>数据来源</strong>：<code>action.builtin = true</code> 时显示 "Edit Manually" 按钮。<code>action.tool</code> 和 <code>action.api</code> 用于渲染 Action Entry。</p>
+                        <p style="margin-top:8px;"><strong>交互细节：</strong></p>
+                        <ul>
+                            <li>点击 "Edit Manually &rsaquo;" &rarr; 拉起第二层表单 V-3</li>
+                            <li>点击底部选项 &rarr; 关闭抽屉 &rarr; V-5 answered</li>
+                            <li>自由输入框输入文本 &rarr; 点发送 / 回车 &rarr; 关闭抽屉 &rarr; V-5 answered（文本作为补充指令）</li>
+                            <li>点击 Back &rarr; 关闭抽屉，回到 V-1 对话流</li>
+                        </ul>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-3 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-3</span> &middot; 内建表单（第二层）</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>点击详情页中的 "Edit Manually &rsaquo;"，拉起第二层全屏抽屉，展示 Tanka 原生功能表单。</p>
+                        <p style="margin-top:8px;">表单由 AI prefill 数据预填充，用户可修改所有字段后直接从表单发送/创建。</p>
+                        <p style="margin-top:8px;"><strong>顶栏</strong>：&times; 关闭按钮（点击回到 V-2）+ 表单标题 + "Send" 按钮（primary 色，表单完整时可点击）</p>
+                        <p style="margin-top:8px;"><strong>仅 Tanka 内建 Action 有此层</strong>。外部 MCP Action（<code>action.builtin = false</code>）没有 "Edit Manually" 按钮，因此不会进入此状态。</p>
+                        <p style="margin-top:8px;"><strong>表单发送后</strong>：关闭两层抽屉 &rarr; 回到小助手对话流 &rarr; 卡片 V-5 answered &rarr; AI 继续执行工作流。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-4 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-4</span> &middot; 详情页 &middot; 外部 MCP</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>当 Action 为外部 MCP（<code>action.builtin = false</code>）时，详情页结构同 V-2，但 Action Entry 卡片中<strong>无 "Edit Manually" 按钮</strong>。</p>
+                        <ul>
+                            <li>Action Entry 仅展示：Tool 图标 + Tool 名 &middot; API 名（如 <code>HubSpot &middot; update_contact_email</code>）</li>
+                            <li>用户只能通过底部选项确认/拒绝，或输入文本</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>设计原因</strong>：外部 MCP Tool 没有 Tanka 原生表单，无法提供精细编辑入口。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-5 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-5</span> &middot; Vote &middot; answered</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>用户通过以下任一入口确认后，卡片收缩为 answered 状态：</p>
+                        <p>&nbsp;&nbsp;&#9312; 对话流直接点击选项 &nbsp; &#9313; 详情页点击选项 &nbsp; &#9314; 详情页输入文本 &nbsp; &#9315; 内建表单发送</p>
+                        <p style="margin-top:8px;">卡片外观同 C-5：primary 外边框 + Header + 选中选项 + Footer。</p>
+                        <p style="margin-top:8px;"><strong>后续</strong>：AI follow-up "已确认，开始执行..." &rarr; 进入执行阶段（tool tag 逐步展示 &rarr; V-7 / V-8）。</p>
+                        <p><strong>交互细节</strong>：如果用户是从详情页/表单确认的，所有抽屉自动关闭，回到对话流。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-6 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-6</span> &middot; Vote &middot; skipped</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>交互同 C-7。用户发送新消息 &rarr; 卡片删除 &rarr; AI 根据新消息继续。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-7 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-7</span> &middot; 执行完成</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>所有执行步骤成功后，AI 发送完成通知消息。</p>
+                        <p style="margin-top:8px;">对话流展示：</p>
+                        <ul>
+                            <li><strong>Tool Tags</strong>：每步执行结果以 inline tag 展示（<code>border-radius: 8px</code>，<code>background: #f9fafb</code>，<code>font-size: 12px</code>），格式：<code>&#10004; {action_name} &mdash; {结果描述}</code></li>
+                            <li>示例：<code>&#10004; read_calendar &mdash; 检查 4 人日历，均可</code> / <code>&#10004; create_meeting &mdash; Zoom 会议已创建</code> / <code>&#10004; create_calendar_event &mdash; 日历邀请已发送</code> / <code>&#10004; send_im_message &mdash; 群聊已通知</code></li>
+                            <li><strong>完成消息</strong>：AI 气泡展示完整结果（主题、时间、Zoom 链接、参会人、邀请/通知状态）</li>
+                            <li><strong>Planning Card</strong>：输入框上方可折叠进度卡，展示 4/4 步骤完成（绿色 &#10003; 图标）</li>
+                        </ul>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- V-8 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">V-8</span> &middot; 执行部分失败</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>执行链中某步失败时：</p>
+                        <ul>
+                            <li>已成功步骤的 Tool Tag <strong>保留</strong>（绿色 &#10004;）</li>
+                            <li>失败步骤的 Tool Tag 变灰（&#9888;&#65039; 图标）</li>
+                            <li>AI 消息说明失败原因 + 问用户是否重试失败步骤</li>
+                            <li>用户确认重试 &rarr; <strong>仅重试失败步骤</strong>，已成功步骤不回滚</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>交互细节</strong>：执行过程中用户发送的消息不中断执行，排队等待执行完成后再处理。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== Permission Dashboard ===== -->
+        <div class="subsection">
+            <h3 class="subsection-title">Permission Dashboard</h3>
+
+            <!-- D-1 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">D-1</span> &middot; App 列表页</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>Dashboard 主页面，展示所有工具的连接状态。</p>
+                        <ul>
+                            <li><strong>已连接区</strong>（标题 "LINKED (N)"）：每个 App 一行卡片（36px 圆角图标 + App 名 + 账号邮箱 + 右箭头），点击 &rarr; D-2</li>
+                            <li><strong>未连接区</strong>（标题 "NOT CONNECTED"）：App 卡片半透明（<code>opacity: 0.5</code>），账号位置显示 "Link &rarr;"（primary 色），点击 &rarr; 触发 OAuth（同 C-2）</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>样式与现有 Dashboard 一致，无修改。</strong></p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- D-2 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">D-2</span> &middot; App 详情 &middot; Overview</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>点击已连接 App 后进入详情页，三个 Tab：Overview（默认选中）/ Tool Permissions / Activity。</p>
+                        <p style="margin-top:8px;">Overview 内容：</p>
+                        <ul>
+                            <li>App 描述（13px 灰色文字 + "More" 链接）</li>
+                            <li>Memorized Data 数量（大号粗体数字）</li>
+                            <li>Linked Account（头像 + 姓名 + 邮箱）</li>
+                            <li>Tool Permissions 概览：按 Read/Write 分组，每组显示工具数量和权限汇总状态（"&#10003; All allow" 绿色 / "&#8230; Custom" 灰色），点击 &rarr; D-3</li>
+                        </ul>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- D-3 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">D-3</span> &middot; App 详情 &middot; Tool Permissions</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>切换到 Tool Permissions Tab，展示该 App 所有操作的权限状态。</p>
+                        <ul>
+                            <li><strong>图例栏</strong>：Auto（绿点）/ Ask（黄点）/ Deny（红点）</li>
+                            <li><strong>权限分组</strong>：按 Read Permissions / Write Permissions 分组，每组有 "Set All &#9662;" 按钮</li>
+                            <li><strong>每个 Action 一行</strong>：action 名 + 描述 + 三态切换按钮（&#10003; Auto / &#9679; Ask / &#10005; Deny），28px 圆形按钮，选中时填充对应颜色</li>
+                            <li><strong>Recent Activity</strong>：底部展示近期授权记录（绿点 + 操作 + 时间）</li>
+                        </ul>
+                        <p style="margin-top:8px;"><strong>交互细节</strong>：用户切换权限状态<strong>实时生效</strong>，通过 API 同步到 AI 决策逻辑。不影响已 answered 的对话卡片。</p>
+                        <p><strong>权限粒度规则</strong>：Read &mdash; App 连接时自动授予（Auto）；Write &mdash; 通过 Permission 卡片请求（默认 Ask）；Delete &mdash; 默认 Deny，需用户手动开启。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- D-4 -->
+            <div class="table-container">
+                <div class="table-header"><h4><span class="state-id">D-4</span> &middot; App 详情 &middot; Activity</h4></div>
+                <table class="spec-table">
+                    <thead><tr><th>功能描述</th><th>页面（原型图）</th></tr></thead>
+                    <tbody><tr><td>
+                        <p>切换到 Activity Tab，展示该 App 的近期授权操作记录列表。</p>
+                    </td><td><code>&#128247; 待补充</code></td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== 内建 Action 跳转表 ===== -->
+        <div class="subsection">
+            <h3 class="subsection-title">内建 Action 跳转表</h3>
+            <div class="content-box">
+                <p>当详情页 Action Entry 为 Tanka 内建功能时，点击 "Edit Manually &rarr;" 拉起的原生表单：</p>
+            </div>
+            <div class="table-container">
+                <div class="table-header"><h4>内建 Action &rarr; 原生表单映射</h4></div>
+                <table>
+                    <thead><tr><th>Action</th><th>跳转表单</th><th>截图</th><th>AI Prefill 字段</th><th>表单发送后行为</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Create Meeting</strong></td>
+                            <td>会议创建页</td>
+                            <td><code>&#128247; 待补充</code></td>
+                            <td>标题、开始/结束时间、Repeat、Calendar、Meeting Link（Zoom）、Location、Attendees（含 Organizer / External 标签）</td>
+                            <td>关闭两层抽屉 &rarr; 卡片 answered &rarr; AI 继续执行</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Create Vote</strong></td>
+                            <td>Vote 创建页</td>
+                            <td><code>&#128247; 待补充</code></td>
+                            <td>内容描述、Invite to Vote（optional）、Invite to Verify、Invite to Execute</td>
+                            <td>同上</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Send Email</strong></td>
+                            <td>邮件编辑页</td>
+                            <td><code>&#128247; 待补充</code></td>
+                            <td>收件人、主题、正文</td>
+                            <td>同上</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Send Message</strong></td>
+                            <td>IM 消息编辑</td>
+                            <td><code>&#128247; 待补充</code></td>
+                            <td>目标会话、消息内容</td>
+                            <td>同上</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 5: 端到端示例 -->
+    <!-- ============================================================ -->
+    <section class="section" id="s5">
+        <div class="section-header">
+            <span class="section-number">Section 5</span>
+            <h2 class="section-title">端到端示例 &mdash; 会议创建</h2>
+        </div>
+
+        <div class="mermaid-container">
+            <div class="mermaid-header">
+                <h3>Phase I 完整流程：会议创建</h3>
+                <span class="mermaid-badge">Mermaid</span>
+            </div>
+            <div class="mermaid-body">
+                <div class="mermaid">
+sequenceDiagram
+    participant G as 群聊
+    participant AI as AI 助手
+    participant U as 用户
+
+    G->>AI: 检测到 meeting_intent
+    AI->>U: T-1 Trigger 气泡
+    AI->>U: C-1 Connect 卡片
+    U->>AI: 选择 Google Calendar → C-2/C-3 OAuth
+    AI->>U: P-1 Permission（Calendar Write）
+    U->>AI: Always Allow → P-3
+    AI->>U: P-1 Permission（Zoom Write）
+    U->>AI: Yes → P-2
+    AI->>U: V-1 Vote 卡片（Action: Create Meeting）
+    U->>U: V-2 打开详情页 → V-3 Edit Manually → 修改表单 → Send
+    AI->>U: V-7 执行完成
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 6: 数据模型 -->
+    <!-- ============================================================ -->
+    <section class="section" id="s6">
+        <div class="section-header">
+            <span class="section-number">Section 6</span>
+            <h2 class="section-title">数据模型</h2>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">TankaActionCard</h3>
+            <div class="content-box">
+<pre><code>interface TankaActionCard {
+  id: string
+  mode: 'vote'
+  title: string
+  body: string                          // Markdown（支持表格）
+
+  options: Array&lt;{
+    id: string
+    label: string                       // 仅标题，无副标题
+    emoji: '👍' | '👎'
+  }&gt;
+
+  // 即将执行的 Action（详情页顶部 Action Entry）
+  action?: {
+    tool: string                        // "Zoom" | "HubSpot" | "Google Calendar"
+    api: string                         // "create_meeting" | "update_contact_email"
+    builtin: boolean                    // true = Tanka 内建（有 Edit Manually）, false = 外部 MCP
+    prefill?: Record&lt;string, any&gt;       // AI prefill 数据，传入内建表单
+  }
+
+  permission?: {                        // 有此字段 → Permission 语义
+    tool: string                        // MCP 返回，如 "Google Calendar"
+    level: 'read' | 'write' | 'delete'
+  }
+  relatedPermissions?: string[]         // 有此字段 → Vote 语义
+
+  status: 'waiting' | 'answered' | 'skipped'
+  createdAt: Date
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <h3 class="subsection-title">数据流</h3>
+            <div class="table-container">
+                <div class="table-header"><h4>数据流转</h4></div>
+                <table>
+                    <thead><tr><th>环节</th><th>处理方</th><th>说明</th></tr></thead>
+                    <tbody>
+                        <tr><td>卡片创建</td><td>后端</td><td>AI 后端生成 ActionCard JSON（含 action.prefill）推送前端</td></tr>
+                        <tr><td>用户选择</td><td>前端 &rarr; 后端</td><td>前端发选择事件，后端监听 &rarr; 触发 AI 推理 + follow-up</td></tr>
+                        <tr><td>内建表单发送</td><td>前端 &rarr; 后端</td><td>表单提交 &rarr; 等同 answered，数据作为确认结果传给 AI</td></tr>
+                        <tr><td>Skip</td><td>前端 + 后端</td><td>前端删 UI，后端标记 skipped，context 保留供 AI 引用</td></tr>
+                        <tr><td>Permission 联动</td><td>后端</td><td>Always Allow &rarr; 更新 Dashboard 为 Auto。Yes/No 不更新</td></tr>
+                        <tr><td>OAuth</td><td>前端</td><td>复用现有逻辑，回调通知后端</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    </div><!-- end split-content -->
+
+    <!-- Prototype Demo Panel (sticky right) -->
+    <div class="split-demo">
+        <div class="split-demo-header">
+            <div class="demo-dot" style="background: #ef4444;"></div>
+            <div class="demo-dot" style="background: #f59e0b;"></div>
+            <div class="demo-dot" style="background: #10b981;"></div>
+            <span style="font-size: 0.75rem; color: var(--gray-500); margin-left: 8px;">Phase I Prototype</span>
+        </div>
+        <div class="split-demo-nav" id="demoNav">
+            <button class="step-btn active" onclick="goDemo(0)">① 初次打开</button>
+            <button class="step-btn" onclick="goDemo(1)">② Push</button>
+            <button class="step-btn" onclick="goDemo(2)">③ 群聊</button>
+            <button class="step-btn" onclick="goDemo(3)">④ Permission</button>
+            <button class="step-btn" onclick="goDemo(4)">⑤ Vote</button>
+            <button class="step-btn" onclick="goDemo(5)">⑥ 执行</button>
+            <button class="step-btn" onclick="goDemo(6)">⑦ Dashboard</button>
+        </div>
+        <iframe id="demoFrame" src="./Phase1-Prototype.html"></iframe>
+    </div>
+
+    </div><!-- end split-layout -->
+</div>
+
+<script>
+var currentDemoStep = 0;
+function goDemo(step) {
+    currentDemoStep = step;
+    var frame = document.getElementById('demoFrame');
+    frame.contentWindow.postMessage({step: step}, '*');
+    // Update active button
+    var btns = document.querySelectorAll('.step-btn');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', i === step);
+}
+// Auto-sync: when user scrolls to a section, update the demo
+var sectionStepMap = {s1:0, s2:0, s3:0, s4:2, s5:5, s6:6};
+var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+            var id = entry.target.id;
+            if (sectionStepMap[id] !== undefined && sectionStepMap[id] !== currentDemoStep) {
+                goDemo(sectionStepMap[id]);
+            }
+        }
+    });
+}, {threshold: 0.3});
+document.querySelectorAll('section[id]').forEach(function(sec) { observer.observe(sec); });
+</script>
+
+<footer class="footer">
+    <p>Action & Permission Phase I &middot; PRD v4.0</p>
+    <p style="margin-top: 4px;">Last updated: 2026-03-30</p>
+</footer>
+
+<script>
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' } });
+</script>
+</body>
+</html>

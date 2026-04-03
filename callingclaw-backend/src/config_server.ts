@@ -3378,6 +3378,242 @@ STEP-BY-STEP FLOW:
         }
       }
 
+      // ══════════════════════════════════════════════════════════════
+      // ── Standalone Presentation: Prepare → Start (no meeting required) ──
+      // ══════════════════════════════════════════════════════════════
+
+      // POST /api/screen/present/prepare — Generate story arc + slide plan (async)
+      // Returns immediately with prepId. Notifies via EventBus + macOS notification when ready.
+      // Must complete BEFORE /start (Bun fetch breaks after Playwright launches)
+      if (url.pathname === "/api/screen/present/prepare" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { url?: string; topic?: string; context?: string };
+        if (!body.url) {
+          return Response.json({ error: "url is required" }, { status: 400, headers });
+        }
+
+        const prepId = `pres_${Date.now().toString(36)}`;
+        const presDir = `${process.env.CALLINGCLAW_HOME || process.env.HOME + "/.callingclaw"}/shared/presentations`;
+
+        // Return immediately — preparation runs in background
+        services.eventBus.emit("presentation.preparing", { prepId, topic: body.topic, url: body.url });
+
+        // Background: read → analyze → plan → save → notify
+        (async () => {
+          try {
+            const { PresentationEngine } = await import("./modules/presentation-engine");
+
+            // Step 1: Read HTML content
+            console.log(`[PresentPrep] ${prepId} — Reading page content...`);
+            let htmlContent = "";
+            if (body.url!.startsWith("http://localhost") && body.url!.includes(`:${CONFIG.port}/`)) {
+              const filename = body.url!.replace(/^http:\/\/localhost:\d+\//, "");
+              htmlContent = await Bun.file(`${import.meta.dir}/../public/${filename}`).text();
+            } else if (body.url!.startsWith("file://")) {
+              htmlContent = await Bun.file(decodeURIComponent(body.url!.replace("file://", ""))).text();
+            } else {
+              const resp = await fetch(body.url!, { signal: AbortSignal.timeout(10000) });
+              htmlContent = await resp.text();
+            }
+
+            const textSnapshot = htmlContent
+              .replace(/<style[\s\S]*?<\/style>/gi, "")
+              .replace(/<script[\s\S]*?<\/script>/gi, "")
+              .replace(/<[^>]+>/g, "\n")
+              .replace(/&[a-z]+;/gi, " ")
+              .replace(/\n{3,}/g, "\n\n")
+              .trim()
+              .substring(0, 6000);
+
+            // Step 2: Story-first — generate PresentationBriefContext
+            console.log(`[PresentPrep] ${prepId} — Generating story arc (Haiku)...`);
+            const engine = new PresentationEngine();
+            const brief = await engine.generateBriefFromContent({
+              textSnapshot,
+              topic: body.topic || "presentation",
+              context: body.context,
+            });
+
+            // Step 3: Map story beats to scroll positions
+            console.log(`[PresentPrep] ${prepId} — Building slide plan...`);
+            const snapshotAdapter = {
+              async snapshotPresentingPage() { return textSnapshot; },
+              async evaluateOnPresentingPage() { return null; },
+              async navigatePresentingPage() { return true; },
+              async shareScreen() {},
+            };
+            const plan = await engine.buildPlan({
+              url: body.url!,
+              topic: body.topic || "presentation",
+              context: body.context,
+              briefContext: brief,
+              chromeLauncher: snapshotAdapter,
+            });
+
+            // Step 4: Save prep to disk
+            await Bun.$`mkdir -p ${presDir}`;
+            const prep = {
+              id: prepId, status: "ready" as const,
+              topic: body.topic || "presentation", sourceUrl: body.url,
+              brief, plan, createdAt: Date.now(),
+            };
+            await Bun.write(`${presDir}/${prepId}.json`, JSON.stringify(prep, null, 2));
+            console.log(`[PresentPrep] ${prepId} — Ready! ${plan.slides.length} slides, ~${Math.round(plan.totalEstimatedMs / 1000)}s`);
+
+            // Step 5: Notify — EventBus + macOS notification
+            const startUrl = `http://localhost:${CONFIG.port}/api/screen/present/start/${prepId}`;
+            services.eventBus.emit("presentation.prepared", {
+              prepId, topic: prep.topic, slides: plan.slides.length,
+              totalEstimatedMs: plan.totalEstimatedMs, startUrl,
+              brief: { goal: brief.goal, keyPoints: brief.keyPoints },
+              plan: plan.slides.map(s => ({ title: s.sectionTitle, durationMs: s.estimatedDurationMs })),
+            });
+
+            // macOS notification
+            const slideList = plan.slides.map((s: any) => s.sectionTitle).join(", ");
+            Bun.spawn(["osascript", "-e",
+              `display notification "Presentation ready: ${plan.slides.length} slides\\n${slideList}" with title "CallingClaw" subtitle "${prep.topic}"`,
+            ]);
+
+          } catch (e: any) {
+            console.error(`[PresentPrep] ${prepId} — Failed:`, e.message);
+            // Save error status
+            await Bun.$`mkdir -p ${presDir}`.catch(() => {});
+            await Bun.write(`${presDir}/${prepId}.json`, JSON.stringify({
+              id: prepId, status: "error", error: e.message,
+              topic: body.topic, sourceUrl: body.url, createdAt: Date.now(),
+            }));
+            services.eventBus.emit("presentation.error", { prepId, error: e.message });
+            Bun.spawn(["osascript", "-e",
+              `display notification "Preparation failed: ${e.message}" with title "CallingClaw" subtitle "Presentation Error"`,
+            ]);
+          }
+        })();
+
+        return Response.json({
+          accepted: true,
+          prepId,
+          status: "preparing",
+          message: "Preparation started. You'll be notified when ready (macOS notification + EventBus).",
+          statusUrl: `http://localhost:${CONFIG.port}/api/screen/present/prep/${prepId}`,
+        }, { headers });
+      }
+
+      // GET /api/screen/present/prep/:id — Return saved prep JSON
+      if (url.pathname.startsWith("/api/screen/present/prep/") && req.method === "GET") {
+        const prepId = url.pathname.replace("/api/screen/present/prep/", "");
+        const presDir = `${process.env.CALLINGCLAW_HOME || process.env.HOME + "/.callingclaw"}/shared/presentations`;
+        const file = Bun.file(`${presDir}/${prepId}.json`);
+        if (await file.exists()) {
+          return Response.json(JSON.parse(await file.text()), { headers });
+        }
+        return Response.json({ error: "Prep not found" }, { status: 404, headers });
+      }
+
+      // POST /api/screen/present/start/:id — Launch Playwright + voice + TranscriptAuditor
+      // User should have voice-test.html open for audio before calling this
+      if (url.pathname.startsWith("/api/screen/present/start/") && req.method === "POST") {
+        const prepId = url.pathname.replace("/api/screen/present/start/", "");
+        const presDir = `${process.env.CALLINGCLAW_HOME || process.env.HOME + "/.callingclaw"}/shared/presentations`;
+        const file = Bun.file(`${presDir}/${prepId}.json`);
+        if (!(await file.exists())) {
+          return Response.json({ error: "Prep not found — call /prepare first" }, { status: 404, headers });
+        }
+
+        try {
+          const prep = JSON.parse(await file.text());
+          const { PresentationEngine } = await import("./modules/presentation-engine");
+          const { buildTestPresentationContext } = await import("./voice-persona");
+
+          // Step 1: Start voice session if not already connected
+          if (!services.realtime.connected) {
+            console.log("[PresentStart] Starting voice session...");
+            await startVoiceSession({ transport: "direct", mode: "default" });
+          }
+
+          // Step 2: Inject presenter context (Layer 2)
+          const presContext = buildTestPresentationContext(prep.brief, prep.plan);
+          services.realtime.injectContext(presContext);
+          console.log("[PresentStart] Presenter context injected");
+
+          // Step 3: Launch Playwright with ChromeLauncher (reuse production code)
+          console.log("[PresentStart] Launching browser...");
+          await services.chromeLauncher.launchStandalone();
+
+          // Step 4: Navigate to source URL
+          // Copy to /tmp if source has spaces in path
+          let targetUrl = prep.sourceUrl;
+          if (prep.sourceUrl.startsWith("http://localhost") && prep.sourceUrl.includes(`:${CONFIG.port}/`)) {
+            const filename = prep.sourceUrl.replace(/^http:\/\/localhost:\d+\//, "");
+            const localPath = `${import.meta.dir}/../public/${filename}`;
+            const tmpPath = `/tmp/callingclaw-present-${filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+            await Bun.write(tmpPath, Bun.file(localPath));
+            targetUrl = "file://" + tmpPath;
+          }
+          await services.chromeLauncher.navigatePresentingPage(targetUrl);
+          console.log(`[PresentStart] Page loaded: ${targetUrl}`);
+
+          // Step 5: Activate TranscriptAuditor (voice command → click/scroll)
+          if (services.transcriptAuditor && !services.transcriptAuditor.active) {
+            services.transcriptAuditor.activate(services.realtime);
+            console.log("[PresentStart] TranscriptAuditor activated");
+          }
+
+          // Step 6: Run presentation in background
+          const engine = new PresentationEngine();
+          const isScript = prep.version === 1 && prep.steps; // v1 script format
+
+          if (isScript) {
+            // New script format (produced by OpenClaw)
+            engine.runScript({
+              script: prep,
+              chromeLauncher: services.chromeLauncher,
+              voice: services.realtime,
+              context: services.context,
+              onStep: (step: any, i: number, total: number) => {
+                services.eventBus.emit("presentation.slide", { slide: `${step.action}: ${step.target || step.url || ""}`, index: i, total });
+              },
+            }).then((result: any) => {
+              services.eventBus.emit("presentation.done", result);
+              console.log(`[PresentStart] Script done: ${result.stepsExecuted} steps`);
+            }).catch((e: any) => {
+              console.error("[PresentStart] Script error:", e.message);
+            });
+          } else {
+            // Legacy plan format (built by Haiku buildPlan)
+            engine._plan = prep.plan;
+            engine.run({
+              chromeLauncher: services.chromeLauncher,
+              voice: services.realtime,
+              context: services.context,
+              onSlide: (slide: any, i: number, total: number) => {
+                services.eventBus.emit("presentation.slide", { slide: slide.sectionTitle, index: i, total });
+              },
+            }).then((result: any) => {
+              services.eventBus.emit("presentation.done", result);
+              console.log(`[PresentStart] Done: ${result.slidesPresented} slides`);
+            }).catch((e: any) => {
+              console.error("[PresentStart] Run error:", e.message);
+            });
+          }
+
+          const stepCount = isScript ? prep.steps.length : prep.plan?.slides?.length || 0;
+          const totalMs = isScript ? prep.totalDurationMs : prep.plan?.totalEstimatedMs || 0;
+
+          return Response.json({
+            success: true,
+            prepId,
+            mode: isScript ? "script_v1" : "legacy_plan",
+            steps: stepCount,
+            totalEstimatedMs: totalMs,
+            voiceConnected: services.realtime.connected,
+            auditorActive: services.transcriptAuditor?.active || false,
+          }, { headers });
+        } catch (e: any) {
+          console.error("[PresentStart] Error:", e.message);
+          return Response.json({ error: e.message }, { status: 500, headers });
+        }
+      }
+
       // POST /api/screen/present/pause — Pause presentation
       if (url.pathname === "/api/screen/present/pause" && req.method === "POST") {
         // TODO: store engine instance globally for pause/resume

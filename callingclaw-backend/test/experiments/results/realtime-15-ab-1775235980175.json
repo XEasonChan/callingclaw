@@ -1,0 +1,198 @@
+{
+  "timestamp": "2026-04-03T17:06:20.175Z",
+  "experiment": "realtime-1.5-mispronunciation-ab-test",
+  "providers": {
+    "legacy": "gpt-4o-realtime-preview-2024-12-17",
+    "ga15": "gpt-realtime-1.5"
+  },
+  "queries": [
+    {
+      "id": "mispronounce-1",
+      "query": "Hey, can you open the Link to Pony testing guide? I need to check which apps we should test first.",
+      "expectedFile": "link2-phase2-testing-guide.html",
+      "difficulty": "hard"
+    },
+    {
+      "id": "mispronounce-2",
+      "query": "I want to see the MTP tool priority list, the one about reducing from 95 to 30 apps",
+      "expectedFile": "mcp-tool-priority.html",
+      "difficulty": "medium"
+    },
+    {
+      "id": "mispronounce-3",
+      "query": "Open the app catalogue for Tanka Link, the one with all 184 app icons",
+      "expectedFile": "tanka-link-app-catalog.html",
+      "difficulty": "easy"
+    },
+    {
+      "id": "mispronounce-4",
+      "query": "Show me that HTML document... the one for phase two coverage, with ClickUp having 51 actions and Salesforce with 50",
+      "expectedFile": "link2-phase2-testing-guide.html",
+      "difficulty": "context-dependent"
+    },
+    {
+      "id": "mispronounce-5",
+      "query": "把那个 PRD 打开，就是 Action and Permission 那个 phase one 的文档",
+      "expectedFile": "PRD-Phase2-Action-Coverage.html",
+      "difficulty": "bilingual"
+    }
+  ],
+  "results": [
+    {
+      "provider": "openai",
+      "queryId": "mispronounce-1",
+      "query": "Hey, can you open the Link to Pony testing guide? I need to check which apps we should test first.",
+      "difficulty": "hard",
+      "expectedFile": "link2-phase2-testing-guide.html",
+      "toolCalled": true,
+      "toolCallId": "call_6CYDYtFiruKBoVSL",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/link2-phase2-testing-guide.html",
+      "calledReason": "The user requested the Phase 2 Testing Guide, referring to it as 'Link to Pony testing guide', which likely means 'Link 2.0'. This document contains the app testing workflows and priority apps for this phase.",
+      "pathCorrect": true,
+      "responseText": "I've opened the Phase 2 Testing Guide for you. You can now check which apps should be tested first.",
+      "durationMs": 5372
+    },
+    {
+      "provider": "openai15",
+      "queryId": "mispronounce-1",
+      "query": "Hey, can you open the Link to Pony testing guide? I need to check which apps we should test first.",
+      "difficulty": "hard",
+      "expectedFile": "link2-phase2-testing-guide.html",
+      "toolCalled": true,
+      "toolCallId": "call_aCNzdcGSsgkA3Yjs",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/link2-phase2-testing-guide.html",
+      "calledReason": "The user asked for the 'Link to Pony testing guide,' which sounds like the 'Phase 2 Testing Guide' for Link 2.0.",
+      "pathCorrect": true,
+      "responseText": "The Phase 2 Testing Guide is open now. You can check the priority apps and their workflows within it. Let me know if you'd like details on any specific app.",
+      "durationMs": 5253
+    },
+    {
+      "provider": "openai",
+      "queryId": "mispronounce-2",
+      "query": "I want to see the MTP tool priority list, the one about reducing from 95 to 30 apps",
+      "difficulty": "medium",
+      "expectedFile": "mcp-tool-priority.html",
+      "toolCalled": true,
+      "toolCallId": "call_isr7GMvStYFlYWb8",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/mcp-tool-priority.html",
+      "calledReason": "The user is referring to the MCP Tool Registry, which details the reduction of Phase II apps from 95 to 20-30 Tier 1 apps.",
+      "pathCorrect": true,
+      "responseText": "The MCP Tool Priority list has been opened. You can now review the details regarding the reduction of Phase II apps from 95 to 20-30 Tier 1 apps.",
+      "durationMs": 5041
+    },
+    {
+      "provider": "openai15",
+      "queryId": "mispronounce-2",
+      "query": "I want to see the MTP tool priority list, the one about reducing from 95 to 30 apps",
+      "difficulty": "medium",
+      "expectedFile": "mcp-tool-priority.html",
+      "toolCalled": true,
+      "toolCallId": "call_8lMJ3IvZjhfWrQWH",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/mcp-tool-priority.html",
+      "calledReason": "This file contains the MCP tool priority reduction from 95 to 20-30 Tier 1 apps",
+      "pathCorrect": true,
+      "responseText": "I've opened the MCP tool priority document for you. Let me know if you'd like a summary or specific details from it.",
+      "durationMs": 5087
+    },
+    {
+      "provider": "openai",
+      "queryId": "mispronounce-3",
+      "query": "Open the app catalogue for Tanka Link, the one with all 184 app icons",
+      "difficulty": "easy",
+      "expectedFile": "tanka-link-app-catalog.html",
+      "toolCalled": true,
+      "toolCallId": "call_YXYdjlASwNE48rA8",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/tanka-link-app-catalog.html",
+      "calledReason": "This file contains information about all 184 app icons and their connection status, which matches the user's request for the app catalog.",
+      "pathCorrect": true,
+      "responseText": "The app catalog for Tanka Link 2.0 with all 184 app icons has been opened. Is there anything specific you'd like to review in the catalog?",
+      "durationMs": 4811
+    },
+    {
+      "provider": "openai15",
+      "queryId": "mispronounce-3",
+      "query": "Open the app catalogue for Tanka Link, the one with all 184 app icons",
+      "difficulty": "easy",
+      "expectedFile": "tanka-link-app-catalog.html",
+      "toolCalled": true,
+      "toolCallId": "call_LwKcz7xpIOub9i3z",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/tanka-link-app-catalog.html",
+      "calledReason": "This file is the App Catalog for Tanka Link 2.0 and contains the 184 app icons requested.",
+      "pathCorrect": true,
+      "responseText": "The App Catalog with all 184 app icons is now open. Let me know what you'd like to explore or discuss within it.",
+      "durationMs": 5190
+    },
+    {
+      "provider": "openai",
+      "queryId": "mispronounce-4",
+      "query": "Show me that HTML document... the one for phase two coverage, with ClickUp having 51 actions and Salesforce with 50",
+      "difficulty": "context-dependent",
+      "expectedFile": "link2-phase2-testing-guide.html",
+      "toolCalled": true,
+      "toolCallId": "call_9KPLugqVHpLP0bi9",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/link2-phase2-testing-guide.html",
+      "calledReason": "This document is the Phase 2 Testing Guide, which includes app testing workflows for ClickUp and Salesforce, among others.",
+      "pathCorrect": true,
+      "responseText": "The Phase 2 Testing Guide has been opened. It includes details on app testing workflows, with ClickUp having 51 actions and Salesforce 50, among others.",
+      "durationMs": 4834
+    },
+    {
+      "provider": "openai15",
+      "queryId": "mispronounce-4",
+      "query": "Show me that HTML document... the one for phase two coverage, with ClickUp having 51 actions and Salesforce with 50",
+      "difficulty": "context-dependent",
+      "expectedFile": "link2-phase2-testing-guide.html",
+      "toolCalled": true,
+      "toolCallId": "call_jyCRJVso4dod8lSw",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link data/pipedream link/link2-phase2-testing-guide.html",
+      "calledReason": "This file is the Phase 2 Testing Guide that includes the details of ClickUp having 51 actions and Salesforce with 50.",
+      "pathCorrect": true,
+      "responseText": "I've opened the Phase 2 Testing Guide for you, which covers those action counts for ClickUp and Salesforce. Please let me know if you'd like me to walk you through any specific sections.",
+      "durationMs": 5074
+    },
+    {
+      "provider": "openai",
+      "queryId": "mispronounce-5",
+      "query": "把那个 PRD 打开，就是 Action and Permission 那个 phase one 的文档",
+      "difficulty": "bilingual",
+      "expectedFile": "PRD-Phase2-Action-Coverage.html",
+      "toolCalled": true,
+      "toolCallId": "call_q1WRpvI4yTdJDYv5",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/Action & Permission Phase I/PRD-Phase2-Action-Coverage.html",
+      "calledReason": "The user requested the 'Action and Permission' Phase I document, which corresponds to the PRD for Phase 2 Action Coverage.",
+      "pathCorrect": true,
+      "responseText": "文档已经打开了，这是 \"Action and Permission\" Phase I 的 PRD 文档。您可以查看相关内容。",
+      "durationMs": 4997
+    },
+    {
+      "provider": "openai15",
+      "queryId": "mispronounce-5",
+      "query": "把那个 PRD 打开，就是 Action and Permission 那个 phase one 的文档",
+      "difficulty": "bilingual",
+      "expectedFile": "PRD-Phase2-Action-Coverage.html",
+      "toolCalled": true,
+      "toolCallId": "call_a9JPOsz8ICJYAKdU",
+      "calledPath": "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/Tanka/Tanka Link 2.0/Link Action/Action & Permission Phase I/PRD-Phase2-Action-Coverage.html",
+      "calledReason": "This is the Action & Permission Phase I PRD document the user requested.",
+      "pathCorrect": true,
+      "responseText": "好的，PRD 文档已经打开。请告诉我你想了解哪些部分，或者想从哪里开始讨论。",
+      "durationMs": 5011
+    }
+  ],
+  "summary": [
+    {
+      "provider": "openai",
+      "correct": 5,
+      "total": 5,
+      "toolCalls": 5,
+      "avgMs": 5011
+    },
+    {
+      "provider": "openai15",
+      "correct": 5,
+      "total": 5,
+      "toolCalls": 5,
+      "avgMs": 5123
+    }
+  ]
+}

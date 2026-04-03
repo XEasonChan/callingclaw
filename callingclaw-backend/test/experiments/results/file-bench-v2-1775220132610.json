@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-04-03T12:42:12.610Z",
+  "results": [
+    {
+      "approach": "1. DIY Agent Loop (Anthropic SDK direct, Haiku)",
+      "durationMs": 1312,
+      "foundPath": null,
+      "success": false,
+      "llmCalls": 1,
+      "error": "Connection error."
+    },
+    {
+      "approach": "2. Claude Code CLI",
+      "durationMs": 60000,
+      "foundPath": null,
+      "success": false,
+      "error": "Claude Code CLI timed out after 60000ms"
+    },
+    {
+      "approach": "3. OpenClaw Agent (--local embedded)",
+      "durationMs": 2824,
+      "foundPath": null,
+      "success": false
+    },
+    {
+      "approach": "4. Claude Agent SDK",
+      "durationMs": 1,
+      "foundPath": null,
+      "success": false,
+      "error": "Not available: Cannot find module '@anthropic-ai/claude-agent-sdk' from '/Users/admin/Library/Mobile Documents/com~"
+    }
+  ]
+}
