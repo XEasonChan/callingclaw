@@ -185,15 +185,18 @@ export class VoiceModule {
 
       // Commit any buffered audio, then cancel in-progress AI response
       this.client.sendEvent("input_audio_buffer.commit", {});
-      const cancelled = this.client.sendEvent("response.cancel", {});
-      if (!cancelled) {
-        // Retry if WebSocket wasn't ready
-        setTimeout(() => {
-          if (this.client.connected) {
-            this.client.sendEvent("response.cancel", {});
-            console.log("[Voice] Retry: sent delayed response.cancel");
-          }
-        }, 100);
+      // Only cancel if AI was actively responding (avoids "response_cancel_not_active" error)
+      if (this._audioState === "speaking" || this._audioState === "thinking" || this._audioState === "interrupted") {
+        const cancelled = this.client.sendEvent("response.cancel", {});
+        if (!cancelled) {
+          // Retry if WebSocket wasn't ready
+          setTimeout(() => {
+            if (this.client.connected && (this._audioState === "speaking" || this._audioState === "thinking")) {
+              this.client.sendEvent("response.cancel", {});
+              console.log("[Voice] Retry: sent delayed response.cancel");
+            }
+          }, 100);
+        }
       }
 
       // Fire external speech-started callback

@@ -96,7 +96,7 @@ export class FileAliasIndex {
    *
    * This is the fast path: ~5ms, no LLM, pure keyword matching.
    */
-  search(query: string, minScore = 0.3): FileAlias | null {
+  search(query: string, minScore = 0.6): FileAlias | null {
     if (!this._ready || this._entries.length === 0) return null;
 
     const queryKeywords = this.tokenize(query);
@@ -116,8 +116,23 @@ export class FileAliasIndex {
       }
       const score = hits / queryKeywords.length;
 
+      // Bidirectional score: also check what fraction of entry keywords match query
+      // This penalizes entries that match a few query words but are about something else
+      let reverseHits = 0;
+      for (const ek of entry.keywords) {
+        if (queryKeywords.some(qk => ek.includes(qk) || qk.includes(ek))) {
+          reverseHits++;
+        }
+      }
+      const reverseScore = entry.keywords.length > 0 ? reverseHits / entry.keywords.length : 0;
+
+      // Combined score: harmonic mean of forward and reverse (penalizes one-sided matches)
+      const combined = score > 0 && reverseScore > 0
+        ? 2 * (score * reverseScore) / (score + reverseScore)
+        : score * 0.5; // If no reverse match, heavily discount
+
       // Boost prep-sourced entries (they have better descriptions)
-      const boosted = entry.source === "prep" ? score * 1.2 : score;
+      const boosted = entry.source === "prep" ? combined * 1.2 : combined;
 
       if (boosted > bestScore && boosted >= minScore) {
         bestScore = boosted;
@@ -127,6 +142,8 @@ export class FileAliasIndex {
 
     if (bestMatch) {
       console.log(`[FileAliasIndex] Match: "${query}" → ${basename(bestMatch.path)} (score: ${bestScore.toFixed(2)}, source: ${bestMatch.source})`);
+    } else {
+      console.log(`[FileAliasIndex] No match for "${query}" (best score: ${bestScore.toFixed(2)} < threshold ${minScore})`);
     }
     return bestMatch;
   }

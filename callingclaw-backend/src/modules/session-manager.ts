@@ -141,7 +141,15 @@ export class SessionManager {
   }): MeetingSession {
     const existing = this._findExisting(opts.meetUrl, opts.calendarEventId);
     if (existing) {
-      console.log(`[SessionManager] Found existing: ${existing.meetingId} for ${opts.topic.slice(0, 40)}`);
+      // Update stale "Meeting" topic if we now have a better one
+      const hasRealTopic = opts.topic && opts.topic !== "Meeting" && !opts.topic.startsWith("Meeting at ");
+      const hasStaleGenericTopic = existing.topic === "Meeting" || existing.topic.startsWith("Meeting at ");
+      if (hasRealTopic && hasStaleGenericTopic) {
+        console.log(`[SessionManager] Updating stale topic: "${existing.topic}" → "${opts.topic.slice(0, 40)}"`);
+        existing.topic = opts.topic;
+        this._save(this._read()); // persist the update
+      }
+      console.log(`[SessionManager] Found existing: ${existing.meetingId} for ${(existing.topic || opts.topic).slice(0, 40)}`);
       return existing;
     }
     return this.create(opts);

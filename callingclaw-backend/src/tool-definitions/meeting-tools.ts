@@ -79,6 +79,10 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               type: "string",
               description: "Google Meet URL — must be a real URL from meeting context or user input. NEVER fabricate a URL.",
             },
+            topic: {
+              type: "string",
+              description: "Meeting topic/title (optional — if not provided, will try to look up from calendar)",
+            },
           },
           required: ["meet_url"],
         },
@@ -171,7 +175,8 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           }
 
           // ── Step 2: Generate or load meeting prep brief ──
-          const meetTopic = calEvent?.summary || context.workspace?.topic || `Meeting at ${args.meet_url}`;
+          // Topic priority: explicit arg > calendar event > workspace context > URL fallback
+          const meetTopic = args.topic || calEvent?.summary || context.workspace?.topic || `Meeting at ${args.meet_url}`;
           const toolSession = deps.sessionManager?.findOrCreate({ topic: meetTopic, meetUrl: args.meet_url })
             || { meetingId: generateMeetingId(), files: {} as Record<string, string> };
           const toolMeetingId = toolSession.meetingId;
@@ -566,13 +571,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           const shareUrl = args.url || "";
           eventBus.emit("voice.tool_call", { tool: "share_screen", summary: shareUrl });
 
-          // If URL provided, share it directly
-          if (shareUrl) {
-            if (chromeLauncher) {
-              await chromeLauncher.shareScreen(shareUrl);
-            } else {
-              await meetJoiner.shareScreen();
-            }
+          // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
+          // MeetJoiner.shareScreen() fails when join was via ChromeLauncher because
+          // MeetJoiner.currentSession.status is never set to "in_meeting" in that path.
+          if (chromeLauncher) {
+            await chromeLauncher.shareScreen(shareUrl || undefined);
           } else {
             await meetJoiner.shareScreen();
           }
@@ -610,18 +613,80 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         }
         case "open_file": {
           eventBus.emit("voice.tool_call", { tool: "open_file", summary: args.path });
-          // Use AutomationRouter's AI-powered file search for fuzzy matching
-          // (voice AI passes guessed filenames like "TankaActionList_Phase1_PRD.html"
-          //  that don't match real paths — Haiku resolves the intent to actual files)
-          if (automationRouter) {
+
+          // Strategy: try multiple search methods in order of reliability
+          let resolvedPath: string | null = null;
+          const queryPath = args.path || "";
+
+          // 1. Exact path check (if user gave a full/relative path)
+          try {
+            const { existsSync } = await import("fs");
+            const { resolve } = await import("path");
+            const home = (await import("os")).homedir();
+            const candidates = [
+              queryPath,
+              resolve(home, "Library/Mobile Documents/com~apple~CloudDocs", queryPath),
+              resolve(home, "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0", queryPath),
+              resolve(home, "Library/Mobile Documents/com~apple~CloudDocs/Tanka", queryPath),
+            ];
+            for (const c of candidates) {
+              if (existsSync(c)) { resolvedPath = c; break; }
+            }
+          } catch {}
+
+          // 2. `find` command — search by filename keywords (fast, deterministic)
+          if (!resolvedPath) {
             try {
-              const result = await automationRouter.execute(`open file: ${args.path}`);
+              const keywords = queryPath.split(/[\s/\\._-]+/).filter((w: string) => w.length > 2);
+              const namePattern = keywords.length > 0 ? `*${keywords.join("*")}*` : `*${queryPath}*`;
+              const home = (await import("os")).homedir();
+              const searchDirs = [
+                `${home}/Library/Mobile Documents/com~apple~CloudDocs`,
+                `${home}/Desktop`,
+                `${home}/.callingclaw/shared`,
+              ];
+              for (const dir of searchDirs) {
+                const result = await Bun.$`find ${dir} -maxdepth 5 -iname ${namePattern} -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null`.text();
+                const files = result.trim().split("\n").filter(Boolean);
+                if (files.length > 0) {
+                  resolvedPath = files[0]!;
+                  console.log(`[open_file] Found via find: ${resolvedPath} (${files.length} total matches)`);
+                  break;
+                }
+              }
+            } catch {}
+          }
+
+          // 3. FileAliasIndex (keyword matching with confidence threshold)
+          if (!resolvedPath && automationRouter?.fileIndex?.ready) {
+            const match = automationRouter.fileIndex.search(queryPath);
+            if (match) resolvedPath = match.path;
+          }
+
+          // 4. AutomationRouter Haiku fallback (slowest but smartest)
+          if (!resolvedPath && automationRouter) {
+            try {
+              const result = await automationRouter.execute(`open file: ${queryPath}`);
               if (result.success) return result.result;
             } catch {}
           }
-          // Fallback: direct open if router fails
-          await meetJoiner.openFile(args.path, args.app || "browser");
-          return `Opened ${args.path} in ${args.app || "browser"}.`;
+
+          if (!resolvedPath) {
+            return `File not found: "${queryPath}". Please provide the exact filename or path.`;
+          }
+
+          // Open the resolved file
+          const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
+          console.log(`[open_file] Opening: ${resolvedPath} in ${app}`);
+
+          if (app === "browser" && chromeLauncher) {
+            // Open in ChromeLauncher's presenting tab for potential screen share
+            const fileUrl = resolvedPath.startsWith("http") ? resolvedPath : `file://${resolvedPath}`;
+            await chromeLauncher.shareScreen(fileUrl);
+            return `Opened and presenting: ${resolvedPath}`;
+          }
+          await meetJoiner.openFile(resolvedPath, app);
+          return `Opened ${resolvedPath} in ${app}.`;
         }
         default:
           return `Unknown meeting tool: ${name}`;
