@@ -37,7 +37,7 @@ const WsHttpsProxyAgent = require("https-proxy-agent").HttpsProxyAgent;
 
 // ── Provider Config Types ──────────────────────────────────────────
 
-export type VoiceProviderName = "openai" | "grok" | "gemini";
+export type VoiceProviderName = "openai" | "openai15" | "grok" | "gemini";
 
 export interface ProviderCapabilities {
   supportsInterruption: boolean;
@@ -84,10 +84,19 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   url: `${CONFIG.openai.realtimeUrl}?model=${CONFIG.openai.realtimeModel}`,
   headers: {
     Authorization: `Bearer ${CONFIG.openai.apiKey}`,
-    "OpenAI-Beta": "realtime=v1",
+    // GA API: no "OpenAI-Beta" header needed (removed for gpt-realtime-1.5)
   },
-  // OpenAI → normalized: no mapping needed (these ARE the canonical names)
-  eventMap: {},
+  // GA API event names → normalized (internal) names
+  // The GA API renamed output events; map them back to names used by VoiceModule
+  eventMap: {
+    "response.output_text.delta": "response.text.delta",
+    "response.output_text.done": "response.text.done",
+    "response.output_audio.delta": "response.audio.delta",
+    "response.output_audio.done": "response.audio.done",
+    "response.output_audio_transcript.delta": "response.audio_transcript.delta",
+    "response.output_audio_transcript.done": "response.audio_transcript.done",
+    "conversation.item.added": "conversation.item.created",
+  },
   capabilities: {
     supportsInterruption: true,
     supportsResume: false,
@@ -101,11 +110,20 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
-        modalities: ["text", "audio"],
-        voice,
-        input_audio_format: "pcm16",
-        output_audio_format: "pcm16",
-        input_audio_transcription: { model: "whisper-1" },
+        type: "realtime",
+        model: CONFIG.openai.realtimeModel,
+        audio: {
+          input: {
+            format: { type: "audio/pcm", rate: 24000 },
+            turn_detection: { type: "semantic_vad" },
+            transcription: { model: "gpt-4o-transcribe" },
+          },
+          output: {
+            format: { type: "audio/pcm", rate: 24000 },
+            voice,
+          },
+        },
+        output_modalities: ["audio"],
         instructions,
         tools: tools.map((t) => ({
           type: "function",
@@ -113,7 +131,78 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
           description: t.description,
           parameters: t.parameters,
         })),
-        turn_detection: { type: "server_vad", ...vad },
+      },
+    };
+  },
+};
+
+// ── OpenAI 1.5 GA Provider ─────────────────────────────────────────
+// gpt-realtime-1.5: GA API (no beta header), new event names, session.type required.
+// Key differences from legacy:
+//   - No "OpenAI-Beta: realtime=v1" header
+//   - session.update requires type: "realtime"
+//   - Event names changed: response.text.delta → response.output_text.delta, etc.
+//   - New features: semantic_vad, image input, MCP servers, async function calling
+//   - Transcription: gpt-4o-transcribe (better than whisper-1)
+
+export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
+  name: "openai15",
+  url: `${CONFIG.openai15.realtimeUrl}?model=${CONFIG.openai15.realtimeModel}`,
+  headers: {
+    Authorization: `Bearer ${CONFIG.openai15.apiKey}`,
+    // NO "OpenAI-Beta" header — GA API doesn't need it
+  },
+  // GA API event names → normalized (legacy-compatible) names
+  // The GA API renamed output events; we map them back to the names
+  // used internally by VoiceModule for backward compatibility
+  eventMap: {
+    "response.output_text.delta": "response.text.delta",
+    "response.output_text.done": "response.text.done",
+    "response.output_audio.delta": "response.audio.delta",
+    "response.output_audio.done": "response.audio.done",
+    "response.output_audio_transcript.delta": "response.audio_transcript.delta",
+    "response.output_audio_transcript.done": "response.audio_transcript.done",
+    // conversation.item.added replaces conversation.item.created in GA
+    "conversation.item.added": "conversation.item.created",
+  },
+  capabilities: {
+    supportsInterruption: true,
+    supportsResume: false,
+    supportsNativeTools: true,
+    supportsTranscription: true,
+    audioFormats: ["pcm16"],
+    maxSessionMinutes: 120,
+  },
+  defaultVoice: CONFIG.openai15.voice,
+  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 800 },
+  buildSession({ instructions, tools, voice, vad }) {
+    return {
+      session: {
+        // GA API requires type: "realtime" for speech-to-speech sessions
+        type: "realtime",
+        model: CONFIG.openai15.realtimeModel,
+        // GA API: audio config is nested under audio.input / audio.output
+        audio: {
+          input: {
+            format: { type: "audio/pcm", rate: 24000 },
+            turn_detection: { type: "semantic_vad" },
+            transcription: { model: "gpt-4o-transcribe" },
+          },
+          output: {
+            format: { type: "audio/pcm", rate: 24000 },
+            voice,
+          },
+        },
+        output_modalities: ["audio"],
+        instructions,
+        tools: tools.map((t) => ({
+          type: "function",
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        })),
+        // GA API: turn_detection is inside audio.input, not at session level
+        // semantic_vad is already set above in audio.input
       },
     };
   },
@@ -214,6 +303,7 @@ export const GEMINI_PROVIDER: RealtimeProviderConfig = {
 
 const PROVIDERS: Record<VoiceProviderName, RealtimeProviderConfig> = {
   openai: OPENAI_PROVIDER,
+  openai15: OPENAI15_PROVIDER,
   grok: GROK_PROVIDER,
   gemini: GEMINI_PROVIDER,
 };

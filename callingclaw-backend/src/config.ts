@@ -51,16 +51,29 @@ export const CONFIG = {
   port: parseInt(process.env.PORT || "4000"),
   // bridgePort removed — Python sidecar eliminated in v2.6.0
 
-  // Voice provider selection: "openai" | "grok" | "gemini"
+  // Voice provider selection: "openai" | "openai15" | "grok" | "gemini"
   // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
-  voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "grok" | "gemini",
+  voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "openai15" | "grok" | "gemini",
 
-  // OpenAI (Realtime voice + GPT-4o vision)
+  // OpenAI (Realtime GA — gpt-realtime-1.5, upgraded from legacy preview)
+  // Uses GA API: no beta header, new event names, session.type required.
+  // Override with OPENAI_REALTIME_MODEL env var to pin a specific version.
   openai: {
     apiKey: process.env.OPENAI_API_KEY || "",
-    realtimeModel: "gpt-4o-realtime-preview-2024-12-17",
+    realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-1.5",
     realtimeUrl: "wss://api.openai.com/v1/realtime",
     voice: "marin",
+  },
+
+  // OpenAI 1.5 GA (gpt-realtime-1.5 — flagship, Feb 2026)
+  // Same pricing as legacy ($32/$64 audio), but better instruction following,
+  // function calling (+34%), and BigBench Audio accuracy (+26%).
+  // GA API: no beta header, new event names, session.type required.
+  openai15: {
+    apiKey: process.env.OPENAI_API_KEY || "",
+    realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-1.5",
+    realtimeUrl: "wss://api.openai.com/v1/realtime",
+    voice: "marin",  // New voices: marin, cedar
   },
 
   // Grok (xAI Voice Agent — A/B test alternative)
