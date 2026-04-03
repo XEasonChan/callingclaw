@@ -398,11 +398,13 @@ ${transcriptText}
 
 ## STT Name Aliases (speech-to-text often mangles these)
 The transcription is from live STT, which frequently misspells proper nouns. Treat these as equivalent:
-- CallingClaw = "calling claw" / "calling clah" / "colin claw" / "calling call" / "calling clause" / "卡林克劳" / "calling克劳"
-- OpenClaw = "open claw" / "open clah" / "open call" / "open clause"
-- Haiku = "hi koo" / "haiku" / "hai ku"
-- Gemini = "gemma knee" / "jiminy" / "杰米尼"
-When a fuzzy match to a known product name appears, interpret it as that product name.
+${
+  brief?.sttAliases && brief.sttAliases.length > 0
+    ? brief.sttAliases.map((a: any) => `- ${a.canonical} = ${a.variants.map((v: string) => `"${v}"`).join(" / ")}`).join("\n")
+    : `- CallingClaw = "calling claw" / "colin claw" / "calling call" / "calling clause"
+- OpenClaw = "open claw" / "open call" / "open clause"`
+}
+When a fuzzy match to a known product/person/term appears, interpret it as the canonical name above.
 
 ## File Name Resolution Examples
 - "landing page html" / "官网html" → search "callingclaw-landing.html" or "callingclaw-landing"

@@ -86,6 +86,14 @@ export interface MeetingPrepBrief {
     durationMs: number;      // how long to stay on this scene
   }>;
   decisionPoints?: string[];  // decisions the voice AI should explicitly drive
+
+  // STT aliases: unusual keywords from prep that STT will likely mangle
+  // Generated pre-meeting by Haiku scanning the brief for proper nouns,
+  // product names, technical terms, and non-English words.
+  sttAliases?: Array<{
+    canonical: string;          // correct spelling: "CallingClaw"
+    variants: string[];         // likely STT outputs: ["calling claw", "colin claw", ...]
+  }>;
 }
 
 // Prompt template moved to openclaw-protocol.ts (OC-001)
@@ -163,6 +171,13 @@ export class MeetingPrepSkill {
     brief.liveNotes = [];
     brief.attendees = attendees || [];
 
+    // Generate STT aliases: scan brief for unusual keywords that STT will mangle.
+    // Runs in parallel with file save (non-blocking, ~1-2s Haiku call).
+    this.generateSttAliases(brief).then((aliases) => {
+      brief.sttAliases = aliases;
+      console.log(`[MeetingPrep] STT aliases ready: ${aliases.length} terms`);
+    }).catch(() => {});
+
     this._currentBrief = brief;
     console.log(`[MeetingPrep] Brief ready: ${brief.keyPoints.length} key points, ${brief.filePaths.length} files, ${brief.browserUrls.length} URLs`);
 
@@ -199,6 +214,53 @@ export class MeetingPrepSkill {
     }
 
     return brief;
+  }
+
+  /**
+   * Scan the prep brief for unusual keywords (product names, technical terms,
+   * people names, non-English words) and generate likely STT misheard variants.
+   * Called once after prep generation (~1-2s Haiku call, non-blocking).
+   */
+  private async generateSttAliases(brief: MeetingPrepBrief): Promise<MeetingPrepBrief["sttAliases"] & {}> {
+    const { callModel, parseJSON } = await import("../ai_gateway/llm-client");
+
+    // Collect all text from the brief for Haiku to scan
+    const briefText = [
+      `Topic: ${brief.topic}`,
+      `Goal: ${brief.goal}`,
+      brief.summary,
+      ...brief.keyPoints,
+      ...(brief.architectureDecisions || []).map(d => `${d.decision}: ${d.rationale}`),
+      ...(brief.filePaths || []).map(f => f.description),
+      ...(brief.browserUrls || []).map(u => u.description),
+      ...(brief.attendees || []).filter(a => a.displayName).map(a => a.displayName),
+      ...(brief.speakingPlan || []).map(s => s.points),
+    ].filter(Boolean).join("\n");
+
+    const result = await callModel({
+      model: "fast",
+      system: "You extract unusual keywords from meeting documents and predict how speech-to-text (Whisper/Google STT) will mishear them. Focus on: product names, brand names, technical terms, people names, non-English words, acronyms spoken aloud, and any word a general-purpose STT model would not have in its common vocabulary.",
+      prompt: `Scan this meeting brief and extract keywords that STT will likely mishear. For each, list 3-6 plausible STT misheard variants (how it might sound phonetically to an English STT model, including mixed-language cases).
+
+${briefText}
+
+Respond with JSON array only, no explanation:
+[{"canonical":"CallingClaw","variants":["calling claw","colin claw","calling clah","calling call"]},...]
+
+Rules:
+- Only include words that STT will ACTUALLY struggle with (skip common English words)
+- Include Chinese/Japanese/Korean terms if present (STT often romanizes them wrong)
+- Include people's names (especially non-English names)
+- Include product names, frameworks, libraries that aren't dictionary words
+- For each variant, think: "what would Whisper output if it heard this word?"`,
+      maxTokens: 500,
+      temperature: 0,
+    });
+
+    const aliases = parseJSON(result) as Array<{ canonical: string; variants: string[] }>;
+    if (!Array.isArray(aliases)) return [];
+    // Filter out invalid entries
+    return aliases.filter(a => a.canonical && Array.isArray(a.variants) && a.variants.length > 0);
   }
 
   // TTL for liveNotes eviction (5 minutes)
