@@ -565,8 +565,18 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         }
         case "open_file": {
           eventBus.emit("voice.tool_call", { tool: "open_file", summary: args.path });
-          await meetJoiner.openFile(args.path, args.app || "vscode");
-          return `Opened ${args.path} in ${args.app || "vscode"}.`;
+          // Use AutomationRouter's AI-powered file search for fuzzy matching
+          // (voice AI passes guessed filenames like "TankaActionList_Phase1_PRD.html"
+          //  that don't match real paths — Haiku resolves the intent to actual files)
+          if (automationRouter) {
+            try {
+              const result = await automationRouter.execute(`open file: ${args.path}`);
+              if (result.success) return result.result;
+            } catch {}
+          }
+          // Fallback: direct open if router fails
+          await meetJoiner.openFile(args.path, args.app || "browser");
+          return `Opened ${args.path} in ${args.app || "browser"}.`;
         }
         default:
           return `Unknown meeting tool: ${name}`;

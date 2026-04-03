@@ -1022,13 +1022,14 @@
 
     const LAYER_ICONS = {
       memory: '&#128218;', calendar: '&#128197;', meeting: '&#128222;',
-      automation: '&#9881;', zoom: '&#127909;',
+      automation: '&#9881;', vision: '&#128247;', zoom: '&#127909;',
     };
     const LAYER_DESCRIPTIONS = {
-      memory: 'recall_context',
-      calendar: 'schedule / check calendar',
-      meeting: 'join / create / leave meeting',
-      automation: 'screen / browser / files',
+      memory: 'recall from MEMORY.md',
+      calendar: 'schedule / check / delete events',
+      meeting: 'join / create / leave / notes / open file',
+      automation: 'computer action / browser / share screen',
+      vision: 'screenshot + screen analysis',
       zoom: 'Zoom keyboard shortcuts',
     };
 
@@ -1087,13 +1088,14 @@
       });
     }
 
-    // Load placeholder layers on init
+    // Load layers — synced with actual tool-definitions/ (2026-04-03)
     renderLayers({
       memory:     { label: 'Memory',     toolCount: 1,  tools: ['recall_context'], status: '...' },
-      calendar:   { label: 'Calendar',   toolCount: 2,  tools: ['schedule_meeting', 'check_calendar'], status: '...' },
-      meeting:    { label: 'Meeting',    toolCount: 4,  tools: ['join_meeting', 'create_and_join_meeting', 'leave_meeting', 'save_meeting_notes'] },
-      automation: { label: 'Automation', toolCount: 6,  tools: ['computer_action', 'browser_action', 'open_file', 'share_screen', 'stop_sharing', 'take_screenshot'], status: '...' },
-      zoom:       { label: 'Zoom',       toolCount: 1,  tools: ['zoom_control'] },
+      calendar:   { label: 'Calendar',   toolCount: 3,  tools: ['schedule_meeting', 'check_calendar', 'delete_event'], status: '...' },
+      meeting:    { label: 'Meeting',    toolCount: 5,  tools: ['join_meeting', 'create_and_join_meeting', 'leave_meeting', 'save_meeting_notes', 'open_file'], status: '...' },
+      automation: { label: 'Automation', toolCount: 4,  tools: ['computer_action', 'browser_action', 'share_screen', 'stop_sharing'], status: '...' },
+      vision:     { label: 'Vision',     toolCount: 1,  tools: ['take_screenshot'], status: '...' },
+      zoom:       { label: 'Zoom',       toolCount: 1,  tools: ['zoom_control'], status: '...' },
     });
   </script>
 </body>

@@ -499,11 +499,14 @@ export class AutomationRouter {
     const { homedir } = await import("os");
     const { resolve } = await import("path");
     const projectRoot = resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0");
+    const iCloudRoot = resolve(homedir(), "Library/Mobile Documents/com~apple~CloudDocs");
     const searchDirs = [
       resolve(homedir(), ".callingclaw", "shared"),
       resolve(projectRoot, "callingclaw-backend/public"),
       resolve(projectRoot, "docs"),
       projectRoot,
+      resolve(iCloudRoot, "Tanka"),          // Tanka project files (PRDs, designs, etc.)
+      resolve(iCloudRoot, "Tanka/Tanka Link 2.0"),
     ];
 
     // Collect candidate files (exclude node_modules/.git)
