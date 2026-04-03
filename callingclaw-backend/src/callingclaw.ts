@@ -152,6 +152,9 @@ meetingPrepSkill.onLiveNote((note, topic) => {
 
 // Forward prep-ready to EventBus — frontend gets instant notification when prep file is saved
 meetingPrepSkill.onPrepReady((brief, meetingId, filePath) => {
+  // Rebuild file index so AutomationRouter can resolve prep file paths instantly
+  transcriptAuditor.refreshPrepContext();
+
   Bun.file(filePath).text().then((mdContent) => {
     eventBus.emit("meeting.prep_ready", {
       meetingId, topic: brief.topic, filePath, mdContent,

@@ -367,9 +367,9 @@ export function startConfigServer(services: Services) {
                     }
                   }
 
-                  // ── Filter 3: Skip if speaker is CallingClaw ──
+                  // ── Filter 3: Skip if speaker is CallingClaw (STT mangles the name) ──
                   const speaker = data.speaker ? String(data.speaker).trim().toLowerCase() : "";
-                  if (speaker && (speaker.includes("callingclaw") || speaker.includes("calling claw"))) {
+                  if (speaker && /calling\s*claw|colin\s*claw|calling\s*clah|calling\s*call|calling\s*clause|callingclaw/.test(speaker)) {
                     console.log(`[VoiceTest] Caption from self filtered: "${text.substring(0, 60)}"`);
                     return;
                   }

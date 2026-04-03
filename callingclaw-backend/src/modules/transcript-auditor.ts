@@ -110,8 +110,35 @@ export class TranscriptAuditor {
     // Subscribe to transcript events
     this.context.on("transcript", this._onTranscript);
 
+    // Build file alias index with prep context so AutomationRouter can instantly
+    // resolve file paths the voice AI references from the meeting prep brief
+    const brief = this.meetingPrepSkill.currentBrief;
+    if (brief) {
+      const prepFiles = [
+        ...(brief.filePaths || []).map((f: any) => ({ path: f.path, description: f.description || "" })),
+        ...(brief.browserUrls || []).map((u: any) => ({ path: u.url, description: u.description || "" })),
+      ];
+      this.automationRouter.fileIndex.build({ prepFilePaths: prepFiles }).catch(() => {});
+    } else {
+      // No prep yet — build with directory scan only, rebuild when prep arrives
+      this.automationRouter.fileIndex.build().catch(() => {});
+    }
+
     console.log("[TranscriptAuditor] Activated — monitoring transcript for automation intent");
     this.eventBus.emit("auditor.activated", {});
+  }
+
+  /** Rebuild file index when prep arrives mid-meeting */
+  refreshPrepContext() {
+    if (!this._active) return;
+    const brief = this.meetingPrepSkill.currentBrief;
+    if (!brief) return;
+    const prepFiles = [
+      ...(brief.filePaths || []).map((f: any) => ({ path: f.path, description: f.description || "" })),
+      ...(brief.browserUrls || []).map((u: any) => ({ path: u.url, description: u.description || "" })),
+    ];
+    this.automationRouter.fileIndex.build({ prepFilePaths: prepFiles }).catch(() => {});
+    console.log("[TranscriptAuditor] Rebuilt file index with prep context");
   }
 
   /** Deactivate auditor when meeting ends */
@@ -124,6 +151,7 @@ export class TranscriptAuditor {
     }
     // Unsubscribe listener to prevent leaking handlers across meetings
     this.context.off("transcript", this._onTranscript);
+    this.automationRouter.fileIndex.clear();
     this.voice = null;
     console.log("[TranscriptAuditor] Deactivated");
     this.eventBus.emit("auditor.deactivated", {});
@@ -367,6 +395,14 @@ ${transcriptText}
 4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
 5. Discussion/opinion ("我觉得.../this should be.../下次需要...") → DO NOT ACT, confidence=0
 6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
+
+## STT Name Aliases (speech-to-text often mangles these)
+The transcription is from live STT, which frequently misspells proper nouns. Treat these as equivalent:
+- CallingClaw = "calling claw" / "calling clah" / "colin claw" / "calling call" / "calling clause" / "卡林克劳" / "calling克劳"
+- OpenClaw = "open claw" / "open clah" / "open call" / "open clause"
+- Haiku = "hi koo" / "haiku" / "hai ku"
+- Gemini = "gemma knee" / "jiminy" / "杰米尼"
+When a fuzzy match to a known product name appears, interpret it as that product name.
 
 ## File Name Resolution Examples
 - "landing page html" / "官网html" → search "callingclaw-landing.html" or "callingclaw-landing"
