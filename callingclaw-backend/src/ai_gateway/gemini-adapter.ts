@@ -307,23 +307,20 @@ export class GeminiProtocolAdapter {
       : tools;
 
     if (tools.length > 0) {
-      // Hardcode tools in the exact format proven to work via gemini-live-full-setup.ts.
-      // Gemini 3.1 Live silently rejects setups with non-conforming tool schemas.
+      // Gemini 3.1 Live silently rejects setup if tools or instruction are too complex.
+      // PROVEN WORKING: exactly 2 tools with minimal schemas (tested in gemini-live-full-setup.ts).
+      // 4+ tools → silent hang. Actions like open_file, share_screen are handled by
+      // TranscriptAuditor (Haiku) which monitors the transcript and executes via AutomationRouter.
+      // Gemini just needs to SAY "let me have my agent open that" → Haiku catches it and acts.
       setup.tools = [{
         functionDeclarations: [
-          {
-            name: "recall_context",
-            description: "Fetch facts from memory",
-            parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
-          },
-          {
-            name: "save_meeting_notes",
-            description: "Save meeting notes",
-            parameters: { type: "object", properties: { notes: { type: "string" } }, required: ["notes"] },
-          },
+          { name: "recall_context", description: "Fetch facts from memory",
+            parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+          { name: "save_meeting_notes", description: "Save meeting notes",
+            parameters: { type: "object", properties: { notes: { type: "string" } }, required: ["notes"] } },
         ],
       }];
-      console.log(`[GeminiAdapter] Tools: 2 hardcoded (proven format)`);
+      console.log(`[GeminiAdapter] Tools: 2 (Gemini 3.1 proven limit — open_file/share_screen via TranscriptAuditor)`);
     }
 
     // Input config (VAD, turnCoverage, transcription)
