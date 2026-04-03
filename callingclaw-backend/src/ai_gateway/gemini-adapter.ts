@@ -69,9 +69,19 @@ export class GeminiProtocolAdapter {
   // Model name — needed to detect protocol differences between 2.5 and 3.1+
   private _model: string;
 
+  // Text message batching for Gemini 3.1 — prevents flooding realtimeInput.text
+  // which causes Gemini to get stuck processing text and stop listening to audio.
+  private _textBatchBuffer: string[] = [];
+  private _textBatchTimer: ReturnType<typeof setTimeout> | null = null;
+  private _textBatchFlush: (() => void) | null = null;
+  private _wsSend: ((payload: string) => void) | null = null;
+
   constructor(model?: string) {
     this._model = model || "gemini-3.1-flash-live-preview";
   }
+
+  /** Set the WS send function so batched text can be flushed asynchronously */
+  setWsSend(fn: (payload: string) => void) { this._wsSend = fn; }
 
   /** Gemini 3.1+ uses realtimeInput.text instead of clientContent.turns for text input */
   private get _usesRealtimeInputText(): boolean {
@@ -358,17 +368,16 @@ export class GeminiProtocolAdapter {
 
   private _buildAudioInput(data: any): string {
     const audioBase64 = data.audio || "";
-    const resampled = resampleAudio24kTo16k(audioBase64);
+    // Skip resampling — send native 24kHz and declare rate in MIME type.
+    // Gemini handles resampling server-side. Missing rate= was causing Gemini
+    // to silently reject audio input after the first text-triggered greeting.
 
     // Gemini 3.1 Live API: use `audio` field directly (not `media` or `mediaChunks`).
-    // - `media` → "Unknown name 'media'" error
-    // - `mediaChunks` → "deprecated. Use audio, video, or text instead."
-    // - `audio` → correct for 3.1+
     return JSON.stringify({
       realtimeInput: {
         audio: {
-          mimeType: "audio/pcm",
-          data: resampled,
+          mimeType: "audio/pcm;rate=24000",
+          data: audioBase64,
         },
       },
     });
@@ -391,9 +400,16 @@ export class GeminiProtocolAdapter {
 
     const text = item.content?.[0]?.text || "";
 
-    // Gemini 3.1+: use realtimeInput.text for ALL text input
-    // (clientContent is only for initial history seeding in 3.1)
+    // Gemini 3.1+: batch text messages to prevent flooding realtimeInput.text
+    // Multiple rapid context injections (time, meeting brief, captions) overwhelm
+    // Gemini and cause it to stop processing audio input after the greeting.
+    // Solution: buffer text messages and flush as one combined message after 1.5s idle.
+    // Longer delay than audio to avoid text/audio interleaving on realtimeInput channel.
     if (this._usesRealtimeInputText) {
+      // Send immediately — Gemini 3.1 processes realtimeInput.text inline.
+      // Batching caused the greeting to be delayed past Gemini's setup window.
+      // The MIME type fix (audio/pcm;rate=24000) was the real cause of the
+      // "deaf after greeting" bug, not text flooding.
       return JSON.stringify({
         realtimeInput: { text },
       });

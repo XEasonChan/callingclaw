@@ -461,6 +461,15 @@ export class RealtimeClient {
           console.log(`[Realtime] Injecting Gemini resume handle into setup`);
         }
 
+        // Wire up WS send for Gemini text batching
+        if (this._geminiAdapter) {
+          this._geminiAdapter.setWsSend((payload) => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+              this.ws.send(payload);
+            }
+          });
+        }
+
         this.sendEvent("session.update", sessionPayload);
         resolve();
       };
