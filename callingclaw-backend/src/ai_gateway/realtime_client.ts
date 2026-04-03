@@ -883,15 +883,24 @@ export class RealtimeClient {
   }
 
   /** Dynamically update session instructions */
+  /** Build a minimal session.update payload with required fields for GA API.
+   *  GA API requires session.type on EVERY session.update, not just the first one. */
+  private _buildSessionUpdate(fields: Record<string, any>) {
+    const session: Record<string, any> = { ...fields };
+    // GA API (openai/openai15): every session.update must include type: "realtime"
+    if (this._provider.name === "openai" || this._provider.name === "openai15") {
+      session.type = "realtime";
+    }
+    return { session };
+  }
+
   updateInstructions(instructions: string) {
     this._lastInstructions = instructions;
     // Gemini: session.update mid-session causes disconnect. Inject as context instead.
     if (this._provider.name === "gemini") {
       return !!this.injectContext(`[SYSTEM UPDATE] ${instructions.slice(0, 500)}`, "ctx_instr_update");
     }
-    return this.sendEvent("session.update", {
-      session: { instructions },
-    });
+    return this.sendEvent("session.update", this._buildSessionUpdate({ instructions }));
   }
 
   /** Dynamically update the voice */
@@ -901,9 +910,7 @@ export class RealtimeClient {
       console.log(`[Realtime] Voice update skipped for Gemini (only settable in setup)`);
       return true;
     }
-    return this.sendEvent("session.update", {
-      session: { voice },
-    });
+    return this.sendEvent("session.update", this._buildSessionUpdate({ voice }));
   }
 
   /** Dynamically update session tools */
@@ -914,15 +921,14 @@ export class RealtimeClient {
       console.log(`[Realtime] Tools update skipped for Gemini (only settable in setup)`);
       return true;
     }
-    return this.sendEvent("session.update", {
-      session: {
-        tools: tools.map((t) => ({
-          type: "function",
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })),
-      },
+    return this.sendEvent("session.update", this._buildSessionUpdate({
+      tools: tools.map((t) => ({
+        type: "function",
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      })),
+    });
     });
   }
 
