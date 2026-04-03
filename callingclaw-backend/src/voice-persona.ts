@@ -410,3 +410,37 @@ export function buildMeetingIntro(
 
   return parts.join("");
 }
+
+// ── Small Talk → Presentation transition prompts ──────────────────
+// Provider-agnostic: injected into any voice model (Gemini, Grok, OpenAI)
+// when a meeting has prepared scenes but should start with casual chat.
+
+/**
+ * Build the "presentation ready" context injection.
+ * Tells the voice AI that slides are available but it should chat first.
+ * The AI decides when to call share_screen based on conversation flow.
+ */
+export function buildPresentationReadyContext(scenes: Array<{ url: string; talkingPoints?: string }>): string {
+  return (
+    `[PRESENTATION READY] You have ${scenes.length} prepared slides for this meeting.\n` +
+    `First slide: ${scenes[0]?.url || "unknown"}\n` +
+    `DO NOT present yet — start with small talk. Greet participants, confirm the agenda, ` +
+    `ask if everyone is ready. When they express intent to start (e.g. "let's start" / ` +
+    `"开始吧" / "show me" / "dive in" / "开始演示" / "请开始"), call share_screen with ` +
+    `the first scene URL.\n` +
+    `If nobody has real conversation for ~30 seconds, proactively ask: ` +
+    `"I have a presentation ready — shall I start sharing my screen?"`
+  );
+}
+
+/**
+ * Build the idle nudge injection.
+ * Sent after ~30s of no real conversation to prompt AI to offer presenting.
+ */
+export function buildIdleNudgeContext(): string {
+  return (
+    `[IDLE NUDGE] The meeting has been quiet for a while. Proactively offer to start ` +
+    `presenting. Say something natural like "I have some materials prepared — would you ` +
+    `like me to share my screen and walk you through them?" or "要不我开始演示？我准备了一些材料。"`
+  );
+}

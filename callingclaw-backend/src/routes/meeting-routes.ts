@@ -6,7 +6,7 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildSceneContext } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildSceneContext, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import { PresentationEngine } from "../modules/presentation-engine";
 import type { Services, RouteHandler } from "./types";
@@ -286,37 +286,24 @@ export function meetingRoutes(services: Services): RouteHandler {
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent (Small Talk mode)");
 
-              // Tell AI about available presentation (but don't start it)
+              // Tell AI about available presentation (but don't start it — Small Talk first)
+              // Uses shared prompts from voice-persona.ts so all providers get the same behavior
               const scenes = prepBrief?.scenes;
               if (scenes && scenes.length > 0) {
-                services.realtime.injectContext(
-                  `[PRESENTATION READY] You have ${scenes.length} prepared slides for this meeting.\n` +
-                  `First slide: ${scenes[0]!.url}\n` +
-                  `DO NOT present yet. Chat with the participants first. When they say something like ` +
-                  `"let's start" / "开始吧" / "show me" / "dive in" / "开始演示", THEN call share_screen ` +
-                  `with the first scene URL. If nobody speaks for ~30 seconds, ask: "I have a presentation ` +
-                  `ready — shall I start sharing my screen?"`
-                );
-                console.log(`[Meeting] Presentation ready (${scenes.length} scenes) — waiting for user signal`);
-              }
+                services.realtime.injectContext(buildPresentationReadyContext(scenes));
+                console.log(`[Meeting] Presentation ready (${scenes.length} scenes) — Small Talk mode`);
 
-              // Idle nudge: if no real conversation after 30s, prompt AI to offer presentation
-              if (scenes && scenes.length > 0) {
+                // Idle nudge: if no real conversation after 30s, prompt AI to offer presentation
                 const idleTimer = setTimeout(() => {
                   const recentEntries = services.context.getRecentTranscript(5);
                   const hasRealConversation = recentEntries.some(
                     e => e.role === "user" && e.text.length > 20 && (Date.now() - e.ts) < 25000
                   );
                   if (!hasRealConversation && services.realtime.connected) {
-                    services.realtime.injectContext(
-                      `[IDLE NUDGE] The meeting has been quiet. Proactively ask the participant if they'd ` +
-                      `like you to start presenting. Say something natural like "I have some materials ` +
-                      `prepared — would you like me to share my screen and walk you through them?"`
-                    );
+                    services.realtime.injectContext(buildIdleNudgeContext());
                     console.log("[Meeting] Idle nudge sent — prompting AI to offer presentation");
                   }
                 }, 30000);
-                // Clean up timer if meeting ends
                 services.eventBus.once("meeting.ended", () => clearTimeout(idleTimer));
               }
             }, 2000); // Wait 2s for audio bridge to fully initialize
