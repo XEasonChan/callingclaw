@@ -276,52 +276,48 @@ export function meetingRoutes(services: Services): RouteHandler {
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
 
-          // Self-introduction: tell participants who CallingClaw is and why it's here
+          // Self-introduction + Small Talk mode
+          // Don't auto-present — let user chat first, AI triggers presentation when user is ready
           if (services.realtime.connected) {
             setTimeout(() => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
               const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
               services.realtime.sendText(intro);
-              console.log("[Meeting] Self-introduction sent");
+              console.log("[Meeting] Self-introduction sent (Small Talk mode)");
 
-              // Auto-present: if playbook has scenes, start screen sharing + scene sequence
+              // Tell AI about available presentation (but don't start it)
               const scenes = prepBrief?.scenes;
-              if (scenes && scenes.length > 0 && services.chromeLauncher) {
-                setTimeout(async () => {
-                  try {
-                    // Share the first scene's URL
-                    console.log(`[Meeting] Auto-present: ${scenes.length} scenes, starting with ${scenes[0]!.url}`);
-                    await services.chromeLauncher.shareScreen(scenes[0]!.url);
+              if (scenes && scenes.length > 0) {
+                services.realtime.injectContext(
+                  `[PRESENTATION READY] You have ${scenes.length} prepared slides for this meeting.\n` +
+                  `First slide: ${scenes[0]!.url}\n` +
+                  `DO NOT present yet. Chat with the participants first. When they say something like ` +
+                  `"let's start" / "开始吧" / "show me" / "dive in" / "开始演示", THEN call share_screen ` +
+                  `with the first scene URL. If nobody speaks for ~30 seconds, ask: "I have a presentation ` +
+                  `ready — shall I start sharing my screen?"`
+                );
+                console.log(`[Meeting] Presentation ready (${scenes.length} scenes) — waiting for user signal`);
+              }
 
-                    // Run scene sequence with progressive context injection
-                    const engine = new PresentationEngine();
-                    engine.runScenes({
-                      scenes,
-                      chromeLauncher: services.chromeLauncher,
-                      voice: services.voice,
-                      context: services.context,
-                      onSceneAdvance: (idx, scene) => {
-                        // Progressive injection: push current scene context to voice AI
-                        if (prepBrief && services.realtime.connected) {
-                          const sceneCtx = buildSceneContext(prepBrief, idx);
-                          if (sceneCtx) services.realtime.injectContext(sceneCtx);
-                        }
-                        services.eventBus.emit("presentation.scene", {
-                          index: idx,
-                          total: scenes.length,
-                          url: scene.url,
-                          talkingPoints: scene.talkingPoints.slice(0, 60),
-                        });
-                      },
-                      onComplete: () => {
-                        services.eventBus.emit("presentation.done", { scenesCount: scenes.length });
-                      },
-                    }).catch(e => console.warn("[Meeting] Auto-present failed:", e.message));
-                  } catch (e: any) {
-                    console.warn("[Meeting] Auto-present setup failed:", e.message);
+              // Idle nudge: if no real conversation after 30s, prompt AI to offer presentation
+              if (scenes && scenes.length > 0) {
+                const idleTimer = setTimeout(() => {
+                  const recentEntries = services.context.getRecentTranscript(5);
+                  const hasRealConversation = recentEntries.some(
+                    e => e.role === "user" && e.text.length > 20 && (Date.now() - e.ts) < 25000
+                  );
+                  if (!hasRealConversation && services.realtime.connected) {
+                    services.realtime.injectContext(
+                      `[IDLE NUDGE] The meeting has been quiet. Proactively ask the participant if they'd ` +
+                      `like you to start presenting. Say something natural like "I have some materials ` +
+                      `prepared — would you like me to share my screen and walk you through them?"`
+                    );
+                    console.log("[Meeting] Idle nudge sent — prompting AI to offer presentation");
                   }
-                }, 5000); // Wait 5s after intro for audio to stabilize
+                }, 30000);
+                // Clean up timer if meeting ends
+                services.eventBus.once("meeting.ended", () => clearTimeout(idleTimer));
               }
             }, 2000); // Wait 2s for audio bridge to fully initialize
           }

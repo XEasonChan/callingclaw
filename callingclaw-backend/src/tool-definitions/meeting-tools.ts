@@ -553,11 +553,46 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           return `Meeting notes saved to: ${filepath}. Created ${createdTasks.length} tasks.`;
         }
         case "share_screen": {
-          eventBus.emit("voice.tool_call", { tool: "share_screen" });
-          const ok = await meetJoiner.shareScreen();
-          return ok
-            ? "Screen sharing started — meeting participants can now see CallingClaw's screen."
-            : "Failed to start screen sharing. Make sure we're in a meeting.";
+          const shareUrl = args.url || "";
+          eventBus.emit("voice.tool_call", { tool: "share_screen", summary: shareUrl });
+
+          // If URL provided, share it directly
+          if (shareUrl) {
+            if (chromeLauncher) {
+              await chromeLauncher.shareScreen(shareUrl);
+            } else {
+              await meetJoiner.shareScreen();
+            }
+          } else {
+            await meetJoiner.shareScreen();
+          }
+
+          // If prep has scenes, start PresentationEngine for scene sequencing
+          const brief = meetingPrepSkill?.currentBrief;
+          const prepScenes = brief?.scenes;
+          const chromeLauncher = deps.chromeLauncher;
+          if (prepScenes && prepScenes.length > 0 && chromeLauncher) {
+            const { PresentationEngine } = await import("../modules/presentation-engine");
+            const { buildSceneContext } = await import("../voice-persona");
+            const engine = new PresentationEngine();
+            engine.runScenes({
+              scenes: prepScenes,
+              chromeLauncher,
+              voice: deps.voice,
+              context,
+              onSceneAdvance: (idx: number, scene: any) => {
+                if (brief) {
+                  const sceneCtx = buildSceneContext(brief, idx);
+                  if (sceneCtx && deps.voice?.client?.connected) deps.voice.client.injectContext(sceneCtx);
+                }
+                eventBus.emit("presentation.scene", { index: idx, total: prepScenes.length, url: scene.url });
+              },
+              onComplete: () => eventBus.emit("presentation.done", { scenesCount: prepScenes.length }),
+            }).catch((e: any) => console.warn("[Meeting] Presentation sequence failed:", e.message));
+            return `Presenting ${prepScenes.length} slides. First: ${prepScenes[0]!.url}`;
+          }
+
+          return "Screen sharing started.";
         }
         case "stop_sharing": {
           await meetJoiner.stopSharing();
