@@ -3,6 +3,24 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.8] - 2026-04-03
+
+### Added
+- **OpenCLI Layer 1.5** — fault-isolated execution layer using OpenCLI (66+ deterministic web adapters for GitHub, HN, Google, arXiv, Wikipedia at $0 cost). Runs on separate Chrome #2 so execution crashes never kill meeting audio
+- **FileAliasIndex** — pre-built keyword index of 1000+ local files at meeting start. Voice query "open the action cart PRD" matches in ~2ms instead of 3-5s (2500x faster, zero LLM cost)
+- **Haiku command generation** — single Haiku call translates natural language to the correct `opencli` command from a catalog of 100 adapters, eliminating per-adapter regex patterns
+- **Dual Chrome architecture** — Playwright Chrome #1 (audio/Meet only) + OpenCLI Chrome #2 (execution only). Documented in `docs/opencli-experiment-findings.md`
+- **E2E test hub** — standalone test pages for automation router, context retriever, transcript auditor, presentation engine
+- **HTML meeting summary** — auto-generated branded summary with review items table, action items, and transcript after meeting ends
+
+### Fixed
+- **Caption echo filter** — 3-layer filter prevents Meet captions from creating voice echo loops
+- **Summary transcript** — uses full transcript (1000 entries) instead of truncated 200-entry window
+
+### Changed
+- **AutomationRouter** — 5-layer routing (shortcuts, OpenCLI, Playwright, Peekaboo, Computer Use). Peekaboo marked dormant (dead code, never triggered). File search checks FileAliasIndex first (fast path)
+- **CLAUDE.md** — updated architecture to reflect Dual Chrome and OpenCLI integration
+
 ## [2.8.7] - 2026-04-02
 
 ### Added
