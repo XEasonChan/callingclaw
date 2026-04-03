@@ -384,6 +384,10 @@ Recent actions: ${
       }`
     : "No meeting brief loaded."
 }
+${(() => {
+  const bc = this.context.browserContext;
+  return bc ? `Active page: ${bc.title} (${bc.url})` : "";
+})()}
 
 ## Transcript (most recent at bottom)
 ${transcriptText}

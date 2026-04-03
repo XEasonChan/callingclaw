@@ -364,16 +364,17 @@ eventBus.on("meeting.started", (data) => {
 
   // ── Start Browser DOM context capture (both modes) ──
   // Captures active browser tab DOM every 10s for richer context.
-  // In Meet mode: captures non-Meet tabs when Playwright is free.
-  // In Talk Locally: captures whatever the user is browsing.
+  // Injects compact [SCREEN] updates into Voice AI when the page changes.
+  let _lastScreenUrl = "";
+  let _lastScreenHash = "";
   if (playwrightCli.connected) {
     _domContextInterval = setInterval(async () => {
-      // Check connected flag directly to avoid triggering auto-start (which opens new about:blank tabs)
       if (!playwrightCli.connected) return;
       try {
         const raw = await playwrightCli.evaluateIfConnected(`() => {
-          // Skip if on Google Meet page (Meet mode uses it for other things)
           if (location.hostname === 'meet.google.com') return JSON.stringify({ skip: true });
+          // Extract headings for structure (voice model uses these to narrate)
+          const headings = [...document.querySelectorAll('h1,h2,h3')].slice(0, 8).map(h => h.textContent?.trim()).filter(Boolean);
           return JSON.stringify({
             url: location.href,
             title: document.title,
@@ -381,6 +382,7 @@ eventBus.on("meeting.started", (data) => {
             scrollHeight: document.documentElement.scrollHeight,
             viewportHeight: window.innerHeight,
             visibleText: document.body.innerText.substring(0, 2000),
+            headings,
             links: document.querySelectorAll('a').length,
             buttons: document.querySelectorAll('button').length,
             inputs: document.querySelectorAll('input,textarea').length,
@@ -390,10 +392,22 @@ eventBus.on("meeting.started", (data) => {
         if (!domInfo.skip) {
           context.updateBrowserContext?.(domInfo);
           eventBus.emit("meeting.browser_context", { ...domInfo, timestamp: Date.now() });
+
+          // Inject [SCREEN] update into voice model when page changes or content shifts significantly
+          const contentHash = (domInfo.url || "") + "|" + (domInfo.headings?.join(",") || "");
+          const urlChanged = domInfo.url !== _lastScreenUrl;
+          const contentChanged = contentHash !== _lastScreenHash;
+          if ((urlChanged || contentChanged) && voice.connected) {
+            _lastScreenUrl = domInfo.url;
+            _lastScreenHash = contentHash;
+            const headingList = (domInfo.headings || []).slice(0, 6).join(" → ");
+            const screenUpdate = `[SCREEN] ${domInfo.title}${headingList ? `\nSections: ${headingList}` : ""}\n${(domInfo.visibleText || "").substring(0, 400)}`;
+            voice.injectContext(screenUpdate);
+          }
         }
       } catch {} // Browser busy or not accessible
     }, 10000);
-    console.log("[Init] Browser DOM context capture started (10s interval)");
+    console.log("[Init] Browser DOM context capture started (10s interval, with voice [SCREEN] injection)");
   }
 });
 
