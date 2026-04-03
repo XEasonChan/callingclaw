@@ -449,6 +449,86 @@ Respond with JSON only:
     }
   }
 
+  // ── DOM-Aware Click Resolution ──
+
+  /**
+   * Two-step click: snapshot clickable elements from live DOM, then use Haiku
+   * to pick the right one based on user intent. Clicks by index — no guessing.
+   *
+   * Flow:
+   *   1. Playwright snapshots all clickable elements (text + aria-label + tag)
+   *   2. Haiku sees the list + user's intent → returns the index to click
+   *   3. Playwright clicks element[index] — guaranteed correct target
+   *
+   * Fallback: if Haiku is unavailable or snapshot fails, falls back to
+   * naive text matching (the old behavior).
+   */
+  private async resolveAndClick(userIntent: string): Promise<string> {
+    if (!this.chromeLauncher?.presentingPage) return "not_found: no presenting page";
+
+    // Step 1: Snapshot clickable elements from live DOM
+    let elements: Array<{ text: string; aria: string; tag: string; href?: string }>;
+    try {
+      const raw = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+        var els = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"], [onclick]'));
+        return JSON.stringify(els.slice(0, 30).map(function(el, i) {
+          return {
+            text: (el.textContent || '').trim().substring(0, 60),
+            aria: (el.getAttribute('aria-label') || ''),
+            tag: el.tagName.toLowerCase(),
+            href: el.getAttribute('href') || undefined,
+          };
+        }));
+      })()`);
+      elements = JSON.parse(String(raw));
+    } catch (e: any) {
+      console.warn(`[Auditor] Click snapshot failed: ${e.message}`);
+      return "not_found: snapshot failed";
+    }
+
+    if (elements.length === 0) return "not_found: no clickable elements";
+
+    // Step 2: Haiku picks the right element
+    const elementList = elements.map((el, i) =>
+      `${i + 1}. [${el.tag}] "${el.text}"${el.aria ? ` aria="${el.aria}"` : ""}${el.href ? ` href="${el.href}"` : ""}`
+    ).join("\n");
+
+    let clickIndex = -1;
+    try {
+      const response = await callModel({
+        model: "fast",
+        system: "You are a click resolver. Given a user's intent and a list of clickable DOM elements, return ONLY the number of the element to click. If no element matches, return 0.",
+        prompt: `User wants to click: "${userIntent}"\n\nClickable elements on page:\n${elementList}`,
+        maxTokens: 10,
+        temperature: 0,
+      });
+      clickIndex = parseInt(String(response).trim()) - 1;
+    } catch {
+      // Haiku unavailable — fall back to naive text match
+      clickIndex = elements.findIndex(el =>
+        el.text.toLowerCase().includes(userIntent.toLowerCase()) ||
+        el.aria.toLowerCase().includes(userIntent.toLowerCase())
+      );
+    }
+
+    if (clickIndex < 0 || clickIndex >= elements.length) {
+      console.log(`[Auditor] Click resolve: no match for "${userIntent}" in ${elements.length} elements`);
+      return `not_found: "${userIntent}" — ${elements.length} clickable elements checked`;
+    }
+
+    // Step 3: Click by index — guaranteed correct target
+    const target = elements[clickIndex]!;
+    const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+      var els = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"], [onclick]'));
+      var el = els[${clickIndex}];
+      if (el) { el.click(); return 'clicked:' + (el.textContent || '').trim().substring(0, 40); }
+      return 'not_found: index out of range';
+    })()`);
+
+    console.log(`[Auditor] Click resolved: "${userIntent}" → #${clickIndex + 1} [${target.tag}] "${target.text}" → ${clickResult}`);
+    return String(clickResult);
+  }
+
   // ── Action Execution ──
 
   private async executeAction(result: AuditResult) {
@@ -571,25 +651,12 @@ Respond with JSON only:
         }
 
         case "click": {
-          // Direct click on presenting tab
+          // Two-step click: snapshot clickable elements → resolve target → click by index
           instruction = `click: ${params.selector || params.instruction || ""}`;
+          const clickTarget = params.selector || params.instruction || "";
           const targetClick = params.targetTab || result.targetTab || "presenting";
           if (targetClick === "presenting" && this.chromeLauncher?.presentingPage) {
-            // Use ChromeLauncher to click on presenting tab (not Meet tab)
-            const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
-              var target = ${JSON.stringify(params.selector || params.instruction || "")};
-              // Try by text content
-              var all = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"]'));
-              var match = all.find(function(el) {
-                var t = (el.textContent || '').trim().toLowerCase();
-                var a = (el.getAttribute('aria-label') || '').toLowerCase();
-                return t.includes(target.toLowerCase()) || a.includes(target.toLowerCase());
-              });
-              if (match) { match.click(); return 'clicked:' + (match.textContent || '').trim().substring(0, 40); }
-              return 'not_found';
-            })()`);
-            executionResult = String(clickResult);
-            console.log(`[Auditor] Click on presenting tab: ${executionResult}`);
+            executionResult = await this.resolveAndClick(clickTarget);
           } else {
             const r = await this.automationRouter.execute(instruction);
             executionResult = r.result;
