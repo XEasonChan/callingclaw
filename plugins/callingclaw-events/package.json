@@ -1,0 +1,9 @@
+{
+  "name": "callingclaw-events-channel",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  }
+}

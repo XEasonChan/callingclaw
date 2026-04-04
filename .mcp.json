@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "callingclaw-events": {
+      "command": "bun",
+      "args": ["plugins/callingclaw-events/index.ts"]
+    }
+  }
+}
