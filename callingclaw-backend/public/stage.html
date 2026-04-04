@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw Presenting</title>
+  <link rel="icon" type="image/png" href="./logo.png">
+  <style>
+    /* ── Design Tokens ─────────────────────────────── */
+    :root {
+      --bg: #08080a;
+      --surface: #111114;
+      --surface2: #19191e;
+      --surface3: #222228;
+      --border: #2a2a32;
+      --text: #e8e8ec;
+      --text2: #8888a0;
+      --text3: #55556a;
+      --accent: #E63946;
+      --accent-dim: rgba(230, 57, 70, 0.15);
+      --blue: #6366f1;
+      --blue-dim: rgba(99, 102, 241, 0.12);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.12);
+      --yellow: #eab308;
+      --yellow-dim: rgba(234, 179, 8, 0.12);
+      --cyan: #06b6d4;
+      --cyan-dim: rgba(6, 182, 212, 0.12);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+      --mono: 'SF Mono', 'JetBrains Mono', 'Menlo', monospace;
+      /* Glow colors */
+      --glow-1: #E63946;
+      --glow-2: #6366f1;
+      --glow-3: #06b6d4;
+      --glow-4: #E63946;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Breathing Edge Glow ─────────────────────── */
+    .glow-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .glow-border {
+      position: absolute;
+      inset: 0;
+      border-radius: 0;
+      opacity: 0.6;
+      transition: opacity 1s ease;
+    }
+
+    .glow-border::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      background: conic-gradient(
+        from var(--glow-angle, 0deg),
+        var(--glow-1),
+        var(--glow-2),
+        var(--glow-3),
+        var(--glow-4)
+      );
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      -webkit-mask-composite: xor;
+      padding: 3px;
+      animation: glowRotate 8s linear infinite;
+      filter: blur(8px);
+    }
+
+    .glow-border.active {
+      opacity: 1;
+    }
+
+    .glow-border.active::before {
+      animation-duration: 4s;
+      filter: blur(12px);
+      padding: 5px;
+    }
+
+    .glow-border.thinking::before {
+      animation-duration: 2s;
+      filter: blur(16px);
+      padding: 6px;
+    }
+
+    @keyframes glowRotate {
+      to { --glow-angle: 360deg; }
+    }
+
+    @property --glow-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    /* Inner subtle vignette */
+    .glow-container::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, var(--bg) 100%);
+      pointer-events: none;
+    }
+
+    /* ── Main Layout ─────────────────────────────── */
+    .stage {
+      position: relative;
+      z-index: 1;
+      height: 100vh;
+      display: flex;
+      padding: 20px;
+      gap: 20px;
+    }
+
+    /* ── Left: Slide Player ──────────────────────── */
+    .slide-player {
+      width: 42%;
+      min-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .slide-frame {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .slide-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000;
+    }
+
+    .slide-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text3);
+    }
+
+    .slide-placeholder .logo-mark {
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--accent), var(--blue));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -1px;
+      opacity: 0.7;
+    }
+
+    .slide-placeholder p {
+      font-size: 13px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .slide-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 4px;
+    }
+
+    .slide-nav .slide-info {
+      font-size: 12px;
+      color: var(--text3);
+      flex: 1;
+    }
+
+    .slide-nav button {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text2);
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .slide-nav button:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    /* ── Right: AI Workspace ─────────────────────── */
+    .workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    /* ── Header ──────────────────────────────────── */
+    .stage-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 0;
+      flex-shrink: 0;
+    }
+
+    .stage-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stage-logo img {
+      width: 18px;
+      height: 18px;
+    }
+
+    .stage-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .stage-meeting {
+      font-size: 12px;
+      color: var(--text2);
+      margin-left: 8px;
+    }
+
+    .stage-clock {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stage-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .stage-status.connected {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .stage-status.disconnected {
+      background: rgba(239,68,68,0.12);
+      color: #ef4444;
+    }
+
+    .stage-status .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Model Cards ─────────────────────────────── */
+    .models {
+      display: flex;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .model-card {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+
+    .model-card.active {
+      border-color: var(--card-accent, var(--border));
+    }
+
+    .model-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--card-accent, var(--border));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .model-card.active::before {
+      opacity: 1;
+    }
+
+    .model-card.system1 {
+      --card-accent: var(--accent);
+    }
+
+    .model-card.system2 {
+      --card-accent: var(--blue);
+    }
+
+    .model-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .model-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .system1 .model-icon {
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .system2 .model-icon {
+      background: var(--blue-dim);
+      color: var(--blue);
+    }
+
+    .model-name {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .model-provider {
+      font-size: 10px;
+      color: var(--text3);
+      margin-top: 1px;
+    }
+
+    .model-status {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text2);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .model-status .indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text3);
+      transition: all 0.3s;
+    }
+
+    .model-status .indicator.active {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .model-status .indicator.thinking {
+      background: var(--yellow);
+      box-shadow: 0 0 8px var(--yellow);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .model-body {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text3);
+      line-height: 1.6;
+      min-height: 36px;
+      max-height: 60px;
+      overflow-y: auto;
+    }
+
+    .model-body .delta {
+      color: var(--text2);
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(2px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* ── Event Feed ──────────────────────────────── */
+    .event-feed {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .feed-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .feed-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text2);
+    }
+
+    .feed-count {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      background: var(--surface2);
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+
+    .feed-filters {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+    }
+
+    .feed-filter {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text3);
+      cursor: pointer;
+      font-family: var(--font);
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .feed-filter:hover { color: var(--text2); }
+    .feed-filter.active { background: var(--surface3); color: var(--text); }
+
+    .feed-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .feed-scroll::-webkit-scrollbar { width: 4px; }
+    .feed-scroll::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+
+    .event-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 5px 16px;
+      animation: fadeIn 0.2s ease;
+      transition: background 0.1s;
+    }
+
+    .event-row:hover {
+      background: var(--surface2);
+    }
+
+    .event-time {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      flex-shrink: 0;
+      min-width: 52px;
+      padding-top: 2px;
+    }
+
+    .event-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      letter-spacing: 0.3px;
+      min-width: 48px;
+      text-align: center;
+    }
+
+    .event-badge.voice   { background: var(--accent-dim); color: var(--accent); }
+    .event-badge.meeting  { background: var(--green-dim);  color: var(--green); }
+    .event-badge.compute  { background: var(--blue-dim);   color: var(--blue); }
+    .event-badge.browser  { background: var(--cyan-dim);   color: var(--cyan); }
+    .event-badge.memory   { background: var(--yellow-dim); color: var(--yellow); }
+    .event-badge.system   { background: var(--surface3);   color: var(--text3); }
+
+    .event-type {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text2);
+      flex-shrink: 0;
+      min-width: 160px;
+    }
+
+    .event-detail {
+      font-size: 11px;
+      color: var(--text3);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .event-detail .highlight {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ── Documents Panel ─────────────────────────── */
+    .documents {
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .docs-header {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text2);
+      margin-bottom: 8px;
+    }
+
+    .doc-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .doc-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      font-size: 11px;
+      color: var(--text2);
+      transition: all 0.15s;
+      cursor: default;
+    }
+
+    .doc-item:hover {
+      background: var(--surface3);
+      color: var(--text);
+    }
+
+    .doc-icon {
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .doc-name {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .doc-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .doc-badge.new {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .doc-badge.modified {
+      background: var(--yellow-dim);
+      color: var(--yellow);
+    }
+
+    /* ── Empty State ─────────────────────────────── */
+    .feed-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text3);
+      font-size: 13px;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .feed-empty .shimmer {
+      width: 200px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--surface3), transparent);
+      border-radius: 1px;
+      animation: shimmer 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    /* ── Responsive ──────────────────────────────── */
+    @media (max-width: 900px) {
+      .stage { flex-direction: column; }
+      .slide-player { width: 100%; min-width: 0; max-height: 40vh; }
+      .models { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Breathing edge glow -->
+  <div class="glow-container">
+    <div class="glow-border" id="glowBorder"></div>
+  </div>
+
+  <div class="stage">
+    <!-- Left: Slide Player -->
+    <div class="slide-player" id="slidePlayer" style="display: none;">
+      <div class="slide-frame">
+        <iframe id="slideFrame" src="about:blank"></iframe>
+        <div class="slide-placeholder" id="slidePlaceholder">
+          <div class="logo-mark">CC</div>
+          <p>Presentation will appear here<br>when slides are loaded</p>
+        </div>
+      </div>
+      <div class="slide-nav" id="slideNav" style="display: none;">
+        <button onclick="slideAction('prev')" title="Previous">&larr;</button>
+        <span class="slide-info" id="slideInfo">Slide 1 / 1</span>
+        <button onclick="slideAction('next')" title="Next">&rarr;</button>
+      </div>
+    </div>
+
+    <!-- Right: AI Workspace -->
+    <div class="workspace">
+      <!-- Header -->
+      <div class="stage-header">
+        <div class="stage-logo">
+          <img src="./logo.png" alt="CC" onerror="this.parentElement.textContent='CC'">
+        </div>
+        <span class="stage-title">CallingClaw</span>
+        <span class="stage-meeting" id="meetingName"></span>
+        <span class="stage-clock" id="clock"></span>
+        <span class="stage-status disconnected" id="wsStatus">
+          <span class="dot"></span>
+          <span id="wsStatusText">Connecting</span>
+        </span>
+      </div>
+
+      <!-- Dual Model Cards -->
+      <div class="models">
+        <!-- System 1: Voice / Realtime -->
+        <div class="model-card system1" id="card-s1">
+          <div class="model-header">
+            <div class="model-icon">S1</div>
+            <div>
+              <div class="model-name">Realtime Voice</div>
+              <div class="model-provider" id="s1-provider">OpenAI Realtime</div>
+            </div>
+            <div class="model-status">
+              <span class="indicator" id="s1-indicator"></span>
+              <span id="s1-status">Idle</span>
+            </div>
+          </div>
+          <div class="model-body" id="s1-body">
+            Waiting for voice session...
+          </div>
+        </div>
+
+        <!-- System 2: Deep Thinking -->
+        <div class="model-card system2" id="card-s2">
+          <div class="model-header">
+            <div class="model-icon">S2</div>
+            <div>
+              <div class="model-name">Deep Reasoning</div>
+              <div class="model-provider">OpenClaw Agent</div>
+            </div>
+            <div class="model-status">
+              <span class="indicator" id="s2-indicator"></span>
+              <span id="s2-status">Idle</span>
+            </div>
+          </div>
+          <div class="model-body" id="s2-body">
+            Standing by for complex tasks...
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Feed -->
+      <div class="event-feed">
+        <div class="feed-header">
+          <span class="feed-title">Activity Stream</span>
+          <span class="feed-count" id="eventCount">0</span>
+          <div class="feed-filters">
+            <button class="feed-filter active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="feed-filter" data-filter="voice" onclick="setFilter('voice')">Voice</button>
+            <button class="feed-filter" data-filter="compute" onclick="setFilter('compute')">Compute</button>
+            <button class="feed-filter" data-filter="meeting" onclick="setFilter('meeting')">Meeting</button>
+          </div>
+        </div>
+        <div class="feed-scroll" id="feedScroll">
+          <div class="feed-empty" id="feedEmpty">
+            <span>Waiting for events...</span>
+            <div class="shimmer"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Related Documents -->
+      <div class="documents" id="documents" style="display: none;">
+        <div class="docs-header">Working Documents</div>
+        <div class="doc-list" id="docList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Configuration ────────────────────────────────
+    var API = 'http://localhost:4000';
+    var WS_URL = 'ws://localhost:4000/ws/events';
+    var MAX_EVENTS = 200;
+    var eventCount = 0;
+    var currentFilter = 'all';
+    var ws = null;
+    var documents = new Map(); // path -> { name, icon, badge, ts }
+
+    // ── Clock ────────────────────────────────────────
+    function updateClock() {
+      var now = new Date();
+      document.getElementById('clock').textContent =
+        now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ── Event categorization ─────────────────────────
+    function categorize(type) {
+      if (type.startsWith('voice.') || type.startsWith('auditor.')) return 'voice';
+      if (type.startsWith('meeting.') || type.startsWith('calendar.') || type.startsWith('scheduler.') || type.startsWith('postmeeting.')) return 'meeting';
+      if (type.startsWith('computer.') || type.startsWith('openclaw.') || type.startsWith('opencli.')) return 'compute';
+      if (type.startsWith('browser_loop.') || type.startsWith('automation.')) return 'browser';
+      if (type.startsWith('retriever.') || type.startsWith('context.') || type.startsWith('workspace.')) return 'memory';
+      return 'system';
+    }
+
+    function categoryLabel(cat) {
+      var labels = { voice: 'Voice', meeting: 'Meet', compute: 'Think', browser: 'Browse', memory: 'Memory', system: 'Sys' };
+      return labels[cat] || 'Sys';
+    }
+
+    // ── Format event detail ──────────────────────────
+    function formatDetail(type, data) {
+      if (!data) return '';
+      // Voice events
+      if (type === 'voice.tool_call') return 'Tool: <span class="highlight">' + esc(data.tool || '') + '</span>' + (data.summary ? ' — ' + esc(trunc(data.summary, 60)) : '');
+      if (type === 'voice.started') return 'Provider: <span class="highlight">' + esc(data.provider || '') + '</span>, mode: ' + esc(data.audio_mode || '');
+      // Meeting
+      if (type === 'meeting.started') return '<span class="highlight">Meeting joined</span>';
+      if (type === 'meeting.ended') return '<span class="highlight">Meeting ended</span>';
+      if (type === 'meeting.prep_ready') return 'Prep materials ready';
+      if (type === 'meeting.prep_progress') return esc(data.step || '');
+      if (type === 'meeting.action_item') return esc(trunc(data.text || data.action || '', 80));
+      if (type === 'meeting.vision') return esc(trunc(data.description || data.scene || '', 80));
+      if (type === 'meeting.context_pushed') return 'Context injected: <span class="highlight">' + esc(data.source || '') + '</span>';
+      // Computer / OpenClaw
+      if (type === 'computer.task_started') return '<span class="highlight">' + esc(trunc(data.instruction || data.task || '', 80)) + '</span>';
+      if (type === 'computer.task_done') return (data.error ? 'Error: ' : 'Done: ') + esc(trunc(data.summary || data.error || '', 80));
+      if (type === 'openclaw.delta') return esc(trunc(data.text || '', 100));
+      // Retriever
+      if (type === 'retriever.topic') return 'Topic: <span class="highlight">' + esc(data.topic || '') + '</span>';
+      if (type === 'retriever.searching') return 'Searching: ' + esc(data.query || '');
+      if (type === 'retriever.complete') return 'Found ' + (data.results || 0) + ' results';
+      // Browser
+      if (type === 'browser_loop.started') return 'Goal: <span class="highlight">' + esc(trunc(data.goal || '', 60)) + '</span>';
+      if (type === 'browser_loop.step') return 'Step: ' + esc(trunc(data.action || '', 60));
+      if (type === 'browser_loop.done') return '<span class="highlight">Complete</span>';
+      // OpenCLI
+      if (type === 'opencli.adapter_start') return 'Adapter: <span class="highlight">' + esc(data.adapter || '') + '</span>';
+      if (type === 'opencli.adapter_done') return 'Done in ' + (data.duration || '?') + 'ms';
+      // Presentation
+      if (type === 'presentation.slide') return 'Slide ' + (data.index || '?') + '/' + (data.total || '?') + ': ' + esc(data.slide || '');
+      if (type === 'presentation.started') return '<span class="highlight">Presentation started</span>';
+      if (type === 'presentation.done') return '<span class="highlight">Presentation complete</span>';
+      // Auditor
+      if (type === 'auditor.intent') return 'Intent: <span class="highlight">' + esc(data.intent || '') + '</span>';
+      if (type === 'auditor.fast_lane') return esc(data.action || '');
+      // Fallback: show first string value
+      var keys = Object.keys(data);
+      for (var i = 0; i < Math.min(keys.length, 3); i++) {
+        var v = data[keys[i]];
+        if (typeof v === 'string' && v.length > 0) return esc(keys[i]) + ': ' + esc(trunc(v, 60));
+      }
+      return '';
+    }
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function trunc(s, n) { return s.length > n ? s.slice(0, n) + '...' : s; }
+
+    // ── Add event to feed ────────────────────────────
+    function addEvent(evt) {
+      var feedScroll = document.getElementById('feedScroll');
+      var feedEmpty = document.getElementById('feedEmpty');
+      if (feedEmpty) feedEmpty.remove();
+
+      eventCount++;
+      document.getElementById('eventCount').textContent = eventCount;
+
+      var cat = categorize(evt.type);
+      var time = new Date(evt.timestamp || Date.now());
+      var timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      var detail = formatDetail(evt.type, evt.data);
+
+      var row = document.createElement('div');
+      row.className = 'event-row';
+      row.dataset.category = cat;
+      if (currentFilter !== 'all' && cat !== currentFilter) {
+        row.style.display = 'none';
+      }
+
+      row.innerHTML =
+        '<span class="event-time">' + timeStr + '</span>' +
+        '<span class="event-badge ' + cat + '">' + categoryLabel(cat) + '</span>' +
+        '<span class="event-type">' + esc(evt.type) + '</span>' +
+        '<span class="event-detail">' + detail + '</span>';
+
+      feedScroll.appendChild(row);
+
+      // Auto-scroll if near bottom
+      var isNearBottom = feedScroll.scrollHeight - feedScroll.scrollTop - feedScroll.clientHeight < 80;
+      if (isNearBottom) {
+        feedScroll.scrollTop = feedScroll.scrollHeight;
+      }
+
+      // Prune old events
+      while (feedScroll.children.length > MAX_EVENTS) {
+        feedScroll.removeChild(feedScroll.firstChild);
+      }
+    }
+
+    // ── Filter events ────────────────────────────────
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.feed-filter').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+      });
+      document.querySelectorAll('.event-row').forEach(function(row) {
+        row.style.display = (filter === 'all' || row.dataset.category === filter) ? '' : 'none';
+      });
+    }
+
+    // ── Update Model Cards ───────────────────────────
+    function updateModelCards(evt) {
+      var type = evt.type;
+      var data = evt.data || {};
+
+      // ── System 1: Voice ──
+      if (type === 'voice.started') {
+        setS1('Listening', 'active', data.provider || 'Realtime');
+        document.getElementById('s1-provider').textContent = data.provider ? (data.provider.charAt(0).toUpperCase() + data.provider.slice(1) + ' Realtime') : 'Realtime API';
+        setGlow('active');
+      } else if (type === 'voice.stopped') {
+        setS1('Idle', '', '');
+        setGlow('');
+      } else if (type === 'voice.tool_call') {
+        setS1('Using tool: ' + (data.tool || ''), 'thinking', '');
+        var body = document.getElementById('s1-body');
+        body.innerHTML = '<span class="delta">' + esc(data.tool || '') + (data.summary ? ' — ' + esc(trunc(data.summary, 100)) : '') + '</span>';
+        setGlow('thinking');
+        setTimeout(function() { setS1('Listening', 'active', ''); setGlow('active'); }, 3000);
+      } else if (type === 'auditor.intent') {
+        var body = document.getElementById('s1-body');
+        body.innerHTML = '<span class="delta">Intent: ' + esc(data.intent || '') + '</span>';
+      } else if (type === 'retriever.searching') {
+        setS1('Searching memory', 'thinking', '');
+        setGlow('thinking');
+      } else if (type === 'retriever.complete') {
+        setS1('Listening', 'active', '');
+        setGlow('active');
+      }
+
+      // ── System 2: OpenClaw / Computer Use ──
+      if (type === 'computer.task_started') {
+        setS2('Working', 'thinking', trunc(data.instruction || data.task || '', 120));
+        setGlow('thinking');
+      } else if (type === 'computer.task_done') {
+        setS2('Done', 'active', data.summary || 'Task complete');
+        setTimeout(function() { setS2('Idle', '', 'Standing by...'); setGlow('active'); }, 5000);
+      } else if (type === 'openclaw.delta') {
+        var body = document.getElementById('s2-body');
+        body.innerHTML = '<span class="delta">' + esc(trunc(data.text || '', 120)) + '</span>';
+        body.scrollTop = body.scrollHeight;
+      } else if (type === 'opencli.adapter_start') {
+        setS2('Running adapter', 'thinking', data.adapter || '');
+        setGlow('thinking');
+      } else if (type === 'opencli.adapter_done') {
+        setS2('Done', 'active', data.adapter + ' (' + (data.duration || '?') + 'ms)');
+        setTimeout(function() { setS2('Idle', '', 'Standing by...'); setGlow('active'); }, 3000);
+      } else if (type === 'opencli.operate_start') {
+        setS2('Browsing', 'thinking', data.goal || '');
+      } else if (type === 'browser_loop.started') {
+        setS2('Browser action', 'thinking', data.goal || '');
+        setGlow('thinking');
+      } else if (type === 'browser_loop.done') {
+        setS2('Done', 'active', 'Browser task complete');
+        setTimeout(function() { setS2('Idle', '', 'Standing by...'); setGlow('active'); }, 3000);
+      }
+
+      // ── Meeting context ──
+      if (type === 'meeting.started') {
+        document.getElementById('meetingName').textContent = data.title || data.meetingId || 'Active Meeting';
+      } else if (type === 'meeting.ended') {
+        document.getElementById('meetingName').textContent = '';
+      }
+
+      // ── Track documents ──
+      trackDocuments(evt);
+    }
+
+    function setS1(status, state, bodyText) {
+      document.getElementById('s1-status').textContent = status;
+      var ind = document.getElementById('s1-indicator');
+      ind.className = 'indicator' + (state ? ' ' + state : '');
+      var card = document.getElementById('card-s1');
+      card.classList.toggle('active', !!state);
+      if (bodyText !== undefined && bodyText !== '') {
+        document.getElementById('s1-body').innerHTML = '<span class="delta">' + esc(bodyText) + '</span>';
+      }
+    }
+
+    function setS2(status, state, bodyText) {
+      document.getElementById('s2-status').textContent = status;
+      var ind = document.getElementById('s2-indicator');
+      ind.className = 'indicator' + (state ? ' ' + state : '');
+      var card = document.getElementById('card-s2');
+      card.classList.toggle('active', !!state);
+      if (bodyText !== undefined && bodyText !== '') {
+        document.getElementById('s2-body').innerHTML = '<span class="delta">' + esc(bodyText) + '</span>';
+      }
+    }
+
+    function setGlow(state) {
+      var glow = document.getElementById('glowBorder');
+      glow.className = 'glow-border' + (state ? ' ' + state : '');
+    }
+
+    // ── Document tracking ────────────────────────────
+    function trackDocuments(evt) {
+      var data = evt.data || {};
+      var docPath = null;
+      var badge = null;
+
+      if (evt.type === 'meeting.prep_ready' && data.filepath) {
+        docPath = data.filepath; badge = 'new';
+      } else if (evt.type === 'meeting.summary_ready' && data.filepath) {
+        docPath = data.filepath; badge = 'new';
+      } else if (evt.type === 'retriever.complete' && data.source) {
+        docPath = data.source; badge = null;
+      } else if (evt.type === 'workspace.updated' && data.file) {
+        docPath = data.file; badge = 'modified';
+      }
+
+      if (!docPath) return;
+
+      var name = docPath.split('/').pop() || docPath;
+      var icon = getDocIcon(name);
+      documents.set(docPath, { name: name, icon: icon, badge: badge, ts: Date.now() });
+      renderDocuments();
+    }
+
+    function getDocIcon(name) {
+      if (name.endsWith('.md')) return '\u{1F4DD}';
+      if (name.endsWith('.html')) return '\u{1F310}';
+      if (name.endsWith('.json')) return '\u{1F4CB}';
+      if (name.endsWith('.ts') || name.endsWith('.js')) return '\u{1F4BB}';
+      if (name.endsWith('.png') || name.endsWith('.jpg')) return '\u{1F5BC}';
+      return '\u{1F4C4}';
+    }
+
+    function renderDocuments() {
+      var container = document.getElementById('documents');
+      var list = document.getElementById('docList');
+      if (documents.size === 0) { container.style.display = 'none'; return; }
+
+      container.style.display = '';
+      list.innerHTML = '';
+
+      // Sort by timestamp, newest first
+      var sorted = Array.from(documents.entries()).sort(function(a, b) { return b[1].ts - a[1].ts; });
+      sorted.forEach(function(entry) {
+        var doc = entry[1];
+        var item = document.createElement('div');
+        item.className = 'doc-item';
+        item.innerHTML =
+          '<span class="doc-icon">' + doc.icon + '</span>' +
+          '<span class="doc-name">' + esc(doc.name) + '</span>' +
+          (doc.badge ? '<span class="doc-badge ' + doc.badge + '">' + doc.badge + '</span>' : '');
+        list.appendChild(item);
+      });
+    }
+
+    // ── Slide player control ─────────────────────────
+    function showSlidePlayer(url) {
+      var player = document.getElementById('slidePlayer');
+      var placeholder = document.getElementById('slidePlaceholder');
+      var frame = document.getElementById('slideFrame');
+      player.style.display = '';
+      if (url) {
+        frame.src = url;
+        placeholder.style.display = 'none';
+      }
+    }
+
+    function hideSlidePlayer() {
+      document.getElementById('slidePlayer').style.display = 'none';
+    }
+
+    function slideAction(dir) {
+      // Send slide navigation to backend
+      fetch(API + '/api/screen/scroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: dir === 'next' ? 'down' : 'up' })
+      }).catch(function() {});
+    }
+
+    // Handle presentation events for slide player
+    function handlePresentationEvent(evt) {
+      if (evt.type === 'presentation.started') {
+        showSlidePlayer(null);
+      } else if (evt.type === 'presentation.slide') {
+        var info = document.getElementById('slideInfo');
+        if (info) info.textContent = 'Slide ' + (evt.data.index || 1) + ' / ' + (evt.data.total || '?');
+        document.getElementById('slideNav').style.display = '';
+      } else if (evt.type === 'presentation.done') {
+        // Keep showing but fade nav
+      }
+    }
+
+    // ── WebSocket connection ─────────────────────────
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = function() {
+        var status = document.getElementById('wsStatus');
+        status.className = 'stage-status connected';
+        document.getElementById('wsStatusText').textContent = 'Live';
+      };
+
+      ws.onmessage = function(e) {
+        try {
+          var evt = JSON.parse(e.data);
+          addEvent(evt);
+          updateModelCards(evt);
+          handlePresentationEvent(evt);
+        } catch (err) {
+          console.warn('[Stage] Parse error:', err);
+        }
+      };
+
+      ws.onclose = function() {
+        var status = document.getElementById('wsStatus');
+        status.className = 'stage-status disconnected';
+        document.getElementById('wsStatusText').textContent = 'Reconnecting';
+        setTimeout(connectWS, 3000);
+      };
+
+      ws.onerror = function() {};
+    }
+
+    // ── Init ─────────────────────────────────────────
+    connectWS();
+
+    // Fetch initial status
+    fetch(API + '/api/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        // Show meeting name if active
+        if (d.meeting && d.meeting.active) {
+          document.getElementById('meetingName').textContent = d.meeting.title || 'Active Meeting';
+        }
+        // Update voice provider
+        if (d.voiceSession && d.voiceSession.provider) {
+          document.getElementById('s1-provider').textContent =
+            d.voiceSession.provider.charAt(0).toUpperCase() + d.voiceSession.provider.slice(1) + ' Realtime';
+          if (d.voiceSession.connected) {
+            setS1('Listening', 'active', 'Voice session active');
+            setGlow('active');
+          }
+        }
+      })
+      .catch(function() {});
+
+    // Listen for slide URL via postMessage (from backend or presenter)
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'load-slide') {
+        showSlidePlayer(e.data.url);
+      }
+    });
+
+    // URL params: ?slide=<url> to pre-load slides
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('slide')) {
+      showSlidePlayer(params.get('slide'));
+    }
+  </script>
+</body>
+</html>

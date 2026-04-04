@@ -1125,24 +1125,27 @@ export class ChromeLauncher {
    *   3. Chrome's --auto-select-desktop-capture-source=CallingClaw Presenting
    *      auto-selects that tab (no dialog, no manual step)
    *
-   * @param url - URL to present (http, file://, or localhost). If omitted, shares entire screen.
+   * @param url - URL to present (http, file://, or localhost). If omitted, opens Meeting Stage dashboard.
    */
   async shareScreen(url?: string): Promise<{ success: boolean; message: string }> {
     if (!this._page || !this._context) return { success: false, message: "No page — call launch() first" };
     const meetPage = this._page;
 
     try {
+      // Default to Meeting Stage when no URL specified
+      const presentUrl = url || `http://localhost:${CONFIG.port}/stage`;
+
       // Step 1: Open target URL in a "presenting" tab
-      if (url) {
+      if (presentUrl) {
         // Close previous presenting tab if any
         if (this._presentingPage) {
           try { await this._presentingPage.close(); } catch {}
         }
         this._presentingPage = await this._context.newPage();
-        await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await this._presentingPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
         // Rename tab title to match Chrome's auto-select flag
         await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
-        console.log(`[ShareScreen] Opened presenting tab: ${url}`);
+        console.log(`[ShareScreen] Opened presenting tab: ${presentUrl}`);
 
         // Switch back to Meet
         await meetPage.bringToFront();
@@ -1185,7 +1188,7 @@ export class ChromeLauncher {
       return {
         success,
         message: success
-          ? `Presenting${url ? ': ' + url : ' (entire screen)'}`
+          ? `Presenting${url ? ': ' + url : ' (Meeting Stage)'}`
           : "Sharing may not have started — check macOS Screen Recording permission",
       };
     } catch (e: any) {

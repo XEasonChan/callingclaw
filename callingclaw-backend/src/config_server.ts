@@ -3876,6 +3876,7 @@ STEP-BY-STEP FLOW:
         "/test-context-retriever": "/test-context-retriever.html",
         "/test-hub": "/test-hub.html",
         "/tests": "/test-hub.html",
+        "/stage": "/stage.html",
       };
       const resolvedPath = pathnameAlias[url.pathname] ?? url.pathname;
       const publicPath = `${import.meta.dir}/../public${resolvedPath === "/" ? "/callingclaw-panel.html" : resolvedPath}`;
