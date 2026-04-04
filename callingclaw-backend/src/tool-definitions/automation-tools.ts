@@ -91,7 +91,7 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
       },
       // ── Local File Search (CLI agent loop) ──
       // Enables multi-turn search: model calls search_files → sees results → calls open_file
-      // Not available on Gemini (4-tool limit), Gemini uses enriched open_file result instead
+      // Not in Gemini's hardcoded 9-tool set (gemini-adapter.ts); Gemini uses open_file + computer_action instead
       {
         name: "search_files",
         description:
@@ -249,43 +249,88 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           const query = (args.query as string) || "";
           const contentSearch = !!args.content_search;
           const home = require("os").homedir();
-          const searchDirs = [
-            `${home}/Library/Mobile Documents/com~apple~CloudDocs/Tanka`,
-            `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public`,
-            `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs`,
+
+          // ── Tiered search: prep resources first, then workspace dirs ──
+          // Tier 1: Files referenced in current meeting prep (highest relevance)
+          // Tier 2: Workspace directories (~/.callingclaw/shared, ~/.openclaw/workspace, project docs)
+          const tier1Files: string[] = [];
+          const prepBrief = meetingPrepSkill?.currentBrief;
+          if (prepBrief) {
+            if (prepBrief.filePaths) for (const f of prepBrief.filePaths) tier1Files.push(f.path);
+            if (prepBrief.browserUrls) for (const u of prepBrief.browserUrls) tier1Files.push(u.url);
+          }
+          // Also check stageDocuments (files already opened in the meeting)
+          for (const doc of context.stageDocuments) tier1Files.push(doc.path);
+
+          const tier2Dirs = [
             `${home}/.callingclaw/shared`,
+            `${home}/.openclaw/workspace`,
+            `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs`,
+            `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public`,
+            `${home}/Library/Mobile Documents/com~apple~CloudDocs/Tanka`,
           ];
 
+          // ── Tokenize + normalize query ──
           const kws = query.toLowerCase().split(/[\s/\\._-]+/).filter((w: string) => w.length > 1);
-          const results: string[] = [];
+          if (kws.length === 0) return "No search keywords provided.";
 
-          for (const dir of searchDirs) {
+          // ── Scoring: fuzzy match with bonus for all-keyword matches ──
+          type ScoredFile = { path: string; score: number; tier: number };
+          const scored: ScoredFile[] = [];
+          const seen = new Set<string>();
+
+          function scoreFile(filePath: string, tier: number) {
+            if (seen.has(filePath)) return;
+            seen.add(filePath);
+            const name = filePath.toLowerCase().split("/").pop() || "";
+            const fullLower = filePath.toLowerCase();
+            let score = 0;
+            let matched = 0;
+            for (const kw of kws) {
+              if (name.includes(kw)) { score += 10; matched++; }       // filename match (strong)
+              else if (fullLower.includes(kw)) { score += 3; matched++; } // path match (weak)
+            }
+            if (matched === 0) return;
+            // Bonus: all keywords matched → strong relevance signal
+            if (matched === kws.length) score += 20;
+            // Tier bonus: prep files rank higher
+            if (tier === 1) score += 15;
+            scored.push({ path: filePath, score, tier });
+          }
+
+          // Score tier 1 (prep resources)
+          for (const f of tier1Files) scoreFile(f, 1);
+
+          // Score tier 2 (workspace dirs)
+          for (const dir of tier2Dirs) {
             try {
               if (contentSearch && kws.length > 0) {
-                // grep inside file contents (slower but finds files by content, not just name)
                 const grepPattern = kws.slice(0, 3).join("|");
-                const out = await Bun.$`grep -ril --include="*.html" --include="*.md" --include="*.json" ${grepPattern} ${dir} 2>/dev/null`.text();
+                const out = await Bun.$`grep -ril --include="*.html" --include="*.md" --include="*.json" --include="*.pdf" ${grepPattern} ${dir} 2>/dev/null`.text();
                 for (const line of out.split("\n")) {
                   const p = line.trim();
-                  if (p && !results.includes(p)) results.push(p);
+                  if (p) scoreFile(p, 2);
                 }
               } else {
-                // filename search (fast)
                 const out = await Bun.$`find ${dir} -maxdepth 4 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) -not -path "*/node_modules/*" 2>/dev/null`.text();
                 for (const line of out.split("\n")) {
                   const p = line.trim();
-                  if (p && kws.some(k => p.toLowerCase().includes(k))) results.push(p);
+                  if (p) scoreFile(p, 2);
                 }
               }
             } catch {}
           }
 
-          if (results.length === 0) {
+          // Sort by score descending
+          scored.sort((a, b) => b.score - a.score);
+
+          if (scored.length === 0) {
             return `No files found matching "${query}". Try different keywords${!contentSearch ? " or set content_search=true to search inside files" : ""}.`;
           }
 
-          const short = results.slice(0, 10).map((f, i) => `${i + 1}. ${f.replace(home, "~")}`).join("\n");
-          return `Found ${results.length} file(s) matching "${query}":\n${short}${results.length > 10 ? `\n... and ${results.length - 10} more` : ""}\n\nUse open_file with the full path to open one.`;
+          const top = scored.slice(0, 10);
+          const short = top.map((f, i) => `${i + 1}. ${f.path.replace(home, "~")} (score: ${f.score})`).join("\n");
+          return `Found ${scored.length} file(s) matching "${query}":\n${short}${scored.length > 10 ? `\n... and ${scored.length - 10} more` : ""}\n\nUse open_file with the full path to open one.`;
         }
         // ── exec: run shell command (atomic action for agent loop) ──
         case "exec": {

@@ -58,12 +58,21 @@ export class VisionModule {
     this._onScreenDescription = options.onScreenDescription;
     this._onFrameCapture = options.onFrameCapture;
 
-    // Gemini Flash via OpenRouter
-    this.visionClient = new OpenAI({
-      apiKey: CONFIG.openrouter.apiKey,
-      baseURL: CONFIG.openrouter.baseUrl,
-    });
-    this.visionModel = CONFIG.vision.model;
+    // Vision model: prefer OpenRouter (Gemini Flash), fallback to OpenAI (gpt-4o-mini)
+    if (CONFIG.openrouter.apiKey) {
+      this.visionClient = new OpenAI({
+        apiKey: CONFIG.openrouter.apiKey,
+        baseURL: CONFIG.openrouter.baseUrl,
+      });
+      this.visionModel = CONFIG.vision.model;
+    } else if (CONFIG.openai.apiKey) {
+      this.visionClient = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+      this.visionModel = "gpt-4o-mini";
+      console.log("[Vision] Using OpenAI gpt-4o-mini as vision fallback (no OpenRouter key)");
+    } else {
+      this.visionClient = new OpenAI({ apiKey: "dummy" });
+      this.visionModel = CONFIG.vision.model;
+    }
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -288,7 +297,31 @@ ${recentTranscript}`;
 
       return response.choices[0]?.message?.content || null;
     } catch (e: any) {
-      console.error(`[Vision] Gemini analysis error: ${e.message}`);
+      console.warn(`[Vision] Primary vision error: ${e.message}`);
+      // Fallback to OpenAI gpt-4o-mini if primary fails (OpenRouter down / no credits)
+      if (CONFIG.openai.apiKey && this.visionModel !== "gpt-4o-mini") {
+        try {
+          const fallbackClient = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+          const fallbackResp = await fallbackClient.chat.completions.create({
+            model: "gpt-4o-mini",
+            max_tokens: meetingMode ? 300 : 500,
+            messages: [
+              { role: "system", content: systemPrompt },
+              {
+                role: "user",
+                content: [
+                  { type: "image_url", image_url: { url: `data:image/jpeg;base64,${screenshot}`, detail: "low" } },
+                  { type: "text", text: userText },
+                ],
+              },
+            ],
+          });
+          console.log("[Vision] Fallback to gpt-4o-mini succeeded");
+          return fallbackResp.choices[0]?.message?.content || null;
+        } catch (e2: any) {
+          console.error(`[Vision] Fallback also failed: ${e2.message}`);
+        }
+      }
       return null;
     } finally {
       this._analyzing = false;

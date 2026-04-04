@@ -555,13 +555,52 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
    * Falls back to simple MEMORY.md keyword search if no API key or agent fails.
    */
   private async semanticSearch(queries: string[]): Promise<RetrievedContext[]> {
+    // Path 0: Check prep brief sections first (instant, no API cost)
+    const brief = this.meetingPrepSkill.currentBrief;
+    if (brief) {
+      const prepResults: RetrievedContext[] = [];
+      const remainingQueries: string[] = [];
+      const sections = [
+        brief.architectureDecisions?.map((d) => `${d.decision}: ${d.rationale}`).join("\n") || "",
+        brief.expectedQuestions?.map((q) => `Q: ${q.question} → ${q.suggestedAnswer}`).join("\n") || "",
+        brief.previousContext || "",
+        brief.keyPoints?.join("\n") || "",
+      ].filter(Boolean);
+
+      for (const q of queries) {
+        const kws = q.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+        let found = false;
+        for (const section of sections) {
+          const lower = section.toLowerCase();
+          const hits = kws.filter((kw) => lower.includes(kw));
+          if (hits.length >= Math.min(2, kws.length)) {
+            prepResults.push({ query: q, content: section.slice(0, 500), retrievedAt: Date.now() });
+            found = true;
+            break;
+          }
+        }
+        if (!found) remainingQueries.push(q);
+      }
+
+      if (remainingQueries.length === 0) {
+        console.log(`[ContextRetriever] All ${queries.length} queries answered from prep brief`);
+        return prepResults;
+      }
+      if (prepResults.length > 0) {
+        console.log(`[ContextRetriever] ${prepResults.length}/${queries.length} answered from prep, ${remainingQueries.length} remain`);
+      }
+      // Fall through to agentic search for remaining queries
+      queries = remainingQueries;
+    }
+
     try {
-      return await Promise.race([
+      const agenticResults = await Promise.race([
         this.agenticSearch(queries),
         new Promise<RetrievedContext[]>((_, reject) =>
           setTimeout(() => reject(new Error("agentic search timeout")), ContextRetriever.AGENT_TIMEOUT_MS)
         ),
       ]);
+      return brief ? [...([] as RetrievedContext[]), ...agenticResults] : agenticResults;
     } catch (err: any) {
       console.warn(`[ContextRetriever] Agentic search failed: ${err.message}, trying keyword fallback`);
       return this.keywordFallback(queries);

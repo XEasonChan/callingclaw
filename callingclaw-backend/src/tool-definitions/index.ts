@@ -6,15 +6,17 @@ import { calendarTools, type CalendarToolDeps } from "./calendar-tools";
 import { meetingTools, type MeetingToolDeps } from "./meeting-tools";
 import { automationTools, type AutomationToolDeps } from "./automation-tools";
 import { aiTools, type AIToolDeps } from "./ai-tools";
+import { prepTools, type PrepToolDeps } from "./prep-tools";
 
 export type { ToolDefinition, ToolModule } from "./types";
 export type { CalendarToolDeps } from "./calendar-tools";
 export type { MeetingToolDeps } from "./meeting-tools";
 export type { AutomationToolDeps } from "./automation-tools";
 export type { AIToolDeps } from "./ai-tools";
+export type { PrepToolDeps } from "./prep-tools";
 
 /** Union of all deps needed by all tool modules */
-export type AllToolDeps = CalendarToolDeps & MeetingToolDeps & AutomationToolDeps & AIToolDeps;
+export type AllToolDeps = CalendarToolDeps & MeetingToolDeps & AutomationToolDeps & AIToolDeps & PrepToolDeps;
 
 /**
  * Build all tool definitions and a unified handler from the given dependencies.
@@ -34,6 +36,7 @@ export function buildAllTools(deps: AllToolDeps): {
     meetingTools(deps),
     automationTools(deps),
     aiTools(deps),
+    prepTools(deps),
   ];
 
   return {

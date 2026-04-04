@@ -7,6 +7,7 @@ import type { ContextRetriever } from "../modules/context-retriever";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import type { OpenClawDispatcher } from "../openclaw-dispatcher";
 import type { EventBus } from "../modules/event-bus";
+import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { OC002_PROMPT, parseOC002, type OC002_Request } from "../openclaw-protocol";
 import { detectLanguage } from "../prompt-constants";
 
@@ -16,10 +17,11 @@ export interface AIToolDeps {
   openclawBridge: OpenClawBridge;
   dispatcher?: OpenClawDispatcher;
   eventBus: EventBus;
+  meetingPrepSkill?: MeetingPrepSkill;
 }
 
 export function aiTools(deps: AIToolDeps): ToolModule {
-  const { contextSync, contextRetriever, openclawBridge, dispatcher, eventBus } = deps;
+  const { contextSync, contextRetriever, openclawBridge, dispatcher, eventBus, meetingPrepSkill } = deps;
 
   const isUsableOpenClawAnswer = (answer: string) => {
     const normalized = answer.trim().toLowerCase();
@@ -67,6 +69,29 @@ export function aiTools(deps: AIToolDeps): ToolModule {
           const query = args.query as string;
           const urgency = (args.urgency as string) || "quick";
           eventBus.emit("voice.tool_call", { tool: "recall_context", query: query.slice(0, 80), urgency });
+
+          // Path -1: Check prep brief sections (instant, <0.1ms)
+          // If the query matches prep content, return immediately without any API call
+          if (meetingPrepSkill?.currentBrief) {
+            const brief = meetingPrepSkill.currentBrief;
+            const kws = query.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2);
+            const sections = [
+              { name: "decisions", text: brief.architectureDecisions?.map((d) => `${d.decision}: ${d.rationale}`).join("\n") || "" },
+              { name: "questions", text: brief.expectedQuestions?.map((q) => `Q: ${q.question} A: ${q.suggestedAnswer}`).join("\n") || "" },
+              { name: "history", text: brief.previousContext || "" },
+              { name: "key_points", text: brief.keyPoints?.join("\n") || "" },
+              { name: "resources", text: [...(brief.filePaths?.map((f) => `${f.description} ${f.path}`) || []), ...(brief.browserUrls?.map((u) => `${u.description} ${u.url}`) || [])].join("\n") },
+            ];
+            for (const s of sections) {
+              if (!s.text) continue;
+              const lower = s.text.toLowerCase();
+              const hits = kws.filter((kw) => lower.includes(kw));
+              if (hits.length >= Math.min(2, kws.length)) {
+                console.log(`[RecallContext] Hit from prep brief (${s.name}): "${query.slice(0, 60)}"`);
+                return `[Prep brief — ${s.name}]\n${s.text}`;
+              }
+            }
+          }
 
           // Path 0: Check ContextRetriever's already-retrieved contexts (instant, <1ms)
           // These are contexts proactively fetched by Haiku gap analysis during the meeting

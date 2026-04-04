@@ -41,6 +41,7 @@ import {
   CORE_IDENTITY,
   MISSION_CONTEXT_PREFIX,
   MISSION_CONTEXT_SUFFIX,
+  PREP_TOOL_HINT,
 } from "./prompt-constants";
 
 // ══════════════════════════════════════════════════════════════
@@ -90,56 +91,57 @@ export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string
 export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefined): string | null {
   if (!brief) return null;
 
-  // ── Playbook path: if speakingPlan exists, inject actionable meeting plan ──
-  // This gives the voice AI a speaking plan + scene cues + decision points,
-  // NOT a research dump. Research stays in the side panel for reference.
+  // ── Playbook path: if speakingPlan exists, inject slim speaking plan ──
   if (brief.speakingPlan && brief.speakingPlan.length > 0) {
     return buildPlaybookContext(brief);
   }
 
-  // ── Legacy path: compressed research (backward compatible) ──
+  // ── Slim brief: ~250 tokens, details available on-demand via read_prep tool ──
   const parts: string[] = [];
 
-  parts.push(`${MISSION_CONTEXT_PREFIX}`);
+  parts.push(MISSION_CONTEXT_PREFIX);
   parts.push(`Topic: ${brief.topic}`);
   parts.push(`Goal: ${brief.goal}`);
-  parts.push(brief.summary);
 
-  if (brief.keyPoints.length > 0) {
-    parts.push(`Key points: ${brief.keyPoints.join("; ")}`);
+  // Resources promoted to top — most actionable info for tool calls
+  const hasFiles = brief.filePaths?.length > 0;
+  const hasUrls = brief.browserUrls?.length > 0;
+  if (hasFiles || hasUrls) {
+    parts.push("\nRESOURCES:");
+    if (hasFiles) {
+      for (const f of brief.filePaths) {
+        const name = f.path.split("/").pop() || f.path;
+        parts.push(`📎 ${name} — ${f.description}`);
+      }
+    }
+    if (hasUrls) {
+      for (const u of brief.browserUrls) {
+        parts.push(`🔗 ${u.description} — ${u.url}`);
+      }
+    }
   }
 
-  if (brief.architectureDecisions.length > 0) {
-    const decisions = brief.architectureDecisions
-      .map((d) => `${d.decision}: ${d.rationale}`)
-      .join("; ");
-    parts.push(`Decisions: ${decisions}`);
+  // Top 3 key points only (full list via read_prep("all_points"))
+  if (brief.keyPoints?.length > 0) {
+    parts.push("\nKEY POINTS:");
+    for (const pt of brief.keyPoints.slice(0, 3)) {
+      parts.push(`- ${pt}`);
+    }
+    if (brief.keyPoints.length > 3) {
+      parts.push(`(${brief.keyPoints.length - 3} more via read_prep)`);
+    }
   }
 
-  if (brief.expectedQuestions.length > 0) {
-    const questions = brief.expectedQuestions
-      .map((q) => `Q: ${q.question} → A: ${q.suggestedAnswer}`)
-      .join(" | ");
-    parts.push(`Expected questions: ${questions}`);
+  // Attendees
+  if (brief.attendees?.length > 0) {
+    const others = brief.attendees.filter((a) => !a.self);
+    if (others.length > 0) {
+      parts.push(`\nAttendees: ${others.map((a) => a.displayName || a.email).join(", ")}`);
+    }
   }
 
-  if (brief.previousContext) {
-    parts.push(`Previous meeting: ${brief.previousContext}`);
-  }
-
-  // File/URL references for Computer Use
-  if (brief.filePaths.length > 0) {
-    const files = brief.filePaths.map((f) => `${f.description}: ${f.path}`).join("; ");
-    parts.push(`Files: ${files}`);
-  }
-
-  if (brief.browserUrls.length > 0) {
-    const urls = brief.browserUrls.map((u) => `${u.description}: ${u.url}`).join("; ");
-    parts.push(`URLs: ${urls}`);
-  }
-
-  parts.push(`${MISSION_CONTEXT_SUFFIX}`);
-  parts.push("Context updates will appear as system messages. Use them naturally — do not repeat verbatim.");
+  parts.push(`\n${PREP_TOOL_HINT}`);
+  parts.push(MISSION_CONTEXT_SUFFIX);
 
   return parts.join("\n");
 }
@@ -154,43 +156,36 @@ function buildPlaybookContext(brief: MeetingPrepBrief): string {
   const plan = brief.speakingPlan!;
   const scenes = brief.scenes || [];
 
-  parts.push(`${MISSION_CONTEXT_PREFIX}`);
+  parts.push(MISSION_CONTEXT_PREFIX);
   parts.push(`Topic: ${brief.topic}`);
   parts.push(`Goal: ${brief.goal}`);
 
-  // Inject speaking plan overview (phase names + time budgets only)
-  parts.push(`\nSPEAKING PLAN (follow this order):`);
+  // Speaking plan overview (phase names + time budgets)
+  parts.push(`\nSPEAKING PLAN (${plan.length} phases):`);
   for (const phase of plan) {
     parts.push(`- ${phase.phase} (~${phase.durationMin}min): ${phase.points}`);
   }
 
-  // Inject first 2 scenes' talking points (progressive — more injected as scenes advance)
+  // Current scene only (subsequent scenes via read_prep("scene", n))
   if (scenes.length > 0) {
-    parts.push(`\nCURRENT SCENE:`);
-    parts.push(`[Scene 1/${scenes.length}] ${scenes[0]!.talkingPoints}`);
+    parts.push(`\nCURRENT SCENE [1/${scenes.length}]:`);
+    parts.push(scenes[0]!.talkingPoints);
     if (scenes.length > 1) {
-      parts.push(`[Next] ${scenes[1]!.talkingPoints.slice(0, 100)}...`);
+      parts.push(`(${scenes.length - 1} more scenes — use read_prep("scene", n) to load)`);
     }
   }
 
-  // Decision points the voice AI should drive
+  // Decision points
   if (brief.decisionPoints && brief.decisionPoints.length > 0) {
-    parts.push(`\nDECISIONS TO DRIVE (ask explicitly, confirm before moving on):`);
+    parts.push(`\nDECISIONS TO DRIVE:`);
     for (const dp of brief.decisionPoints) {
       parts.push(`- ${dp}`);
     }
   }
 
-  // Q&A strategies (compact)
-  if (brief.expectedQuestions.length > 0) {
-    parts.push(`\nQ&A STRATEGIES:`);
-    for (const q of brief.expectedQuestions.slice(0, 5)) {
-      parts.push(`Q: ${q.question} → ${q.suggestedAnswer}`);
-    }
-  }
-
-  parts.push(`${MISSION_CONTEXT_SUFFIX}`);
-  parts.push("You are in PRESENTER mode. Follow the speaking plan. You can see the screen — use scroll/click/navigate tools to advance through content naturally. Drive decisions explicitly.");
+  parts.push(`\n${PREP_TOOL_HINT}`);
+  parts.push(MISSION_CONTEXT_SUFFIX);
+  parts.push("PRESENTER mode. Follow the speaking plan. Use read_prep for Q&A strategies and scene details.");
 
   return parts.join("\n");
 }

@@ -28,6 +28,7 @@
 import { resolve } from "path";
 import { homedir } from "os";
 import { existsSync, mkdirSync, rmSync } from "fs";
+import { CONFIG } from "./config";
 
 // Always use dedicated CallingClaw profile (lightweight, fast startup).
 // Google cookies are imported from the user's main Chrome on first launch.
@@ -499,8 +500,7 @@ export class ChromeLauncher {
         "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
-        "--no-startup-window",                    // Prevent blank windows on launch
-        "--disable-session-crashed-bubble",       // No "restore pages" prompt
+        "--restore-last-session=false",             // Don't restore previous session tabs
         "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab/window matching this title
         "--enable-usermedia-screen-capturing",    // Enable screen capture API
         `--remote-debugging-port=${port}`,
@@ -524,22 +524,6 @@ export class ChromeLauncher {
       }
     }
     await page.goto("about:blank");
-    // Also listen for unexpected new pages and close them (Chrome extensions, popups, etc.)
-    context.on("page", async (newPage) => {
-      // Only auto-close if it's a blank/new tab page (not our presenting tab)
-      try {
-        const url = newPage.url();
-        if (url === "about:blank" || url === "chrome://newtab/" || url === "chrome://new-tab-page/") {
-          // Wait a moment to see if it navigates somewhere
-          await newPage.waitForTimeout(500);
-          const finalUrl = newPage.url();
-          if (finalUrl === "about:blank" || finalUrl.startsWith("chrome://newtab") || finalUrl.startsWith("chrome://new-tab-page")) {
-            console.log(`[ChromeLauncher] Auto-closing unexpected blank tab: ${finalUrl}`);
-            await newPage.close();
-          }
-        }
-      } catch {}
-    });
 
     // Verify init script works
     const check = await page.evaluate(() => !!(window as any).__cc);
@@ -1206,6 +1190,19 @@ export class ChromeLauncher {
 
       const success = status !== "not_sharing";
       console.log(`[ShareScreen] Status: ${status} (${success ? "✅" : "❌"})`);
+
+      // After sharing starts, switch focus to the presenting tab.
+      // Human presenters look at what they're sharing, not the meeting room.
+      // This also ensures BrowserCapture/VisionModule target the right tab.
+      if (success && this._presentingPage) {
+        try {
+          await this._presentingPage.bringToFront();
+          console.log("[ShareScreen] Switched focus to presenting tab");
+        } catch (e: any) {
+          console.warn("[ShareScreen] Could not switch to presenting tab:", e.message);
+        }
+      }
+
       return {
         success,
         message: success

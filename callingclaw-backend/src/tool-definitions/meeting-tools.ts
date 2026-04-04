@@ -774,7 +774,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           if (textExts.test(resolvedPath)) {
             try {
               const fileContent = await Bun.file(resolvedPath).text();
-              const maxChars = 3000;
+              const maxChars = 4000;
               const truncated = fileContent.length > maxChars
                 ? fileContent.slice(0, maxChars) + `\n... (truncated, ${fileContent.length} chars total)`
                 : fileContent;

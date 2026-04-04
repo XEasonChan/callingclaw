@@ -82,3 +82,6 @@ export const MISSION_CONTEXT_SUFFIX = "═══ END MEETING CONTEXT ═══";
  * If the brief exceeds this, it should be compressed.
  */
 export const MISSION_CONTEXT_TOKEN_BUDGET = 500;
+
+/** Hint appended to slim brief — tells model it can query prep sections via tool */
+export const PREP_TOOL_HINT = "USE read_prep(section) for: decisions, questions, history, all_points, scenes";

@@ -134,7 +134,7 @@ export function meetingRoutes(services: Services): RouteHandler {
             const instructions = body.instructions || (meetTopic0
               ? `You are CallingClaw, an AI meeting assistant. This meeting's topic is: "${meetTopic0}". Focus your conversation on this topic. Ask clarifying questions, confirm decisions, and track action items related to it. Speak naturally and concisely.`
               : undefined);
-            await services.realtime.start(instructions, body.provider ? { provider: body.provider } : undefined);
+            await services.realtime.start(instructions, body.provider as any || undefined);
             voiceStarted = true;
             console.log(`[Meeting] Voice AI started${meetTopic0 ? ` (topic: ${meetTopic0})` : ""}${body.provider ? ` [${body.provider}]` : ""}`);
           } catch (e: any) {
@@ -157,13 +157,26 @@ export function meetingRoutes(services: Services): RouteHandler {
         const existingPrepBrief = services.meetingPrepSkill?.currentBrief;
         const sessionHasPrep = session.files?.prep;
         if (sessionHasPrep || existingPrepBrief) {
-          // Prep already exists — just inject into voice if needed
+          // Prep already exists — inject into voice context
           prepBrief = existingPrepBrief;
           if (prepBrief && services.realtime.connected) {
             injectMeetingBrief(services.realtime, prepBrief);
             console.log("[Meeting] Layer 2 meeting brief injected (existing prep)");
-          } else if (sessionHasPrep) {
-            console.log(`[Meeting] Session ${meetingId} already has prep file — skipping prepareMeeting()`);
+          } else if (sessionHasPrep && services.realtime.connected) {
+            // Brief not in memory but prep file exists on disk — read and inject raw markdown
+            try {
+              const prepPath = session.files!.prep as string;
+              const raw = await Bun.file(prepPath).text();
+              if (raw && raw.length > 100) {
+                // Truncate to fit voice context (~4000 chars)
+                // Resources are now at the top of prep markdown, simple truncation preserves them
+                const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
+                services.realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
+                console.log(`[Meeting] Layer 2 injected from disk prep (${raw.length} chars → ${content.length} chars)`);
+              }
+            } catch (e: any) {
+              console.warn(`[Meeting] Failed to read prep file from disk: ${e.message}`);
+            }
           }
         } else if (services.meetingPrepSkill && services.agentAdapter?.connected) {
           try {

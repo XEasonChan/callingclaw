@@ -217,6 +217,31 @@ export function renderPrepBriefMarkdown(brief: MeetingPrepBrief): string {
     p.push("");
   }
 
+  // Files & Links — promoted to top for visibility (was last, often truncated)
+  const hasFiles = brief.filePaths.length > 0;
+  const hasUrls = brief.browserUrls.length > 0;
+  if (hasFiles || hasUrls) {
+    p.push("## 📎 相关资源");
+    p.push("");
+    if (hasFiles) {
+      p.push("**文件**");
+      p.push("");
+      brief.filePaths.forEach((f) => {
+        const name = f.path.split("/").pop() || f.path;
+        p.push(`- \`${name}\` — ${f.description}`);
+      });
+      p.push("");
+    }
+    if (hasUrls) {
+      p.push("**链接**");
+      p.push("");
+      brief.browserUrls.forEach((u) => {
+        p.push(`- [${u.description}](${u.url})`);
+      });
+      p.push("");
+    }
+  }
+
   // Key Points
   if (brief.keyPoints.length > 0) {
     p.push("## 📌 要点");
@@ -254,31 +279,6 @@ export function renderPrepBriefMarkdown(brief: MeetingPrepBrief): string {
     p.push("");
     p.push(brief.previousContext);
     p.push("");
-  }
-
-  // Files & Links
-  const hasFiles = brief.filePaths.length > 0;
-  const hasUrls = brief.browserUrls.length > 0;
-  if (hasFiles || hasUrls) {
-    p.push("## 📎 相关资源");
-    p.push("");
-    if (hasFiles) {
-      p.push("**文件**");
-      p.push("");
-      brief.filePaths.forEach((f) => {
-        const name = f.path.split("/").pop() || f.path;
-        p.push(`- \`${name}\` — ${f.description}`);
-      });
-      p.push("");
-    }
-    if (hasUrls) {
-      p.push("**链接**");
-      p.push("");
-      brief.browserUrls.forEach((u) => {
-        p.push(`- [${u.description}](${u.url})`);
-      });
-      p.push("");
-    }
   }
 
   p.push("---");
