@@ -1106,8 +1106,7 @@ export function startConfigServer(services: Services) {
       // Returns a checklist of all prerequisites + a quickStart command.
       // Frontend shows "Ready" page when all required items pass.
       if (url.pathname === "/api/onboarding/ready" && req.method === "GET") {
-        // ── Audio: BlackHole removed in v2.7.12, now uses Playwright audio injection ──
-        // No virtual audio drivers needed. SwitchAudioSource also no longer required.
+        // Audio: BlackHole removed in v2.7.12 — Playwright audio injection, no virtual drivers
 
         // ── macOS permissions (check via CLI probes) ──
         let screenRecording = false;
@@ -1138,6 +1137,8 @@ export function startConfigServer(services: Services) {
         } catch {}
 
         const checklist = {
+          // Audio: Playwright injection (no BlackHole needed since v2.7.12)
+          audio: true,
           // Required macOS permissions
           screenRecording,
           accessibility,
@@ -1256,11 +1257,9 @@ export function startConfigServer(services: Services) {
         }
       }
 
-      // GET /api/onboarding/audio — Check BlackHole + SwitchAudioSource status
+      // GET /api/onboarding/audio — Audio status (BlackHole removed in v2.7.12)
       if (url.pathname === "/api/onboarding/audio" && req.method === "GET") {
         let devices: string[] = [];
-        // BlackHole removed in v2.7.12 — audio now uses Playwright injection
-        // This endpoint kept for backward compatibility but always returns ready=true
         let currentInput = "";
         let currentOutput = "";
 
@@ -1272,8 +1271,10 @@ export function startConfigServer(services: Services) {
           currentInput = (await Bun.$`SwitchAudioSource -c -t input`.text()).trim();
         } catch {}
 
+        const ready = true; // No virtual audio drivers needed since v2.7.12
+
         return Response.json({
-          ready: true, // No virtual audio drivers needed since v2.7.12
+          ready,
           audioMethod: "playwright_injection",
           currentInput,
           currentOutput,
@@ -3198,6 +3199,22 @@ STEP-BY-STEP FLOW:
       // ── Bridge / Google / Static ──
       // ══════════════════════════════════════════════════════════════
 
+      // GET /api/stage/documents — Working documents on the Meeting Stage
+      if (url.pathname === "/api/stage/documents" && req.method === "GET") {
+        return Response.json({ documents: services.context.stageDocuments }, { headers });
+      }
+
+      // POST /api/screen/iframe/load — Load URL into stage slide iframe
+      if (url.pathname === "/api/screen/iframe/load" && req.method === "POST") {
+        if (!services.chromeLauncher?.presentingPage) {
+          return Response.json({ error: "No presenting tab — start screen sharing first" }, { status: 400, headers });
+        }
+        const body = (await req.json().catch(() => ({}))) as { url?: string };
+        if (!body.url) return Response.json({ error: "url required" }, { status: 400, headers });
+        const ok = await services.chromeLauncher.loadSlideFrame(body.url);
+        return Response.json({ success: ok }, { headers });
+      }
+
       // POST /api/screen/share — Share a URL or entire screen in Meet
       if (url.pathname === "/api/screen/share" && req.method === "POST") {
         if (!services.chromeLauncher?.page) {
@@ -3826,6 +3843,7 @@ STEP-BY-STEP FLOW:
         "/test-context-retriever": "/test-context-retriever.html",
         "/test-hub": "/test-hub.html",
         "/tests": "/test-hub.html",
+        "/stage": "/stage.html",
       };
       const resolvedPath = pathnameAlias[url.pathname] ?? url.pathname;
       const publicPath = `${import.meta.dir}/../public${resolvedPath === "/" ? "/callingclaw-panel.html" : resolvedPath}`;

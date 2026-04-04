@@ -929,6 +929,9 @@ calendar.connect().then(() => {
   calendar.startAutoReconnect();
 });
 
+// ── 6.5. Prompt Registry ──────────────────────────────────────
+import("./prompt-registrations").then(m => m.registerAllPrompts()).catch(() => {});
+
 // ── 7. HTTP Config Server ───────────────────────────────────────
 
 startConfigServer({

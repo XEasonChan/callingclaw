@@ -480,7 +480,7 @@ async function checkEnvironment() {
     checks.python = { ok: false, error: 'Python 3 not found' };
   }
 
-  // BlackHole removed in v2.7.12 — audio injection via Playwright, no virtual drivers needed
+  // Audio: Playwright injection (BlackHole removed in v2.7.12)
   checks.audio = { ok: true, method: 'playwright_injection' };
 
   // SwitchAudioSource — check /opt/homebrew/bin too (Electron PATH may not include it)

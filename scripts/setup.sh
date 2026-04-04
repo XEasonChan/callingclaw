@@ -37,7 +37,7 @@ info "Checking prerequisites..."
 
 # macOS
 if [[ "$(uname)" != "Darwin" ]]; then
-  fail "CallingClaw requires macOS (uses osascript, BlackHole, Electron)"
+  fail "CallingClaw requires macOS (uses osascript, Playwright, Electron)"
 fi
 ok "macOS detected"
 
