@@ -51,6 +51,14 @@ export interface BrowserContext {
   capturedAt: number;
 }
 
+/** Document tracked on the Meeting Stage — visible to participants during screen share */
+export interface StageDocument {
+  path: string;
+  name: string;
+  badge?: "new" | "modified";
+  addedAt: number;
+}
+
 /** Active presentation scene — updated by PresentationEngine, read by TranscriptAuditor */
 export interface CurrentScene {
   index: number;
@@ -67,6 +75,7 @@ export class SharedContext {
   private _workspace: WorkspaceContext | null = null;
   private _browserContext: BrowserContext | null = null;
   private _currentScene: CurrentScene | null = null;
+  private _stageDocuments = new Map<string, StageDocument>();
   private _listeners = new Map<string, Array<(data: any) => void>>();
 
   // ── Transcript ──
@@ -214,6 +223,31 @@ export class SharedContext {
     this.emit("scene", null);
   }
 
+  // ── Stage Documents (Meeting Stage working documents) ──
+
+  addStageDocument(path: string, badge?: "new" | "modified") {
+    const name = path.split("/").pop() || path;
+    this._stageDocuments.set(path, { path, name, badge, addedAt: Date.now() });
+    this.emit("stage_documents", this.stageDocuments);
+  }
+
+  get stageDocuments(): StageDocument[] {
+    return Array.from(this._stageDocuments.values())
+      .sort((a, b) => b.addedAt - a.addedAt)
+      .slice(0, 10);
+  }
+
+  getStageDocumentsPrompt(): string {
+    const docs = this.stageDocuments;
+    if (docs.length === 0) return "";
+    return "[STAGE DOCS] " + docs.map((d, i) => `${i + 1}. ${d.name}`).join("  ");
+  }
+
+  clearStageDocuments() {
+    this._stageDocuments.clear();
+    this.emit("stage_documents", []);
+  }
+
   // ── Event System ──
 
   on(event: string, handler: (data: any) => void) {
@@ -247,6 +281,7 @@ export class SharedContext {
       todos: this.getTodos(),
       workspace: this._workspace,
       browserContext: this._browserContext,
+      stageDocuments: this.stageDocuments,
     };
   }
 
@@ -256,5 +291,6 @@ export class SharedContext {
     this._meetingNotes = [];
     this._workspace = null;
     this._browserContext = null;
+    this._stageDocuments.clear();
   }
 }

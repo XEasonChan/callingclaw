@@ -1290,6 +1290,78 @@ export class ChromeLauncher {
   }
 
   // ══════════════════════════════════════════════════════════════
+  // Stage iframe Control (slide frame inside /stage page)
+  // ══════════════════════════════════════════════════════════════
+
+  /** Check if the presenting page is currently showing the Meeting Stage */
+  private _isOnStage(): boolean {
+    if (!this._presentingPage) return false;
+    try { return String(this._presentingPage.url()).includes("/stage"); } catch { return false; }
+  }
+
+  /** Load a URL into the stage's slide iframe. Returns false if not on stage or load failed. */
+  async loadSlideFrame(url: string): Promise<boolean> {
+    if (!this._presentingPage) return false;
+    // Navigate to stage first if not already there
+    if (!this._isOnStage()) {
+      const ok = await this.navigatePresentingPage(`http://localhost:${CONFIG.port}/stage`);
+      if (!ok) return false;
+      await this._presentingPage.waitForTimeout(1000);
+    }
+    try {
+      await this._presentingPage.evaluate(`(() => {
+        var frame = document.getElementById('slideFrame');
+        var placeholder = document.getElementById('slidePlaceholder');
+        var nav = document.getElementById('slideNav');
+        if (!frame) return false;
+        frame.src = ${JSON.stringify(url)};
+        if (placeholder) placeholder.style.display = 'none';
+        if (nav) nav.style.display = '';
+        return true;
+      })()`);
+      console.log(`[ChromeLauncher] Loaded slide frame: ${url}`);
+      return true;
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] loadSlideFrame failed:", e.message);
+      return false;
+    }
+  }
+
+  /** Execute JavaScript inside the stage iframe's document (same-origin only) */
+  async evaluateOnSlideFrame(code: string): Promise<any> {
+    if (!this._presentingPage || !this._isOnStage()) return null;
+    try {
+      return await this._presentingPage.evaluate(`(() => {
+        var doc = document.getElementById('slideFrame')?.contentDocument;
+        if (!doc) return null;
+        return (function() { ${code} }).call(doc);
+      })()`);
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] evaluateOnSlideFrame failed:", e.message);
+      return null;
+    }
+  }
+
+  /** Click element inside the stage iframe by CSS selector */
+  async clickOnSlideFrame(selector: string): Promise<boolean> {
+    if (!this._presentingPage || !this._isOnStage()) return false;
+    try {
+      const result = await this._presentingPage.evaluate(`(() => {
+        var doc = document.getElementById('slideFrame')?.contentDocument;
+        if (!doc) return 'no_doc';
+        var el = doc.querySelector(${JSON.stringify(selector)});
+        if (!el) return 'not_found';
+        el.click();
+        return 'clicked';
+      })()`);
+      return result === "clicked";
+    } catch (e: any) {
+      console.warn(`[ChromeLauncher] clickOnSlideFrame failed: ${selector}`, e.message);
+      return false;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
   // Google Account Check
   // ══════════════════════════════════════════════════════════════
 
