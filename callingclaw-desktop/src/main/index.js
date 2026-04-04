@@ -480,15 +480,8 @@ async function checkEnvironment() {
     checks.python = { ok: false, error: 'Python 3 not found' };
   }
 
-  // BlackHole
-  try {
-    const audioDevices = execSync('system_profiler SPAudioDataType 2>/dev/null', { timeout: 5000 }).toString();
-    checks.blackhole2ch = { ok: audioDevices.includes('BlackHole 2ch') };
-    checks.blackhole16ch = { ok: audioDevices.includes('BlackHole 16ch') };
-  } catch {
-    checks.blackhole2ch = { ok: false };
-    checks.blackhole16ch = { ok: false };
-  }
+  // BlackHole removed in v2.7.12 — audio injection via Playwright, no virtual drivers needed
+  checks.audio = { ok: true, method: 'playwright_injection' };
 
   // SwitchAudioSource — check /opt/homebrew/bin too (Electron PATH may not include it)
   try {

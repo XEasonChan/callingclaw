@@ -1106,19 +1106,8 @@ export function startConfigServer(services: Services) {
       // Returns a checklist of all prerequisites + a quickStart command.
       // Frontend shows "Ready" page when all required items pass.
       if (url.pathname === "/api/onboarding/ready" && req.method === "GET") {
-        // ── Audio drivers ──
-        let blackhole2ch = false;
-        let blackhole16ch = false;
-        let switchAudioSource = false;
-        try {
-          const audioDevices = await Bun.$`system_profiler SPAudioDataType 2>/dev/null`.text();
-          blackhole2ch = audioDevices.includes("BlackHole 2ch");
-          blackhole16ch = audioDevices.includes("BlackHole 16ch");
-        } catch {}
-        try {
-          await Bun.$`which SwitchAudioSource`.quiet();
-          switchAudioSource = true;
-        } catch {}
+        // ── Audio: BlackHole removed in v2.7.12, now uses Playwright audio injection ──
+        // No virtual audio drivers needed. SwitchAudioSource also no longer required.
 
         // ── macOS permissions (check via CLI probes) ──
         let screenRecording = false;
@@ -1149,10 +1138,6 @@ export function startConfigServer(services: Services) {
         } catch {}
 
         const checklist = {
-          // Required for meeting audio (must all pass)
-          blackhole2ch,
-          blackhole16ch,
-          switchAudioSource,
           // Required macOS permissions
           screenRecording,
           accessibility,
@@ -1167,8 +1152,7 @@ export function startConfigServer(services: Services) {
           openclawCommand,
         };
 
-        const requiredOk = blackhole2ch && blackhole16ch && switchAudioSource
-          && screenRecording && accessibility && sidecar && voiceKey;
+        const requiredOk = screenRecording && accessibility && sidecar && voiceKey;
 
         return Response.json({
           ready: requiredOk,
@@ -1177,12 +1161,6 @@ export function startConfigServer(services: Services) {
             ? "/callingclaw join <your-meeting-url>"
             : null,
           hints: {
-            ...(!blackhole2ch || !blackhole16ch ? {
-              blackhole: "BlackHole audio driver not installed. Required for meeting audio bridging.",
-            } : {}),
-            ...(!switchAudioSource ? {
-              switchAudioSource: "SwitchAudioSource not found. Install: brew install switchaudio-osx",
-            } : {}),
             ...(!screenRecording ? {
               screenRecording: "Screen recording permission not granted. Open System Settings → Privacy → Screen Recording.",
             } : {}),
@@ -1281,38 +1259,25 @@ export function startConfigServer(services: Services) {
       // GET /api/onboarding/audio — Check BlackHole + SwitchAudioSource status
       if (url.pathname === "/api/onboarding/audio" && req.method === "GET") {
         let devices: string[] = [];
-        let blackhole2ch = false;
-        let blackhole16ch = false;
-        let switchAudioSource = false;
+        // BlackHole removed in v2.7.12 — audio now uses Playwright injection
+        // This endpoint kept for backward compatibility but always returns ready=true
         let currentInput = "";
         let currentOutput = "";
 
         try {
-          const raw = await Bun.$`system_profiler SPAudioDataType 2>/dev/null`.text();
-          blackhole2ch = raw.includes("BlackHole 2ch");
-          blackhole16ch = raw.includes("BlackHole 16ch");
-        } catch {}
-
-        try {
           await Bun.$`which SwitchAudioSource`.quiet();
-          switchAudioSource = true;
           const all = await Bun.$`SwitchAudioSource -a`.text();
           devices = all.trim().split("\n").filter(Boolean);
           currentOutput = (await Bun.$`SwitchAudioSource -c`.text()).trim();
           currentInput = (await Bun.$`SwitchAudioSource -c -t input`.text()).trim();
         } catch {}
 
-        const ready = blackhole2ch && blackhole16ch && switchAudioSource;
-
         return Response.json({
-          ready,
-          blackhole2ch,
-          blackhole16ch,
-          switchAudioSource,
+          ready: true, // No virtual audio drivers needed since v2.7.12
+          audioMethod: "playwright_injection",
           currentInput,
           currentOutput,
           devices,
-          needsReboot: !blackhole2ch && !blackhole16ch, // If both missing after install, likely needs reboot
         }, { headers });
       }
 
