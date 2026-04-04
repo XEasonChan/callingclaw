@@ -382,16 +382,17 @@ When user asks to join a meeting, check calendar, or do complex computer actions
 
   private _buildAudioInput(data: any): string {
     const audioBase64 = data.audio || "";
-    // Skip resampling — send native 24kHz and declare rate in MIME type.
-    // Gemini handles resampling server-side. Missing rate= was causing Gemini
-    // to silently reject audio input after the first text-triggered greeting.
+    // Resample 24kHz → 16kHz per Gemini best practices:
+    // "Ensure your client resamples microphone input (often 44.1kHz or 48kHz) to 16kHz"
+    // https://ai.google.dev/gemini-api/docs/live-api/best-practices
+    const resampled = resampleAudio24kTo16k(audioBase64);
 
-    // Gemini 3.1 Live API: use `audio` field directly (not `media` or `mediaChunks`).
+    // Gemini 3.1 Live API: use `audio` field with explicit rate declaration.
     return JSON.stringify({
       realtimeInput: {
         audio: {
-          mimeType: "audio/pcm;rate=24000",
-          data: audioBase64,
+          mimeType: "audio/pcm;rate=16000",
+          data: resampled,
         },
       },
     });
