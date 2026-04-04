@@ -1125,24 +1125,27 @@ export class ChromeLauncher {
    *   3. Chrome's --auto-select-desktop-capture-source=CallingClaw Presenting
    *      auto-selects that tab (no dialog, no manual step)
    *
-   * @param url - URL to present (http, file://, or localhost). If omitted, shares entire screen.
+   * @param url - URL to present (http, file://, or localhost). If omitted, opens Meeting Stage dashboard.
    */
   async shareScreen(url?: string): Promise<{ success: boolean; message: string }> {
     if (!this._page || !this._context) return { success: false, message: "No page — call launch() first" };
     const meetPage = this._page;
 
     try {
+      // Default to Meeting Stage when no URL specified
+      const presentUrl = url || `http://localhost:${CONFIG.port}/stage`;
+
       // Step 1: Open target URL in a "presenting" tab
-      if (url) {
+      if (presentUrl) {
         // Close previous presenting tab if any
         if (this._presentingPage) {
           try { await this._presentingPage.close(); } catch {}
         }
         this._presentingPage = await this._context.newPage();
-        await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await this._presentingPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
         // Rename tab title to match Chrome's auto-select flag
         await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
-        console.log(`[ShareScreen] Opened presenting tab: ${url}`);
+        console.log(`[ShareScreen] Opened presenting tab: ${presentUrl}`);
 
         // Switch back to Meet
         await meetPage.bringToFront();
@@ -1185,7 +1188,7 @@ export class ChromeLauncher {
       return {
         success,
         message: success
-          ? `Presenting${url ? ': ' + url : ' (entire screen)'}`
+          ? `Presenting${url ? ': ' + url : ' (Meeting Stage)'}`
           : "Sharing may not have started — check macOS Screen Recording permission",
       };
     } catch (e: any) {
@@ -1284,6 +1287,78 @@ export class ChromeLauncher {
         return snap(document.body, 0).substring(0, 4000);
       })()`));
     } catch { return "Snapshot failed"; }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Stage iframe Control (slide frame inside /stage page)
+  // ══════════════════════════════════════════════════════════════
+
+  /** Check if the presenting page is currently showing the Meeting Stage */
+  private _isOnStage(): boolean {
+    if (!this._presentingPage) return false;
+    try { return String(this._presentingPage.url()).includes("/stage"); } catch { return false; }
+  }
+
+  /** Load a URL into the stage's slide iframe. Returns false if not on stage or load failed. */
+  async loadSlideFrame(url: string): Promise<boolean> {
+    if (!this._presentingPage) return false;
+    // Navigate to stage first if not already there
+    if (!this._isOnStage()) {
+      const ok = await this.navigatePresentingPage(`http://localhost:${CONFIG.port}/stage`);
+      if (!ok) return false;
+      await this._presentingPage.waitForTimeout(1000);
+    }
+    try {
+      await this._presentingPage.evaluate(`(() => {
+        var frame = document.getElementById('slideFrame');
+        var placeholder = document.getElementById('slidePlaceholder');
+        var nav = document.getElementById('slideNav');
+        if (!frame) return false;
+        frame.src = ${JSON.stringify(url)};
+        if (placeholder) placeholder.style.display = 'none';
+        if (nav) nav.style.display = '';
+        return true;
+      })()`);
+      console.log(`[ChromeLauncher] Loaded slide frame: ${url}`);
+      return true;
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] loadSlideFrame failed:", e.message);
+      return false;
+    }
+  }
+
+  /** Execute JavaScript inside the stage iframe's document (same-origin only) */
+  async evaluateOnSlideFrame(code: string): Promise<any> {
+    if (!this._presentingPage || !this._isOnStage()) return null;
+    try {
+      return await this._presentingPage.evaluate(`(() => {
+        var doc = document.getElementById('slideFrame')?.contentDocument;
+        if (!doc) return null;
+        return (function() { ${code} }).call(doc);
+      })()`);
+    } catch (e: any) {
+      console.warn("[ChromeLauncher] evaluateOnSlideFrame failed:", e.message);
+      return null;
+    }
+  }
+
+  /** Click element inside the stage iframe by CSS selector */
+  async clickOnSlideFrame(selector: string): Promise<boolean> {
+    if (!this._presentingPage || !this._isOnStage()) return false;
+    try {
+      const result = await this._presentingPage.evaluate(`(() => {
+        var doc = document.getElementById('slideFrame')?.contentDocument;
+        if (!doc) return 'no_doc';
+        var el = doc.querySelector(${JSON.stringify(selector)});
+        if (!el) return 'not_found';
+        el.click();
+        return 'clicked';
+      })()`);
+      return result === "clicked";
+    } catch (e: any) {
+      console.warn(`[ChromeLauncher] clickOnSlideFrame failed: ${selector}`, e.message);
+      return false;
+    }
   }
 
   // ══════════════════════════════════════════════════════════════

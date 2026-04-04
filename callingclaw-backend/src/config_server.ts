@@ -3233,6 +3233,22 @@ STEP-BY-STEP FLOW:
       // ── Bridge / Google / Static ──
       // ══════════════════════════════════════════════════════════════
 
+      // GET /api/stage/documents — Working documents on the Meeting Stage
+      if (url.pathname === "/api/stage/documents" && req.method === "GET") {
+        return Response.json({ documents: services.context.stageDocuments }, { headers });
+      }
+
+      // POST /api/screen/iframe/load — Load URL into stage slide iframe
+      if (url.pathname === "/api/screen/iframe/load" && req.method === "POST") {
+        if (!services.chromeLauncher?.presentingPage) {
+          return Response.json({ error: "No presenting tab — start screen sharing first" }, { status: 400, headers });
+        }
+        const body = (await req.json().catch(() => ({}))) as { url?: string };
+        if (!body.url) return Response.json({ error: "url required" }, { status: 400, headers });
+        const ok = await services.chromeLauncher.loadSlideFrame(body.url);
+        return Response.json({ success: ok }, { headers });
+      }
+
       // POST /api/screen/share — Share a URL or entire screen in Meet
       if (url.pathname === "/api/screen/share" && req.method === "POST") {
         if (!services.chromeLauncher?.page) {
@@ -3861,6 +3877,7 @@ STEP-BY-STEP FLOW:
         "/test-context-retriever": "/test-context-retriever.html",
         "/test-hub": "/test-hub.html",
         "/tests": "/test-hub.html",
+        "/stage": "/stage.html",
       };
       const resolvedPath = pathnameAlias[url.pathname] ?? url.pathname;
       const publicPath = `${import.meta.dir}/../public${resolvedPath === "/" ? "/callingclaw-panel.html" : resolvedPath}`;
