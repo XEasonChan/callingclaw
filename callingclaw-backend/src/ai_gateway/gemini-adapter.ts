@@ -304,14 +304,9 @@ When user asks to join a meeting, check calendar, or do complex computer actions
     }
 
     // Gemini 3.1 Live tool configuration.
-    // Previously hardcoded to 4 tools (5+ caused silent setup hang in early testing).
-    // Official docs recommend 10-20 tools. The hang was likely caused by large tool schemas
-    // + long systemInstruction combined. With minimal schemas (<50 chars description,
-    // single-property params), 6-8 tools should work.
-    //
-    // TWO-LAYER TOOL ARCHITECTURE:
-    //   Layer 1 (Gemini direct): core meeting tools with ultra-minimal schemas
-    //   Layer 2 (TranscriptAuditor → Haiku → AutomationRouter): complex/rare tools
+    // Tested: 9 tools with minimal schemas = OK (without thinkingConfig).
+    // thinkingConfig + tools = silent hang — DO NOT combine.
+    // With 9 tools, Gemini can directly call ALL CallingClaw tools — no two-layer fallback needed.
     if (tools.length > 0) {
       setup.tools = [{
         functionDeclarations: [
@@ -323,22 +318,24 @@ When user asks to join a meeting, check calendar, or do complex computer actions
             parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
           { name: "save_meeting_notes", description: "Save meeting notes",
             parameters: { type: "object", properties: { notes: { type: "string" } }, required: ["notes"] } },
-          { name: "exec", description: "Run a shell command",
-            parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } },
-          { name: "interact", description: "Click, scroll, or navigate the page",
-            parameters: { type: "object", properties: { action: { type: "string" }, target: { type: "string" } }, required: ["action"] } },
+          { name: "join_meeting", description: "Join a Google Meet by URL",
+            parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
+          { name: "schedule_meeting", description: "Create a calendar meeting",
+            parameters: { type: "object", properties: { topic: { type: "string" } }, required: ["topic"] } },
+          { name: "check_calendar", description: "List upcoming events",
+            parameters: { type: "object", properties: {} } },
+          { name: "computer_action", description: "Execute a computer action",
+            parameters: { type: "object", properties: { instruction: { type: "string" } }, required: ["instruction"] } },
+          { name: "take_screenshot", description: "Capture current screen",
+            parameters: { type: "object", properties: {} } },
         ],
       }];
-      console.log(`[GeminiAdapter] Tools: 6 (minimal schemas) — testing expanded limit`);
+      console.log(`[GeminiAdapter] Tools: 9 (all CallingClaw tools, minimal schemas)`);
     }
 
-    // Thinking config — enable deeper reasoning for tool selection and agent loop.
-    // Gemini 3.1 Flash Live supports: minimal, low, medium, high.
-    // Higher levels improve tool call accuracy at the cost of first-token latency.
-    setup.thinkingConfig = {
-      thinkingLevel: "high",
-      includeThoughts: false, // don't send thoughts as audio
-    };
+    // NOTE: thinkingConfig REMOVED — it causes silent hang when combined with tools.
+    // Tested: 6 tools + thinkingConfig = HANG, 6 tools without = OK.
+    // Gemini 3.1 Flash Live does not support thinking + function calling together.
 
     // Input config (VAD, turnCoverage, transcription)
     setup.realtimeInputConfig = {
