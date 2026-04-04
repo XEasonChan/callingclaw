@@ -190,43 +190,12 @@ function buildPlaybookContext(brief: MeetingPrepBrief): string {
   }
 
   parts.push(`${MISSION_CONTEXT_SUFFIX}`);
-  parts.push("You are in PRESENTER mode. Follow the speaking plan. When a scene advances, new context will appear. Drive decisions explicitly.");
+  parts.push("You are in PRESENTER mode. Follow the speaking plan. You can see the screen — use scroll/click/navigate tools to advance through content naturally. Drive decisions explicitly.");
 
   return parts.join("\n");
 }
 
-/**
- * Build progressive context for a specific scene transition.
- * Called by PresentationEngine.runScenes() as scenes advance.
- * Returns a compact context string for conversation.item.create injection.
- */
-export function buildSceneContext(
-  brief: MeetingPrepBrief,
-  sceneIndex: number,
-): string | null {
-  const scenes = brief.scenes;
-  if (!scenes || sceneIndex >= scenes.length) return null;
-
-  const current = scenes[sceneIndex]!;
-  const next = sceneIndex + 1 < scenes.length ? scenes[sceneIndex + 1] : null;
-
-  const parts: string[] = [];
-  parts.push(`[SCENE ${sceneIndex + 1}/${scenes.length}] ${current.talkingPoints}`);
-  if (next) {
-    parts.push(`[Next] ${next.talkingPoints.slice(0, 100)}...`);
-  }
-
-  // Find which speaking plan phase this scene belongs to
-  const plan = brief.speakingPlan || [];
-  for (const phase of plan) {
-    if (phase.sceneIndices?.includes(sceneIndex)) {
-      parts.push(`[Phase: ${phase.phase}] ${phase.points}`);
-      break;
-    }
-  }
-
-  return parts.join("\n");
-}
+// buildSceneContext deleted — voice model drives presentation natively with screenshot feedback
 
 /**
  * Inject the meeting brief into the live voice session as a Layer 2 context item.

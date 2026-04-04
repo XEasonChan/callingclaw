@@ -843,6 +843,20 @@ const voice = new VoiceModule({
   },
 });
 
+// Post-tool screenshot feedback: voice model sees the result of its visual actions
+voice.onScreenCapture(async () => {
+  try {
+    const page = chromeLauncher.presentingPage || chromeLauncher.page;
+    if (!page) return null;
+    const buf = await page.screenshot({ type: "jpeg", quality: 60 });
+    const screenshot = buf.toString("base64");
+    const title = await page.title().catch(() => "");
+    return { screenshot, caption: title || "screen" };
+  } catch {
+    return null;
+  }
+});
+
 // Forward meeting action items to EventBus
 context.on("note", (note) => {
   if (note.type === "action_item" || note.type === "todo") {

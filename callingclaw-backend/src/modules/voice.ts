@@ -66,6 +66,9 @@ export class VoiceModule {
   // External callback for speech-started (registered via onSpeechStarted())
   private _onSpeechStarted?: () => void;
 
+  // Post-tool screenshot feedback: called after visual tools complete to auto-inject screen state
+  private _onScreenCapture?: () => Promise<{ screenshot: string; caption: string } | null>;
+
   get connected() {
     return this.client.connected;
   }
@@ -364,6 +367,8 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
                 ts: Date.now(),
               });
+              // Auto-inject screenshot if this was a visual tool (perception-action loop)
+              this._feedbackScreenshot(name).catch(() => {});
               // Trigger model to process the result and decide next action.
               // Without this, the model sees the context but won't speak or call another tool.
               // This is what closes the agent loop for slow tools.
@@ -393,6 +398,9 @@ export class VoiceModule {
         }
 
         this.client.submitToolResult(call_id, result);
+
+        // Auto-inject screenshot if this was a visual tool
+        this._feedbackScreenshot(name).catch(() => {});
 
         // Record result in transcript
         this.context.addTranscript({
@@ -641,5 +649,36 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    */
   onSpeechStarted(handler: () => void) {
     this._onSpeechStarted = handler;
+  }
+
+  /**
+   * Register screen capture callback for post-tool visual feedback.
+   * After visual tools (interact, scroll, navigate, open_file, share_screen) complete,
+   * this callback is called to capture a screenshot and inject it to the voice model.
+   * This closes the perception-action loop: model sees result of its actions.
+   */
+  onScreenCapture(handler: () => Promise<{ screenshot: string; caption: string } | null>) {
+    this._onScreenCapture = handler;
+  }
+
+  /** Tools that change what's on screen — trigger screenshot feedback after completion */
+  private static VISUAL_TOOLS = new Set([
+    "interact", "browser_action", "share_screen", "open_file",
+    "scroll_page", "click_element", "navigate", "exec",
+  ]);
+
+  /** Auto-inject screenshot after a visual tool completes */
+  private async _feedbackScreenshot(toolName: string): Promise<void> {
+    if (!this._onScreenCapture || !VoiceModule.VISUAL_TOOLS.has(toolName)) return;
+    try {
+      const result = await this._onScreenCapture();
+      if (result?.screenshot) {
+        this.injectScreenshot(result.screenshot, `[SCREEN_UPDATE] after ${toolName}: ${result.caption}`);
+        console.log(`[Voice] Post-tool screenshot injected (${toolName})`);
+      }
+    } catch (e: any) {
+      // Non-fatal — screenshot feedback is best-effort
+      console.warn(`[Voice] Post-tool screenshot failed: ${e.message}`);
+    }
   }
 }
