@@ -857,6 +857,30 @@ voice.onScreenCapture(async () => {
   }
 });
 
+// ── Stage Documents → Voice Context ──────────────────────────────
+// Track working documents on the Meeting Stage and inject into voice
+// so users can say "open the first document" by number.
+function updateStageDocsContext() {
+  const prompt = context.getStageDocumentsPrompt();
+  if (!prompt || !voice.connected) return;
+  voice.removeContext("ctx_stage_docs");
+  voice.injectContext(prompt, "ctx_stage_docs");
+}
+eventBus.on("meeting.prep_ready", (data: any) => {
+  const fp = data?.filepath || data?.filePath;
+  if (fp) { context.addStageDocument(fp, "new"); updateStageDocsContext(); }
+});
+eventBus.on("meeting.summary_ready", (data: any) => {
+  if (data?.filepath) { context.addStageDocument(data.filepath, "new"); updateStageDocsContext(); }
+});
+eventBus.on("meeting.summary_html_ready", (data: any) => {
+  if (data?.htmlPath) { context.addStageDocument(data.htmlPath, "new"); updateStageDocsContext(); }
+});
+eventBus.on("workspace.updated", (data: any) => {
+  if (data?.file) { context.addStageDocument(data.file, "modified"); updateStageDocsContext(); }
+});
+eventBus.on("voice.started", () => { updateStageDocsContext(); });
+
 // Forward meeting action items to EventBus
 context.on("note", (note) => {
   if (note.type === "action_item" || note.type === "todo") {

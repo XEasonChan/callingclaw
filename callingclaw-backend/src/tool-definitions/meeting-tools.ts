@@ -125,8 +125,14 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "share_screen",
         description:
-          "Share CallingClaw's screen in the current Google Meet call so meeting participants can see what's on screen.",
-        parameters: { type: "object", properties: {} },
+          "Share CallingClaw's screen in the current Google Meet call. Use target 'iframe' to load local content into the Meeting Stage's slide frame without leaving the stage view. Omit target to share the full Meeting Stage (default).",
+        parameters: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "URL or file path to present. Omit to show default Meeting Stage." },
+            target: { type: "string", description: "Where to load: 'iframe' loads into stage slide frame (local content only), omit for full page." },
+          },
+        },
       },
       {
         name: "stop_sharing",
@@ -136,18 +142,18 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "open_file",
         description:
-          "Open a file on CallingClaw's screen for discussion or presentation. Use during meetings to show code, documents, or web pages.",
+          "Open a file on CallingClaw's screen for discussion or presentation. Use doc_number to open a file from the Working Documents list (e.g. 'open the first document' → doc_number: 1).",
         parameters: {
           type: "object",
           properties: {
             path: { type: "string", description: "File path or URL to open" },
+            doc_number: { type: "number", description: "Open document by number from Working Documents list (1-based)" },
             app: {
               type: "string",
               enum: ["vscode", "browser", "finder"],
               description: "App to open with (default: vscode)",
             },
           },
-          required: ["path"],
         },
       },
     ],
@@ -572,11 +578,30 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         }
         case "share_screen": {
           const shareUrl = args.url || "";
-          eventBus.emit("voice.tool_call", { tool: "share_screen", summary: shareUrl });
+          const target = args.target || "";
+          eventBus.emit("voice.tool_call", { tool: "share_screen", summary: shareUrl, target });
 
+          if (target === "iframe" && deps.chromeLauncher && shareUrl) {
+            // Load content into the stage's slide iframe (same-origin local content)
+            const isLocal = shareUrl.startsWith("http://localhost") || shareUrl.startsWith("/") || shareUrl.startsWith("file://");
+            if (isLocal) {
+              const resolvedUrl = shareUrl.startsWith("/") ? `http://localhost:${CONFIG.port}${shareUrl}` : shareUrl;
+              const ok = await deps.chromeLauncher.loadSlideFrame(resolvedUrl);
+              if (ok) {
+                eventBus.emit("presentation.loaded", { url: resolvedUrl, target: "iframe" });
+                return `Loaded into stage slide frame: ${resolvedUrl}`;
+              }
+              return "Failed to load into stage iframe — presenting page may not be on /stage";
+            } else {
+              // Cross-origin: navigate the presenting tab directly (share persists on same tab)
+              await deps.chromeLauncher.navigatePresentingPage(shareUrl);
+              eventBus.emit("presentation.loaded", { url: shareUrl, target: "fullpage" });
+              return `Opened external URL in presenting tab: ${shareUrl}. Say "back to stage" to return to Meeting Stage.`;
+            }
+          }
+
+          // Default: share screen with full page (opens Meeting Stage if no URL)
           // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
-          // MeetJoiner.shareScreen() fails when join was via ChromeLauncher because
-          // MeetJoiner.currentSession.status is never set to "in_meeting" in that path.
           if (deps.chromeLauncher) {
             await deps.chromeLauncher.shareScreen(shareUrl || undefined);
           } else {
@@ -630,6 +655,17 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           return "Screen sharing stopped.";
         }
         case "open_file": {
+          // Resolve doc_number from Working Documents list
+          if (args.doc_number && deps.context) {
+            const docs = deps.context.stageDocuments;
+            const idx = Number(args.doc_number) - 1;
+            if (idx >= 0 && idx < docs.length) {
+              args.path = docs[idx].path;
+            } else {
+              return `No document #${args.doc_number}. ${docs.length} documents available: ${docs.map((d: any, i: number) => `${i + 1}. ${d.name}`).join(", ")}`;
+            }
+          }
+
           eventBus.emit("voice.tool_call", { tool: "open_file", summary: args.path });
 
           // Strategy: try multiple search methods in order of reliability

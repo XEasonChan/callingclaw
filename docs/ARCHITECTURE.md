@@ -75,23 +75,26 @@ User starts a voice session
 ```
 
 **During conversation:**
-- `recall_context` tool → OpenClawDispatcher → local search / subprocess / gateway
-- `computer_action` tool → ComputerUseModule → Anthropic API (no OpenClaw)
+- `recall_context` tool → ContextRetriever cache (0ms) → local MEMORY.md → Haiku subprocess → OpenClaw (fallback only)
+- `computer_action` tool → ComputerUseModule → Anthropic API (Haiku/Sonnet, no OpenClaw)
+- VisionModule → Gemini Flash screenshot analysis (every ~40s)
+- TranscriptAuditor → Haiku intent classification (continuous)
+- ContextRetriever → Haiku gap detection + agentic search (continuous)
 
-**OpenClaw:** Optional. Voice works without it.
+**OpenClaw:** Optional. Voice and all meeting-time AI works without it. OpenClaw is only used as last-resort fallback for deep context recall.
 
 ### 2. Join Meeting (Google Meet/Zoom)
 
 ```
 User clicks "Join" + pastes URL
   → POST /api/meeting/join { url }
-  → MeetJoiner.join(url)
-      → Detect platform (Meet/Zoom)
-      → PlaywrightCLI navigates Chrome to Meet URL
-      → Auto-clicks "Join" button
-  → Audio routing switches:
-      Meet → BlackHole 16ch (capture) → Realtime API
-      AI response → BlackHole 2ch → Meet mic input
+  → ChromeLauncher.joinGoogleMeet(url)
+      → Playwright library launches Chrome with anti-detection flags
+      → addInitScript injects audio capture (getUserMedia intercept)
+      → Auto-clicks "Join" button, monitors admission
+  → Audio routing:
+      Meet WebRTC receivers (muted=false track) → PCM16 capture → Realtime API
+      AI response → addInitScript audio injection → Meet mic input
   → VoiceModule.start({ mode: "meeting", transport: "meet_bridge" })
   → MeetingModule.startRecording()
   → ContextRetriever starts (gap analysis every ~500 chars)
@@ -130,11 +133,18 @@ Audio loop (continuous during meeting):
 
 Tool calls (automatic, triggered by AI):
   recall_context → ContextRetriever cache (0ms)
-                 → or OpenClawDispatcher local/subprocess (100ms-10s)
-  computer_action → ComputerUseModule → Anthropic API
-  browser_action → PlaywrightCLI (fastest for web)
-  take_screenshot → screencapture CLI
+                 → or local MEMORY.md search (<100ms)
+                 → or Haiku subprocess (1-5s)
+                 → or OpenClaw gateway (fallback only, 5-30s)
+  computer_action → ComputerUseModule → Anthropic API (Haiku/Sonnet)
+  share_screen → ChromeLauncher.shareScreen() or loadSlideFrame() (Meeting Stage iframe)
+  open_file → resolve by path or doc_number from Working Documents
   check_calendar → GoogleCalendarClient
+
+Background (continuous, no tool call needed):
+  VisionModule → Gemini Flash screenshot analysis (every ~40s)
+  ContextRetriever → Haiku gap detection (every ~500 chars of new transcript)
+  TranscriptAuditor → Haiku intent classification (per utterance)
 ```
 
 **Voice State Machine:** `idle → listening → thinking → speaking → listening`
