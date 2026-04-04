@@ -50,11 +50,12 @@ callingclaw-desktop/     Electron desktop app — UI, audio bridge, tray
 All services instantiate once in `callingclaw.ts` and inject cross-module dependencies:
 
 1. **Infrastructure** — NativeBridge (osascript+cliclick), SharedContext (central state), EventBus, TaskStore, GoogleCalendarClient
-2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Haiku during meetings, Sonnet outside), ContextRetriever (Haiku gap detection)
+2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Haiku during meetings, Sonnet outside), ContextRetriever (Haiku gap detection), TranscriptAuditor (Haiku intent classification)
 3. **Meeting** — MeetingModule (recording+action items), MeetingScheduler (calendar auto-join), PostMeetingDelivery, KeyFrameStore
 4. **Skills** — MeetingPrepSkill, OpenClawBridge (System 2 deep reasoning), BrowserActionLoop (Haiku + Playwright snapshot)
 5. **Browser (Dual Chrome)** — Chrome #1: ChromeLauncher (Playwright library: Meet join + audio injection + admission monitor + screen share). Chrome #2: OpenCLIBridge (fault-isolated execution: deterministic web adapters, CLI hub, operate mode). See `docs/opencli-experiment-findings.md` for architecture decision.
-6. **HTTP Server** — `config_server.ts` takes a `Services` interface, builds REST + WebSocket APIs via `Bun.serve()`
+6. **Meeting Stage** — `public/stage.html` transparent AI workspace for screen sharing. Left: presentation iframe (Playwright-controlled). Right: dual-model EventBus feed + Working Documents. Default screen share target.
+7. **HTTP Server** — `config_server.ts` takes a `Services` interface, builds REST + WebSocket APIs via `Bun.serve()`
 
 ### Multi-Provider Voice (ai_gateway/)
 
@@ -99,6 +100,29 @@ Event-driven integration hub (`modules/event-bus.ts`). Supports WebSocket subscr
 - `/ws/events` — EventBus real-time stream (Desktop UI updates)
 - `/ws/voice-test` — Browser-based voice testing
 - `/ws/audio-bridge` — Electron audio (AudioWorklet PCM chunks)
+
+### Meeting Stage (`/stage`)
+
+Transparent AI workspace screen-shared during meetings. ChromeLauncher opens `/stage` by default when `shareScreen()` is called without a URL.
+
+- **Left**: Presentation iframe, controlled via `loadSlideFrame()` / `evaluateOnSlideFrame()` / `clickOnSlideFrame()` (Playwright, same-origin only). Cross-origin URLs fall back to `navigatePresentingPage()` (same tab, share persists).
+- **Right**: Dual-model EventBus feed (S1 voice events + S2 compute events) + Working Documents panel
+- **Working Documents**: Tracked server-side in `SharedContext.stageDocuments`, injected into voice Layer 3 as numbered list. Users say "open the first document" → `open_file({ doc_number: 1 })`.
+- **API**: `GET /api/stage/documents`, `POST /api/screen/iframe/load`
+
+### Meeting-Time Model Usage
+
+During meetings, CallingClaw uses its own fast models, NOT OpenClaw:
+
+| Module | Model | Purpose |
+|--------|-------|---------|
+| VoiceModule | OpenAI Realtime / Gemini Live | Real-time voice conversation |
+| VisionModule | Gemini Flash (OpenRouter) | Screenshot analysis every ~40s |
+| ContextRetriever | Haiku (OpenRouter) | Gap detection + agentic search |
+| TranscriptAuditor | Haiku (OpenRouter) | Real-time intent classification |
+| ComputerUseModule | Haiku/Sonnet (Anthropic API) | Screen control when voice AI requests |
+
+OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-004/005 summary delivery, OC-009 follow-up). During meetings, it is only a fallback for `recall_context` deep search when local + Haiku paths fail.
 
 ## Rules
 

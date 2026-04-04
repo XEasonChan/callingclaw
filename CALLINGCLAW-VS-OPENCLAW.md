@@ -4,14 +4,18 @@
 
 CallingClaw 可以独立创建 Google Calendar 会议，不依赖 OpenClaw。日历操作通过 Google Calendar REST API 直接完成（`google_cal.ts` → `createEvent()`）。
 
-| 能力 | 实现方式 |
-|------|---------|
-| 创建日历事件 + Meet 链接 | `calendar.createEvent()` 直接调 Google API |
-| 加入 Google Meet | ChromeLauncher / PlaywrightCLI |
-| 实时语音对话 | OpenAI Realtime API / Grok Voice |
-| 屏幕截图分析 | Gemini Flash |
-| 电脑控制 | Claude Computer Use |
-| 会议录制 + 转录 | MeetingModule |
+| 能力 | 实现方式 | 模型 |
+|------|---------|------|
+| 创建日历事件 + Meet 链接 | `calendar.createEvent()` 直接调 Google API | 无需模型 |
+| 加入 Google Meet | ChromeLauncher (Playwright library) | 无需模型 |
+| 实时语音对话 | VoiceModule → RealtimeClient | OpenAI Realtime / Gemini Live |
+| 屏幕截图分析 | VisionModule (每 ~40s) | Gemini Flash (OpenRouter) |
+| 实时意图分类 | TranscriptAuditor (每句话) | Haiku (OpenRouter) |
+| 上下文主动搜索 | ContextRetriever (每 ~500 字) | Haiku (OpenRouter) |
+| 电脑控制 | ComputerUseModule | Haiku/Sonnet (Anthropic API) |
+| 会议录制 + 转录 | MeetingModule | 无需模型 |
+| 投屏 Meeting Stage | ChromeLauncher + stage.html | 无需模型 |
+| Working Documents 语音上下文 | SharedContext → voice.injectContext | 无需模型 |
 
 ## OpenClaw 的交互点（全部可选）
 
