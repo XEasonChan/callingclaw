@@ -179,10 +179,10 @@
       min-height: 0;
     }
 
-    /* ── Left: Slide Player — fills all remaining space ── */
+    /* ── Left: Slide Player — greedy on narrow, capped at 4:3 on wide ── */
     .slide-player {
-      flex: 1;
-      min-width: 0;
+      width: min(calc(100% - 296px), calc((100vh - 60px) * 4 / 3));
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -361,10 +361,11 @@
       color: var(--text);
     }
 
-    /* ── Right: Workspace Panel — fixed narrow width ── */
+    /* ── Right: Workspace — 280px min, absorbs extra on wide screens ── */
     .workspace {
-      width: 300px;
-      flex-shrink: 0;
+      flex: 1;
+      min-width: 280px;
+      max-width: 420px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -615,10 +616,12 @@
     .doc-row .badge.new { background: var(--green-light); color: var(--green); }
     .doc-row .badge.modified { background: var(--yellow-light); color: var(--yellow); }
 
-    /* ── Responsive ──────────────────────────────── */
+    /* ── Responsive — stack vertically on narrow screens ── */
     @media (max-width: 900px) {
       .content { flex-direction: column; }
-      .slide-player { width: 100%; min-width: 0; max-height: 40vh; }
+      .slide-player { width: 100%; flex-shrink: 0; height: 50vh; }
+      .slide-frame-outer { flex: 1; }
+      .workspace { max-width: none; min-width: 0; }
     }
   </style>
 </head>
