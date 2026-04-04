@@ -3,6 +3,27 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.12] - 2026-04-04
+
+### Added
+- **Meeting Stage** (`/stage`) — transparent AI workspace for screen sharing. Shows dual-model EventBus feed (S1 voice + S2 compute), Working Documents panel with file type icons, and presentation iframe with inward breathing glow animation
+- **Stage iframe control** — `loadSlideFrame()`, `evaluateOnSlideFrame()`, `clickOnSlideFrame()` let the AI load and interact with HTML presentations inside the stage's slide frame via Playwright
+- **Working Documents voice context** — stage documents injected into voice Layer 3 as numbered list. Say "open the first document" and the AI resolves it instantly via `doc_number` param
+- **Post-tool screenshot feedback** — voice model sees the visual result of its screen actions (Playwright screenshot after tool calls)
+- **Prompt Dashboard** (`/prompt-dashboard`) — visual registry of all prompt templates with token counts and dependencies
+- **Prompt Registry** — centralized prompt management system (`prompt-registry.ts` + `prompt-registrations.ts`)
+
+### Changed
+- **Screen sharing defaults to Meeting Stage** — `shareScreen()` without URL opens `/stage` instead of sharing entire screen. Cross-origin URLs navigate the same tab (share persists, no permission change needed)
+- **Voice-driven presentation** — replaced 540-line timer-driven PresentationEngine with native voice-model scene control (SceneController + next_scene/prev_scene tools)
+- **Gemini adapter** — removed thinkingConfig (incompatible with tools), expanded to 9 tools
+- **Session management** — fixed session ID consistency, blank tab prevention, BlackHole device handling
+- **Documentation** — corrected meeting-time model usage (Haiku/Gemini Flash, not OpenClaw) across CLAUDE.md, ARCHITECTURE.md, CALLINGCLAW-VS-OPENCLAW.md
+
+### Removed
+- **Timer-driven presentation** — deleted 540 lines of timer-based PresentationEngine execution (replaced by voice-driven SceneController)
+- **BlackHole from onboarding** — removed virtual audio driver checks from health UI and setup (Playwright audio injection replaced BlackHole in v2.7.12)
+
 ## [2.8.8] - 2026-04-03
 
 ### Added
