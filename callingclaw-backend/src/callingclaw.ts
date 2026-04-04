@@ -283,6 +283,17 @@ const vision = new VisionModule({
     if (keyFrameStore.active) {
       keyFrameStore.saveFrame(image, metadata).catch(() => {});
     }
+    // Inject screenshot into voice session so AI can see the screen during conversation.
+    // Throttled to 1 frame per 5s to avoid token flooding (~25 tokens/sec for audio alone).
+    // Works for OpenAI 1.5 (input_image), Gemini 3.1 (realtimeInput.video), text fallback for others.
+    if (voice.connected && keyFrameStore.active && image) {
+      const now = Date.now();
+      if (!globalThis._lastVoiceScreenshotTs || now - globalThis._lastVoiceScreenshotTs > 5000) {
+        globalThis._lastVoiceScreenshotTs = now;
+        const caption = metadata.title ? `[Screen: ${metadata.title}]` : undefined;
+        voice.injectScreenshot(image, caption);
+      }
+    }
   },
   onScreenDescription: (description, _screenshot) => {
     // Emit vision event for Desktop UI visibility
@@ -318,7 +329,11 @@ const vision = new VisionModule({
 // Auto-start meeting vision + open transparency view + activate auditor when meeting starts
 eventBus.on("meeting.started", (data) => {
   // Track active meeting ID for live log event emission
-  activeMeetingId = data?.meetingId || activeMeetingId || `cc_${Date.now().toString(36)}_live`;
+  // Prefer event data → existing active → SessionManager lookup → SM-generated ID (never orphan)
+  activeMeetingId = data?.meetingId || activeMeetingId
+    || sessionManager.list({ status: "active" })[0]?.meetingId
+    || sessionManager.list({ status: "ready" })[0]?.meetingId
+    || sessionManager.generateId();
   // Reset incremental context injection state for new meeting
   resetContextInjectionState();
   // Reset transcript from previous meeting to prevent context leakage
@@ -652,7 +667,7 @@ async function autoLeaveMeeting() {
 
     // Post-meeting delivery (now includes screenshots + summary HTML)
     const prepSummary = getPostMeetingSummary(meetingPrepSkill);
-    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult, summaryHtmlPath }).catch((e: any) => {
+    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult, summaryHtmlPath, meetingId: activeMeetingId }).catch((e: any) => {
       console.error("[AutoLeave] Delivery failed:", e.message);
     });
 
@@ -828,6 +843,20 @@ const voice = new VoiceModule({
   },
 });
 
+// Post-tool screenshot feedback: voice model sees the result of its visual actions
+voice.onScreenCapture(async () => {
+  try {
+    const page = chromeLauncher.presentingPage || chromeLauncher.page;
+    if (!page) return null;
+    const buf = await page.screenshot({ type: "jpeg", quality: 60 });
+    const screenshot = buf.toString("base64");
+    const title = await page.title().catch(() => "");
+    return { screenshot, caption: title || "screen" };
+  } catch {
+    return null;
+  }
+});
+
 // ── Stage Documents → Voice Context ──────────────────────────────
 // Track working documents on the Meeting Stage and inject into voice
 // so users can say "open the first document" by number.
@@ -923,6 +952,9 @@ calendar.connect().then(() => {
   console.warn("[Init] Google Calendar not available (optional) — auto-reconnect enabled");
   calendar.startAutoReconnect();
 });
+
+// ── 6.5. Prompt Registry ──────────────────────────────────────
+import("./prompt-registrations").then(m => m.registerAllPrompts()).catch(() => {});
 
 // ── 7. HTTP Config Server ───────────────────────────────────────
 

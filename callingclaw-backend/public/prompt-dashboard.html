@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CallingClaw — Prompt Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --text-dim: #8b949e; --accent: #dc4a3a;
+      --green: #3fb950; --yellow: #d29922; --blue: #58a6ff;
+      --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      --sans: 'Inter', -apple-system, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--sans); background: var(--bg); color: var(--text); }
+
+    header {
+      padding: 20px 32px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px;
+    }
+    header h1 { font-size: 20px; font-weight: 600; }
+    header .badge {
+      background: var(--accent); color: white; padding: 2px 8px;
+      border-radius: 4px; font-size: 11px; font-weight: 600;
+    }
+    header .stats { margin-left: auto; font-size: 13px; color: var(--text-dim); }
+
+    .layout { display: flex; height: calc(100vh - 65px); }
+
+    /* Sidebar */
+    nav {
+      width: 240px; border-right: 1px solid var(--border);
+      overflow-y: auto; flex-shrink: 0; padding: 12px 0;
+    }
+    nav .cat-header {
+      padding: 8px 16px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.5px;
+    }
+    nav .prompt-link {
+      display: block; padding: 6px 16px; font-size: 13px; color: var(--text);
+      cursor: pointer; text-decoration: none; border-left: 2px solid transparent;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    nav .prompt-link:hover { background: var(--surface); }
+    nav .prompt-link.active { border-left-color: var(--accent); background: var(--surface); }
+    nav .prompt-link .model-tag {
+      font-size: 10px; color: var(--text-dim); margin-left: 4px;
+    }
+    nav .prompt-link.overridden::before {
+      content: ''; display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--yellow); margin-right: 6px;
+    }
+
+    /* Main content */
+    main { flex: 1; overflow-y: auto; padding: 24px 32px; }
+
+    .prompt-header { margin-bottom: 20px; }
+    .prompt-header h2 { font-size: 18px; margin-bottom: 4px; }
+    .prompt-header .meta {
+      display: flex; gap: 12px; font-size: 12px; color: var(--text-dim); flex-wrap: wrap;
+    }
+    .prompt-header .meta span { display: flex; align-items: center; gap: 4px; }
+
+    .prompt-editor {
+      width: 100%; min-height: 300px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: var(--mono); font-size: 13px;
+      padding: 16px; resize: vertical; line-height: 1.6;
+      tab-size: 2;
+    }
+    .prompt-editor:focus { outline: none; border-color: var(--accent); }
+
+    .actions {
+      display: flex; gap: 8px; margin-top: 12px; align-items: center;
+    }
+    .btn {
+      padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary { background: transparent; color: var(--text); }
+    .btn-secondary:hover { background: var(--surface); }
+    .btn-danger { background: transparent; color: var(--accent); border-color: var(--accent); }
+    .btn-danger:hover { background: rgba(220, 74, 58, 0.1); }
+
+    .status-msg {
+      font-size: 12px; color: var(--green); margin-left: 8px;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .status-msg.show { opacity: 1; }
+
+    .scenario-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;
+      font-size: 13px; color: var(--text-dim); line-height: 1.5;
+    }
+    .scenario-box .label { color: var(--blue); font-weight: 500; }
+
+    .char-count { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+    .char-count .tokens { color: var(--yellow); }
+
+    .empty-state {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: var(--text-dim); font-size: 15px;
+    }
+
+    /* Search */
+    .search-box {
+      margin: 0 12px 12px; padding: 8px 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px; color: var(--text);
+      font-size: 13px; width: calc(100% - 24px);
+    }
+    .search-box:focus { outline: none; border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Prompt Dashboard</h1>
+    <span class="badge">CallingClaw</span>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="layout">
+    <nav id="sidebar">
+      <input type="text" class="search-box" placeholder="Search prompts..." id="search" oninput="filterPrompts()">
+    </nav>
+    <main id="main">
+      <div class="empty-state">Select a prompt from the sidebar</div>
+    </main>
+  </div>
+
+  <script>
+    var API = window.location.origin;
+    var prompts = [];
+    var activeId = null;
+
+    async function loadPrompts() {
+      try {
+        var resp = await fetch(API + '/api/prompts');
+        prompts = await resp.json();
+        renderSidebar();
+        document.getElementById('stats').textContent =
+          prompts.length + ' prompts, ' +
+          prompts.filter(function(p) { return p.value !== p.defaultValue; }).length + ' overridden';
+      } catch (e) {
+        document.getElementById('main').innerHTML =
+          '<div class="empty-state">Failed to load prompts. Is the backend running?</div>';
+      }
+    }
+
+    function renderSidebar() {
+      var nav = document.getElementById('sidebar');
+      var search = document.getElementById('search');
+      var html = '';
+      var cats = {};
+      var q = (search ? search.value : '').toLowerCase();
+
+      prompts.forEach(function(p) {
+        if (q && p.name.toLowerCase().indexOf(q) === -1 && p.id.toLowerCase().indexOf(q) === -1
+            && p.scenario.toLowerCase().indexOf(q) === -1) return;
+        if (!cats[p.category]) cats[p.category] = [];
+        cats[p.category].push(p);
+      });
+
+      var catNames = { voice: 'Voice Model', analysis: 'Analysis (Haiku)', automation: 'Automation', meeting: 'Meeting', tools: 'Tool Descriptions', config: 'Configuration' };
+      var catOrder = ['voice', 'analysis', 'automation', 'meeting', 'tools', 'config'];
+
+      catOrder.forEach(function(cat) {
+        if (!cats[cat]) return;
+        html += '<div class="cat-header">' + (catNames[cat] || cat) + '</div>';
+        cats[cat].forEach(function(p) {
+          var isOverridden = p.value !== p.defaultValue;
+          html += '<a class="prompt-link' + (p.id === activeId ? ' active' : '') + (isOverridden ? ' overridden' : '') + '" data-id="' + p.id + '" onclick="selectPrompt(\'' + p.id + '\')">' +
+            p.name + '</a>';
+        });
+      });
+
+      // Keep search box, replace rest
+      var existing = nav.querySelector('.search-box');
+      nav.innerHTML = '';
+      nav.appendChild(existing || Object.assign(document.createElement('input'), {
+        type: 'text', className: 'search-box', placeholder: 'Search prompts...',
+        id: 'search', oninput: filterPrompts
+      }));
+      nav.insertAdjacentHTML('beforeend', html);
+    }
+
+    function filterPrompts() { renderSidebar(); }
+
+    function selectPrompt(id) {
+      activeId = id;
+      var p = prompts.find(function(x) { return x.id === id; });
+      if (!p) return;
+
+      renderSidebar();
+
+      var isOverridden = p.value !== p.defaultValue;
+      var chars = p.value.length;
+      var tokens = Math.round(chars / 3.5); // rough estimate
+
+      document.getElementById('main').innerHTML =
+        '<div class="prompt-header">' +
+        '  <h2>' + p.name + '</h2>' +
+        '  <div class="meta">' +
+        '    <span><strong>ID:</strong> ' + p.id + '</span>' +
+        '    <span><strong>Model:</strong> ' + p.model + '</span>' +
+        '    <span><strong>File:</strong> ' + p.file + ':' + p.line + '</span>' +
+        (p.dynamic ? '    <span style="color:var(--yellow)">Dynamic (template vars)</span>' : '') +
+        (isOverridden ? '    <span style="color:var(--yellow)">OVERRIDDEN</span>' : '') +
+        '  </div>' +
+        '</div>' +
+        '<div class="scenario-box"><span class="label">Scenario:</span> ' + p.scenario + '</div>' +
+        '<textarea class="prompt-editor" id="editor" spellcheck="false">' + escapeHtml(p.value) + '</textarea>' +
+        '<div class="char-count">' + chars + ' chars / ~<span class="tokens">' + tokens + ' tokens</span>' +
+        (p.dynamic ? ' (template — {variables} replaced at runtime)' : '') + '</div>' +
+        '<div class="actions">' +
+        '  <button class="btn btn-primary" onclick="savePrompt()">Save Override</button>' +
+        '  <button class="btn btn-secondary" onclick="resetPrompt()">Reset to Default</button>' +
+        (isOverridden ? '  <button class="btn btn-danger" onclick="showDiff()">Show Diff</button>' : '') +
+        '  <span class="status-msg" id="status"></span>' +
+        '</div>' +
+        (isOverridden ? '<div id="diff-area" style="margin-top:16px"></div>' : '');
+
+      // Update char count on type
+      var editor = document.getElementById('editor');
+      editor.addEventListener('input', function() {
+        var c = editor.value.length;
+        var t = Math.round(c / 3.5);
+        var countEl = editor.parentElement.querySelector('.char-count');
+        if (countEl) countEl.innerHTML = c + ' chars / ~<span class="tokens">' + t + ' tokens</span>' +
+          (p.dynamic ? ' (template — {variables} replaced at runtime)' : '');
+      });
+    }
+
+    async function savePrompt() {
+      var editor = document.getElementById('editor');
+      if (!editor || !activeId) return;
+
+      try {
+        var resp = await fetch(API + '/api/prompts/' + activeId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: editor.value }),
+        });
+        var result = await resp.json();
+        if (result.ok) {
+          showStatus('Saved! Will take effect on next use.');
+          // Update local state
+          var p = prompts.find(function(x) { return x.id === activeId; });
+          if (p) p.value = editor.value;
+          renderSidebar();
+        } else {
+          showStatus('Error: ' + (result.error || 'unknown'), true);
+        }
+      } catch (e) {
+        showStatus('Network error', true);
+      }
+    }
+
+    async function resetPrompt() {
+      if (!activeId) return;
+      if (!confirm('Reset this prompt to default?')) return;
+
+      try {
+        var resp = await fetch(API + '/api/prompts/' + activeId + '/reset', { method: 'POST' });
+        var result = await resp.json();
+        if (result.ok) {
+          showStatus('Reset to default.');
+          var p = prompts.find(function(x) { return x.id === activeId; });
+          if (p) p.value = p.defaultValue;
+          selectPrompt(activeId);
+          renderSidebar();
+        }
+      } catch (e) {
+        showStatus('Network error', true);
+      }
+    }
+
+    function showDiff() {
+      var p = prompts.find(function(x) { return x.id === activeId; });
+      if (!p) return;
+      var area = document.getElementById('diff-area');
+      if (!area) return;
+
+      // Simple line-by-line diff
+      var origLines = p.defaultValue.split('\n');
+      var currLines = p.value.split('\n');
+      var html = '<div style="font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto">';
+      html += '<div style="color:var(--text-dim);margin-bottom:8px;font-weight:600">Diff (default vs override):</div>';
+
+      var maxLen = Math.max(origLines.length, currLines.length);
+      for (var i = 0; i < maxLen; i++) {
+        var orig = origLines[i] || '';
+        var curr = currLines[i] || '';
+        if (orig === curr) {
+          html += '<div style="color:var(--text-dim)"> ' + escapeHtml(orig) + '</div>';
+        } else {
+          if (orig) html += '<div style="color:#f85149;background:rgba(248,81,73,0.1)">- ' + escapeHtml(orig) + '</div>';
+          if (curr) html += '<div style="color:var(--green);background:rgba(63,185,80,0.1)">+ ' + escapeHtml(curr) + '</div>';
+        }
+      }
+      html += '</div>';
+      area.innerHTML = html;
+    }
+
+    function showStatus(msg, isError) {
+      var el = document.getElementById('status');
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = isError ? 'var(--accent)' : 'var(--green)';
+      el.classList.add('show');
+      setTimeout(function() { el.classList.remove('show'); }, 3000);
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    loadPrompts();
+  </script>
+</body>
+</html>

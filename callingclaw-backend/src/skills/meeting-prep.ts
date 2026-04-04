@@ -182,7 +182,7 @@ export class MeetingPrepSkill {
     console.log(`[MeetingPrep] Brief ready: ${brief.keyPoints.length} key points, ${brief.filePaths.length} files, ${brief.browserUrls.length} URLs`);
 
     // Persist prep brief to shared directory (non-blocking)
-    // Use SessionManager if available (atomic file + session update), fallback to legacy
+    // SessionManager is always wired at startup (callingclaw.ts) — use it for atomic file + session update
     const actualId = meetingId || (this._sessionManager ? this._sessionManager.generateId() : generateMeetingId());
     if (this._sessionManager) {
       const { renderPrepBriefMarkdown } = await import("../modules/shared-documents");
@@ -200,17 +200,7 @@ export class MeetingPrepSkill {
         console.warn(`[MeetingPrep] Failed to start live log: ${e.message}`);
       });
     } else {
-      // Legacy fallback
-      savePrepBrief(brief, actualId).then((filePath) => {
-        this._onPrepReady?.(brief, actualId, filePath);
-      }).catch((e: any) => {
-        console.warn(`[MeetingPrep] Failed to save prep brief to disk: ${e.message}`);
-      });
-      startLiveLog(topic, actualId).then((logPath) => {
-        this._liveLogPath = logPath;
-      }).catch((e: any) => {
-        console.warn(`[MeetingPrep] Failed to start live log: ${e.message}`);
-      });
+      console.warn(`[MeetingPrep] No SessionManager — prep brief will not be persisted. ID: ${actualId}`);
     }
 
     return brief;

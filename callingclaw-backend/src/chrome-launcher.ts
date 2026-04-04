@@ -499,6 +499,8 @@ export class ChromeLauncher {
         "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
+        "--no-startup-window",                    // Prevent blank windows on launch
+        "--disable-session-crashed-bubble",       // No "restore pages" prompt
         "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab/window matching this title
         "--enable-usermedia-screen-capturing",    // Enable screen capture API
         `--remote-debugging-port=${port}`,
@@ -511,14 +513,33 @@ export class ChromeLauncher {
     await context.addInitScript(AUDIO_INIT_SCRIPT);
     console.log("[ChromeLauncher] Init script installed (getUserMedia + RTC interception)");
 
-    // Use first page (close any extras Chrome opened from previous session)
+    // Use first page (close ALL extras Chrome opened from previous session)
+    // Aggressive cleanup: close every page except the one we keep, then navigate to blank
     const pages = context.pages();
     const page = pages[0] || await context.newPage();
-    // Close extra tabs that Chrome may have restored
-    for (let i = 1; i < pages.length; i++) {
-      try { await pages[i].close(); } catch {}
+    if (pages.length > 1) {
+      console.log(`[ChromeLauncher] Closing ${pages.length - 1} extra tabs from previous session`);
+      for (let i = pages.length - 1; i >= 1; i--) {
+        try { await pages[i].close(); } catch {}
+      }
     }
     await page.goto("about:blank");
+    // Also listen for unexpected new pages and close them (Chrome extensions, popups, etc.)
+    context.on("page", async (newPage) => {
+      // Only auto-close if it's a blank/new tab page (not our presenting tab)
+      try {
+        const url = newPage.url();
+        if (url === "about:blank" || url === "chrome://newtab/" || url === "chrome://new-tab-page/") {
+          // Wait a moment to see if it navigates somewhere
+          await newPage.waitForTimeout(500);
+          const finalUrl = newPage.url();
+          if (finalUrl === "about:blank" || finalUrl.startsWith("chrome://newtab") || finalUrl.startsWith("chrome://new-tab-page")) {
+            console.log(`[ChromeLauncher] Auto-closing unexpected blank tab: ${finalUrl}`);
+            await newPage.close();
+          }
+        }
+      } catch {}
+    });
 
     // Verify init script works
     const check = await page.evaluate(() => !!(window as any).__cc);
@@ -1530,12 +1551,19 @@ export class ChromeLauncher {
    */
   private clearAudioDevicePrefs(): void {
     const prefsPath = resolve(this.profileDir, "Default", "Preferences");
+    const fs = require("fs");
     try {
-      if (!existsSync(prefsPath)) return;
-      const prefs = JSON.parse(require("fs").readFileSync(prefsPath, "utf-8"));
+      // Create Default directory + minimal Preferences if it doesn't exist (first launch)
+      const defaultDir = resolve(this.profileDir, "Default");
+      if (!existsSync(defaultDir)) {
+        fs.mkdirSync(defaultDir, { recursive: true });
+      }
+      const prefs = existsSync(prefsPath)
+        ? JSON.parse(fs.readFileSync(prefsPath, "utf-8"))
+        : {};
       let changed = false;
 
-      // Clear default audio devices → system default
+      // Clear default audio devices → system default (prevents BlackHole from being cached)
       if (!prefs.media) prefs.media = {};
       if (prefs.media.default_audio_capture_device !== "") {
         prefs.media.default_audio_capture_device = "";
@@ -1546,12 +1574,25 @@ export class ChromeLauncher {
         changed = true;
       }
 
+      // Suppress session restore — prevents blank tabs from previous session
+      if (!prefs.session) prefs.session = {};
+      if (prefs.session.restore_on_startup !== 5) {  // 5 = don't restore
+        prefs.session.restore_on_startup = 5;
+        changed = true;
+      }
+      // Also clear startup URLs to prevent blank tab restoration
+      if (!prefs.session.startup_urls) prefs.session.startup_urls = [];
+      if (prefs.session.startup_urls.length > 0) {
+        prefs.session.startup_urls = [];
+        changed = true;
+      }
+
       if (changed) {
-        require("fs").writeFileSync(prefsPath, JSON.stringify(prefs));
-        console.log("[ChromeLauncher] Cleared audio device prefs (reset to system default)");
+        fs.writeFileSync(prefsPath, JSON.stringify(prefs));
+        console.log("[ChromeLauncher] Cleared audio device prefs + session restore (reset to system default)");
       }
     } catch (e: any) {
-      // Non-fatal — prefs file may not exist on first launch
+      console.warn(`[ChromeLauncher] clearAudioDevicePrefs failed: ${e.message}`);
     }
   }
 

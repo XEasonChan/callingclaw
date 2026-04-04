@@ -6,7 +6,7 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildSceneContext, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import { PresentationEngine } from "../modules/presentation-engine";
 import type { Services, RouteHandler } from "./types";
@@ -621,9 +621,11 @@ STEP-BY-STEP FLOW:
 
         // Trigger smart todo delivery (non-blocking)
         if (services.postMeetingDelivery) {
+          const activeSession = services.sessionManager?.list({ status: "active" })[0];
           services.postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,
+            meetingId: activeSession?.meetingId,
             prepSummary: services.meetingPrepSkill?.currentBrief ? {
               topic: services.meetingPrepSkill.currentBrief.topic,
               liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],

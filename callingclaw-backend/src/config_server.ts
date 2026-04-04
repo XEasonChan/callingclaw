@@ -622,6 +622,30 @@ export function startConfigServer(services: Services) {
       }
 
       // ══════════════════════════════════════════════════════════════
+      // ── Prompt Dashboard API ──
+      // ══════════════════════════════════════════════════════════════
+
+      if (url.pathname === "/api/prompts" && req.method === "GET") {
+        const { listPrompts } = await import("./prompt-registry");
+        return Response.json(listPrompts(), { headers });
+      }
+
+      if (url.pathname.startsWith("/api/prompts/") && !url.pathname.endsWith("/reset") && req.method === "PUT") {
+        const id = decodeURIComponent(url.pathname.slice("/api/prompts/".length));
+        const body = (await req.json()) as { value: string };
+        const { setPromptOverride } = await import("./prompt-registry");
+        const ok = setPromptOverride(id, body.value);
+        return Response.json({ ok, id }, { headers });
+      }
+
+      if (url.pathname.endsWith("/reset") && url.pathname.startsWith("/api/prompts/") && req.method === "POST") {
+        const id = decodeURIComponent(url.pathname.slice("/api/prompts/".length, -"/reset".length));
+        const { resetPrompt } = await import("./prompt-registry");
+        const ok = resetPrompt(id);
+        return Response.json({ ok, id }, { headers });
+      }
+
+      // ══════════════════════════════════════════════════════════════
       // ── Core API Routes ──
       // ══════════════════════════════════════════════════════════════
 
@@ -1106,19 +1130,7 @@ export function startConfigServer(services: Services) {
       // Returns a checklist of all prerequisites + a quickStart command.
       // Frontend shows "Ready" page when all required items pass.
       if (url.pathname === "/api/onboarding/ready" && req.method === "GET") {
-        // ── Audio drivers ──
-        let blackhole2ch = false;
-        let blackhole16ch = false;
-        let switchAudioSource = false;
-        try {
-          const audioDevices = await Bun.$`system_profiler SPAudioDataType 2>/dev/null`.text();
-          blackhole2ch = audioDevices.includes("BlackHole 2ch");
-          blackhole16ch = audioDevices.includes("BlackHole 16ch");
-        } catch {}
-        try {
-          await Bun.$`which SwitchAudioSource`.quiet();
-          switchAudioSource = true;
-        } catch {}
+        // Audio: BlackHole removed in v2.7.12 — Playwright audio injection, no virtual drivers
 
         // ── macOS permissions (check via CLI probes) ──
         let screenRecording = false;
@@ -1149,10 +1161,8 @@ export function startConfigServer(services: Services) {
         } catch {}
 
         const checklist = {
-          // Required for meeting audio (must all pass)
-          blackhole2ch,
-          blackhole16ch,
-          switchAudioSource,
+          // Audio: Playwright injection (no BlackHole needed since v2.7.12)
+          audio: true,
           // Required macOS permissions
           screenRecording,
           accessibility,
@@ -1167,8 +1177,7 @@ export function startConfigServer(services: Services) {
           openclawCommand,
         };
 
-        const requiredOk = blackhole2ch && blackhole16ch && switchAudioSource
-          && screenRecording && accessibility && sidecar && voiceKey;
+        const requiredOk = screenRecording && accessibility && sidecar && voiceKey;
 
         return Response.json({
           ready: requiredOk,
@@ -1177,12 +1186,6 @@ export function startConfigServer(services: Services) {
             ? "/callingclaw join <your-meeting-url>"
             : null,
           hints: {
-            ...(!blackhole2ch || !blackhole16ch ? {
-              blackhole: "BlackHole audio driver not installed. Required for meeting audio bridging.",
-            } : {}),
-            ...(!switchAudioSource ? {
-              switchAudioSource: "SwitchAudioSource not found. Install: brew install switchaudio-osx",
-            } : {}),
             ...(!screenRecording ? {
               screenRecording: "Screen recording permission not granted. Open System Settings → Privacy → Screen Recording.",
             } : {}),
@@ -1278,41 +1281,28 @@ export function startConfigServer(services: Services) {
         }
       }
 
-      // GET /api/onboarding/audio — Check BlackHole + SwitchAudioSource status
+      // GET /api/onboarding/audio — Audio status (BlackHole removed in v2.7.12)
       if (url.pathname === "/api/onboarding/audio" && req.method === "GET") {
         let devices: string[] = [];
-        let blackhole2ch = false;
-        let blackhole16ch = false;
-        let switchAudioSource = false;
         let currentInput = "";
         let currentOutput = "";
 
         try {
-          const raw = await Bun.$`system_profiler SPAudioDataType 2>/dev/null`.text();
-          blackhole2ch = raw.includes("BlackHole 2ch");
-          blackhole16ch = raw.includes("BlackHole 16ch");
-        } catch {}
-
-        try {
           await Bun.$`which SwitchAudioSource`.quiet();
-          switchAudioSource = true;
           const all = await Bun.$`SwitchAudioSource -a`.text();
           devices = all.trim().split("\n").filter(Boolean);
           currentOutput = (await Bun.$`SwitchAudioSource -c`.text()).trim();
           currentInput = (await Bun.$`SwitchAudioSource -c -t input`.text()).trim();
         } catch {}
 
-        const ready = blackhole2ch && blackhole16ch && switchAudioSource;
+        const ready = true; // No virtual audio drivers needed since v2.7.12
 
         return Response.json({
           ready,
-          blackhole2ch,
-          blackhole16ch,
-          switchAudioSource,
+          audioMethod: "playwright_injection",
           currentInput,
           currentOutput,
           devices,
-          needsReboot: !blackhole2ch && !blackhole16ch, // If both missing after install, likely needs reboot
         }, { headers });
       }
 

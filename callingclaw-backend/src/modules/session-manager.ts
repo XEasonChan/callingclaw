@@ -139,7 +139,7 @@ export class SessionManager {
     calendarEventId?: string;
     startTime?: string;
   }): MeetingSession {
-    const existing = this._findExisting(opts.meetUrl, opts.calendarEventId);
+    const existing = this._findExisting(opts.meetUrl, opts.calendarEventId, opts.topic);
     if (existing) {
       // Update stale "Meeting" topic if we now have a better one
       const hasRealTopic = opts.topic && opts.topic !== "Meeting" && !opts.topic.startsWith("Meeting at ");
@@ -322,14 +322,27 @@ export class SessionManager {
 
   // ── Internal ──
 
-  private _findExisting(meetUrl?: string, calendarEventId?: string): MeetingSession | null {
+  private _findExisting(meetUrl?: string, calendarEventId?: string, topic?: string): MeetingSession | null {
     const sessions = this._read().sessions;
-    return sessions.find(s =>
+    // Primary: match by meetUrl or calendarEventId (strongest identifiers)
+    const byKey = sessions.find(s =>
       s.status !== SESSION_STATUS.ENDED && (
         (meetUrl && s.meetUrl && s.meetUrl === meetUrl) ||
         (calendarEventId && s.calendarEventId && s.calendarEventId === calendarEventId)
       )
-    ) || null;
+    );
+    if (byKey) return byKey;
+
+    // Fallback: match by topic for sessions without meetUrl/calendarEventId
+    // Prevents duplicate sessions from delegate API and talk-locally
+    if (topic && topic !== "Meeting" && !topic.startsWith("Meeting at ")) {
+      return sessions.find(s =>
+        s.status !== SESSION_STATUS.ENDED &&
+        !s.meetUrl && !s.calendarEventId &&
+        s.topic === topic
+      ) || null;
+    }
+    return null;
   }
 
   private _transition(meetingId: string, target: SessionStatus, fields?: Record<string, any>): MeetingSession {

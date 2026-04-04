@@ -79,6 +79,8 @@ export class PostMeetingDelivery {
     } | null;
     /** Path to branded HTML meeting summary */
     summaryHtmlPath?: string;
+    /** Session meetingId from SessionManager — use this to link todos to the session */
+    meetingId?: string;
   }): Promise<MeetingDelivery | null> {
     if (!this.adapter.connected) {
       console.warn(`[PostMeeting] Agent adapter (${this.adapter.name}) not connected — cannot deliver todos`);
@@ -86,7 +88,7 @@ export class PostMeetingDelivery {
     }
 
     const { summary, notesFilePath, prepSummary, keyFrameResult, summaryHtmlPath } = opts;
-    const meetingId = `mtg_${Date.now()}`;
+    const meetingId = opts.meetingId || `mtg_${Date.now()}`;
     const topic = prepSummary?.topic || summary.title || "Meeting";
 
     // Build todo list from action items

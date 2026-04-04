@@ -139,31 +139,6 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         description: "Stop sharing CallingClaw's screen in Google Meet.",
         parameters: { type: "object", properties: {} },
       },
-      // ── Voice-driven scene control (sideband pattern) ──
-      // These tools let the voice model control presentation pacing.
-      // Registered only when a presentation is active with scenes loaded.
-      {
-        name: "next_scene",
-        description:
-          "Advance to the next presentation slide/section. Call this AFTER you finish explaining the current content. Returns a screenshot of the new scene.",
-        parameters: { type: "object", properties: {} },
-      },
-      {
-        name: "prev_scene",
-        description: "Go back to the previous presentation slide/section.",
-        parameters: { type: "object", properties: {} },
-      },
-      {
-        name: "go_to_scene",
-        description: "Jump to a specific presentation scene by number (1-based).",
-        parameters: {
-          type: "object",
-          properties: {
-            scene_number: { type: "number", description: "Scene number (1-based, e.g. 1 for first scene)" },
-          },
-          required: ["scene_number"],
-        },
-      },
       {
         name: "open_file",
         description:
@@ -548,10 +523,13 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           // ── Smart Todo Delivery: send concise todos to Telegram with inline buttons ──
           // User confirms → deep research + sub-agent execution per todo
+          const activeSession = deps.sessionManager?.list({ status: "active" })[0]
+            || deps.sessionManager?.list({ status: "ended" })[0];
           postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,
             prepSummary,
+            meetingId: activeSession?.meetingId,
           }).catch((e: any) => {
             console.error("[PostMeeting] Delivery failed:", e.message);
             // Fallback: push full report to OpenClaw directly
@@ -630,106 +608,51 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             await meetJoiner.shareScreen();
           }
 
-          // If prep has scenes, use voice-driven SceneController (when provider supports images)
-          // or fall back to timer-driven PresentationEngine
+          // Native voice-driven presentation: inject narrative plan + screenshot
+          // Voice model sees the screen and drives naturally using interact/scroll tools
           const brief = meetingPrepSkill?.currentBrief;
-          const prepScenes = brief?.scenes;
           const cl = deps.chromeLauncher;
-          if (prepScenes && prepScenes.length > 0 && cl) {
-            const providerName = deps.voice?.provider;
-            const supportsImage = providerName === "openai15" || providerName === "gemini";
-
-            if (supportsImage) {
-              // Voice-driven mode: SceneController + next_scene/prev_scene tools
-              // Voice model sees screenshots, decides when to advance (sideband pattern)
-              const { SceneController } = await import("../modules/presentation-engine");
-              const controller = new SceneController();
-              controller.load(prepScenes, cl);
-              // Store controller for scene tool handlers
-              (deps as any)._sceneController = controller;
-
-              // Inject presentation plan so voice model knows the full agenda
-              const planSummary = prepScenes.map((s: any, i: number) =>
-                `Scene ${i + 1}: ${s.scrollTarget || s.url} — ${s.talkingPoints.slice(0, 80)}`
-              ).join("\n");
-              deps.voice?.injectContext(
-                `[PRESENTATION] ${prepScenes.length} scenes loaded. Use next_scene to advance.\n${planSummary}`
-              );
-
-              // Trigger first scene automatically
-              const first = await controller.next();
-              if (first.screenshot && deps.voice) {
-                deps.voice.injectScreenshot(first.screenshot,
-                  `[SCENE 1/${controller.totalScenes}] ${first.scene?.talkingPoints?.slice(0, 150) || ""}`
-                );
+          if (brief && cl && deps.voice) {
+            // Take screenshot of the shared content
+            try {
+              const page = cl.presentingPage;
+              if (page) {
+                const buf = await page.screenshot({ type: "jpeg", quality: 60 });
+                const screenshot = buf.toString("base64");
+                deps.voice.injectScreenshot(screenshot, `[PRESENTING] ${shareUrl || "screen"}`);
               }
-              eventBus.emit("presentation.started", { scenes: prepScenes.length, mode: "voice-driven" });
-              return `Presenting ${prepScenes.length} scenes (voice-driven). First scene is on screen — describe what you see and present it. Call next_scene when ready to advance.`;
+            } catch {}
+
+            // Inject narrative plan so voice knows what to present
+            const narrativeParts: string[] = [];
+            if (brief.goal) narrativeParts.push(`Goal: ${brief.goal}`);
+            if (brief.keyPoints?.length) {
+              narrativeParts.push(`Key points:\n${brief.keyPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}`);
+            }
+            if (brief.speakingPlan?.length) {
+              const phases = brief.speakingPlan.map((p: any) => `- ${p.phase}: ${p.points}`).join("\n");
+              narrativeParts.push(`Speaking plan:\n${phases}`);
+            }
+            if (brief.browserUrls?.length) {
+              const urls = brief.browserUrls.map((u: any) => `- ${u.url}: ${u.description}`).join("\n");
+              narrativeParts.push(`Materials to show:\n${urls}`);
             }
 
-            // Fallback: timer-driven PresentationEngine (for providers without image support)
-            const { PresentationEngine } = await import("../modules/presentation-engine");
-            const { buildSceneContext } = await import("../voice-persona");
-            const engine = new PresentationEngine();
-            engine.runScenes({
-              scenes: prepScenes,
-              chromeLauncher: cl,
-              voice: deps.voice,
-              context,
-              onSceneAdvance: (idx: number, scene: any) => {
-                if (brief) {
-                  const sceneCtx = buildSceneContext(brief, idx);
-                  if (sceneCtx && deps.voice?.connected) deps.voice.injectContext(sceneCtx);
-                }
-                eventBus.emit("presentation.scene", { index: idx, total: prepScenes.length, url: scene.url });
-              },
-              onComplete: () => eventBus.emit("presentation.done", { scenesCount: prepScenes.length }),
-            }).catch((e: any) => console.warn("[Meeting] Presentation sequence failed:", e.message));
-            return `Presenting ${prepScenes.length} slides. First: ${prepScenes[0]!.url}`;
+            if (narrativeParts.length > 0) {
+              deps.voice.injectContext(
+                `[PRESENTATION MODE] You are now presenting to the meeting. Present naturally — scroll, click, and navigate using your tools. Here is your narrative guide:\n\n${narrativeParts.join("\n\n")}`
+              );
+            }
+            eventBus.emit("presentation.started", { mode: "native" });
+            return `Screen sharing started. You can see the content — present it naturally. Use interact/scroll to navigate the page.`;
           }
 
           return "Screen sharing started.";
         }
         case "stop_sharing": {
           await meetJoiner.stopSharing();
-          // Clean up SceneController if active
-          if ((deps as any)._sceneController) {
-            (deps as any)._sceneController.unload();
-            (deps as any)._sceneController = null;
-            eventBus.emit("presentation.done", { mode: "voice-driven" });
-          }
+          eventBus.emit("presentation.done", { mode: "native" });
           return "Screen sharing stopped.";
-        }
-        // ── Voice-driven scene tools (sideband pattern) ──
-        case "next_scene":
-        case "prev_scene":
-        case "go_to_scene": {
-          const controller = (deps as any)?._sceneController;
-          if (!controller?.isLoaded) return "No presentation active. Use share_screen first.";
-
-          let result;
-          if (name === "next_scene") result = await controller.next();
-          else if (name === "prev_scene") result = await controller.prev();
-          else result = await controller.goTo((args.scene_number || 1) - 1); // 1-based → 0-based
-
-          if (!result.scene) {
-            if (name === "next_scene") {
-              // Presentation complete
-              eventBus.emit("presentation.done", { scenesPresented: controller.totalScenes, mode: "voice-driven" });
-              return `Presentation complete (${controller.totalScenes} scenes). You may stop sharing.`;
-            }
-            return "Cannot go to that scene.";
-          }
-
-          // Inject screenshot so voice model can see the new scene
-          if (result.screenshot && deps.voice) {
-            deps.voice.injectScreenshot(result.screenshot,
-              `[SCENE ${result.index + 1}/${result.total}] ${result.scene.talkingPoints.slice(0, 150)}`
-            );
-          }
-          eventBus.emit("presentation.scene", { index: result.index, total: result.total, mode: "voice-driven" });
-
-          return `Scene ${result.index + 1}/${result.total}: ${result.scene.talkingPoints.slice(0, 200)}`;
         }
         case "open_file": {
           // Resolve doc_number from Working Documents list
@@ -842,10 +765,38 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             // Open in ChromeLauncher's presenting tab for potential screen share
             const fileUrl = resolvedPath.startsWith("http") ? resolvedPath : `file://${resolvedPath}`;
             await deps.chromeLauncher.shareScreen(fileUrl);
-            return `Opened and presenting: ${resolvedPath}`;
+          } else {
+            await meetJoiner.openFile(resolvedPath, app);
           }
-          await meetJoiner.openFile(resolvedPath, app);
-          return `Opened ${resolvedPath} in ${app}.`;
+
+          // Read file content and inject into voice context (meeting memory)
+          const textExts = /\.(txt|md|html|json|csv|ts|tsx|js|jsx|py|yaml|yml|toml|xml|sql|sh|env|log|conf|cfg)$/i;
+          if (textExts.test(resolvedPath)) {
+            try {
+              const fileContent = await Bun.file(resolvedPath).text();
+              const maxChars = 3000;
+              const truncated = fileContent.length > maxChars
+                ? fileContent.slice(0, maxChars) + `\n... (truncated, ${fileContent.length} chars total)`
+                : fileContent;
+              const fileName = resolvedPath.split("/").pop() || resolvedPath;
+
+              // Inject into real-time voice context
+              if (deps.voice) {
+                deps.voice.injectContext(`[FILE_CONTENT] ${fileName}:\n${truncated}`);
+              }
+              // Persist in meeting prep liveNotes
+              if (deps.meetingPrepSkill) {
+                deps.meetingPrepSkill.addLiveNote(`[CONTEXT] Opened ${fileName} — ${fileContent.length} chars, content injected to voice context`);
+              }
+              console.log(`[open_file] Injected ${Math.min(fileContent.length, maxChars)} chars from ${fileName} into voice context`);
+            } catch (e: any) {
+              console.warn(`[open_file] Could not read file content: ${e.message}`);
+            }
+          }
+
+          return app === "browser"
+            ? `Opened and presenting: ${resolvedPath}`
+            : `Opened ${resolvedPath} in ${app}.`;
         }
         default:
           return `Unknown meeting tool: ${name}`;

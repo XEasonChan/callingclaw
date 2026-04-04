@@ -37,7 +37,7 @@ info "Checking prerequisites..."
 
 # macOS
 if [[ "$(uname)" != "Darwin" ]]; then
-  fail "CallingClaw requires macOS (uses osascript, BlackHole, Electron)"
+  fail "CallingClaw requires macOS (uses osascript, Playwright, Electron)"
 fi
 ok "macOS detected"
 
@@ -87,14 +87,8 @@ else
   warn "Install with: brew install cliclick"
 fi
 
-# BlackHole (optional, for meeting audio)
-if system_profiler SPAudioDataType 2>/dev/null | grep -qi blackhole; then
-  ok "BlackHole audio driver detected"
-else
-  warn "BlackHole not found (needed for Google Meet/Zoom audio bridging)"
-  warn "Install with: brew install blackhole-2ch blackhole-16ch switchaudio-osx"
-  warn "Then restart your Mac"
-fi
+# Audio: Playwright injection (no virtual audio drivers needed since v2.7.12)
+ok "Audio: Playwright injection (no BlackHole needed)"
 
 echo ""
 
