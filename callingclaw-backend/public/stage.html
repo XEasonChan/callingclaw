@@ -5,43 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CallingClaw Presenting</title>
   <link rel="icon" type="image/png" href="./logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    /* ── Design Tokens ─────────────────────────────── */
+    /* ── Design Tokens (CallingClaw Official) ──────── */
     :root {
-      --bg: #08080a;
-      --surface: #111114;
-      --surface2: #19191e;
-      --surface3: #222228;
-      --border: #2a2a32;
-      --text: #e8e8ec;
-      --text2: #8888a0;
-      --text3: #55556a;
-      --accent: #E63946;
-      --accent-dim: rgba(230, 57, 70, 0.15);
+      --bg: #FFFFFF;
+      --bg-subtle: #F8F8FA;
+      --surface: #ffffff;
+      --text: #1f2937;
+      --text2: #6b7280;
+      --text3: #9ca3af;
+      --accent: #dc4a3a;
+      --accent-hover: #c43d2e;
+      --accent-light: #fef2f1;
+      --accent-glow: rgba(220, 74, 58, 0.12);
+      --green: #4aa682;
+      --green-light: #e6f4ee;
+      --yellow: #d97706;
+      --yellow-light: #fef3c7;
       --blue: #6366f1;
-      --blue-dim: rgba(99, 102, 241, 0.12);
-      --green: #22c55e;
-      --green-dim: rgba(34, 197, 94, 0.12);
-      --yellow: #eab308;
-      --yellow-dim: rgba(234, 179, 8, 0.12);
-      --cyan: #06b6d4;
-      --cyan-dim: rgba(6, 182, 212, 0.12);
-      --radius: 16px;
-      --radius-sm: 10px;
-      --radius-xs: 6px;
-      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-      --mono: 'SF Mono', 'JetBrains Mono', 'Menlo', monospace;
-      /* Glow colors */
-      --glow-1: #E63946;
-      --glow-2: #6366f1;
-      --glow-3: #06b6d4;
-      --glow-4: #E63946;
+      --blue-light: #eef2ff;
+      --cyan: #0891b2;
+      --cyan-light: #ecfeff;
+      --border: #e5e7eb;
+      --border-sketch: #c9cdd4;
+
+      --font-display: "Space Grotesk", system-ui, sans-serif;
+      --font-body: "Inter", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.04);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.06);
+
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: var(--font);
+      font-family: var(--font-body);
       background: var(--bg);
       color: var(--text);
       height: 100vh;
@@ -49,224 +53,85 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Breathing Edge Glow ─────────────────────── */
-    .glow-container {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
+    /* ── Hand-drawn border mixin ──────────────────── */
+    .sketch-box {
+      border: 2px solid var(--border-sketch);
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      background: var(--surface);
     }
 
-    .glow-border {
-      position: absolute;
-      inset: 0;
-      border-radius: 0;
-      opacity: 0.6;
-      transition: opacity 1s ease;
+    .sketch-box-sm {
+      border: 1.5px solid var(--border-sketch);
+      border-radius: 15px 255px 15px 225px / 225px 15px 255px 15px;
+      background: var(--surface);
     }
 
-    .glow-border::before {
-      content: '';
-      position: absolute;
-      inset: -2px;
-      background: conic-gradient(
-        from var(--glow-angle, 0deg),
-        var(--glow-1),
-        var(--glow-2),
-        var(--glow-3),
-        var(--glow-4)
-      );
-      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      mask-composite: exclude;
-      -webkit-mask-composite: xor;
-      padding: 3px;
-      animation: glowRotate 8s linear infinite;
-      filter: blur(8px);
-    }
-
-    .glow-border.active {
-      opacity: 1;
-    }
-
-    .glow-border.active::before {
-      animation-duration: 4s;
-      filter: blur(12px);
-      padding: 5px;
-    }
-
-    .glow-border.thinking::before {
-      animation-duration: 2s;
-      filter: blur(16px);
-      padding: 6px;
-    }
-
-    @keyframes glowRotate {
-      to { --glow-angle: 360deg; }
-    }
-
-    @property --glow-angle {
-      syntax: '<angle>';
-      initial-value: 0deg;
-      inherits: false;
-    }
-
-    /* Inner subtle vignette */
-    .glow-container::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(ellipse at center, transparent 60%, var(--bg) 100%);
-      pointer-events: none;
+    .sketch-box-alt {
+      border: 2px solid var(--border-sketch);
+      border-radius: 225px 15px 255px 15px / 15px 255px 15px 225px;
+      background: var(--surface);
     }
 
     /* ── Main Layout ─────────────────────────────── */
     .stage {
-      position: relative;
-      z-index: 1;
       height: 100vh;
       display: flex;
-      padding: 20px;
-      gap: 20px;
-    }
-
-    /* ── Left: Slide Player ──────────────────────── */
-    .slide-player {
-      width: 42%;
-      min-width: 380px;
-      display: flex;
       flex-direction: column;
+      padding: 16px 20px;
       gap: 12px;
-    }
-
-    .slide-frame {
-      flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      position: relative;
-    }
-
-    .slide-frame iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: #000;
-    }
-
-    .slide-placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      color: var(--text3);
-    }
-
-    .slide-placeholder .logo-mark {
-      width: 64px;
-      height: 64px;
-      border-radius: 20px;
-      background: linear-gradient(135deg, var(--accent), var(--blue));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: -1px;
-      opacity: 0.7;
-    }
-
-    .slide-placeholder p {
-      font-size: 13px;
-      text-align: center;
-      line-height: 1.5;
-    }
-
-    .slide-nav {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 4px;
-    }
-
-    .slide-nav .slide-info {
-      font-size: 12px;
-      color: var(--text3);
-      flex: 1;
-    }
-
-    .slide-nav button {
-      width: 32px;
-      height: 32px;
-      border-radius: var(--radius-xs);
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text2);
-      font-size: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s;
-    }
-
-    .slide-nav button:hover {
-      background: var(--surface2);
-      color: var(--text);
-    }
-
-    /* ── Right: AI Workspace ─────────────────────── */
-    .workspace {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      min-width: 0;
     }
 
     /* ── Header ──────────────────────────────────── */
     .stage-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 4px 0;
+      gap: 10px;
+      padding: 0 4px;
       flex-shrink: 0;
     }
 
     .stage-logo {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: var(--accent);
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--surface);
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 4px;
     }
 
     .stage-logo img {
-      width: 18px;
-      height: 18px;
+      width: 24px;
+      height: 24px;
     }
 
     .stage-title {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    .stage-divider {
+      width: 1px;
+      height: 18px;
+      background: var(--border);
+      margin: 0 4px;
     }
 
     .stage-meeting {
-      font-size: 12px;
-      color: var(--text2);
-      margin-left: 8px;
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: -0.01em;
     }
 
     .stage-clock {
       margin-left: auto;
-      font-family: var(--mono);
+      font-family: var(--font-mono);
       font-size: 13px;
       color: var(--text3);
       font-variant-numeric: tabular-nums;
@@ -276,21 +141,21 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-left: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 12px;
       border-radius: 20px;
+      margin-left: 8px;
     }
 
     .stage-status.connected {
-      background: var(--green-dim);
+      background: var(--green-light);
       color: var(--green);
     }
 
     .stage-status.disconnected {
-      background: rgba(239,68,68,0.12);
-      color: #ef4444;
+      background: var(--accent-light);
+      color: var(--accent);
     }
 
     .stage-status .dot {
@@ -303,499 +168,555 @@
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+      50% { opacity: 0.3; }
     }
 
-    /* ── Model Cards ─────────────────────────────── */
-    .models {
-      display: flex;
-      gap: 12px;
-      flex-shrink: 0;
-    }
-
-    .model-card {
+    /* ── Content Area ────────────────────────────── */
+    .content {
       flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 14px 16px;
+      display: flex;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    /* ── Left: Slide Player — fills all remaining space ── */
+    .slide-player {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slide-frame-outer {
+      flex: 1;
       position: relative;
+      border-radius: 20px;
+      min-height: 0;
+    }
+
+    .slide-frame {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
       overflow: hidden;
-      transition: border-color 0.3s;
+      background: var(--bg-subtle);
+      border: 1.5px solid var(--border);
     }
 
-    .model-card.active {
-      border-color: var(--card-accent, var(--border));
+    /* Inward rotating glow — uniform on all 4 edges */
+    .slide-frame::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 15px;
+      pointer-events: none;
+      z-index: 3;
+      background: conic-gradient(
+        from var(--glow-angle, 0deg),
+        rgba(220, 74, 58, 0.50),
+        rgba(245, 160, 50, 0.35),
+        rgba(255, 255, 255, 0.25),
+        rgba(245, 160, 50, 0.35),
+        rgba(220, 74, 58, 0.50)
+      );
+      -webkit-mask:
+        linear-gradient(to right,  black, transparent 36px) left   / 36px 100% no-repeat,
+        linear-gradient(to left,   black, transparent 36px) right  / 36px 100% no-repeat,
+        linear-gradient(to bottom, black, transparent 36px) top    / 100% 36px no-repeat,
+        linear-gradient(to top,    black, transparent 36px) bottom / 100% 36px no-repeat;
+      mask:
+        linear-gradient(to right,  black, transparent 36px) left   / 36px 100% no-repeat,
+        linear-gradient(to left,   black, transparent 36px) right  / 36px 100% no-repeat,
+        linear-gradient(to bottom, black, transparent 36px) top    / 100% 36px no-repeat,
+        linear-gradient(to top,    black, transparent 36px) bottom / 100% 36px no-repeat;
+      -webkit-mask-composite: source-over;
+      mask-composite: add;
+      animation: glowSpin 8s linear infinite, breathe 5s ease-in-out infinite;
     }
 
-    .model-card::before {
+    @property --glow-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    @keyframes glowSpin {
+      to { --glow-angle: 360deg; }
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.95; }
+    }
+
+    /* Active state — faster spin, brighter */
+    .slide-frame-outer.active .slide-frame::after {
+      animation: glowSpin 6s linear infinite, breatheActive 4s ease-in-out infinite;
+    }
+
+    @keyframes breatheActive {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    /* Thinking state — fastest spin, brightest */
+    .slide-frame-outer.thinking .slide-frame::after {
+      background: conic-gradient(
+        from var(--glow-angle, 0deg),
+        rgba(220, 74, 58, 0.65),
+        rgba(245, 160, 50, 0.45),
+        rgba(255, 255, 255, 0.35),
+        rgba(245, 160, 50, 0.45),
+        rgba(220, 74, 58, 0.65)
+      );
+      animation: glowSpin 3s linear infinite, breatheThink 2.5s ease-in-out infinite;
+    }
+
+    @keyframes breatheThink {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+
+    .slide-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .slide-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 2;
+    }
+
+    .slide-placeholder .logo-big {
+      width: 80px;
+      height: 80px;
+      border-radius: 24px;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    .slide-placeholder .logo-big img {
+      width: 56px;
+      height: 56px;
+    }
+
+    .slide-placeholder .tagline {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text2);
+      letter-spacing: -0.02em;
+    }
+
+    .slide-placeholder .subtitle {
+      font-size: 13px;
+      color: var(--text3);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .slide-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+    }
+
+    .slide-info {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--text2);
+      flex: 1;
+      text-align: center;
+    }
+
+    .slide-nav button {
+      width: 28px;
+      height: 28px;
+      border: 1.5px solid var(--border-sketch);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text2);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .slide-nav button:hover {
+      background: var(--bg-subtle);
+      color: var(--text);
+    }
+
+    /* ── Right: Workspace Panel — fixed narrow width ── */
+    .workspace {
+      width: 300px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+
+    /* ── Model Log Panel — compact, ~1:1 aspect ── */
+    .model-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 10px 12px 6px;
+      position: relative;
+    }
+
+    .model-panel::before {
       content: '';
       position: absolute;
       top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--card-accent, var(--border));
+      left: 12px;
+      right: 12px;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--panel-accent, var(--border));
       opacity: 0;
       transition: opacity 0.3s;
     }
 
-    .model-card.active::before {
+    .model-panel.active::before {
       opacity: 1;
     }
 
-    .model-card.system1 {
-      --card-accent: var(--accent);
-    }
+    .model-panel.s1 { --panel-accent: var(--accent); }
+    .model-panel.s2 { --panel-accent: var(--blue); }
 
-    .model-card.system2 {
-      --card-accent: var(--blue);
-    }
-
-    .model-header {
+    .model-head {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
     }
 
     .model-icon {
       width: 28px;
       height: 28px;
-      border-radius: 8px;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-family: var(--font-display);
+      font-size: 12px;
       font-weight: 700;
       flex-shrink: 0;
     }
 
-    .system1 .model-icon {
-      background: var(--accent-dim);
+    .s1 .model-icon {
+      background: var(--accent-light);
       color: var(--accent);
+      border: 1.5px solid rgba(220, 74, 58, 0.2);
     }
 
-    .system2 .model-icon {
-      background: var(--blue-dim);
+    .s2 .model-icon {
+      background: var(--blue-light);
       color: var(--blue);
+      border: 1.5px solid rgba(99, 102, 241, 0.2);
     }
 
     .model-name {
-      font-size: 12px;
+      font-family: var(--font-display);
+      font-size: 13px;
       font-weight: 600;
+      color: var(--text);
       letter-spacing: -0.01em;
     }
 
     .model-provider {
-      font-size: 10px;
+      font-size: 11px;
       color: var(--text3);
-      margin-top: 1px;
     }
 
-    .model-status {
+    .model-status-label {
       margin-left: auto;
-      font-size: 11px;
-      color: var(--text2);
       display: flex;
       align-items: center;
       gap: 5px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text2);
     }
 
-    .model-status .indicator {
+    .model-status-label .indicator {
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--text3);
+      background: var(--border);
       transition: all 0.3s;
     }
 
-    .model-status .indicator.active {
+    .model-status-label .indicator.active {
       background: var(--green);
-      box-shadow: 0 0 8px var(--green);
+      box-shadow: 0 0 6px rgba(74, 166, 130, 0.4);
     }
 
-    .model-status .indicator.thinking {
+    .model-status-label .indicator.thinking {
       background: var(--yellow);
-      box-shadow: 0 0 8px var(--yellow);
+      box-shadow: 0 0 6px rgba(217, 119, 6, 0.4);
       animation: pulse 1s ease-in-out infinite;
     }
 
-    .model-body {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text3);
-      line-height: 1.6;
-      min-height: 36px;
-      max-height: 60px;
-      overflow-y: auto;
-    }
-
-    .model-body .delta {
-      color: var(--text2);
-      animation: fadeIn 0.2s ease;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(2px); }
-      to { opacity: 1; transform: none; }
-    }
-
-    /* ── Event Feed ──────────────────────────────── */
-    .event-feed {
+    /* Log scroll area */
+    .model-log {
       flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.7;
       min-height: 0;
     }
 
-    .feed-header {
+    .model-log::-webkit-scrollbar { width: 3px; }
+    .model-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .log-entry {
+      display: flex;
+      gap: 8px;
+      padding: 2px 0;
+      animation: logFade 0.3s var(--ease);
+      align-items: baseline;
+    }
+
+    @keyframes logFade {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .log-time {
+      color: var(--text3);
+      flex-shrink: 0;
+      font-size: 10px;
+      min-width: 48px;
+    }
+
+    .log-type {
+      color: var(--text2);
+      flex-shrink: 0;
+      min-width: 140px;
+    }
+
+    .log-detail {
+      color: var(--text3);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .log-detail .hl {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .log-empty {
       display: flex;
       align-items: center;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    .feed-title {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text2);
-    }
-
-    .feed-count {
-      font-family: var(--mono);
-      font-size: 10px;
+      justify-content: center;
+      height: 100%;
+      font-family: var(--font-body);
+      font-size: 13px;
       color: var(--text3);
-      background: var(--surface2);
-      padding: 2px 7px;
-      border-radius: 10px;
     }
 
-    .feed-filters {
-      margin-left: auto;
+    /* ── Documents Section ────────────────────────── */
+    .documents {
+      padding: 12px 14px;
+      flex-shrink: 0;
+      min-height: 120px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .docs-label {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .doc-list {
       display: flex;
+      flex-direction: column;
       gap: 4px;
     }
 
-    .feed-filter {
-      font-size: 10px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: none;
-      background: transparent;
-      color: var(--text3);
-      cursor: pointer;
-      font-family: var(--font);
-      font-weight: 500;
+    .doc-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 8px;
       transition: all 0.15s;
     }
 
-    .feed-filter:hover { color: var(--text2); }
-    .feed-filter.active { background: var(--surface3); color: var(--text); }
-
-    .feed-scroll {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 0;
+    .doc-row:hover {
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
     }
 
-    .feed-scroll::-webkit-scrollbar { width: 4px; }
-    .feed-scroll::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
-
-    .event-row {
+    .doc-row .doc-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
       display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 5px 16px;
-      animation: fadeIn 0.2s ease;
-      transition: background 0.1s;
+      align-items: center;
+      justify-content: center;
     }
 
-    .event-row:hover {
-      background: var(--surface2);
+    .doc-row .doc-icon svg {
+      width: 18px;
+      height: 18px;
     }
 
-    .event-time {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--text3);
-      flex-shrink: 0;
-      min-width: 52px;
-      padding-top: 2px;
-    }
-
-    .event-badge {
-      font-size: 9px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 3px;
-      text-transform: uppercase;
-      flex-shrink: 0;
-      letter-spacing: 0.3px;
-      min-width: 48px;
-      text-align: center;
-    }
-
-    .event-badge.voice   { background: var(--accent-dim); color: var(--accent); }
-    .event-badge.meeting  { background: var(--green-dim);  color: var(--green); }
-    .event-badge.compute  { background: var(--blue-dim);   color: var(--blue); }
-    .event-badge.browser  { background: var(--cyan-dim);   color: var(--cyan); }
-    .event-badge.memory   { background: var(--yellow-dim); color: var(--yellow); }
-    .event-badge.system   { background: var(--surface3);   color: var(--text3); }
-
-    .event-type {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text2);
-      flex-shrink: 0;
-      min-width: 160px;
-    }
-
-    .event-detail {
-      font-size: 11px;
-      color: var(--text3);
+    .doc-row .doc-name {
       flex: 1;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-family: var(--font-body);
     }
 
-    .event-detail .highlight {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    /* ── Documents Panel ─────────────────────────── */
-    .documents {
-      flex-shrink: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 12px 16px;
-      max-height: 140px;
-      overflow-y: auto;
-    }
-
-    .docs-header {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text2);
-      margin-bottom: 8px;
-    }
-
-    .doc-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .doc-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xs);
-      font-size: 11px;
-      color: var(--text2);
-      transition: all 0.15s;
-      cursor: default;
-    }
-
-    .doc-item:hover {
-      background: var(--surface3);
-      color: var(--text);
-    }
-
-    .doc-icon {
-      font-size: 12px;
-      flex-shrink: 0;
-    }
-
-    .doc-name {
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .doc-badge {
+    .doc-row .badge {
       font-size: 9px;
-      padding: 1px 5px;
-      border-radius: 3px;
       font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
     }
 
-    .doc-badge.new {
-      background: var(--green-dim);
-      color: var(--green);
-    }
-
-    .doc-badge.modified {
-      background: var(--yellow-dim);
-      color: var(--yellow);
-    }
-
-    /* ── Empty State ─────────────────────────────── */
-    .feed-empty {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--text3);
-      font-size: 13px;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .feed-empty .shimmer {
-      width: 200px;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--surface3), transparent);
-      border-radius: 1px;
-      animation: shimmer 2s ease-in-out infinite;
-    }
-
-    @keyframes shimmer {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 1; }
-    }
+    .doc-row .badge.new { background: var(--green-light); color: var(--green); }
+    .doc-row .badge.modified { background: var(--yellow-light); color: var(--yellow); }
 
     /* ── Responsive ──────────────────────────────── */
     @media (max-width: 900px) {
-      .stage { flex-direction: column; }
+      .content { flex-direction: column; }
       .slide-player { width: 100%; min-width: 0; max-height: 40vh; }
-      .models { flex-direction: column; }
     }
   </style>
 </head>
 <body>
-  <!-- Breathing edge glow -->
-  <div class="glow-container">
-    <div class="glow-border" id="glowBorder"></div>
-  </div>
-
   <div class="stage">
-    <!-- Left: Slide Player -->
-    <div class="slide-player" id="slidePlayer" style="display: none;">
-      <div class="slide-frame">
-        <iframe id="slideFrame" src="about:blank"></iframe>
-        <div class="slide-placeholder" id="slidePlaceholder">
-          <div class="logo-mark">CC</div>
-          <p>Presentation will appear here<br>when slides are loaded</p>
-        </div>
+    <!-- Header -->
+    <div class="stage-header">
+      <div class="stage-logo">
+        <img src="./logo.png" alt="CC" onerror="this.parentElement.innerHTML='<span style=&quot;color:var(--accent);font-family:Space Grotesk;font-weight:700;font-size:14px&quot;>CC</span>'">
       </div>
-      <div class="slide-nav" id="slideNav" style="display: none;">
-        <button onclick="slideAction('prev')" title="Previous">&larr;</button>
-        <span class="slide-info" id="slideInfo">Slide 1 / 1</span>
-        <button onclick="slideAction('next')" title="Next">&rarr;</button>
-      </div>
+      <span class="stage-title">CallingClaw</span>
+      <div class="stage-divider"></div>
+      <span class="stage-meeting" id="meetingName">Weekly Standup</span>
+      <span class="stage-clock" id="clock"></span>
+      <span class="stage-status connected" id="wsStatus">
+        <span class="dot"></span>
+        <span id="wsStatusText">Live</span>
+      </span>
     </div>
 
-    <!-- Right: AI Workspace -->
-    <div class="workspace">
-      <!-- Header -->
-      <div class="stage-header">
-        <div class="stage-logo">
-          <img src="./logo.png" alt="CC" onerror="this.parentElement.textContent='CC'">
+    <!-- Content -->
+    <div class="content">
+      <!-- Left: Slide Player with breathing gradient -->
+      <div class="slide-player">
+        <div class="slide-frame-outer active" id="slideOuter">
+          <div class="slide-frame">
+            <iframe id="slideFrame" src="about:blank"></iframe>
+            <div class="slide-placeholder" id="slidePlaceholder">
+              <div class="logo-big">
+                <img src="./logo.png" alt="CC" onerror="this.parentElement.innerHTML='<span style=&quot;color:var(--accent);font-family:Space Grotesk;font-weight:700;font-size:28px&quot;>CC</span>'">
+              </div>
+              <div class="tagline">Your AI is preparing...</div>
+              <div class="subtitle">Presentation will appear here when slides are loaded</div>
+            </div>
+          </div>
         </div>
-        <span class="stage-title">CallingClaw</span>
-        <span class="stage-meeting" id="meetingName"></span>
-        <span class="stage-clock" id="clock"></span>
-        <span class="stage-status disconnected" id="wsStatus">
-          <span class="dot"></span>
-          <span id="wsStatusText">Connecting</span>
-        </span>
+        <div class="slide-nav" id="slideNav" style="display:none;">
+          <button onclick="slideAction('prev')">&larr;</button>
+          <span class="slide-info" id="slideInfo">Slide 1 / 1</span>
+          <button onclick="slideAction('next')">&rarr;</button>
+        </div>
       </div>
 
-      <!-- Dual Model Cards -->
-      <div class="models">
-        <!-- System 1: Voice / Realtime -->
-        <div class="model-card system1" id="card-s1">
-          <div class="model-header">
+      <!-- Right: Workspace -->
+      <div class="workspace">
+        <!-- System 1: Realtime Voice -->
+        <div class="model-panel sketch-box s1" id="panel-s1">
+          <div class="model-head">
             <div class="model-icon">S1</div>
             <div>
               <div class="model-name">Realtime Voice</div>
               <div class="model-provider" id="s1-provider">OpenAI Realtime</div>
             </div>
-            <div class="model-status">
-              <span class="indicator" id="s1-indicator"></span>
-              <span id="s1-status">Idle</span>
+            <div class="model-status-label">
+              <span class="indicator active" id="s1-ind"></span>
+              <span id="s1-status">Listening</span>
             </div>
           </div>
-          <div class="model-body" id="s1-body">
-            Waiting for voice session...
+          <div class="model-log" id="s1-log">
+            <div class="log-empty">Waiting for voice events...</div>
           </div>
         </div>
 
-        <!-- System 2: Deep Thinking -->
-        <div class="model-card system2" id="card-s2">
-          <div class="model-header">
+        <!-- System 2: Deep Reasoning -->
+        <div class="model-panel sketch-box-alt s2" id="panel-s2">
+          <div class="model-head">
             <div class="model-icon">S2</div>
             <div>
               <div class="model-name">Deep Reasoning</div>
               <div class="model-provider">OpenClaw Agent</div>
             </div>
-            <div class="model-status">
-              <span class="indicator" id="s2-indicator"></span>
+            <div class="model-status-label">
+              <span class="indicator" id="s2-ind"></span>
               <span id="s2-status">Idle</span>
             </div>
           </div>
-          <div class="model-body" id="s2-body">
-            Standing by for complex tasks...
+          <div class="model-log" id="s2-log">
+            <div class="log-empty">Standing by for complex tasks...</div>
           </div>
         </div>
-      </div>
 
-      <!-- Event Feed -->
-      <div class="event-feed">
-        <div class="feed-header">
-          <span class="feed-title">Activity Stream</span>
-          <span class="feed-count" id="eventCount">0</span>
-          <div class="feed-filters">
-            <button class="feed-filter active" data-filter="all" onclick="setFilter('all')">All</button>
-            <button class="feed-filter" data-filter="voice" onclick="setFilter('voice')">Voice</button>
-            <button class="feed-filter" data-filter="compute" onclick="setFilter('compute')">Compute</button>
-            <button class="feed-filter" data-filter="meeting" onclick="setFilter('meeting')">Meeting</button>
-          </div>
+        <!-- Working Documents -->
+        <div class="documents sketch-box-sm" id="documents">
+          <div class="docs-label">Working Documents</div>
+          <div class="doc-list" id="docList"></div>
         </div>
-        <div class="feed-scroll" id="feedScroll">
-          <div class="feed-empty" id="feedEmpty">
-            <span>Waiting for events...</span>
-            <div class="shimmer"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Related Documents -->
-      <div class="documents" id="documents" style="display: none;">
-        <div class="docs-header">Working Documents</div>
-        <div class="doc-list" id="docList"></div>
       </div>
     </div>
   </div>
 
   <script>
-    // ── Configuration ────────────────────────────────
+    // ── Config ───────────────────────────────────────
     var API = 'http://localhost:4000';
     var WS_URL = 'ws://localhost:4000/ws/events';
-    var MAX_EVENTS = 200;
-    var eventCount = 0;
-    var currentFilter = 'all';
+    var MAX_LOG = 80;
+    var DEMO_MODE = true; // set false when real backend is connected
     var ws = null;
-    var documents = new Map(); // path -> { name, icon, badge, ts }
+    var documents = new Map();
 
     // ── Clock ────────────────────────────────────────
     function updateClock() {
@@ -806,289 +727,216 @@
     setInterval(updateClock, 1000);
     updateClock();
 
-    // ── Event categorization ─────────────────────────
-    function categorize(type) {
-      if (type.startsWith('voice.') || type.startsWith('auditor.')) return 'voice';
-      if (type.startsWith('meeting.') || type.startsWith('calendar.') || type.startsWith('scheduler.') || type.startsWith('postmeeting.')) return 'meeting';
-      if (type.startsWith('computer.') || type.startsWith('openclaw.') || type.startsWith('opencli.')) return 'compute';
-      if (type.startsWith('browser_loop.') || type.startsWith('automation.')) return 'browser';
-      if (type.startsWith('retriever.') || type.startsWith('context.') || type.startsWith('workspace.')) return 'memory';
-      return 'system';
+    // ── Helpers ──────────────────────────────────────
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function trunc(s, n) { return s && s.length > n ? s.slice(0, n) + '...' : (s || ''); }
+    function timeStr(ts) {
+      var d = new Date(ts || Date.now());
+      return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
     }
 
-    function categoryLabel(cat) {
-      var labels = { voice: 'Voice', meeting: 'Meet', compute: 'Think', browser: 'Browse', memory: 'Memory', system: 'Sys' };
-      return labels[cat] || 'Sys';
+    // ── Categorize into S1 or S2 ─────────────────────
+    function isSystem1(type) {
+      return type.startsWith('voice.') || type.startsWith('auditor.') ||
+             type.startsWith('retriever.') || type.startsWith('meeting.') ||
+             type.startsWith('presentation.');
     }
 
-    // ── Format event detail ──────────────────────────
-    function formatDetail(type, data) {
+    function isSystem2(type) {
+      return type.startsWith('computer.') || type.startsWith('openclaw.') ||
+             type.startsWith('opencli.') || type.startsWith('browser_loop.') ||
+             type.startsWith('automation.');
+    }
+
+    // ── Format event detail for log ──────────────────
+    function fmtDetail(type, data) {
       if (!data) return '';
-      // Voice events
-      if (type === 'voice.tool_call') return 'Tool: <span class="highlight">' + esc(data.tool || '') + '</span>' + (data.summary ? ' — ' + esc(trunc(data.summary, 60)) : '');
-      if (type === 'voice.started') return 'Provider: <span class="highlight">' + esc(data.provider || '') + '</span>, mode: ' + esc(data.audio_mode || '');
-      // Meeting
-      if (type === 'meeting.started') return '<span class="highlight">Meeting joined</span>';
-      if (type === 'meeting.ended') return '<span class="highlight">Meeting ended</span>';
-      if (type === 'meeting.prep_ready') return 'Prep materials ready';
+      if (type === 'voice.tool_call') return '<span class="hl">' + esc(data.tool || '') + '</span>' + (data.summary ? ' — ' + esc(trunc(data.summary, 50)) : '');
+      if (type === 'voice.started') return 'provider: <span class="hl">' + esc(data.provider || '') + '</span>';
+      if (type === 'voice.stopped') return '<span class="hl">session ended</span>';
+      if (type === 'meeting.started') return '<span class="hl">joined</span>';
+      if (type === 'meeting.vision') return esc(trunc(data.description || data.scene || '', 60));
+      if (type === 'meeting.context_pushed') return 'source: <span class="hl">' + esc(data.source || '') + '</span>';
+      if (type === 'meeting.action_item') return esc(trunc(data.text || '', 60));
+      if (type === 'meeting.prep_ready') return '<span class="hl">materials ready</span>';
       if (type === 'meeting.prep_progress') return esc(data.step || '');
-      if (type === 'meeting.action_item') return esc(trunc(data.text || data.action || '', 80));
-      if (type === 'meeting.vision') return esc(trunc(data.description || data.scene || '', 80));
-      if (type === 'meeting.context_pushed') return 'Context injected: <span class="highlight">' + esc(data.source || '') + '</span>';
-      // Computer / OpenClaw
-      if (type === 'computer.task_started') return '<span class="highlight">' + esc(trunc(data.instruction || data.task || '', 80)) + '</span>';
-      if (type === 'computer.task_done') return (data.error ? 'Error: ' : 'Done: ') + esc(trunc(data.summary || data.error || '', 80));
-      if (type === 'openclaw.delta') return esc(trunc(data.text || '', 100));
-      // Retriever
-      if (type === 'retriever.topic') return 'Topic: <span class="highlight">' + esc(data.topic || '') + '</span>';
-      if (type === 'retriever.searching') return 'Searching: ' + esc(data.query || '');
-      if (type === 'retriever.complete') return 'Found ' + (data.results || 0) + ' results';
-      // Browser
-      if (type === 'browser_loop.started') return 'Goal: <span class="highlight">' + esc(trunc(data.goal || '', 60)) + '</span>';
-      if (type === 'browser_loop.step') return 'Step: ' + esc(trunc(data.action || '', 60));
-      if (type === 'browser_loop.done') return '<span class="highlight">Complete</span>';
-      // OpenCLI
-      if (type === 'opencli.adapter_start') return 'Adapter: <span class="highlight">' + esc(data.adapter || '') + '</span>';
-      if (type === 'opencli.adapter_done') return 'Done in ' + (data.duration || '?') + 'ms';
-      // Presentation
-      if (type === 'presentation.slide') return 'Slide ' + (data.index || '?') + '/' + (data.total || '?') + ': ' + esc(data.slide || '');
-      if (type === 'presentation.started') return '<span class="highlight">Presentation started</span>';
-      if (type === 'presentation.done') return '<span class="highlight">Presentation complete</span>';
-      // Auditor
-      if (type === 'auditor.intent') return 'Intent: <span class="highlight">' + esc(data.intent || '') + '</span>';
+      if (type === 'auditor.intent') return '<span class="hl">' + esc(data.intent || '') + '</span>';
       if (type === 'auditor.fast_lane') return esc(data.action || '');
-      // Fallback: show first string value
+      if (type === 'retriever.topic') return '<span class="hl">' + esc(data.topic || '') + '</span>';
+      if (type === 'retriever.searching') return esc(data.query || '');
+      if (type === 'retriever.complete') return (data.results || 0) + ' results';
+      if (type === 'computer.task_started') return '<span class="hl">' + esc(trunc(data.instruction || data.task || '', 60)) + '</span>';
+      if (type === 'computer.task_done') return (data.error ? 'ERR ' : '') + esc(trunc(data.summary || data.error || '', 60));
+      if (type === 'openclaw.delta') return esc(trunc(data.text || '', 80));
+      if (type === 'opencli.adapter_start') return '<span class="hl">' + esc(data.adapter || '') + '</span>';
+      if (type === 'opencli.adapter_done') return esc(data.adapter || '') + ' (' + (data.duration || '?') + 'ms)';
+      if (type === 'opencli.operate_start') return '<span class="hl">' + esc(trunc(data.goal || '', 60)) + '</span>';
+      if (type === 'browser_loop.started') return '<span class="hl">' + esc(trunc(data.goal || '', 50)) + '</span>';
+      if (type === 'browser_loop.step') return esc(trunc(data.action || '', 50));
+      if (type === 'browser_loop.done') return '<span class="hl">complete</span>';
+      if (type === 'presentation.slide') return 'slide ' + (data.index || '?') + '/' + (data.total || '?');
       var keys = Object.keys(data);
-      for (var i = 0; i < Math.min(keys.length, 3); i++) {
+      for (var i = 0; i < Math.min(keys.length, 2); i++) {
         var v = data[keys[i]];
-        if (typeof v === 'string' && v.length > 0) return esc(keys[i]) + ': ' + esc(trunc(v, 60));
+        if (typeof v === 'string' && v.length > 0) return esc(trunc(v, 50));
       }
       return '';
     }
 
-    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-    function trunc(s, n) { return s.length > n ? s.slice(0, n) + '...' : s; }
+    // ── Append log entry to a model panel ────────────
+    function appendLog(panelId, type, data, ts) {
+      var log = document.getElementById(panelId);
+      var empty = log.querySelector('.log-empty');
+      if (empty) empty.remove();
 
-    // ── Add event to feed ────────────────────────────
-    function addEvent(evt) {
-      var feedScroll = document.getElementById('feedScroll');
-      var feedEmpty = document.getElementById('feedEmpty');
-      if (feedEmpty) feedEmpty.remove();
+      var entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML =
+        '<span class="log-time">' + timeStr(ts) + '</span>' +
+        '<span class="log-type">' + esc(type) + '</span>' +
+        '<span class="log-detail">' + fmtDetail(type, data) + '</span>';
+      log.appendChild(entry);
 
-      eventCount++;
-      document.getElementById('eventCount').textContent = eventCount;
+      // Auto-scroll
+      log.scrollTop = log.scrollHeight;
 
-      var cat = categorize(evt.type);
-      var time = new Date(evt.timestamp || Date.now());
-      var timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-      var detail = formatDetail(evt.type, evt.data);
-
-      var row = document.createElement('div');
-      row.className = 'event-row';
-      row.dataset.category = cat;
-      if (currentFilter !== 'all' && cat !== currentFilter) {
-        row.style.display = 'none';
-      }
-
-      row.innerHTML =
-        '<span class="event-time">' + timeStr + '</span>' +
-        '<span class="event-badge ' + cat + '">' + categoryLabel(cat) + '</span>' +
-        '<span class="event-type">' + esc(evt.type) + '</span>' +
-        '<span class="event-detail">' + detail + '</span>';
-
-      feedScroll.appendChild(row);
-
-      // Auto-scroll if near bottom
-      var isNearBottom = feedScroll.scrollHeight - feedScroll.scrollTop - feedScroll.clientHeight < 80;
-      if (isNearBottom) {
-        feedScroll.scrollTop = feedScroll.scrollHeight;
-      }
-
-      // Prune old events
-      while (feedScroll.children.length > MAX_EVENTS) {
-        feedScroll.removeChild(feedScroll.firstChild);
+      // Prune
+      while (log.children.length > MAX_LOG) {
+        log.removeChild(log.firstChild);
       }
     }
 
-    // ── Filter events ────────────────────────────────
-    function setFilter(filter) {
-      currentFilter = filter;
-      document.querySelectorAll('.feed-filter').forEach(function(btn) {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
-      });
-      document.querySelectorAll('.event-row').forEach(function(row) {
-        row.style.display = (filter === 'all' || row.dataset.category === filter) ? '' : 'none';
-      });
+    // ── Update model status indicators ───────────────
+    function setModelStatus(sys, status, state) {
+      var ind = document.getElementById(sys + '-ind');
+      var label = document.getElementById(sys + '-status');
+      var panel = document.getElementById('panel-' + sys);
+      ind.className = 'indicator' + (state ? ' ' + state : '');
+      label.textContent = status;
+      panel.classList.toggle('active', !!state);
     }
 
-    // ── Update Model Cards ───────────────────────────
-    function updateModelCards(evt) {
+    // ── Update breathing glow state ──────────────────
+    function setGlow(state) {
+      var outer = document.getElementById('slideOuter');
+      outer.className = 'slide-frame-outer' + (state ? ' ' + state : '');
+    }
+
+    // ── Process incoming event ───────────────────────
+    function processEvent(evt) {
       var type = evt.type;
       var data = evt.data || {};
+      var ts = evt.timestamp || Date.now();
 
-      // ── System 1: Voice ──
+      // Route to correct panel
+      if (isSystem1(type)) {
+        appendLog('s1-log', type, data, ts);
+      }
+      if (isSystem2(type)) {
+        appendLog('s2-log', type, data, ts);
+      }
+
+      // Update S1 status
       if (type === 'voice.started') {
-        setS1('Listening', 'active', data.provider || 'Realtime');
-        document.getElementById('s1-provider').textContent = data.provider ? (data.provider.charAt(0).toUpperCase() + data.provider.slice(1) + ' Realtime') : 'Realtime API';
+        setModelStatus('s1', 'Listening', 'active');
         setGlow('active');
       } else if (type === 'voice.stopped') {
-        setS1('Idle', '', '');
+        setModelStatus('s1', 'Idle', '');
         setGlow('');
       } else if (type === 'voice.tool_call') {
-        setS1('Using tool: ' + (data.tool || ''), 'thinking', '');
-        var body = document.getElementById('s1-body');
-        body.innerHTML = '<span class="delta">' + esc(data.tool || '') + (data.summary ? ' — ' + esc(trunc(data.summary, 100)) : '') + '</span>';
+        setModelStatus('s1', 'Tool: ' + (data.tool || ''), 'thinking');
         setGlow('thinking');
-        setTimeout(function() { setS1('Listening', 'active', ''); setGlow('active'); }, 3000);
-      } else if (type === 'auditor.intent') {
-        var body = document.getElementById('s1-body');
-        body.innerHTML = '<span class="delta">Intent: ' + esc(data.intent || '') + '</span>';
+        setTimeout(function() { setModelStatus('s1', 'Listening', 'active'); setGlow('active'); }, 3000);
       } else if (type === 'retriever.searching') {
-        setS1('Searching memory', 'thinking', '');
+        setModelStatus('s1', 'Recalling...', 'thinking');
         setGlow('thinking');
       } else if (type === 'retriever.complete') {
-        setS1('Listening', 'active', '');
+        setModelStatus('s1', 'Listening', 'active');
         setGlow('active');
       }
 
-      // ── System 2: OpenClaw / Computer Use ──
+      // Update S2 status
       if (type === 'computer.task_started') {
-        setS2('Working', 'thinking', trunc(data.instruction || data.task || '', 120));
+        setModelStatus('s2', 'Working', 'thinking');
         setGlow('thinking');
       } else if (type === 'computer.task_done') {
-        setS2('Done', 'active', data.summary || 'Task complete');
-        setTimeout(function() { setS2('Idle', '', 'Standing by...'); setGlow('active'); }, 5000);
+        setModelStatus('s2', 'Done', 'active');
+        setTimeout(function() { setModelStatus('s2', 'Idle', ''); }, 5000);
       } else if (type === 'openclaw.delta') {
-        var body = document.getElementById('s2-body');
-        body.innerHTML = '<span class="delta">' + esc(trunc(data.text || '', 120)) + '</span>';
-        body.scrollTop = body.scrollHeight;
-      } else if (type === 'opencli.adapter_start') {
-        setS2('Running adapter', 'thinking', data.adapter || '');
-        setGlow('thinking');
-      } else if (type === 'opencli.adapter_done') {
-        setS2('Done', 'active', data.adapter + ' (' + (data.duration || '?') + 'ms)');
-        setTimeout(function() { setS2('Idle', '', 'Standing by...'); setGlow('active'); }, 3000);
-      } else if (type === 'opencli.operate_start') {
-        setS2('Browsing', 'thinking', data.goal || '');
+        setModelStatus('s2', 'Reasoning...', 'thinking');
       } else if (type === 'browser_loop.started') {
-        setS2('Browser action', 'thinking', data.goal || '');
+        setModelStatus('s2', 'Browsing', 'thinking');
         setGlow('thinking');
       } else if (type === 'browser_loop.done') {
-        setS2('Done', 'active', 'Browser task complete');
-        setTimeout(function() { setS2('Idle', '', 'Standing by...'); setGlow('active'); }, 3000);
+        setModelStatus('s2', 'Done', 'active');
+        setTimeout(function() { setModelStatus('s2', 'Idle', ''); setGlow('active'); }, 3000);
+      } else if (type === 'opencli.adapter_start') {
+        setModelStatus('s2', 'Adapter: ' + (data.adapter || ''), 'thinking');
+      } else if (type === 'opencli.adapter_done') {
+        setModelStatus('s2', 'Done', 'active');
+        setTimeout(function() { setModelStatus('s2', 'Idle', ''); }, 3000);
       }
 
-      // ── Meeting context ──
-      if (type === 'meeting.started') {
-        document.getElementById('meetingName').textContent = data.title || data.meetingId || 'Active Meeting';
-      } else if (type === 'meeting.ended') {
-        document.getElementById('meetingName').textContent = '';
+      // Track documents
+      var docPath = null, badge = null;
+      if (type === 'meeting.prep_ready' && data.filepath) { docPath = data.filepath; badge = 'new'; }
+      else if (type === 'meeting.summary_ready' && data.filepath) { docPath = data.filepath; badge = 'new'; }
+      else if (type === 'workspace.updated' && data.file) { docPath = data.file; badge = 'modified'; }
+      if (docPath) {
+        var name = docPath.split('/').pop() || docPath;
+        documents.set(docPath, { name: name, badge: badge, ts: Date.now() });
+        renderDocs();
       }
 
-      // ── Track documents ──
-      trackDocuments(evt);
-    }
-
-    function setS1(status, state, bodyText) {
-      document.getElementById('s1-status').textContent = status;
-      var ind = document.getElementById('s1-indicator');
-      ind.className = 'indicator' + (state ? ' ' + state : '');
-      var card = document.getElementById('card-s1');
-      card.classList.toggle('active', !!state);
-      if (bodyText !== undefined && bodyText !== '') {
-        document.getElementById('s1-body').innerHTML = '<span class="delta">' + esc(bodyText) + '</span>';
-      }
-    }
-
-    function setS2(status, state, bodyText) {
-      document.getElementById('s2-status').textContent = status;
-      var ind = document.getElementById('s2-indicator');
-      ind.className = 'indicator' + (state ? ' ' + state : '');
-      var card = document.getElementById('card-s2');
-      card.classList.toggle('active', !!state);
-      if (bodyText !== undefined && bodyText !== '') {
-        document.getElementById('s2-body').innerHTML = '<span class="delta">' + esc(bodyText) + '</span>';
+      // Meeting name
+      if (type === 'meeting.started' && data.title) {
+        document.getElementById('meetingName').textContent = data.title;
       }
     }
 
-    function setGlow(state) {
-      var glow = document.getElementById('glowBorder');
-      glow.className = 'glow-border' + (state ? ' ' + state : '');
+    // SVG icons for file types
+    var FILE_ICONS = {
+      md: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#6b7280" stroke-width="1.5"/><path d="M7 10l2 2 4-4" stroke="#4aa682" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      pdf: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#dc4a3a" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#dc4a3a" font-size="6" font-weight="700" font-family="Inter">PDF</text></svg>',
+      html: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#6366f1" stroke-width="1.5"/><text x="10" y="12.5" text-anchor="middle" fill="#6366f1" font-size="5.5" font-weight="600" font-family="Inter">&lt;/&gt;</text></svg>',
+      docx: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#2563eb" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#2563eb" font-size="5.5" font-weight="700" font-family="Inter">W</text></svg>',
+      xlsx: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#16a34a" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h6" stroke="#16a34a" stroke-width="1" stroke-linecap="round"/></svg>',
+      gdoc: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#4285f4" stroke-width="1.5"/><path d="M7 7h6M7 10h4" stroke="#4285f4" stroke-width="1.2" stroke-linecap="round"/></svg>',
+      gsheet: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#0f9d58" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h6M11 7v6" stroke="#0f9d58" stroke-width="1" stroke-linecap="round"/></svg>',
+      gdrive: '<svg viewBox="0 0 20 20" fill="none"><path d="M7 3l6 10H3l6-10z" stroke="#f4b400" stroke-width="1.3" fill="none"/><path d="M13 13l3-5H7" stroke="#4285f4" stroke-width="1.3" fill="none"/></svg>',
+      json: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#d97706" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#d97706" font-size="5.5" font-weight="600" font-family="Inter">{}</text></svg>',
+      ts: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#3178c6" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#3178c6" font-size="6" font-weight="700" font-family="Inter">TS</text></svg>',
+      png: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#8b5cf6" stroke-width="1.5"/><circle cx="8" cy="8" r="2" stroke="#8b5cf6" stroke-width="1"/><path d="M3 14l4-3 3 2 3-4 4 5" stroke="#8b5cf6" stroke-width="1" fill="none"/></svg>',
+      default: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#9ca3af" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3" stroke="#9ca3af" stroke-width="1" stroke-linecap="round"/></svg>'
+    };
+
+    function getFileIcon(name) {
+      var ext = (name.split('.').pop() || '').toLowerCase();
+      // Google Drive detection
+      if (name.includes('gdoc') || name.includes('Google Doc')) return FILE_ICONS.gdoc;
+      if (name.includes('gsheet') || name.includes('Google Sheet')) return FILE_ICONS.gsheet;
+      if (name.includes('gdrive') || name.includes('Google Drive')) return FILE_ICONS.gdrive;
+      return FILE_ICONS[ext] || FILE_ICONS.default;
     }
 
-    // ── Document tracking ────────────────────────────
-    function trackDocuments(evt) {
-      var data = evt.data || {};
-      var docPath = null;
-      var badge = null;
-
-      if (evt.type === 'meeting.prep_ready' && data.filepath) {
-        docPath = data.filepath; badge = 'new';
-      } else if (evt.type === 'meeting.summary_ready' && data.filepath) {
-        docPath = data.filepath; badge = 'new';
-      } else if (evt.type === 'retriever.complete' && data.source) {
-        docPath = data.source; badge = null;
-      } else if (evt.type === 'workspace.updated' && data.file) {
-        docPath = data.file; badge = 'modified';
-      }
-
-      if (!docPath) return;
-
-      var name = docPath.split('/').pop() || docPath;
-      var icon = getDocIcon(name);
-      documents.set(docPath, { name: name, icon: icon, badge: badge, ts: Date.now() });
-      renderDocuments();
-    }
-
-    function getDocIcon(name) {
-      if (name.endsWith('.md')) return '\u{1F4DD}';
-      if (name.endsWith('.html')) return '\u{1F310}';
-      if (name.endsWith('.json')) return '\u{1F4CB}';
-      if (name.endsWith('.ts') || name.endsWith('.js')) return '\u{1F4BB}';
-      if (name.endsWith('.png') || name.endsWith('.jpg')) return '\u{1F5BC}';
-      return '\u{1F4C4}';
-    }
-
-    function renderDocuments() {
-      var container = document.getElementById('documents');
+    function renderDocs() {
       var list = document.getElementById('docList');
-      if (documents.size === 0) { container.style.display = 'none'; return; }
-
-      container.style.display = '';
       list.innerHTML = '';
-
-      // Sort by timestamp, newest first
       var sorted = Array.from(documents.entries()).sort(function(a, b) { return b[1].ts - a[1].ts; });
       sorted.forEach(function(entry) {
         var doc = entry[1];
-        var item = document.createElement('div');
-        item.className = 'doc-item';
-        item.innerHTML =
-          '<span class="doc-icon">' + doc.icon + '</span>' +
+        var row = document.createElement('div');
+        row.className = 'doc-row';
+        row.innerHTML =
+          '<span class="doc-icon">' + getFileIcon(doc.name) + '</span>' +
           '<span class="doc-name">' + esc(doc.name) + '</span>' +
-          (doc.badge ? '<span class="doc-badge ' + doc.badge + '">' + doc.badge + '</span>' : '');
-        list.appendChild(item);
+          (doc.badge ? '<span class="badge ' + doc.badge + '">' + doc.badge + '</span>' : '');
+        list.appendChild(row);
       });
     }
 
     // ── Slide player control ─────────────────────────
-    function showSlidePlayer(url) {
-      var player = document.getElementById('slidePlayer');
-      var placeholder = document.getElementById('slidePlaceholder');
-      var frame = document.getElementById('slideFrame');
-      player.style.display = '';
-      if (url) {
-        frame.src = url;
-        placeholder.style.display = 'none';
-      }
-    }
-
-    function hideSlidePlayer() {
-      document.getElementById('slidePlayer').style.display = 'none';
-    }
-
     function slideAction(dir) {
-      // Send slide navigation to backend
       fetch(API + '/api/screen/scroll', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1096,85 +944,140 @@
       }).catch(function() {});
     }
 
-    // Handle presentation events for slide player
-    function handlePresentationEvent(evt) {
-      if (evt.type === 'presentation.started') {
-        showSlidePlayer(null);
-      } else if (evt.type === 'presentation.slide') {
-        var info = document.getElementById('slideInfo');
-        if (info) info.textContent = 'Slide ' + (evt.data.index || 1) + ' / ' + (evt.data.total || '?');
-        document.getElementById('slideNav').style.display = '';
-      } else if (evt.type === 'presentation.done') {
-        // Keep showing but fade nav
-      }
-    }
-
     // ── WebSocket connection ─────────────────────────
     function connectWS() {
-      ws = new WebSocket(WS_URL);
-
-      ws.onopen = function() {
-        var status = document.getElementById('wsStatus');
-        status.className = 'stage-status connected';
-        document.getElementById('wsStatusText').textContent = 'Live';
-      };
-
-      ws.onmessage = function(e) {
-        try {
-          var evt = JSON.parse(e.data);
-          addEvent(evt);
-          updateModelCards(evt);
-          handlePresentationEvent(evt);
-        } catch (err) {
-          console.warn('[Stage] Parse error:', err);
-        }
-      };
-
-      ws.onclose = function() {
-        var status = document.getElementById('wsStatus');
-        status.className = 'stage-status disconnected';
-        document.getElementById('wsStatusText').textContent = 'Reconnecting';
-        setTimeout(connectWS, 3000);
-      };
-
-      ws.onerror = function() {};
+      try {
+        ws = new WebSocket(WS_URL);
+        ws.onopen = function() {
+          DEMO_MODE = false; // real backend connected, stop demo
+          var status = document.getElementById('wsStatus');
+          status.className = 'stage-status connected';
+          document.getElementById('wsStatusText').textContent = 'Live';
+        };
+        ws.onmessage = function(e) {
+          try { processEvent(JSON.parse(e.data)); } catch (err) {}
+        };
+        ws.onclose = function() {
+          document.getElementById('wsStatus').className = 'stage-status disconnected';
+          document.getElementById('wsStatusText').textContent = 'Reconnecting';
+          setTimeout(connectWS, 3000);
+        };
+        ws.onerror = function() {};
+      } catch (e) {
+        // WS not available, keep demo mode
+        setTimeout(connectWS, 5000);
+      }
     }
-
-    // ── Init ─────────────────────────────────────────
     connectWS();
 
-    // Fetch initial status
-    fetch(API + '/api/status')
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        // Show meeting name if active
-        if (d.meeting && d.meeting.active) {
-          document.getElementById('meetingName').textContent = d.meeting.title || 'Active Meeting';
-        }
-        // Update voice provider
-        if (d.voiceSession && d.voiceSession.provider) {
-          document.getElementById('s1-provider').textContent =
-            d.voiceSession.provider.charAt(0).toUpperCase() + d.voiceSession.provider.slice(1) + ' Realtime';
-          if (d.voiceSession.connected) {
-            setS1('Listening', 'active', 'Voice session active');
-            setGlow('active');
-          }
-        }
-      })
-      .catch(function() {});
-
-    // Listen for slide URL via postMessage (from backend or presenter)
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'load-slide') {
-        showSlidePlayer(e.data.url);
-      }
-    });
-
-    // URL params: ?slide=<url> to pre-load slides
+    // ── URL params ───────────────────────────────────
     var params = new URLSearchParams(window.location.search);
     if (params.get('slide')) {
-      showSlidePlayer(params.get('slide'));
+      document.getElementById('slideFrame').src = params.get('slide');
+      document.getElementById('slidePlaceholder').style.display = 'none';
+      document.getElementById('slideNav').style.display = '';
     }
+    if (params.get('meeting')) {
+      document.getElementById('meetingName').textContent = params.get('meeting');
+    }
+
+    // ══════════════════════════════════════════════════
+    // DEMO MODE — Simulated events
+    // ══════════════════════════════════════════════════
+    (function runDemo() {
+      // Demo documents — various file types
+      documents.set('/prep/weekly_standup_prep.md', { name: 'weekly_standup_prep.md', badge: 'new', ts: Date.now() });
+      documents.set('/gdrive/Q1 Sprint Review.gdoc', { name: 'Q1 Sprint Review (Google Doc)', badge: null, ts: Date.now() - 1000 });
+      documents.set('/meetings/summary.html', { name: 'meeting_summary.html', badge: 'modified', ts: Date.now() - 2000 });
+      documents.set('/gdrive/Sprint Metrics.gsheet', { name: 'Sprint Metrics (Google Sheet)', badge: null, ts: Date.now() - 3000 });
+      documents.set('/docs/auth-migration-rfc.pdf', { name: 'auth-migration-rfc.pdf', badge: 'new', ts: Date.now() - 4000 });
+      documents.set('/docs/api-spec.json', { name: 'api-spec.json', badge: null, ts: Date.now() - 5000 });
+      renderDocs();
+
+      // ── S1 event sequences ──
+      var s1Events = [
+        { type: 'voice.started', data: { provider: 'openai', audio_mode: 'meet_bridge' } },
+        { type: 'meeting.started', data: { title: 'Weekly Standup', meetingId: 'cc_042' } },
+        { type: 'meeting.prep_ready', data: { filepath: '~/.callingclaw/shared/prep/weekly_standup_prep.md' } },
+        { type: 'meeting.context_pushed', data: { source: 'meeting_prep', tokens: 480 } },
+        { type: 'auditor.intent', data: { intent: 'status_update' } },
+        { type: 'voice.tool_call', data: { tool: 'recall_context', summary: 'Searching for sprint velocity metrics from last 3 sprints' } },
+        { type: 'retriever.topic', data: { topic: 'sprint velocity' } },
+        { type: 'retriever.searching', data: { query: 'sprint velocity metrics Q1 2026' } },
+        { type: 'retriever.complete', data: { results: 3, source: 'knowledge_base' } },
+        { type: 'meeting.context_pushed', data: { source: 'retriever', tokens: 320 } },
+        { type: 'auditor.intent', data: { intent: 'question_about_blocker' } },
+        { type: 'voice.tool_call', data: { tool: 'check_calendar', summary: 'Looking up design review scheduled this week' } },
+        { type: 'meeting.vision', data: { description: 'Screen shows Jira board with 3 tickets in review column, 2 in progress' } },
+        { type: 'meeting.context_pushed', data: { source: 'vision', tokens: 150 } },
+        { type: 'auditor.fast_lane', data: { action: 'note_action_item' } },
+        { type: 'meeting.action_item', data: { text: 'Follow up with design team on component library review by Friday' } },
+        { type: 'voice.tool_call', data: { tool: 'share_screen', summary: 'Sharing sprint burndown chart' } },
+        { type: 'presentation.slide', data: { index: 1, total: 4, slide: 'Sprint Burndown' } },
+        { type: 'presentation.slide', data: { index: 2, total: 4, slide: 'Velocity Trend' } },
+        { type: 'meeting.action_item', data: { text: 'Schedule architecture review for new auth service next Tuesday' } },
+        { type: 'retriever.topic', data: { topic: 'auth service RFC' } },
+        { type: 'retriever.searching', data: { query: 'auth service architecture proposal RFC' } },
+        { type: 'retriever.complete', data: { results: 1, source: 'shared_docs' } },
+        { type: 'auditor.intent', data: { intent: 'wrap_up_discussion' } },
+        { type: 'voice.tool_call', data: { tool: 'create_todo', summary: 'Creating action items from meeting notes' } },
+      ];
+
+      // ── S2 event sequences ──
+      var s2Events = [
+        { type: 'computer.task_started', data: { instruction: 'Analyze sprint metrics and prepare burndown visualization' } },
+        { type: 'openclaw.delta', data: { text: 'Reading sprint data from Jira API...' } },
+        { type: 'openclaw.delta', data: { text: 'Calculating velocity: avg 42 story points per sprint over last 3 sprints' } },
+        { type: 'openclaw.delta', data: { text: 'Generating burndown chart with matplotlib...' } },
+        { type: 'opencli.adapter_start', data: { adapter: 'jira-sprint-metrics' } },
+        { type: 'opencli.adapter_done', data: { adapter: 'jira-sprint-metrics', duration: 1240, success: true } },
+        { type: 'computer.task_done', data: { summary: 'Sprint burndown chart saved to /tmp/burndown.html' } },
+        { type: 'computer.task_started', data: { instruction: 'Research auth service migration patterns for architecture review' } },
+        { type: 'openclaw.delta', data: { text: 'Searching codebase for current auth implementation...' } },
+        { type: 'openclaw.delta', data: { text: 'Found 3 auth middleware files, analyzing token storage pattern...' } },
+        { type: 'browser_loop.started', data: { goal: 'Look up OAuth 2.1 best practices for session token storage' } },
+        { type: 'browser_loop.step', data: { action: 'navigate to oauth.net/2.1 security recommendations' } },
+        { type: 'browser_loop.step', data: { action: 'extract token storage guidelines from IETF draft' } },
+        { type: 'browser_loop.done', data: { result: 'Extracted 5 key recommendations for token storage' } },
+        { type: 'openclaw.delta', data: { text: 'Comparing current implementation against IETF recommendations...' } },
+        { type: 'openclaw.delta', data: { text: 'Writing auth migration RFC draft with 3 options...' } },
+        { type: 'computer.task_done', data: { summary: 'Auth RFC draft saved to shared/docs/auth-migration-rfc.md' } },
+        { type: 'computer.task_started', data: { instruction: 'Generate meeting summary with action items and decisions' } },
+        { type: 'openclaw.delta', data: { text: 'Parsing transcript for key decisions and action items...' } },
+        { type: 'openclaw.delta', data: { text: 'Found 2 decisions, 4 action items, 1 open question' } },
+        { type: 'openclaw.delta', data: { text: 'Formatting HTML summary with embedded screenshots...' } },
+      ];
+
+      var s1Idx = 0, s2Idx = 0;
+
+      function emitS1() {
+        if (!DEMO_MODE || s1Idx >= s1Events.length) {
+          if (DEMO_MODE) { s1Idx = 0; setTimeout(emitS1, 8000); } // loop
+          return;
+        }
+        var evt = s1Events[s1Idx++];
+        evt.timestamp = Date.now();
+        processEvent(evt);
+        var delay = 1500 + Math.random() * 3000; // 1.5-4.5s between events
+        setTimeout(emitS1, delay);
+      }
+
+      function emitS2() {
+        if (!DEMO_MODE || s2Idx >= s2Events.length) {
+          if (DEMO_MODE) { s2Idx = 0; setTimeout(emitS2, 12000); } // loop, slower
+          return;
+        }
+        var evt = s2Events[s2Idx++];
+        evt.timestamp = Date.now();
+        processEvent(evt);
+        var delay = 2000 + Math.random() * 4000; // 2-6s between events
+        setTimeout(emitS2, delay);
+      }
+
+      // Start demo with staggered timing
+      setTimeout(emitS1, 800);
+      setTimeout(emitS2, 2500);
+    })();
   </script>
 </body>
 </html>
