@@ -111,6 +111,21 @@ export class TranscriptAuditor {
     // Subscribe to transcript events
     this.context.on("transcript", this._onTranscript);
 
+    // Listen for Realtime tool calls → add to dedup ring buffer so Auditor
+    // doesn't re-execute the same action that Realtime already handled.
+    // Without this, user says "打开MCP文档" → Realtime calls open_file (200ms)
+    // → Auditor classifies as search_and_open (1.5s later) → opens same file again.
+    this.eventBus.on("voice.tool_call", (data: any) => {
+      const tool = data?.tool || "";
+      const key = `realtime:${tool}:${JSON.stringify(data?.summary || data?.instruction || "").slice(0, 80)}`;
+      if (!this._recentActions.includes(key)) {
+        this._recentActions.push(key);
+        if (this._recentActions.length > 5) this._recentActions.shift();
+      }
+      this._lastExecutionTs = Date.now();
+      console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool}, suppressing auditor for ${this.COOLDOWN_MS}ms`);
+    });
+
     // Build file alias index with prep context so AutomationRouter can instantly
     // resolve file paths the voice AI references from the meeting prep brief
     const brief = this.meetingPrepSkill.currentBrief;
@@ -400,6 +415,7 @@ ${transcriptText}
 4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
 5. Discussion/opinion ("我觉得.../this should be.../下次需要...") → DO NOT ACT, confidence=0
 6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
+7. **ALREADY HANDLED**: If you see [Tool Call] or [Tool Result] in the transcript for the same action → DO NOT ACT, confidence=0. The voice AI already executed it.
 
 ## STT Name Aliases (speech-to-text often mangles these)
 The transcription is from live STT, which frequently misspells proper nouns. Treat these as equivalent:

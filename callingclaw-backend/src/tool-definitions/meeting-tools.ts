@@ -133,6 +133,31 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         description: "Stop sharing CallingClaw's screen in Google Meet.",
         parameters: { type: "object", properties: {} },
       },
+      // ── Voice-driven scene control (sideband pattern) ──
+      // These tools let the voice model control presentation pacing.
+      // Registered only when a presentation is active with scenes loaded.
+      {
+        name: "next_scene",
+        description:
+          "Advance to the next presentation slide/section. Call this AFTER you finish explaining the current content. Returns a screenshot of the new scene.",
+        parameters: { type: "object", properties: {} },
+      },
+      {
+        name: "prev_scene",
+        description: "Go back to the previous presentation slide/section.",
+        parameters: { type: "object", properties: {} },
+      },
+      {
+        name: "go_to_scene",
+        description: "Jump to a specific presentation scene by number (1-based).",
+        parameters: {
+          type: "object",
+          properties: {
+            scene_number: { type: "number", description: "Scene number (1-based, e.g. 1 for first scene)" },
+          },
+          required: ["scene_number"],
+        },
+      },
       {
         name: "open_file",
         description:
@@ -574,29 +599,62 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
           // MeetJoiner.shareScreen() fails when join was via ChromeLauncher because
           // MeetJoiner.currentSession.status is never set to "in_meeting" in that path.
-          if (chromeLauncher) {
-            await chromeLauncher.shareScreen(shareUrl || undefined);
+          if (deps.chromeLauncher) {
+            await deps.chromeLauncher.shareScreen(shareUrl || undefined);
           } else {
             await meetJoiner.shareScreen();
           }
 
-          // If prep has scenes, start PresentationEngine for scene sequencing
+          // If prep has scenes, use voice-driven SceneController (when provider supports images)
+          // or fall back to timer-driven PresentationEngine
           const brief = meetingPrepSkill?.currentBrief;
           const prepScenes = brief?.scenes;
-          const chromeLauncher = deps.chromeLauncher;
-          if (prepScenes && prepScenes.length > 0 && chromeLauncher) {
+          const cl = deps.chromeLauncher;
+          if (prepScenes && prepScenes.length > 0 && cl) {
+            const providerName = deps.voice?.provider;
+            const supportsImage = providerName === "openai15" || providerName === "gemini";
+
+            if (supportsImage) {
+              // Voice-driven mode: SceneController + next_scene/prev_scene tools
+              // Voice model sees screenshots, decides when to advance (sideband pattern)
+              const { SceneController } = await import("../modules/presentation-engine");
+              const controller = new SceneController();
+              controller.load(prepScenes, cl);
+              // Store controller for scene tool handlers
+              (deps as any)._sceneController = controller;
+
+              // Inject presentation plan so voice model knows the full agenda
+              const planSummary = prepScenes.map((s: any, i: number) =>
+                `Scene ${i + 1}: ${s.scrollTarget || s.url} — ${s.talkingPoints.slice(0, 80)}`
+              ).join("\n");
+              deps.voice?.injectContext(
+                `[PRESENTATION] ${prepScenes.length} scenes loaded. Use next_scene to advance.\n${planSummary}`
+              );
+
+              // Trigger first scene automatically
+              const first = await controller.next();
+              if (first.screenshot && deps.voice) {
+                deps.voice.injectScreenshot(first.screenshot,
+                  `[SCENE 1/${controller.totalScenes}] ${first.scene?.talkingPoints?.slice(0, 150) || ""}`
+                );
+              }
+              eventBus.emit("presentation.started", { scenes: prepScenes.length, mode: "voice-driven" });
+              return `Presenting ${prepScenes.length} scenes (voice-driven). First scene is on screen — describe what you see and present it. Call next_scene when ready to advance.`;
+            }
+
+            // Fallback: timer-driven PresentationEngine (for providers without image support)
             const { PresentationEngine } = await import("../modules/presentation-engine");
             const { buildSceneContext } = await import("../voice-persona");
             const engine = new PresentationEngine();
             engine.runScenes({
               scenes: prepScenes,
-              chromeLauncher,
+              chromeLauncher: cl,
               voice: deps.voice,
               context,
               onSceneAdvance: (idx: number, scene: any) => {
                 if (brief) {
                   const sceneCtx = buildSceneContext(brief, idx);
-                  if (sceneCtx && deps.voice?.client?.connected) deps.voice.client.injectContext(sceneCtx);
+                  if (sceneCtx && deps.voice?.connected) deps.voice.injectContext(sceneCtx);
                 }
                 eventBus.emit("presentation.scene", { index: idx, total: prepScenes.length, url: scene.url });
               },
@@ -609,7 +667,44 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
         }
         case "stop_sharing": {
           await meetJoiner.stopSharing();
+          // Clean up SceneController if active
+          if ((deps as any)._sceneController) {
+            (deps as any)._sceneController.unload();
+            (deps as any)._sceneController = null;
+            eventBus.emit("presentation.done", { mode: "voice-driven" });
+          }
           return "Screen sharing stopped.";
+        }
+        // ── Voice-driven scene tools (sideband pattern) ──
+        case "next_scene":
+        case "prev_scene":
+        case "go_to_scene": {
+          const controller = (deps as any)?._sceneController;
+          if (!controller?.isLoaded) return "No presentation active. Use share_screen first.";
+
+          let result;
+          if (name === "next_scene") result = await controller.next();
+          else if (name === "prev_scene") result = await controller.prev();
+          else result = await controller.goTo((args.scene_number || 1) - 1); // 1-based → 0-based
+
+          if (!result.scene) {
+            if (name === "next_scene") {
+              // Presentation complete
+              eventBus.emit("presentation.done", { scenesPresented: controller.totalScenes, mode: "voice-driven" });
+              return `Presentation complete (${controller.totalScenes} scenes). You may stop sharing.`;
+            }
+            return "Cannot go to that scene.";
+          }
+
+          // Inject screenshot so voice model can see the new scene
+          if (result.screenshot && deps.voice) {
+            deps.voice.injectScreenshot(result.screenshot,
+              `[SCENE ${result.index + 1}/${result.total}] ${result.scene.talkingPoints.slice(0, 150)}`
+            );
+          }
+          eventBus.emit("presentation.scene", { index: result.index, total: result.total, mode: "voice-driven" });
+
+          return `Scene ${result.index + 1}/${result.total}: ${result.scene.talkingPoints.slice(0, 200)}`;
         }
         case "open_file": {
           eventBus.emit("voice.tool_call", { tool: "open_file", summary: args.path });
@@ -672,17 +767,45 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           }
 
           if (!resolvedPath) {
-            return `File not found: "${queryPath}". Please provide the exact filename or path.`;
+            // Rich result: return candidate list so model can retry with a better pick.
+            // This enables multi-turn agent loop — model sees candidates, calls open_file
+            // again with the correct path. Works across all providers (no extra tool needed).
+            try {
+              const home = (await import("os")).homedir();
+              const searchDirs = [
+                `${home}/Library/Mobile Documents/com~apple~CloudDocs/Tanka`,
+                `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public`,
+                `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs`,
+                `${home}/.callingclaw/shared`,
+              ];
+              // Fuzzy search: split query into keywords, find files matching any keyword
+              const kws = queryPath.toLowerCase().split(/[\s/\\._-]+/).filter((w: string) => w.length > 2);
+              const allFiles: string[] = [];
+              for (const dir of searchDirs) {
+                try {
+                  const out = await Bun.$`find ${dir} -maxdepth 4 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" \) -not -path "*/node_modules/*" 2>/dev/null`.text();
+                  for (const line of out.split("\n")) {
+                    const p = line.trim();
+                    if (p && kws.some((k: string) => p.toLowerCase().includes(k))) allFiles.push(p);
+                  }
+                } catch {}
+              }
+              if (allFiles.length > 0) {
+                const short = allFiles.slice(0, 8).map((f, i) => `${i + 1}. ${f.replace(home, "~")}`).join("\n");
+                return `No exact match for "${queryPath}". Similar files found:\n${short}\n\nCall open_file again with the full path of the best match.`;
+              }
+            } catch {}
+            return `File not found: "${queryPath}". Try different keywords or check the file name.`;
           }
 
           // Open the resolved file
           const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
           console.log(`[open_file] Opening: ${resolvedPath} in ${app}`);
 
-          if (app === "browser" && chromeLauncher) {
+          if (app === "browser" && deps.chromeLauncher) {
             // Open in ChromeLauncher's presenting tab for potential screen share
             const fileUrl = resolvedPath.startsWith("http") ? resolvedPath : `file://${resolvedPath}`;
-            await chromeLauncher.shareScreen(fileUrl);
+            await deps.chromeLauncher.shareScreen(fileUrl);
             return `Opened and presenting: ${resolvedPath}`;
           }
           await meetJoiner.openFile(resolvedPath, app);

@@ -882,6 +882,22 @@ export class RealtimeClient {
     return this.sendEvent("response.create", {});
   }
 
+  /**
+   * Submit tool result WITHOUT triggering a model response (backgroundResult pattern).
+   * The result is injected into conversation context but the model doesn't start speaking.
+   * Use with a separate response.create + instructions for natural filler phrases.
+   */
+  submitToolResultBackground(callId: string, result: string): boolean {
+    return this.sendEvent("conversation.item.create", {
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: result,
+      },
+    });
+    // Intentionally NO response.create — caller triggers filler phrase separately
+  }
+
   /** Dynamically update session instructions */
   /** Build a minimal session.update payload with required fields for GA API.
    *  GA API requires session.type on EVERY session.update, not just the first one. */
@@ -973,6 +989,56 @@ export class RealtimeClient {
       console.log(`[Realtime] Context evicted: ${oldest.id} (queue full, max ${MAX_CONTEXT_ITEMS})`);
     }
 
+    return itemId;
+  }
+
+  /**
+   * Inject a screenshot image into the voice model's conversation.
+   * Provider-aware: openai15 gets input_image, gemini gets realtimeInput.video,
+   * openai/grok fall back to text caption.
+   *
+   * @param base64Jpeg - Base64-encoded JPEG image (no data: prefix)
+   * @param caption - Optional text description alongside the image
+   * @returns The item ID if sent, false if not connected or unsupported
+   */
+  injectImage(base64Jpeg: string, caption?: string): string | false {
+    if (!this._connected || !base64Jpeg) return false;
+
+    // Grok + legacy OpenAI: no image support — fall back to text caption
+    if (this._provider.name === "grok" || this._provider.name === "openai") {
+      if (caption) return this.injectContext(`[SCREENSHOT] ${caption}`);
+      return false;
+    }
+
+    const itemId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+    const content: any[] = [];
+    if (caption) {
+      content.push({ type: "input_text", text: caption });
+    }
+    content.push({ type: "input_image", image: base64Jpeg });
+
+    const sent = this.sendEvent("conversation.item.create", {
+      item: {
+        id: itemId,
+        type: "message",
+        role: "user",
+        content,
+      },
+    });
+
+    if (!sent) return false;
+
+    this._contextQueue.push({ id: itemId, text: `[IMAGE] ${caption || "screenshot"}`, injectedAt: Date.now() });
+
+    // FIFO eviction — images are token-expensive, evict aggressively
+    while (this._contextQueue.length > MAX_CONTEXT_ITEMS) {
+      const oldest = this._contextQueue.shift()!;
+      this.sendEvent("conversation.item.delete", { item_id: oldest.id });
+      console.log(`[Realtime] Context evicted: ${oldest.id} (queue full)`);
+    }
+
+    console.log(`[Realtime] Injected image ${itemId} (${Math.round(base64Jpeg.length / 1024)}KB${caption ? `, caption: ${caption.slice(0, 60)}` : ""})`);
     return itemId;
   }
 

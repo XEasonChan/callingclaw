@@ -338,10 +338,24 @@ export class VoiceModule {
             ts: Date.now(),
           });
         } else {
-          // Normal conversation: acknowledge immediately, don't block voice thread
-          this.client.submitToolResult(call_id, "Working on it. I'll let you know when done.");
+          // Normal conversation: background result pattern (inspired by OpenAI Agents SDK)
+          // 1. Submit tool result WITHOUT triggering response (backgroundResult)
+          this.client.submitToolResultBackground(call_id, "ok");
 
-          // Execute async — inject result when ready
+          // 2. Let the model generate a natural filler phrase ("让我查一下..." / "One moment...")
+          if (this.client.providerName === "gemini") {
+            // Gemini auto-responds to context; response.create is a no-op
+            this.client.injectContext(`[SYSTEM] You just started the "${name}" tool. Briefly acknowledge you're working on it, one short sentence.`);
+          } else {
+            // OpenAI / Grok: response.create with instructions for contextual filler
+            this.client.sendEvent("response.create", {
+              response: {
+                instructions: `You just called the "${name}" tool. Briefly and naturally acknowledge you're working on it. One short sentence. Match the conversation language.`,
+              },
+            });
+          }
+
+          // 3. Execute async — inject result when ready, then trigger model to continue
           if (this.onToolCall) {
             this.onToolCall(name, args, call_id).then((result) => {
               this.injectContext(`[DONE] ${name}: ${result.slice(0, 200)}`);
@@ -350,7 +364,11 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
                 ts: Date.now(),
               });
-              console.log(`[Voice] Slow tool ${name} completed async`);
+              // Trigger model to process the result and decide next action.
+              // Without this, the model sees the context but won't speak or call another tool.
+              // This is what closes the agent loop for slow tools.
+              this.client.sendEvent("response.create", {});
+              console.log(`[Voice] Slow tool ${name} completed async → triggered response`);
             }).catch((e: any) => {
               this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
               this.context.addTranscript({
@@ -358,7 +376,8 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: Error: ${e.message}`,
                 ts: Date.now(),
               });
-              console.error(`[Voice] Slow tool ${name} failed:`, e.message);
+              this.client.sendEvent("response.create", {});
+              console.error(`[Voice] Slow tool ${name} failed → triggered response:`, e.message);
             });
           }
         }
@@ -479,6 +498,19 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   injectContext(text: string): string | false {
     if (!this.client.connected) return false;
     return this.client.injectContext(text);
+  }
+
+  /**
+   * Inject a screenshot into the voice model's conversation.
+   * Provider-aware: openai15/gemini get actual images, others get text caption.
+   *
+   * @param base64Jpeg - Base64-encoded JPEG (no data: prefix needed)
+   * @param caption - Optional text description alongside the image
+   * @returns The item ID if sent, false if not connected
+   */
+  injectScreenshot(base64Jpeg: string, caption?: string): string | false {
+    if (!this.client.connected) return false;
+    return this.client.injectImage(base64Jpeg, caption);
   }
 
   /**

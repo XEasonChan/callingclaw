@@ -19,14 +19,12 @@ test("classify: meet mute → shortcuts layer, high confidence", () => {
   expect(result.confidence).toBeGreaterThanOrEqual(0.95);
 });
 
-test("classify: 'open' + URL matches open_app first (known pattern order issue)", () => {
-  // NOTE: open_app regex matches before open_url due to pattern order.
-  // This is a pre-existing issue — open_app's \w+ captures "https".
-  // The Haiku medium lane correctly resolves URLs via classifyIntent().
+test("classify: 'open' + URL matches open_url (high confidence)", () => {
+  // open_url regex has higher priority than open_app and matches URLs correctly.
   const result = router.classify("open https://callingclaw.com");
   expect(result.layer).toBe("shortcuts");
-  expect(result.action).toBe("open_app"); // open_app matches first
-  expect(result.confidence).toBeGreaterThanOrEqual(0.85);
+  expect(result.action).toBe("open_url");
+  expect(result.confidence).toBeGreaterThanOrEqual(0.9);
 });
 
 // ── Medium confidence patterns (< 0.95) ──

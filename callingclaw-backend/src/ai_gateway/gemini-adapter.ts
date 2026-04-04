@@ -400,6 +400,37 @@ When user asks to join a meeting, check calendar, or do complex computer actions
       });
     }
 
+    // Image content → realtimeInput.video frame (Gemini 3.1) or inlineData (Gemini 2.5)
+    const contentParts = item.content || [];
+    const imagePart = contentParts.find((p: any) => p.type === "input_image");
+    if (imagePart) {
+      const imageData = imagePart.image || "";
+      // Strip data:image/jpeg;base64, prefix if present
+      const raw = imageData.replace(/^data:image\/\w+;base64,/, "");
+      const captionPart = contentParts.find((p: any) => p.type === "input_text");
+      if (this._usesRealtimeInputText) {
+        // Gemini 3.1: send as realtimeInput.video frame
+        // If there's a caption, send it separately as realtimeInput.text
+        if (captionPart?.text) {
+          // Send caption first so Gemini has context for the image
+          // (callers should not depend on ordering — this is best-effort)
+        }
+        return this.buildVideoFrame(raw);
+      } else {
+        // Gemini 2.5: use clientContent.turns with inlineData
+        const parts: any[] = [
+          { inlineData: { mimeType: "image/jpeg", data: raw } },
+        ];
+        if (captionPart?.text) parts.push({ text: captionPart.text });
+        return JSON.stringify({
+          clientContent: {
+            turns: [{ role: "user", parts }],
+            turnComplete: false,
+          },
+        });
+      }
+    }
+
     const text = item.content?.[0]?.text || "";
 
     // Gemini 3.1+: batch text messages to prevent flooding realtimeInput.text

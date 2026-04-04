@@ -88,6 +88,24 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           required: ["action"],
         },
       },
+      // ── Local File Search (CLI agent loop) ──
+      // Enables multi-turn search: model calls search_files → sees results → calls open_file
+      // Not available on Gemini (4-tool limit), Gemini uses enriched open_file result instead
+      {
+        name: "search_files",
+        description:
+          "Search local files by keywords using CLI (grep/find). Returns matching file paths. " +
+          "Use when you need to find a file before opening it, or when open_file returned 'not found'. " +
+          "Supports searching by filename AND file content (grep).",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search keywords (e.g. 'tanka action mcp' or 'PRD phase 1')" },
+            content_search: { type: "boolean", description: "If true, also grep inside file contents (slower but finds files by content)" },
+          },
+          required: ["query"],
+        },
+      },
       // ── Browser Automation (Playwright CLI) ──
       {
         name: "browser_action",
@@ -224,6 +242,49 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           } catch (e: any) {
             return `Browser error: ${e.message}`;
           }
+        }
+        case "search_files": {
+          eventBus.emit("voice.tool_call", { tool: "search_files", summary: (args.query as string)?.slice(0, 80) });
+          const query = (args.query as string) || "";
+          const contentSearch = !!args.content_search;
+          const home = require("os").homedir();
+          const searchDirs = [
+            `${home}/Library/Mobile Documents/com~apple~CloudDocs/Tanka`,
+            `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/callingclaw-backend/public`,
+            `${home}/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/docs`,
+            `${home}/.callingclaw/shared`,
+          ];
+
+          const kws = query.toLowerCase().split(/[\s/\\._-]+/).filter((w: string) => w.length > 1);
+          const results: string[] = [];
+
+          for (const dir of searchDirs) {
+            try {
+              if (contentSearch && kws.length > 0) {
+                // grep inside file contents (slower but finds files by content, not just name)
+                const grepPattern = kws.slice(0, 3).join("|");
+                const out = await Bun.$`grep -ril --include="*.html" --include="*.md" --include="*.json" ${grepPattern} ${dir} 2>/dev/null`.text();
+                for (const line of out.split("\n")) {
+                  const p = line.trim();
+                  if (p && !results.includes(p)) results.push(p);
+                }
+              } else {
+                // filename search (fast)
+                const out = await Bun.$`find ${dir} -maxdepth 4 -type f \( -name "*.html" -o -name "*.md" -o -name "*.pdf" -o -name "*.json" \) -not -path "*/node_modules/*" 2>/dev/null`.text();
+                for (const line of out.split("\n")) {
+                  const p = line.trim();
+                  if (p && kws.some(k => p.toLowerCase().includes(k))) results.push(p);
+                }
+              }
+            } catch {}
+          }
+
+          if (results.length === 0) {
+            return `No files found matching "${query}". Try different keywords${!contentSearch ? " or set content_search=true to search inside files" : ""}.`;
+          }
+
+          const short = results.slice(0, 10).map((f, i) => `${i + 1}. ${f.replace(home, "~")}`).join("\n");
+          return `Found ${results.length} file(s) matching "${query}":\n${short}${results.length > 10 ? `\n... and ${results.length - 10} more` : ""}\n\nUse open_file with the full path to open one.`;
         }
         default:
           return `Unknown automation tool: ${name}`;

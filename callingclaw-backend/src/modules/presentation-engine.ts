@@ -749,3 +749,130 @@ export interface PresentationScript {
   };
   steps: ScriptStep[];
 }
+
+// ── SceneController: Voice-driven scene navigation ──────────────────
+// Thin stateful wrapper around ChromeLauncher for voice-controlled presentations.
+// Voice model calls next_scene/prev_scene/go_to_scene tools → SceneController
+// executes DOM actions and returns a screenshot so voice can see the result.
+//
+// This replaces the timer-driven runScenes() loop with a model-driven loop:
+//   Voice sees screenshot → narrates → calls next_scene → sees new screenshot → continues
+//
+// Inspired by OpenAI Agents SDK's voice-driven tool pattern.
+
+export interface SceneSpec {
+  url: string;
+  scrollTarget?: string;
+  talkingPoints: string;
+  durationMs: number;
+}
+
+export interface SceneResult {
+  screenshot: string | null;  // base64 JPEG
+  scene: SceneSpec | null;
+  index: number;
+  total: number;
+}
+
+export class SceneController {
+  private _scenes: SceneSpec[] = [];
+  private _currentIndex = -1;
+  private _chromeLauncher: any = null;
+  private _currentUrl = "";
+
+  get currentIndex() { return this._currentIndex; }
+  get totalScenes() { return this._scenes.length; }
+  get currentScene(): SceneSpec | null { return this._scenes[this._currentIndex] ?? null; }
+  get hasNext() { return this._currentIndex < this._scenes.length - 1; }
+  get hasPrev() { return this._currentIndex > 0; }
+  get isLoaded() { return this._scenes.length > 0 && !!this._chromeLauncher; }
+
+  load(scenes: SceneSpec[], chromeLauncher: any) {
+    this._scenes = scenes;
+    this._chromeLauncher = chromeLauncher;
+    this._currentIndex = -1;
+    this._currentUrl = "";
+    console.log(`[SceneController] Loaded ${scenes.length} scenes`);
+  }
+
+  async next(): Promise<SceneResult> {
+    if (!this.hasNext) return { screenshot: null, scene: null, index: this._currentIndex, total: this._scenes.length };
+    this._currentIndex++;
+    return this._executeScene(this._currentIndex);
+  }
+
+  async prev(): Promise<SceneResult> {
+    if (!this.hasPrev) return { screenshot: null, scene: null, index: this._currentIndex, total: this._scenes.length };
+    this._currentIndex--;
+    return this._executeScene(this._currentIndex);
+  }
+
+  async goTo(index: number): Promise<SceneResult> {
+    if (index < 0 || index >= this._scenes.length) {
+      return { screenshot: null, scene: null, index: this._currentIndex, total: this._scenes.length };
+    }
+    this._currentIndex = index;
+    return this._executeScene(index);
+  }
+
+  unload() {
+    this._scenes = [];
+    this._currentIndex = -1;
+    this._chromeLauncher = null;
+    this._currentUrl = "";
+  }
+
+  private async _executeScene(index: number): Promise<SceneResult> {
+    const scene = this._scenes[index]!;
+    const cl = this._chromeLauncher;
+
+    // 1. Navigate if URL changed
+    if (scene.url && scene.url !== this._currentUrl) {
+      try {
+        await cl.navigatePresentingPage(scene.url);
+        this._currentUrl = scene.url;
+        await new Promise(r => setTimeout(r, 1500)); // page load
+      } catch (e: any) {
+        console.warn(`[SceneController] Navigate failed: ${e.message}`);
+      }
+    }
+
+    // 2. Scroll to target
+    if (scene.scrollTarget) {
+      try {
+        await cl.evaluateOnPresentingPage(`(() => {
+          var target = ${JSON.stringify(scene.scrollTarget)};
+          var all = document.querySelectorAll('h1,h2,h3,h4,h5,h6,section,[id],p,div');
+          for (var el of all) {
+            var text = (el.textContent || '').trim();
+            if (text.toLowerCase().includes(target.toLowerCase()) && text.length < 200) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              return 'scrolled';
+            }
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return 'fallback_top';
+        })()`);
+        await new Promise(r => setTimeout(r, 800)); // scroll animation
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // 3. Take screenshot via CDP
+    let screenshot: string | null = null;
+    try {
+      const page = cl.presentingPage;
+      if (page) {
+        const buf = await page.screenshot({ type: "jpeg", quality: 60 });
+        screenshot = buf.toString("base64");
+      }
+    } catch (e: any) {
+      console.warn(`[SceneController] Screenshot failed: ${e.message}`);
+    }
+
+    console.log(`[SceneController] Scene ${index + 1}/${this._scenes.length}: ${scene.scrollTarget || scene.url} (${screenshot ? Math.round(screenshot.length / 1024) + "KB" : "no screenshot"})`);
+
+    return { screenshot, scene, index, total: this._scenes.length };
+  }
+}
