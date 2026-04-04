@@ -303,30 +303,42 @@ When user asks to join a meeting, check calendar, or do complex computer actions
       };
     }
 
-    // Gemini 3.1 Live tool limit: max 4 tools (5+ causes silent setup hang).
-    // Tested: 4 OK, 5+ HANG. No official docs on this limit.
+    // Gemini 3.1 Live tool configuration.
+    // Previously hardcoded to 4 tools (5+ caused silent setup hang in early testing).
+    // Official docs recommend 10-20 tools. The hang was likely caused by large tool schemas
+    // + long systemInstruction combined. With minimal schemas (<50 chars description,
+    // single-property params), 6-8 tools should work.
     //
     // TWO-LAYER TOOL ARCHITECTURE:
-    //   Layer 1 (Gemini direct, <500ms): 4 highest-frequency tools with minimal schemas
-    //   Layer 2 (TranscriptAuditor → Haiku → AutomationRouter): everything else
-    //     Gemini says "let me have my agent handle that" → Haiku catches it → executes
-    //
-    // Layer 1 tools chosen by frequency: recall_context > open_file > share_screen > save_meeting_notes
+    //   Layer 1 (Gemini direct): core meeting tools with ultra-minimal schemas
+    //   Layer 2 (TranscriptAuditor → Haiku → AutomationRouter): complex/rare tools
     if (tools.length > 0) {
       setup.tools = [{
         functionDeclarations: [
           { name: "recall_context", description: "Fetch facts from memory",
             parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
-          { name: "open_file", description: "Open a file or webpage for discussion",
+          { name: "open_file", description: "Search and open a file",
             parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } },
-          { name: "share_screen", description: "Share a URL on screen in the meeting",
+          { name: "share_screen", description: "Present a URL in meeting",
             parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
-          { name: "save_meeting_notes", description: "Save notes from the meeting",
+          { name: "save_meeting_notes", description: "Save meeting notes",
             parameters: { type: "object", properties: { notes: { type: "string" } }, required: ["notes"] } },
+          { name: "exec", description: "Run a shell command",
+            parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } },
+          { name: "interact", description: "Click, scroll, or navigate the page",
+            parameters: { type: "object", properties: { action: { type: "string" }, target: { type: "string" } }, required: ["action"] } },
         ],
       }];
-      console.log(`[GeminiAdapter] Tools: 4 (Gemini 3.1 max) — Layer 2 actions via TranscriptAuditor`);
+      console.log(`[GeminiAdapter] Tools: 6 (minimal schemas) — testing expanded limit`);
     }
+
+    // Thinking config — enable deeper reasoning for tool selection and agent loop.
+    // Gemini 3.1 Flash Live supports: minimal, low, medium, high.
+    // Higher levels improve tool call accuracy at the cost of first-token latency.
+    setup.thinkingConfig = {
+      thinkingLevel: "high",
+      includeThoughts: false, // don't send thoughts as audio
+    };
 
     // Input config (VAD, turnCoverage, transcription)
     setup.realtimeInputConfig = {

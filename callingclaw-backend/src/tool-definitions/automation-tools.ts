@@ -23,6 +23,7 @@ export interface AutomationToolDeps {
   playwrightCli: PlaywrightCLIClient;
   zoomSkill: ZoomSkill;
   meetingPrepSkill: MeetingPrepSkill;
+  chromeLauncher?: any; // ChromeLauncher for interact tool (presenting page control)
 }
 
 export function automationTools(deps: AutomationToolDeps): ToolModule {
@@ -285,6 +286,79 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
 
           const short = results.slice(0, 10).map((f, i) => `${i + 1}. ${f.replace(home, "~")}`).join("\n");
           return `Found ${results.length} file(s) matching "${query}":\n${short}${results.length > 10 ? `\n... and ${results.length - 10} more` : ""}\n\nUse open_file with the full path to open one.`;
+        }
+        // ── exec: run shell command (atomic action for agent loop) ──
+        case "exec": {
+          const command = (args.command as string) || "";
+          if (!command) return "No command provided.";
+          eventBus.emit("voice.tool_call", { tool: "exec", summary: command.slice(0, 80) });
+          // Safety: block destructive commands
+          const blocked = /\brm\s+-rf\b|mkfs|dd\s+if=|>\s*\/dev\//.test(command);
+          if (blocked) return "Command blocked for safety.";
+          try {
+            const proc = Bun.spawn(["bash", "-c", command], {
+              stdout: "pipe", stderr: "pipe",
+              cwd: require("os").homedir(),
+              env: { ...process.env, PATH: process.env.PATH },
+            });
+            const [stdout, stderr] = await Promise.all([
+              new Response(proc.stdout).text(),
+              new Response(proc.stderr).text(),
+            ]);
+            const code = await proc.exited;
+            const output = (stdout || stderr).trim().slice(0, 3000);
+            return code === 0
+              ? (output || "(empty output)")
+              : `Exit ${code}: ${output}`;
+          } catch (e: any) {
+            return `Error: ${e.message}`;
+          }
+        }
+        // ── interact: click/scroll/navigate on presenting page ──
+        case "interact": {
+          const action = (args.action as string) || "";
+          const target = (args.target as string) || "";
+          eventBus.emit("voice.tool_call", { tool: "interact", summary: `${action} ${target}`.slice(0, 80) });
+          const cl = deps.chromeLauncher;
+          if (!cl?.presentingPage) return "No presenting page active. Use share_screen first.";
+          try {
+            switch (action) {
+              case "click": {
+                // DOM snapshot → find element → click
+                const elements = await cl.evaluateOnPresentingPage(`(() => {
+                  const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
+                  return Array.from(els).slice(0, 30).map((el, i) => i + '. ' + (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 60));
+                })()`);
+                if (!target) return `Clickable elements:\n${elements}\nCall interact again with action="click" and target="<element text>".`;
+                // Find best match
+                await cl.evaluateOnPresentingPage(`(() => {
+                  const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
+                  for (const el of els) {
+                    if ((el.textContent || '').toLowerCase().includes(${JSON.stringify(target.toLowerCase())})) {
+                      el.click(); return 'clicked';
+                    }
+                  }
+                  return 'not found';
+                })()`);
+                return `Clicked "${target}".`;
+              }
+              case "scroll":
+              case "scroll_down":
+                await cl.evaluateOnPresentingPage(`window.scrollBy(0, ${target === "up" ? -600 : 600})`);
+                return `Scrolled ${target || "down"}.`;
+              case "scroll_up":
+                await cl.evaluateOnPresentingPage(`window.scrollBy(0, -600)`);
+                return "Scrolled up.";
+              case "navigate":
+                if (!target) return "Provide a URL to navigate to.";
+                await cl.navigatePresentingPage(target);
+                return `Navigated to ${target}.`;
+              default:
+                return `Unknown action: ${action}. Use click, scroll, scroll_up, scroll_down, or navigate.`;
+            }
+          } catch (e: any) {
+            return `Interact error: ${e.message}`;
+          }
         }
         default:
           return `Unknown automation tool: ${name}`;
