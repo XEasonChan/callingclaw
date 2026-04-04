@@ -425,7 +425,7 @@ export class MeetingScheduler {
               this.sessionManager.registerFile(s.meetingId, "prep", s.meetingId + "_prep.md");
               this.sessionManager.markReady(s.meetingId);
             } else {
-              upsertSession({ meetingId: s.meetingId, status: "ready", files: { prep: s.meetingId + "_prep.md" } });
+              console.warn(`[PrepRecovery] No sessionManager — cannot update session ${s.meetingId}`);
             }
             this.eventBus.emit("meeting.prep_ready", {
               meetingId: s.meetingId,

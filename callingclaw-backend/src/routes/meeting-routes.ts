@@ -621,9 +621,11 @@ STEP-BY-STEP FLOW:
 
         // Trigger smart todo delivery (non-blocking)
         if (services.postMeetingDelivery) {
+          const activeSession = services.sessionManager?.list({ status: "active" })[0];
           services.postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,
+            meetingId: activeSession?.meetingId,
             prepSummary: services.meetingPrepSkill?.currentBrief ? {
               topic: services.meetingPrepSkill.currentBrief.topic,
               liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],

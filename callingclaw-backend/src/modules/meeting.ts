@@ -253,7 +253,7 @@ export class MeetingModule {
   /**
    * Export meeting summary to a markdown file
    */
-  async exportToMarkdown(summary?: MeetingSummary, filename?: string): Promise<string> {
+  async exportToMarkdown(summary?: MeetingSummary, filename?: string, meetingId?: string): Promise<string> {
     if (!summary) {
       summary = await this.generateSummary();
     }
@@ -262,7 +262,8 @@ export class MeetingModule {
     const dateStr = now.toISOString().slice(0, 10);
     const timeStr = now.toTimeString().slice(0, 5).replace(":", "");
     const safeTitle = (summary.title || "meeting").replace(/[^a-zA-Z0-9\u4e00-\u9fff-_ ]/g, "").slice(0, 50);
-    const fname = filename || `${dateStr}_${timeStr}_${safeTitle}.md`;
+    // Use meetingId-based filename when available (links summary to session in SessionManager)
+    const fname = filename || (meetingId ? `${meetingId}_summary.md` : `${dateStr}_${timeStr}_${safeTitle}.md`);
     const filepath = `${NOTES_DIR}/${fname}`;
 
     // Build markdown content — conversation only (no tool/system noise)

@@ -542,10 +542,13 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           // ── Smart Todo Delivery: send concise todos to Telegram with inline buttons ──
           // User confirms → deep research + sub-agent execution per todo
+          const activeSession = deps.sessionManager?.list({ status: "active" })[0]
+            || deps.sessionManager?.list({ status: "ended" })[0];
           postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,
             prepSummary,
+            meetingId: activeSession?.meetingId,
           }).catch((e: any) => {
             console.error("[PostMeeting] Delivery failed:", e.message);
             // Fallback: push full report to OpenClaw directly
@@ -806,10 +809,38 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             // Open in ChromeLauncher's presenting tab for potential screen share
             const fileUrl = resolvedPath.startsWith("http") ? resolvedPath : `file://${resolvedPath}`;
             await deps.chromeLauncher.shareScreen(fileUrl);
-            return `Opened and presenting: ${resolvedPath}`;
+          } else {
+            await meetJoiner.openFile(resolvedPath, app);
           }
-          await meetJoiner.openFile(resolvedPath, app);
-          return `Opened ${resolvedPath} in ${app}.`;
+
+          // Read file content and inject into voice context (meeting memory)
+          const textExts = /\.(txt|md|html|json|csv|ts|tsx|js|jsx|py|yaml|yml|toml|xml|sql|sh|env|log|conf|cfg)$/i;
+          if (textExts.test(resolvedPath)) {
+            try {
+              const fileContent = await Bun.file(resolvedPath).text();
+              const maxChars = 3000;
+              const truncated = fileContent.length > maxChars
+                ? fileContent.slice(0, maxChars) + `\n... (truncated, ${fileContent.length} chars total)`
+                : fileContent;
+              const fileName = resolvedPath.split("/").pop() || resolvedPath;
+
+              // Inject into real-time voice context
+              if (deps.voice) {
+                deps.voice.injectContext(`[FILE_CONTENT] ${fileName}:\n${truncated}`);
+              }
+              // Persist in meeting prep liveNotes
+              if (deps.meetingPrepSkill) {
+                deps.meetingPrepSkill.addLiveNote(`[CONTEXT] Opened ${fileName} — ${fileContent.length} chars, content injected to voice context`);
+              }
+              console.log(`[open_file] Injected ${Math.min(fileContent.length, maxChars)} chars from ${fileName} into voice context`);
+            } catch (e: any) {
+              console.warn(`[open_file] Could not read file content: ${e.message}`);
+            }
+          }
+
+          return app === "browser"
+            ? `Opened and presenting: ${resolvedPath}`
+            : `Opened ${resolvedPath} in ${app}.`;
         }
         default:
           return `Unknown meeting tool: ${name}`;
