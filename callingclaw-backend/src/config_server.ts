@@ -192,13 +192,9 @@ export function startConfigServer(services: Services) {
     const now = new Date();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const timeCtx = `当前时间: ${now.toISOString()} (${tz}, ${now.toLocaleDateString("zh-CN", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: tz })})`;
-    services.realtime.sendEvent("conversation.item.create", {
-      item: {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text: `[系统信息]\n${timeCtx}` }],
-      },
-    });
+    // Use injectContext() instead of raw sendEvent — proper role ("system") + FIFO queue management.
+    // Raw sendEvent with role "user" would trigger AI response on OpenAI/Grok.
+    services.realtime.injectContext(`[系统信息]\n${timeCtx}`);
 
     // Inject selected meeting context so AI knows which meeting to join/delete
     if (opts.topic || opts.meetLink) {
@@ -209,13 +205,7 @@ export function startConfigServer(services: Services) {
         "用户已选择此会议。当用户要求加入会议时，直接使用上述Meet链接调用join_meeting工具，无需再次询问链接。",
         opts.calendarEventId ? "当用户要求删除/取消此会议时，直接使用上述日历事件ID调用delete_event工具。" : "",
       ].filter(Boolean).join("\n");
-      services.realtime.sendEvent("conversation.item.create", {
-        item: {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text: `[当前会议上下文]\n${meetingCtx}` }],
-        },
-      });
+      services.realtime.injectContext(`[当前会议上下文]\n${meetingCtx}`);
       console.log(`[VoiceSession] Meeting context injected: ${opts.topic || "no topic"}, link: ${opts.meetLink || "none"}, calEventId: ${opts.calendarEventId || "none"}`);
     }
 
@@ -405,13 +395,7 @@ export function startConfigServer(services: Services) {
                     "用户已选择此会议。当用户要求加入会议时，直接使用上述Meet链接调用join_meeting工具，无需再次询问链接。",
                     calendarEventId ? "当用户要求删除/取消此会议时，直接使用上述日历事件ID调用delete_event工具。" : "",
                   ].filter(Boolean).join("\n");
-                  services.realtime.sendEvent("conversation.item.create", {
-                    item: {
-                      type: "message",
-                      role: "user",
-                      content: [{ type: "input_text", text: `[当前会议上下文]\n${meetingCtx}` }],
-                    },
-                  });
+                  services.realtime.injectContext(`[当前会议上下文]\n${meetingCtx}`);
                   console.log(`[VoiceTest] Meeting context injected: ${topic || "no topic"}, link: ${meetLink || "none"}, calEventId: ${calendarEventId || "none"}`);
                 }
               };
@@ -443,15 +427,10 @@ export function startConfigServer(services: Services) {
                     services.transcriptAuditor.activate(services.realtime);
                     console.log("[VoiceTest] TranscriptAuditor activated for Talk Locally");
                   }
-                  // Inject current date/time for relative time parsing
+                  // Inject current date/time via injectContext (system role, no response trigger)
                   const _now = new Date();
                   const _tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                  services.realtime.sendEvent("conversation.item.create", {
-                    item: {
-                      type: "message", role: "user",
-                      content: [{ type: "input_text", text: `[系统信息]\n当前时间: ${_now.toISOString()} (${_tz}, ${_now.toLocaleDateString("zh-CN", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: _tz })})` }],
-                    },
-                  });
+                  services.realtime.injectContext(`[系统信息]\n当前时间: ${_now.toISOString()} (${_tz}, ${_now.toLocaleDateString("zh-CN", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: _tz })})`);
                   // Inject meeting context after session is ready
                   injectMeetingContext();
                 }).catch((e: any) => {
@@ -1867,9 +1846,11 @@ export function startConfigServer(services: Services) {
 
               // Trigger PostMeetingDelivery (OpenClaw → Telegram)
               if (services.postMeetingDelivery) {
+                const endedSession = services.sessionManager?.list({ status: "ended" })[0];
                 services.postMeetingDelivery.deliver({
                   summary: autoSummary,
                   notesFilePath: autoFilepath,
+                  meetingId: endedSession?.meetingId,
                   prepSummary: services.meetingPrepSkill?.currentBrief ? {
                     topic: services.meetingPrepSkill.currentBrief.topic,
                     liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],
@@ -2019,7 +2000,7 @@ STEP-BY-STEP FLOW:
           return Response.json({ error: "OpenClaw not connected" }, { status: 503, headers });
         }
 
-        const session = services.sessionManager!.create({ topic: body.topic });
+        const session = services.sessionManager!.findOrCreate({ topic: body.topic });
         const meetingId = session.meetingId;
 
         services.eventBus.emit("meeting.prep_progress", {
@@ -2631,9 +2612,11 @@ STEP-BY-STEP FLOW:
 
         // Trigger smart todo delivery (non-blocking)
         if (services.postMeetingDelivery) {
+          const endedSession = services.sessionManager?.list({ status: "ended" })[0];
           services.postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,
+            meetingId: endedSession?.meetingId,
             prepSummary: services.meetingPrepSkill?.currentBrief ? {
               topic: services.meetingPrepSkill.currentBrief.topic,
               liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],
@@ -2821,9 +2804,11 @@ STEP-BY-STEP FLOW:
 
         // Trigger post-meeting delivery (non-blocking)
         if (services.postMeetingDelivery) {
+          const deliverySession = services.sessionManager?.list({ status: "ended" })[0];
           services.postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,
+            meetingId: deliverySession?.meetingId,
             prepSummary: services.meetingPrepSkill?.currentBrief ? {
               topic: services.meetingPrepSkill.currentBrief.topic,
               liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],

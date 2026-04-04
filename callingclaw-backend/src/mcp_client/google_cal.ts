@@ -152,6 +152,8 @@ export class GoogleCalendarClient {
 
   /** Called when an auth error is detected at runtime (e.g. refresh token expired) */
   onAuthError?: (error: string) => void;
+  /** Prevents infinite rescan loops — reset after successful rescan */
+  private _rescanAttempted = false;
 
   constructor() {
     this.clientId = process.env.GOOGLE_CLIENT_ID || "";
@@ -241,8 +243,36 @@ export class GoogleCalendarClient {
           console.log("[Calendar] Token refreshed successfully — auth error cleared");
         }
       } catch (e: any) {
-        // Runtime auth failure — mark disconnected and notify
         const msg = e.message || "Unknown auth error";
+
+        // Auto-rescan: if refresh token expired (invalid_grant), try to find a newer
+        // token from OpenClaw workspace or other credential sources before giving up.
+        // Google OAuth apps in "Testing" mode expire refresh tokens after 7 days.
+        if (msg.includes("invalid_grant") && !this._rescanAttempted) {
+          this._rescanAttempted = true;
+          console.warn("[Calendar] Refresh token expired — auto-scanning for newer credentials...");
+          try {
+            const { credentials } = await scanForGoogleCredentials();
+            if (credentials?.refreshToken && credentials.refreshToken !== this.refreshToken) {
+              this.refreshToken = credentials.refreshToken;
+              if (credentials.clientId) this.clientId = credentials.clientId;
+              if (credentials.clientSecret) this.clientSecret = credentials.clientSecret;
+              console.log("[Calendar] Found newer credentials — retrying token refresh...");
+              await this.refreshAccessToken();
+              this._rescanAttempted = false; // Reset for future failures
+              if (this._authError) {
+                this._authError = null;
+                this._connected = true;
+                console.log("[Calendar] Auto-rescan successful — reconnected!");
+              }
+              return this.accessToken;
+            }
+          } catch (rescanErr: any) {
+            console.warn("[Calendar] Auto-rescan failed:", rescanErr.message);
+          }
+        }
+
+        // Runtime auth failure — mark disconnected and notify
         console.error("[Calendar] Runtime auth failure:", msg);
         this._connected = false;
         this._authError = msg;
