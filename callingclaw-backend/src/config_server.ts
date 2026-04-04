@@ -622,6 +622,30 @@ export function startConfigServer(services: Services) {
       }
 
       // ══════════════════════════════════════════════════════════════
+      // ── Prompt Dashboard API ──
+      // ══════════════════════════════════════════════════════════════
+
+      if (url.pathname === "/api/prompts" && req.method === "GET") {
+        const { listPrompts } = await import("./prompt-registry");
+        return Response.json(listPrompts(), { headers });
+      }
+
+      if (url.pathname.startsWith("/api/prompts/") && !url.pathname.endsWith("/reset") && req.method === "PUT") {
+        const id = decodeURIComponent(url.pathname.slice("/api/prompts/".length));
+        const body = (await req.json()) as { value: string };
+        const { setPromptOverride } = await import("./prompt-registry");
+        const ok = setPromptOverride(id, body.value);
+        return Response.json({ ok, id }, { headers });
+      }
+
+      if (url.pathname.endsWith("/reset") && url.pathname.startsWith("/api/prompts/") && req.method === "POST") {
+        const id = decodeURIComponent(url.pathname.slice("/api/prompts/".length, -"/reset".length));
+        const { resetPrompt } = await import("./prompt-registry");
+        const ok = resetPrompt(id);
+        return Response.json({ ok, id }, { headers });
+      }
+
+      // ══════════════════════════════════════════════════════════════
       // ── Core API Routes ──
       // ══════════════════════════════════════════════════════════════
 
