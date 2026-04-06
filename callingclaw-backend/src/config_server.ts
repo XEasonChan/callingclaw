@@ -1769,9 +1769,14 @@ export function startConfigServer(services: Services) {
               // If we have a presentation script (speakingPlan + scenes), inject it
               const brief = prepBrief || services.meetingPrepSkill?.currentBrief;
               if (brief?.speakingPlan && brief.scenes?.length > 0) {
+                // Primer message (EXP-7C finding: eliminates hallucination in first turns)
+                services.realtime.injectContext(
+                  `[PRESENTATION] 你即将进行一个 ${brief.speakingPlan.length} 部分的汇报，主题是"${brief.topic}"。每次收到 [PRESENT NOW] 内容块时，只讲那个部分的内容。引用具体数字和数据，不要编造。用自然的语气，像资深 PM 给老板做汇报。`
+                );
+
                 // Inject playbook context so voice knows the presentation plan
                 injectMeetingBrief(services.realtime, brief);
-                console.log(`[Meeting] ✅ Presentation mode: ${brief.speakingPlan.length} phases, ${brief.scenes.length} scenes`);
+                console.log(`[Meeting] ✅ Presentation mode: ${brief.speakingPlan.length} phases, ${brief.scenes.length} scenes (with primer)`);
 
                 // Also inject the presentation ready context
                 const readyCtx = buildPresentationReadyContext(brief.scenes);

@@ -596,15 +596,13 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    * Unlike sendText() (role:"user" → AI responds TO it), this uses role:"system"
    * so the AI presents FROM the content in its own words.
    */
-  presentSlide(text: string) {
-    this.context.addTranscript({ role: "system", text: `[Slide] ${text.slice(0, 100)}...`, ts: Date.now() });
-    this.client.sendEvent("conversation.item.create", {
-      item: {
-        type: "message",
-        role: "system",
-        content: [{ type: "input_text", text: `[PRESENT NOW] Present this naturally in your own words. Stay close to the content, make it conversational:\n${text}` }],
-      },
-    });
+  presentSlide(text: string, sectionTitle?: string) {
+    this.context.addTranscript({ role: "system", text: `[Slide] ${(sectionTitle || text).slice(0, 100)}...`, ts: Date.now() });
+    // Use replaceContext with fixed ID — only one slide in context at a time (EXP-7C finding)
+    this.replaceContext(
+      `[PRESENT NOW] ${sectionTitle ? sectionTitle + "\n\n" : ""}${text}`,
+      "ctx_current_slide"
+    );
     this.client.sendEvent("response.create", {});
   }
 
