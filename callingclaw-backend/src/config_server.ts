@@ -1623,7 +1623,15 @@ export function startConfigServer(services: Services) {
                   decisionPoints: prepData.decisionPoints || [],
                 };
                 services.meetingPrepSkill.setBrief(prepBrief);
-                console.log(`[Meeting] ✅ Loaded presentation script from ${fname}: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes`);
+                // Register prep files as Working Documents on Stage
+                for (const f of (prepData.filePaths || [])) {
+                  const name = f.path.split("/").pop() || f.path;
+                  services.context.addStageDocument(f.path, "new");
+                }
+                for (const u of (prepData.browserUrls || [])) {
+                  services.context.addStageDocument(u.url, "new");
+                }
+                console.log(`[Meeting] ✅ Loaded presentation script from ${fname}: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes, ${(prepData.filePaths?.length || 0) + (prepData.browserUrls?.length || 0)} documents`);
                 break;
               }
             }
