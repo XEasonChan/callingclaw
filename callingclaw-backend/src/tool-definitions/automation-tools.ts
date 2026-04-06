@@ -428,21 +428,52 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
               }
               case "scroll":
               case "scroll_down": {
-                // Scroll by one viewport height (not fixed 600px) and return actual position
+                // Section-aware scroll: find next heading below viewport and scroll to it
+                // Falls back to 75% viewport scroll if no heading found
                 const scrollInfo = await cl.evaluateOnPresentingPage(`(() => {
                   var vh = window.innerHeight;
+                  var currentY = window.scrollY;
+                  var viewBottom = currentY + vh;
                   var dir = ${JSON.stringify(target)} === "up" ? -1 : 1;
+
+                  // Find next section heading below current viewport
+                  if (dir > 0) {
+                    var headings = document.querySelectorAll('h1,h2,h3,section[id],section[class]');
+                    var nextSection = null;
+                    for (var h of headings) {
+                      var rect = h.getBoundingClientRect();
+                      var absY = rect.top + currentY;
+                      if (absY > viewBottom + 50) {
+                        nextSection = h;
+                        break;
+                      }
+                    }
+                    if (nextSection) {
+                      nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      var title = (nextSection.textContent || '').trim().substring(0, 60);
+                      return JSON.stringify({
+                        scrollY: Math.round(window.scrollY),
+                        scrollMax: Math.round(document.documentElement.scrollHeight - vh),
+                        pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - vh) * 100),
+                        nextSection: title
+                      });
+                    }
+                  }
+
+                  // Fallback: scroll by viewport height
                   window.scrollBy(0, dir * Math.round(vh * 0.75));
                   return JSON.stringify({
                     scrollY: Math.round(window.scrollY),
-                    scrollMax: Math.round(document.documentElement.scrollHeight - window.innerHeight),
-                    viewportH: vh,
-                    pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100)
+                    scrollMax: Math.round(document.documentElement.scrollHeight - vh),
+                    pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - vh) * 100),
+                    nextSection: null
                   });
                 })()`);
                 try {
                   const info = JSON.parse(String(scrollInfo));
-                  actionResult = `Scrolled ${target || "down"}. Position: ${info.pct}% (${info.scrollY}/${info.scrollMax}px).`;
+                  actionResult = info.nextSection
+                    ? `Scrolled to section: "${info.nextSection}". Position: ${info.pct}%.`
+                    : `Scrolled ${target || "down"}. Position: ${info.pct}% (${info.scrollY}/${info.scrollMax}px).`;
                 } catch {
                   actionResult = `Scrolled ${target || "down"}.`;
                 }

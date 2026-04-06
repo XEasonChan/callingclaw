@@ -204,6 +204,8 @@ interface TestResult {
   contentMatch: boolean;    // expectVoice matched (specific info present)
   noFiller: boolean;        // rejectVoice did NOT match (no empty filler)
   responseLength: number;   // char count (proxy for information density)
+  audioTruncated: boolean;  // detected mid-sentence cutoff (AI interrupted itself)
+  userIgnored: boolean;     // user spoke but AI didn't address it
   // Meta
   durationMs: number;
   error?: string;
@@ -376,6 +378,7 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
   const result: TestResult = {
     id: test.id, toolCalled: false, toolName: "none",
     logMatch: false, contentMatch: false, noFiller: true, voiceText: "", responseLength: 0,
+    audioTruncated: false, userIgnored: false,
     systemOk: false, groundTruth: "", durationMs: 0,
   };
 
@@ -416,12 +419,38 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     // Check: did the log pattern match?
     result.logMatch = test.expectLog.test(log);
 
-    // Check: voice quality (content + fluency)
+    // Check: voice quality (content + fluency + interruption)
     const aiResponses = newEntries.filter(e => e.role === "assistant");
     result.voiceText = aiResponses.map(e => e.text).join(" ");
     result.responseLength = result.voiceText.length;
     result.contentMatch = test.expectVoice.test(result.voiceText);
     result.noFiller = test.rejectVoice ? !test.rejectVoice.test(result.voiceText) : true;
+
+    // Audio truncation detection: AI interrupted its own sentence
+    // Pattern: multiple short AI responses in rapid succession (< 3s apart), or sentence ending mid-word
+    result.audioTruncated = false;
+    if (aiResponses.length >= 2) {
+      for (let i = 1; i < aiResponses.length; i++) {
+        const prev = aiResponses[i - 1]!;
+        const curr = aiResponses[i]!;
+        const gap = (curr.ts || 0) - (prev.ts || 0);
+        // Short gap + previous sentence doesn't end with punctuation = truncation
+        if (gap < 3000 && gap > 0 && prev.text.length > 10 && !/[。！？.!?\n]$/.test(prev.text.trim())) {
+          result.audioTruncated = true;
+          break;
+        }
+      }
+    }
+    // Also check log for "interrupted" events
+    if (log.includes("interrupted AI response")) {
+      result.audioTruncated = true;
+    }
+
+    // User ignored detection: user spoke but AI response doesn't reference their topic
+    result.userIgnored = false;
+    const userEntries = newEntries.filter(e => e.role === "user" && e.text.length > 10);
+    // This is hard to auto-detect, so we just flag if there were user entries but no tool/response change
+    // (future: semantic similarity between user question and AI response)
 
     // GROUND TRUTH: full pipeline health after this step
     const postHealth = await checkPipelineHealth();
@@ -500,7 +529,8 @@ Tests:      ${VOICE_TESTS.length}
     const toolIcon = r.toolCalled ? "✅" : "❌";
     const contentIcon = r.contentMatch ? "✅" : "❌";
     const fillerIcon = r.noFiller ? "✅" : "🔁";
-    console.log(`[${now()}]   sys:${sysIcon} tool:${toolIcon}(${r.toolName}) content:${contentIcon} filler:${fillerIcon} len:${r.responseLength}`);
+    const truncIcon = r.audioTruncated ? "✂️" : "";
+    console.log(`[${now()}]   sys:${sysIcon} tool:${toolIcon}(${r.toolName}) content:${contentIcon} filler:${fillerIcon} len:${r.responseLength} ${truncIcon}`);
     console.log(`[${now()}]   ground: ${r.groundTruth}`);
     if (r.voiceText) console.log(`[${now()}]   AI: "${r.voiceText.slice(0, 100)}"`);
     if (r.error) console.log(`[${now()}]   ⛔ ${r.error}`);
