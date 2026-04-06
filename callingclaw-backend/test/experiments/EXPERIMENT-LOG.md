@@ -46,6 +46,16 @@
 - **Pika pricing question**: Model answered but made up numbers ("每月几十美元") instead of using prep FAQ data ($0.50/min). Need to inject FAQ alongside narration.
 - **Next**: Adjust prompt to emphasize insight words + inject FAQ as context + cap response length
 
+### EXP-7B-run2: Why-What-How Prompt + FAQ Injection
+- **Date**: 2026-04-06
+- **Score**: 82% avg (+2 from run1)
+- **Why**: 2.0/2 ✅ (was 0.5/1 — Why-What-How prompt works!)
+- **How**: 2.0/2 ✅ (all sections have steps/flow)
+- **What**: 0.5/2 ❌ (key data points like "23帧、74秒、$19.99" not mentioned)
+- **Pika pricing**: Still fabricated ("没有具体数据") despite FAQ being injected
+- **Diagnosis**: Model prioritizes narrative over data. Need to add key_points as mandatory callouts.
+- **Next**: Add "[MUST MENTION]" prefix for key_points in injection prompt
+
 ## Learnings
 
 1. **gpt-realtime-1.5 支持纯文本模式** — `output_modalities: ["text"]`，可以做快速 eval
