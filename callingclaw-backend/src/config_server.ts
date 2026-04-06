@@ -3426,13 +3426,18 @@ STEP-BY-STEP FLOW:
             // Scroll inside the iframe's contentDocument
             const iframeResult = await services.chromeLauncher.evaluateOnPresentingPage(`(() => {
               var iframe = document.getElementById('slideFrame');
-              if (!iframe || !iframe.contentDocument) return JSON.stringify({ error: 'no iframe access' });
+              if (!iframe || !iframe.contentWindow) return JSON.stringify({ error: 'no iframe access' });
+              // Use contentWindow.scrollBy — works regardless of scroll container (body vs documentElement)
+              iframe.contentWindow.scrollBy({ top: ${dir}, behavior: 'smooth' });
+              // Read position from whichever element has the scroll
               var doc = iframe.contentDocument;
-              doc.documentElement.scrollBy({ top: ${dir}, behavior: 'smooth' });
+              var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+              var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+              var ch = iframe.clientHeight;
               return JSON.stringify({
-                scrollY: Math.round(doc.documentElement.scrollTop),
-                scrollMax: Math.round(doc.documentElement.scrollHeight - iframe.clientHeight),
-                pct: Math.round(doc.documentElement.scrollTop / Math.max(1, doc.documentElement.scrollHeight - iframe.clientHeight) * 100)
+                scrollY: Math.round(st),
+                scrollMax: Math.round(sh - ch),
+                pct: Math.round(st / Math.max(1, sh - ch) * 100)
               });
             })()`);
             const info = iframeResult ? JSON.parse(String(iframeResult)) : null;
