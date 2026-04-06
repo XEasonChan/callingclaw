@@ -12,7 +12,7 @@ import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { ZoomSkill } from "../skills/zoom";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion } from "../voice-persona";
-import { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
+import { PAGE_EXTRACT_JS, PAGE_CLICK_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
 
 export interface AutomationToolDeps {
   automationRouter: AutomationRouter;
@@ -138,6 +138,8 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
         description:
           "Control the presenting tab (the page you're sharing in Meet). " +
           "Use this to click buttons, scroll through content, or navigate to a new URL while presenting. " +
+          "For click: use the [index] number from [PAGE] context (e.g. target='3' clicks element [3]). " +
+          "Text matching also works (e.g. target='Download'). " +
           "After each action, you'll receive updated [PAGE] context showing what's now visible.",
         parameters: {
           type: "object",
@@ -149,7 +151,7 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
             },
             target: {
               type: "string",
-              description: "For click: button/link text to click. For scroll: 'up'/'down' or text to scroll to. For navigate: URL.",
+              description: "For click: element [index] number (preferred) or button/link text. For scroll: 'up'/'down'. For navigate: URL.",
             },
           },
           required: ["action"],
@@ -414,16 +416,68 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                   const ctx = formatPageContext(raw);
                   return ctx || "No clickable elements found.";
                 }
-                await cl.evaluateOnPresentingPage(`(() => {
-                  const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
-                  for (const el of els) {
-                    if ((el.textContent || '').toLowerCase().includes(${JSON.stringify(target.toLowerCase())})) {
-                      el.click(); return 'clicked';
+
+                // Index-based click (preferred): target="3" clicks element [3]
+                const indexMatch = target.match(/^\d+$/);
+                if (indexMatch) {
+                  const clickResult = await cl.evaluateOnPresentingPage(PAGE_CLICK_JS(parseInt(target)));
+                  try {
+                    const r = JSON.parse(String(clickResult));
+                    if (r.ok) {
+                      actionResult = `Clicked [${target}] ${r.tag}: "${r.text}".`;
+                    } else {
+                      actionResult = `Element [${target}] not found. Use interact(action="click") without target to see available elements.`;
                     }
+                  } catch {
+                    actionResult = `Clicked element [${target}].`;
                   }
-                  return 'not found';
-                })()`);
-                actionResult = `Clicked "${target}".`;
+                } else {
+                  // Text-based fallback: target="Download for Mac" (fuzzy match + W3C events)
+                  const clickResult = await cl.evaluateOnPresentingPage(`(() => {
+                    var els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
+                    var target = null;
+                    var targetText = ${JSON.stringify(target.toLowerCase())};
+                    for (var el of els) {
+                      if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
+                      var text = (el.textContent || '').toLowerCase().trim();
+                      if (text.includes(targetText)) { target = el; break; }
+                    }
+                    if (!target) {
+                      // Try aria-label match
+                      for (var el of els) {
+                        var label = (el.getAttribute('aria-label') || '').toLowerCase();
+                        if (label.includes(targetText)) { target = el; break; }
+                      }
+                    }
+                    if (!target) return JSON.stringify({ ok: false });
+
+                    // W3C click: scrollIntoView + hit-test + synthetic events
+                    target.scrollIntoView({ behavior: 'instant', block: 'center' });
+                    var rect = target.getBoundingClientRect();
+                    var x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+                    var hit = document.elementFromPoint(x, y);
+                    var ct = (hit instanceof HTMLElement && target.contains(hit)) ? hit : target;
+                    var po = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerType: 'mouse' };
+                    var mo = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 };
+                    ct.dispatchEvent(new PointerEvent('pointerover', po));
+                    ct.dispatchEvent(new PointerEvent('pointerenter', Object.assign({}, po, { bubbles: false })));
+                    ct.dispatchEvent(new MouseEvent('mouseover', mo));
+                    ct.dispatchEvent(new MouseEvent('mouseenter', Object.assign({}, mo, { bubbles: false })));
+                    ct.dispatchEvent(new PointerEvent('pointerdown', po));
+                    ct.dispatchEvent(new MouseEvent('mousedown', mo));
+                    target.focus({ preventScroll: true });
+                    ct.dispatchEvent(new PointerEvent('pointerup', po));
+                    ct.dispatchEvent(new MouseEvent('mouseup', mo));
+                    ct.click();
+                    return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60) });
+                  })()`);
+                  try {
+                    const r = JSON.parse(String(clickResult));
+                    actionResult = r.ok ? `Clicked "${r.text}".` : `"${target}" not found on page.`;
+                  } catch {
+                    actionResult = `Clicked "${target}".`;
+                  }
+                }
                 break;
               }
               case "scroll":
