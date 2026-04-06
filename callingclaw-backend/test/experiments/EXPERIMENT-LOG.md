@@ -2,7 +2,16 @@
 
 > autoresearch 风格：每轮实验有明确目标 → 执行 → 验证 → keep/revert → 下一轮
 
-## Current Score: 75% best (2497ad5) | Previous: 72% (v2.8.14)
+## Current Score: 75% best (2497ad5) | v2.9.0 released
+
+## P0 Open Bug: Audio Truncation (5 rounds of fixes, unresolved)
+- AI says half a sentence then gets cut off by next response
+- Last sentence repeats
+- Root cause: response.create cancels in-progress audio playback
+- 5 fix attempts: audioState check → queue → response.done flush → dual-flag → text-only handling
+- All partially helped but none fully solved
+- Research subagent investigating OpenAI Realtime API lifecycle + industry approaches
+- See memory: bug_audio_truncation_investigation.md
 
 ## Latest Run (EXP-2 audio fix)
 - product_presentation: 83% (A-01~A-04 all pass) ✅
