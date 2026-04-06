@@ -828,8 +828,21 @@ export class RealtimeClient {
     this.handlers.set(eventType, list);
   }
 
+  private _lastResponseCreateTs = 0;
+
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+
+    // Global debounce for response.create — prevents multiple sources from
+    // triggering rapid consecutive responses (causes AI to repeat itself)
+    if (type === "response.create") {
+      const now = Date.now();
+      if (now - this._lastResponseCreateTs < 2000) {
+        console.log(`[Realtime] response.create debounced (${now - this._lastResponseCreateTs}ms since last)`);
+        return true; // pretend it was sent
+      }
+      this._lastResponseCreateTs = now;
+    }
 
     // Gemini: route through protocol adapter for structural transform
     if (this._geminiAdapter) {

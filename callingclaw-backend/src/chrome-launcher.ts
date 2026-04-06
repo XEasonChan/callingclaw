@@ -493,6 +493,7 @@ export class ChromeLauncher {
     const context = await chromium.launchPersistentContext(this.profileDir, {
       headless: false,
       channel: "chrome",
+      viewport: null,  // Use full window size — allows user to resize/maximize for presentation
       args: [
         "--autoplay-policy=no-user-gesture-required",
         "--disable-infobars",
@@ -503,6 +504,7 @@ export class ChromeLauncher {
         "--restore-last-session=false",             // Don't restore previous session tabs
         "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab/window matching this title
         "--enable-usermedia-screen-capturing",    // Enable screen capture API
+        "--start-maximized",                      // Start Chrome maximized for presentation
         `--remote-debugging-port=${port}`,
       ],
       permissions: ["microphone", "camera"],
