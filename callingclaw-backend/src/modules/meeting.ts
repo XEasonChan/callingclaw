@@ -115,6 +115,13 @@ export class MeetingModule {
     const transcript = this.context.getTranscriptText(50);
     if (!transcript) return [];
 
+    // Minimum content threshold: skip near-empty meetings (just intro/ack)
+    const userEntries = (transcript.match(/^\[user\]/gm) || []).length;
+    if (userEntries < 3) {
+      console.warn(`[Meeting] Only ${userEntries} user entries — too few for extraction, skipping`);
+      return [];
+    }
+
     // Idempotency: skip if transcript hasn't changed since last extraction
     const hash = Bun.hash(transcript).toString(16);
     if (hash === this._lastExtractionHash && this._extractionCount > 0) {
@@ -203,6 +210,13 @@ export class MeetingModule {
     }
 
     const transcript = this.context.getConversationText(1000);
+
+    // Minimum content threshold: skip near-empty meetings
+    const userEntries = (transcript.match(/^\[user\]/gm) || []).length;
+    if (userEntries < 3) {
+      console.warn(`[Meeting] Only ${userEntries} user entries — too few for summary, skipping`);
+      return { title: "Meeting", duration: "unknown", participants: [], keyPoints: ["Skipped: insufficient content"], actionItems: [], decisions: [], followUps: [] };
+    }
 
     // Idempotency: skip if transcript hasn't changed
     const hash = Bun.hash(transcript).toString(16);
