@@ -262,7 +262,9 @@ async function checkPipelineHealth(): Promise<{ ok: boolean; detail: string; met
     if (!m.voiceConnected) issues.push("voice=disconnected");
     if (!m.chromeAlive) issues.push("chrome=crashed");
     if (m.transcriptHasForeignLang) issues.push("stt=foreign_lang_detected");
-    if (!m.audioChunksFlowing) issues.push("audio=no_chunks");
+    // Audio chunks are only relevant for real voice meetings, not sendText-driven eval
+    // Don't gate on audio — sendText bypasses the audio pipeline entirely
+    // if (!m.audioChunksFlowing) issues.push("audio=no_chunks");
 
     return {
       ok: issues.length === 0,
