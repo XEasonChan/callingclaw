@@ -577,6 +577,26 @@ eventBus.on("meeting.ended", async () => {
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
 
+// ── Screen share: reconnect BrowserCapture to the correct tab ──
+// When presenting starts, BrowserCapture should target the presenting tab (not Meet grid).
+// When presenting stops, switch back to the Meet tab.
+eventBus.on("presentation.started", async () => {
+  try {
+    await browserCapture.reconnectToActivePage();
+    console.log("[Init] BrowserCapture reconnected to presenting tab");
+  } catch (e: any) {
+    console.warn("[Init] BrowserCapture reconnect failed:", e.message);
+  }
+});
+eventBus.on("presentation.done", async () => {
+  try {
+    await browserCapture.reconnectToActivePage();
+    console.log("[Init] BrowserCapture reconnected to Meet tab");
+  } catch (e: any) {
+    console.warn("[Init] BrowserCapture reconnect failed:", e.message);
+  }
+});
+
 // ── Auto-leave when meeting ends externally (host ended, kicked, etc.) ──
 // This is called from PlaywrightCLI's meeting-end detector.
 let _autoLeaveInProgress = false;
