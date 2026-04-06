@@ -1,161 +1,170 @@
 #!/usr/bin/env bun
 /**
- * AutoEval — CallingClaw 自动化 E2E 测试 & 实验 Harness
- * ======================================================
- * 独立实验环境，不修改生产代码。所有 prompt / action 参数复制在此文件中。
- * 参考 autoresearch 模式：每轮实验有明确目标 + 验证指标 + bug 记录。
+ * AutoEval — CallingClaw Voice-Driven E2E Test Harness
+ * ====================================================
+ * autoresearch 模式：voice-only 驱动 + 结构化日志 + 评分 + 自动迭代
+ *
+ * 核心规则：
+ *   - Claude Code 只能用 sendText (模拟用户语音) 驱动测试
+ *   - Action 必须由 voice model 或 TranscriptAuditor 触发，不能直接调 API
+ *   - 每轮结果写入 results.tsv，可量化对比
+ *   - 失败时分析 log → 修改生产代码 → 下一轮
  *
  * Usage:
  *   bun run test/experiments/autoeval.ts [meetUrl]
- *
- * 测试链路:
- *   A. Meeting Stage + iframe (PRD 文档演示)
- *   B. CallingClaw 官网投屏 + 滚动 + 点击
- *   C. Google 搜索 manus + 浏览结果
- *   D. 退出会议
+ *   bun run test/experiments/autoeval.ts --results   # 查看历史结果
  */
+
+import { resolve } from "path";
+import { existsSync } from "fs";
 
 const BASE = "http://localhost:4000";
 const MEET_URL = process.argv[2] || "https://meet.google.com/ijv-arfc-fnd";
+const RESULTS_FILE = resolve(import.meta.dir, "autoeval-results.tsv");
+const LOG_DIR = resolve(import.meta.dir, "autoeval-logs");
 
 // ══════════════════════════════════════════════════════════════
-// EXPERIMENT PARAMETERS — 修改这里快速迭代，不动生产代码
+// EXPERIMENT CONFIG — 每轮改这里，不动生产代码
 // ══════════════════════════════════════════════════════════════
 
-/** Voice model system context — 告诉它现在在测试模式 */
-const VOICE_TEST_CONTEXT = `[PRESENTATION MODE] 你正在进行 E2E 投屏演示测试。
-你的屏幕正在被投屏到 Google Meet 会议中。
-当收到 [PAGE] context 时，描述你在页面上实际看到的内容。
-当收到指令时，使用你的工具（share_screen, interact, leave_meeting）来执行。
-用中文，简洁。每次操作后等待 [PAGE] 或 [DONE] context 再继续。`;
+/** 当前实验描述（写入 results.tsv） */
+const EXPERIMENT = "voice-only: test intent→action pipeline via sendText";
 
-/** 真实会议的 prep 数据 — autoeval 用实际会议的 prep 和文件 */
-const MEETING_TOPIC = "CallingClaw 上线视频脚本讨论";
-const PREP_FILE = "cc_mnk9jbh8_qyr4_prep.md";
-const STAGE_URL = `http://localhost:4000/stage?meeting=${encodeURIComponent(MEETING_TOPIC)}&slide=${encodeURIComponent("http://localhost:4000/prd-phase1.html")}`;
-
-/** 测试步骤 — 每步是一个 { action, voice, verify } */
-const STEPS: Step[] = [
-  // ── Phase A: Meeting Stage + iframe 演示 ──
+/** 语音测试用例 — 只用 sendText 驱动，action 由 CallingClaw 自己执行 */
+const VOICE_TESTS: VoiceTest[] = [
   {
-    name: "A1. 打开 Meeting Stage (带真实会议名 + PRD iframe)",
-    action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: STAGE_URL } },
-    voice: "现在投屏了 Meeting Stage，左边加载了 Tanka Action Card Phase 1 的 PRD 文档，请介绍你看到的文档内容",
-    verify: (r: any) => r.success === true,
-    waitMs: 18000,
+    id: "V-001",
+    voice: "帮我投屏 CallingClaw 官网",
+    expectTool: "share_screen",
+    expectLog: /ShareScreen.*Opened|share_screen/i,
+    expectVoice: /官网|网站|投屏|CallingClaw/,
+    timeoutMs: 20000,
   },
   {
-    name: "A2. 在 Stage iframe 里向下滚动 PRD",
-    action: { type: "eval_iframe", code: "window.scrollBy(0, 500); return document.title || 'scrolled'" },
-    voice: "PRD 文档往下滚动了，介绍新出现的部分",
-    verify: () => true,
-    waitMs: 15000,
+    id: "V-002",
+    voice: "向下滚动页面，介绍一下你看到的功能",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    expectVoice: /功能|模块|介绍|特色/,
+    timeoutMs: 20000,
   },
   {
-    name: "A3. 继续滚动 PRD",
-    action: { type: "eval_iframe", code: "window.scrollBy(0, 500); return 'scrolled'" },
-    voice: "继续介绍这部分内容",
-    verify: () => true,
-    waitMs: 12000,
-  },
-
-  // ── Phase B: CallingClaw 官网投屏 + 滚动 + 点击 ──
-  {
-    name: "B1. 切换投屏到 CallingClaw 官网",
-    action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: "https://www.callingclaw.com" } },
-    voice: "现在切换到了 CallingClaw 官方网站，介绍你看到的首页内容",
-    verify: (r: any) => r.success === true,
-    waitMs: 15000,
+    id: "V-003",
+    voice: "再往下滚动",
+    expectTool: "interact",
+    expectLog: /scroll/i,
+    expectVoice: /.+/,  // any response
+    timeoutMs: 15000,
   },
   {
-    name: "B2. 向下滚动官网",
-    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { direction: "down", pixels: 600 } },
-    voice: "页面向下滚动了，介绍新出现的功能模块",
-    verify: (r: any) => r.success === true,
-    waitMs: 15000,
+    id: "V-004",
+    voice: "点击 Features 这个链接",
+    expectTool: "interact",
+    expectLog: /click|Features/i,
+    expectVoice: /功能|Features|点击/,
+    timeoutMs: 20000,
   },
   {
-    name: "B3. 再次滚动",
-    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { direction: "down", pixels: 600 } },
-    voice: "继续介绍这部分",
-    verify: (r: any) => r.success === true,
-    waitMs: 12000,
+    id: "V-005",
+    voice: "现在帮我切换投屏到 Google，搜索 manus AI 最新新闻",
+    expectTool: "share_screen",
+    expectLog: /ShareScreen.*google|share_screen/i,
+    expectVoice: /Google|搜索|manus/,
+    timeoutMs: 20000,
   },
   {
-    name: "B4. 点击页面中的链接测试",
-    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { target: "Features" } },
-    voice: "跳转到了 Features 部分，介绍一下",
-    verify: (r: any) => r.success === true,
-    waitMs: 15000,
-  },
-
-  // ── Phase C: Google 搜索 manus + 点击结果 ──
-  {
-    name: "C1. 打开 Google 搜索 manus",
-    action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: "https://www.google.com/search?q=manus+AI+agent+latest+news+2026" } },
-    voice: "现在打开了 Google 搜索 manus AI 最新新闻，描述搜索结果页面",
-    verify: (r: any) => r.success === true,
-    waitMs: 15000,
-  },
-  {
-    name: "C2. 滚动搜索结果",
-    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { direction: "down", pixels: 400 } },
-    voice: "搜索结果里有什么相关的新闻",
-    verify: (r: any) => r.success === true,
-    waitMs: 12000,
-  },
-
-  // ── Phase D: 退出 ──
-  {
-    name: "D1. 退出会议",
-    action: { type: "api", method: "POST", path: "/api/meeting/leave" },
-    voice: null,
-    verify: (r: any) => r.ok === true || !!r.filepath,
-    waitMs: 3000,
+    id: "V-006",
+    voice: "好的，帮我退出会议",
+    expectTool: "leave_meeting",
+    expectLog: /Left meeting|leave/i,
+    expectVoice: /再见|退出|谢谢/,
+    timeoutMs: 15000,
   },
 ];
 
 // ══════════════════════════════════════════════════════════════
-// BUGS LIST — 每轮实验发现的问题记录在这里
+// KNOWN BUGS — 更新在这里，每轮实验检查
 // ══════════════════════════════════════════════════════════════
 
 const KNOWN_BUGS = [
-  { id: "BUG-001", status: "FIXED", desc: "CONFIG not defined in chrome-launcher.ts (missing import)" },
-  { id: "BUG-002", status: "FIXED", desc: "Voice provider param passed as object not string" },
-  { id: "BUG-003", status: "FIXED", desc: "--no-startup-window blocks Chrome windows" },
-  { id: "BUG-004", status: "FIXED", desc: "context.on('page') auto-closes presenting tabs" },
-  { id: "BUG-005", status: "OPEN", desc: "BrowserCapture CDP port not found → take_screenshot returns empty" },
-  { id: "BUG-006", status: "OPEN", desc: "Voice model doesn't self-drive tool calls from injected program" },
-  { id: "BUG-007", status: "OPEN", desc: "VisionModule Gemini/OpenRouter connection fails (China network)" },
-  { id: "BUG-008", status: "OPEN", desc: "scroll target='Vision' not found on callingclaw.com" },
-  { id: "BUG-009", status: "OPEN", desc: "interact tool can't operate on stage iframe (only presenting page)" },
-  { id: "BUG-010", status: "OPEN", desc: "Audio playback to Meet — AI speaks but participants may not hear" },
+  { id: "BUG-001", status: "FIXED", desc: "CONFIG not defined in chrome-launcher" },
+  { id: "BUG-002", status: "FIXED", desc: "Voice provider param passed as object" },
+  { id: "BUG-003", status: "FIXED", desc: "--no-startup-window blocks Chrome" },
+  { id: "BUG-004", status: "FIXED", desc: "context.on('page') kills presenting tabs" },
+  { id: "BUG-005", status: "OPEN", desc: "BrowserCapture CDP not found → no screenshots" },
+  { id: "BUG-006", status: "OPEN", desc: "Voice model won't self-drive tool calls" },
+  { id: "BUG-007", status: "OPEN", desc: "VisionModule Gemini/OpenRouter connection fail" },
+  { id: "BUG-008", status: "OPEN", desc: "scroll target 'Vision' not found on site" },
+  { id: "BUG-009", status: "OPEN", desc: "interact can't operate on Stage iframe" },
+  { id: "BUG-010", status: "OPEN", desc: "Audio playback to Meet not verified" },
+  { id: "BUG-011", status: "OPEN", desc: "Stage iframe resets when share_screen switches URL" },
 ];
 
 // ══════════════════════════════════════════════════════════════
 // TYPES
 // ══════════════════════════════════════════════════════════════
 
-interface Step {
-  name: string;
-  action: ApiAction | SequenceAction | EvalIframeAction;
-  voice: string | null;
-  voiceAfterAction?: boolean;
-  verify: (result: any) => boolean;
-  waitMs: number;
+interface VoiceTest {
+  id: string;
+  voice: string;          // sendText input (simulated user speech)
+  expectTool: string;     // expected tool call name
+  expectLog: RegExp;      // expected pattern in backend log
+  expectVoice: RegExp;    // expected pattern in AI voice response
+  timeoutMs: number;
 }
 
-interface ApiAction { type: "api"; method: string; path: string; body?: any }
-interface SequenceAction { type: "sequence"; steps: Array<{ method: string; path: string; body?: any }> }
-interface EvalIframeAction { type: "eval_iframe"; code: string }
-
-interface StepResult {
-  name: string;
-  actionOk: boolean;
-  actionResult: any;
-  voiceResponse: string;
-  toolsCalled: string[];
+interface TestResult {
+  id: string;
+  toolCalled: boolean;    // did the expected tool get called?
+  toolName: string;       // actual tool called (or "none")
+  logMatch: boolean;      // did the log pattern match?
+  voiceMatch: boolean;    // did the voice response match?
+  voiceText: string;      // actual voice response
+  durationMs: number;
   error?: string;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SCORING (autoresearch's val_bpb equivalent)
+// ══════════════════════════════════════════════════════════════
+
+function scoreResults(results: TestResult[]): { total: number; breakdown: string } {
+  let score = 0;
+  const weights = { tool: 40, log: 20, voice: 40 }; // out of 100 per test
+  const maxScore = results.length * 100;
+
+  for (const r of results) {
+    if (r.toolCalled) score += weights.tool;
+    if (r.logMatch) score += weights.log;
+    if (r.voiceMatch) score += weights.voice;
+  }
+
+  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  return {
+    total: pct,
+    breakdown: `tool:${results.filter(r => r.toolCalled).length}/${results.length} log:${results.filter(r => r.logMatch).length}/${results.length} voice:${results.filter(r => r.voiceMatch).length}/${results.length}`,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// RESULTS.TSV (autoresearch's persistent experiment log)
+// ══════════════════════════════════════════════════════════════
+
+function appendResult(score: number, breakdown: string, experiment: string, details: string) {
+  const timestamp = new Date().toISOString().slice(0, 19);
+  const gitHash = (() => { try { return require("child_process").execSync("git rev-parse --short HEAD", { cwd: resolve(import.meta.dir, "../..") }).toString().trim(); } catch { return "unknown"; } })();
+  const line = `${timestamp}\t${gitHash}\t${score}\t${breakdown}\t${experiment}\t${details}\n`;
+
+  // Ensure header exists
+  if (!existsSync(RESULTS_FILE)) {
+    require("fs").writeFileSync(RESULTS_FILE, "timestamp\tcommit\tscore\tbreakdown\texperiment\tdetails\n");
+  }
+  require("fs").appendFileSync(RESULTS_FILE, line);
+}
+
+function printHistory() {
+  if (!existsSync(RESULTS_FILE)) { console.log("No results yet."); return; }
+  console.log(require("fs").readFileSync(RESULTS_FILE, "utf-8"));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -164,93 +173,68 @@ interface StepResult {
 
 async function api(method: string, path: string, body?: any): Promise<any> {
   try {
-    const res = await fetch(`${BASE}${path}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const res = await fetch(`${BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
     return res.json();
-  } catch (e: any) {
-    return { error: e.message };
-  }
+  } catch (e: any) { return { error: e.message }; }
 }
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+function now() { return new Date().toLocaleTimeString("zh-CN", { hour12: false }); }
 
-function ts() { return new Date().toLocaleTimeString("zh-CN", { hour12: false }); }
-
-async function getLatestTranscript(count = 5): Promise<Array<{ role: string; text: string }>> {
+async function getTranscript(count = 10): Promise<Array<{ role: string; text: string; ts: number }>> {
   const r = await api("GET", `/api/meeting/transcript?count=${count}`);
   return r.entries || [];
 }
 
-async function getLatestAIResponse(): Promise<string> {
-  const entries = await getLatestTranscript(5);
-  const ai = entries.filter(e => e.role === "assistant").pop();
-  return ai?.text || "(no response)";
+async function getBackendLog(lines = 50): Promise<string> {
+  try { return require("child_process").execSync(`strings /tmp/callingclaw-backend.log | tail -${lines}`).toString(); } catch { return ""; }
 }
 
-async function getToolCalls(count = 5): Promise<string[]> {
-  const entries = await getLatestTranscript(count);
-  return entries
-    .filter(e => e.role === "system" && e.text.includes("Tool Call"))
-    .map(e => e.text.match(/Tool Call\] (\w+)/)?.[1] || "?");
-}
-
-async function executeAction(action: Step["action"]): Promise<any> {
-  switch (action.type) {
-    case "api":
-      return api(action.method, action.path, action.body);
-    case "sequence": {
-      let lastResult: any;
-      for (const step of action.steps) {
-        lastResult = await api(step.method, step.path, step.body);
-        await sleep(1000);
-      }
-      return lastResult;
-    }
-    case "eval_iframe": {
-      // Execute code on the stage iframe via evaluate API
-      return api("POST", "/api/screen/iframe/eval", { code: action.code });
-    }
-  }
-}
-
-async function runStep(step: Step): Promise<StepResult> {
-  const result: StepResult = {
-    name: step.name,
-    actionOk: false,
-    actionResult: null,
-    voiceResponse: "",
-    toolsCalled: [],
+async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<TestResult> {
+  const start = Date.now();
+  const result: TestResult = {
+    id: test.id, toolCalled: false, toolName: "none",
+    logMatch: false, voiceMatch: false, voiceText: "", durationMs: 0,
   };
 
   try {
-    // Voice before action (default) or action first
-    if (step.voice && !step.voiceAfterAction) {
-      // Inject context first, then do action, then send voice
+    // Send voice command (the ONLY way to drive action)
+    await api("POST", "/api/voice/text", { text: test.voice });
+
+    // Wait for CallingClaw to process
+    await sleep(test.timeoutMs);
+
+    // Collect evidence
+    const entries = await getTranscript(20);
+    const newEntries = entries.filter(e => e.ts > transcriptBefore);
+    const log = await getBackendLog(30);
+
+    // Check: did the expected tool get called?
+    const toolCalls = newEntries
+      .filter(e => e.role === "system" && e.text.includes("Tool Call"))
+      .map(e => e.text.match(/Tool Call\] (\w+)/)?.[1] || "");
+    result.toolName = toolCalls.join(",") || "none";
+    result.toolCalled = toolCalls.some(t => t === test.expectTool);
+
+    // Also check TranscriptAuditor executed (it doesn't show as Tool Call in transcript)
+    if (!result.toolCalled) {
+      result.toolCalled = test.expectLog.test(log);
+      if (result.toolCalled) result.toolName = `auditor:${test.expectTool}`;
     }
 
-    // Execute action
-    result.actionResult = await executeAction(step.action);
-    result.actionOk = step.verify(result.actionResult);
+    // Check: did the log pattern match?
+    result.logMatch = test.expectLog.test(log);
 
-    // Send voice command (if any)
-    if (step.voice) {
-      await sleep(1000); // Let action settle
-      await api("POST", "/api/voice/text", { text: step.voice });
-    }
+    // Check: did the voice response match?
+    const aiResponses = newEntries.filter(e => e.role === "assistant");
+    result.voiceText = aiResponses.map(e => e.text).join(" ");
+    result.voiceMatch = test.expectVoice.test(result.voiceText);
 
-    // Wait for AI to process
-    await sleep(step.waitMs);
-
-    // Collect results
-    result.voiceResponse = await getLatestAIResponse();
-    result.toolsCalled = await getToolCalls(3);
   } catch (e: any) {
     result.error = e.message;
   }
 
+  result.durationMs = Date.now() - start;
   return result;
 }
 
@@ -259,116 +243,110 @@ async function runStep(step: Step): Promise<StepResult> {
 // ══════════════════════════════════════════════════════════════
 
 async function main() {
+  // --results flag: just print history and exit
+  if (process.argv.includes("--results")) { printHistory(); return; }
+
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║  CallingClaw AutoEval — E2E Presentation Test              ║
-║  autoresearch pattern: isolated, iterable, measurable      ║
+║  CallingClaw AutoEval — Voice-Driven E2E Test              ║
+║  autoresearch: results.tsv + scoring + keep-or-discard     ║
 ╚════════════════════════════════════════════════════════════╝
+
+Experiment: ${EXPERIMENT}
+Meet URL:   ${MEET_URL}
+Tests:      ${VOICE_TESTS.length}
 `);
 
   // Pre-check
   const status = await api("GET", "/api/status");
   if (status.callingclaw !== "running") { console.error("❌ Backend not running"); process.exit(1); }
-  console.log(`[${ts()}] Backend v${status.version}, voice=${status.voiceSession?.connected}\n`);
+  console.log(`[${now()}] Backend v${status.version}\n`);
 
-  // Print known bugs
-  console.log("Known Bugs:");
-  for (const b of KNOWN_BUGS) {
-    console.log(`  ${b.status === "FIXED" ? "✅" : "🔴"} ${b.id}: ${b.desc}`);
+  // Known bugs
+  const openBugs = KNOWN_BUGS.filter(b => b.status === "OPEN");
+  if (openBugs.length > 0) {
+    console.log(`Open bugs (${openBugs.length}):`);
+    for (const b of openBugs) console.log(`  🔴 ${b.id}: ${b.desc}`);
+    console.log("");
   }
-  console.log("");
 
   // Join meeting
-  console.log(`[${ts()}] Joining ${MEET_URL}...`);
+  console.log(`[${now()}] Joining meeting...`);
   const join = await api("POST", "/api/meeting/join", {
-    url: MEET_URL, provider: "openai", topic: "CallingClaw E2E Experiment",
+    url: MEET_URL, provider: "openai", topic: EXPERIMENT,
   });
-  if (!join.success) { console.error(`❌ Join failed: ${JSON.stringify(join)}`); process.exit(1); }
-  console.log(`[${ts()}] ✅ Joined (voice=${join.voice}, audio=${join.audio_mode})\n`);
-  await sleep(4000);
+  if (!join.success) { console.error(`❌ Join: ${JSON.stringify(join)}`); process.exit(1); }
+  console.log(`[${now()}] ✅ Joined (voice=${join.voice})\n`);
+  await sleep(5000);
 
-  // Inject test context into voice
-  await api("POST", "/api/voice/inject", { text: VOICE_TEST_CONTEXT });
-  console.log(`[${ts()}] Test context injected\n`);
+  // Run voice tests
+  const results: TestResult[] = [];
+  const allStart = Date.now();
 
-  // Run steps
-  const results: StepResult[] = [];
-  const startTime = Date.now();
+  for (const test of VOICE_TESTS) {
+    const transcriptTs = Date.now();
+    console.log(`[${now()}] 🎤 ${test.id}: "${test.voice}"`);
 
-  for (const step of STEPS) {
-    console.log(`[${ts()}] ⏳ ${step.name}`);
-    const r = await runStep(step);
+    const r = await runVoiceTest(test, transcriptTs);
     results.push(r);
 
-    const actionStatus = r.actionOk ? "✅" : "❌";
-    const hasVoice = r.voiceResponse && r.voiceResponse !== "(no response)";
-    console.log(`[${ts()}]   Action: ${actionStatus} ${JSON.stringify(r.actionResult)?.slice(0, 80)}`);
-    if (hasVoice) {
-      console.log(`[${ts()}]   Voice: ${r.voiceResponse.slice(0, 100)}`);
-    }
-    if (r.toolsCalled.length > 0) {
-      console.log(`[${ts()}]   Tools: ${r.toolsCalled.join(", ")}`);
-    }
-    if (r.error) {
-      console.log(`[${ts()}]   Error: ${r.error}`);
-    }
+    const toolIcon = r.toolCalled ? "✅" : "❌";
+    const voiceIcon = r.voiceMatch ? "✅" : "❌";
+    console.log(`[${now()}]   Tool: ${toolIcon} ${r.toolName}  Voice: ${voiceIcon}`);
+    if (r.voiceText) console.log(`[${now()}]   AI: "${r.voiceText.slice(0, 80)}"`);
+    if (r.error) console.log(`[${now()}]   Error: ${r.error}`);
     console.log("");
 
-    // Check if meeting ended
+    // Early exit if meeting ended
     const s = await api("GET", "/api/status");
-    if (s.meeting === "idle") break;
+    if (s.meeting === "idle") { console.log(`[${now()}] Meeting ended\n`); break; }
   }
 
-  // Ensure leave
+  // Leave if still in meeting
   const finalStatus = await api("GET", "/api/status");
   if (finalStatus.meeting !== "idle") {
     await api("POST", "/api/meeting/leave");
   }
 
-  // ── Results Summary ──
-  const duration = Math.round((Date.now() - startTime) / 1000);
-  const passed = results.filter(r => r.actionOk).length;
-  const total = results.length;
-  const allTools = new Set(results.flatMap(r => r.toolsCalled));
-  const allVoice = results.filter(r => r.voiceResponse && r.voiceResponse !== "(no response)").length;
+  // ── Score (autoresearch's val_bpb equivalent) ──
+  const { total, breakdown } = scoreResults(results);
+  const duration = Math.round((Date.now() - allStart) / 1000);
 
-  console.log(`
-══════════════════════════════════════════════════════════════
-  EXPERIMENT RESULTS
-══════════════════════════════════════════════════════════════
-  Duration:    ${duration}s
-  Steps:       ${passed}/${total} passed
-  Voice:       ${allVoice}/${total} responded
-  Tools seen:  ${[...allTools].join(", ") || "none"}
-══════════════════════════════════════════════════════════════
+  // ── Print results ──
+  console.log(`═══════════════════════════════════════════`);
+  console.log(`  SCORE: ${total}%  (${breakdown})`);
+  console.log(`  Duration: ${duration}s`);
+  console.log(`═══════════════════════════════════════════\n`);
 
-  Step Results:
-`);
   for (const r of results) {
-    const icon = r.actionOk ? "✅" : "❌";
-    const voice = r.voiceResponse?.slice(0, 60) || "-";
-    console.log(`  ${icon} ${r.name} — voice: "${voice}"`);
+    const t = r.toolCalled ? "✅" : "❌";
+    const v = r.voiceMatch ? "✅" : "❌";
+    console.log(`  ${r.id}: tool${t} voice${v}  ${r.toolName}  "${r.voiceText.slice(0, 50)}"`);
   }
 
-  console.log(`
-  New Bugs Found This Run:
-  (manually add to KNOWN_BUGS after investigation)
-`);
+  // ── Persist to results.tsv (autoresearch's keep-or-discard log) ──
+  const failedTests = results.filter(r => !r.toolCalled || !r.voiceMatch).map(r => r.id).join(",");
+  appendResult(total, breakdown, EXPERIMENT, failedTests || "all_pass");
+  console.log(`\n📊 Results appended to ${RESULTS_FILE}`);
 
-  // Check for new issues
-  const issues: string[] = [];
-  for (const r of results) {
-    if (!r.actionOk) issues.push(`${r.name}: action failed — ${JSON.stringify(r.actionResult)?.slice(0, 100)}`);
-    if (r.voiceResponse === "(no response)") issues.push(`${r.name}: voice model did not respond`);
-  }
-  if (issues.length === 0) {
-    console.log("  🎉 No new issues!\n");
-  } else {
-    for (const issue of issues) {
-      console.log(`  🔴 ${issue}`);
+  // ── Print decision: keep or discard? ──
+  // Read previous score to compare
+  try {
+    const lines = require("fs").readFileSync(RESULTS_FILE, "utf-8").trim().split("\n");
+    if (lines.length >= 3) {
+      const prev = lines[lines.length - 2]!.split("\t");
+      const prevScore = parseInt(prev[2]!) || 0;
+      if (total > prevScore) {
+        console.log(`\n🟢 IMPROVED: ${prevScore}% → ${total}% (+${total - prevScore}). KEEP this change.`);
+      } else if (total === prevScore) {
+        console.log(`\n🟡 SAME: ${total}%. No improvement.`);
+      } else {
+        console.log(`\n🔴 REGRESSED: ${prevScore}% → ${total}% (${total - prevScore}). Consider REVERTING.`);
+      }
     }
-    console.log("");
-  }
+  } catch {}
+
+  console.log("");
 }
 
 main().catch(err => {
