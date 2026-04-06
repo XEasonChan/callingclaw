@@ -603,10 +603,17 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
 
           // Default: share screen with full page (opens Meeting Stage if no URL)
           // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
+          let shareResult: { success: boolean; message: string } = { success: false, message: "No launcher" };
           if (deps.chromeLauncher) {
-            await deps.chromeLauncher.shareScreen(shareUrl || undefined);
+            shareResult = await deps.chromeLauncher.shareScreen(shareUrl || undefined);
           } else {
-            await meetJoiner.shareScreen();
+            const ok = await meetJoiner.shareScreen();
+            shareResult = { success: ok, message: ok ? "Sharing (legacy)" : "Failed (legacy)" };
+          }
+
+          // If share failed, tell the voice model immediately — don't proceed as if it worked
+          if (!shareResult.success) {
+            return `Screen share failed: ${shareResult.message}. Try again or check screen recording permission.`;
           }
 
           // ── Presentation mode: sync voice with screen actions ──

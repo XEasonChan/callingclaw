@@ -298,7 +298,16 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           const kws = query.toLowerCase().split(/[\s/\\._-]+/).filter((w: string) => w.length > 1);
           if (kws.length === 0) return "No search keywords provided.";
 
-          // ── Scoring: fuzzy match with bonus for all-keyword matches ──
+          // ── Build prep description index for scoring ──
+          // Allows matching "launch video script" → description "Personal 视频完整分镜脚本"
+          const prepDescriptions = new Map<string, string>();
+          if (prepBrief) {
+            for (const f of (prepBrief.filePaths || [])) {
+              prepDescriptions.set(f.path, f.description || "");
+            }
+          }
+
+          // ── Scoring: fuzzy match with description + filename + path ──
           type ScoredFile = { path: string; score: number; tier: number };
           const scored: ScoredFile[] = [];
           const seen = new Set<string>();
@@ -308,21 +317,25 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
             seen.add(filePath);
             const name = filePath.toLowerCase().split("/").pop() || "";
             const fullLower = filePath.toLowerCase();
+            const desc = (prepDescriptions.get(filePath) || "").toLowerCase();
             let score = 0;
             let matched = 0;
             for (const kw of kws) {
               if (name.includes(kw)) { score += 10; matched++; }       // filename match (strong)
+              else if (desc.includes(kw)) { score += 8; matched++; }   // description match (strong, from prep)
               else if (fullLower.includes(kw)) { score += 3; matched++; } // path match (weak)
             }
             if (matched === 0) return;
             // Bonus: all keywords matched → strong relevance signal
             if (matched === kws.length) score += 20;
+            // Partial match bonus: >60% keywords matched
+            if (matched >= kws.length * 0.6 && matched < kws.length) score += 10;
             // Tier bonus: prep files rank higher
             if (tier === 1) score += 15;
             scored.push({ path: filePath, score, tier });
           }
 
-          // Score tier 1 (prep resources)
+          // Score tier 1 (prep resources — now with description matching)
           for (const f of tier1Files) scoreFile(f, 1);
 
           // Score tier 2 (workspace dirs)
@@ -414,14 +427,40 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                 break;
               }
               case "scroll":
-              case "scroll_down":
-                await cl.evaluateOnPresentingPage(`window.scrollBy(0, ${target === "up" ? -600 : 600})`);
-                actionResult = `Scrolled ${target || "down"}.`;
+              case "scroll_down": {
+                // Scroll by one viewport height (not fixed 600px) and return actual position
+                const scrollInfo = await cl.evaluateOnPresentingPage(`(() => {
+                  var vh = window.innerHeight;
+                  var dir = ${JSON.stringify(target)} === "up" ? -1 : 1;
+                  window.scrollBy(0, dir * Math.round(vh * 0.75));
+                  return JSON.stringify({
+                    scrollY: Math.round(window.scrollY),
+                    scrollMax: Math.round(document.documentElement.scrollHeight - window.innerHeight),
+                    viewportH: vh,
+                    pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100)
+                  });
+                })()`);
+                try {
+                  const info = JSON.parse(String(scrollInfo));
+                  actionResult = `Scrolled ${target || "down"}. Position: ${info.pct}% (${info.scrollY}/${info.scrollMax}px).`;
+                } catch {
+                  actionResult = `Scrolled ${target || "down"}.`;
+                }
                 break;
-              case "scroll_up":
-                await cl.evaluateOnPresentingPage(`window.scrollBy(0, -600)`);
-                actionResult = "Scrolled up.";
+              }
+              case "scroll_up": {
+                const upInfo = await cl.evaluateOnPresentingPage(`(() => {
+                  window.scrollBy(0, -Math.round(window.innerHeight * 0.75));
+                  return JSON.stringify({ scrollY: Math.round(window.scrollY), pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100) });
+                })()`);
+                try {
+                  const info = JSON.parse(String(upInfo));
+                  actionResult = `Scrolled up. Position: ${info.pct}% (${info.scrollY}px).`;
+                } catch {
+                  actionResult = "Scrolled up.";
+                }
                 break;
+              }
               case "navigate":
                 if (!target) return "Provide a URL to navigate to.";
                 await cl.navigatePresentingPage(target);
