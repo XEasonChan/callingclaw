@@ -601,11 +601,42 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // Default: share screen with full page (opens Meeting Stage if no URL)
+          // Default: share screen with full page
+          // NEVER share an empty Meeting Stage — resolve content first.
+          let resolvedShareUrl = shareUrl;
+
+          if (!resolvedShareUrl && deps.chromeLauncher) {
+            // Try to find presentable content from prep brief
+            const brief = meetingPrepSkill?.currentBrief;
+
+            // 1. Check scenes[] for a URL (presentation.json scenes)
+            const sceneUrl = brief?.scenes?.find(s => s.url)?.url;
+            // 2. Check filePaths[] for a local .html file
+            const htmlFile = brief?.filePaths?.find(f => /\.html?$/i.test(f.path));
+
+            if (sceneUrl) {
+              // Scene URL found — load it into Stage iframe, then share the Stage
+              const sceneResolved = sceneUrl.startsWith("/")
+                ? `http://localhost:${CONFIG.port}${sceneUrl}` : sceneUrl;
+              await deps.chromeLauncher.loadSlideFrame(sceneResolved);
+              // Share the Stage (which now has content in its iframe)
+              resolvedShareUrl = "";  // will become /stage via shareScreen() default
+            } else if (htmlFile) {
+              // Local HTML file — load it into Stage iframe, then share the Stage
+              const htmlResolved = htmlFile.path.startsWith("/")
+                ? `http://localhost:${CONFIG.port}${htmlFile.path}` : htmlFile.path;
+              await deps.chromeLauncher.loadSlideFrame(htmlResolved);
+              resolvedShareUrl = "";  // will become /stage via shareScreen() default
+            } else {
+              // No content available — refuse to share an empty stage
+              return "No content to present. Specify a URL or prepare presentation materials first.";
+            }
+          }
+
           // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
           let shareResult: { success: boolean; message: string } = { success: false, message: "No launcher" };
           if (deps.chromeLauncher) {
-            shareResult = await deps.chromeLauncher.shareScreen(shareUrl || undefined);
+            shareResult = await deps.chromeLauncher.shareScreen(resolvedShareUrl || undefined);
           } else {
             const ok = await meetJoiner.shareScreen();
             shareResult = { success: ok, message: ok ? "Sharing (legacy)" : "Failed (legacy)" };
