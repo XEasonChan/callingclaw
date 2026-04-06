@@ -3423,14 +3423,18 @@ STEP-BY-STEP FLOW:
           try {
             const px = body.pixels || 500;
             const dir = body.direction === "up" ? -px : px;
-            const iframeResult = await services.chromeLauncher.evaluateOnSlideFrame(`
-              window.scrollBy({ top: ${dir}, behavior: 'smooth' });
+            // Scroll inside the iframe's contentDocument
+            const iframeResult = await services.chromeLauncher.evaluateOnPresentingPage(`(() => {
+              var iframe = document.getElementById('slideFrame');
+              if (!iframe || !iframe.contentDocument) return JSON.stringify({ error: 'no iframe access' });
+              var doc = iframe.contentDocument;
+              doc.documentElement.scrollBy({ top: ${dir}, behavior: 'smooth' });
               return JSON.stringify({
-                scrollY: Math.round(window.scrollY),
-                scrollMax: Math.round(document.documentElement.scrollHeight - window.innerHeight),
-                pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100)
+                scrollY: Math.round(doc.documentElement.scrollTop),
+                scrollMax: Math.round(doc.documentElement.scrollHeight - iframe.clientHeight),
+                pct: Math.round(doc.documentElement.scrollTop / Math.max(1, doc.documentElement.scrollHeight - iframe.clientHeight) * 100)
               });
-            `);
+            })()`);
             const info = iframeResult ? JSON.parse(String(iframeResult)) : null;
             return Response.json({
               success: true,
