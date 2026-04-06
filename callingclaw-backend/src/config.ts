@@ -55,6 +55,11 @@ export const CONFIG = {
   // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
   voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "openai15" | "grok" | "gemini",
 
+  // Transcription language hints (ISO 639-1 codes, comma-separated)
+  // "auto" = detect from transcript; "zh,en" = Chinese + English bilingual
+  // Used by OpenAI Realtime transcription + SenseVoice
+  transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "zh,en") as string,
+
   // OpenAI (Realtime GA — gpt-realtime-1.5, upgraded from legacy preview)
   // Uses GA API: no beta header, new event names, session.type required.
   // Override with OPENAI_REALTIME_MODEL env var to pin a specific version.
