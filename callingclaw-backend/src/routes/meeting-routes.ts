@@ -178,7 +178,77 @@ export function meetingRoutes(services: Services): RouteHandler {
               console.warn(`[Meeting] Failed to read prep file from disk: ${e.message}`);
             }
           }
-        } else if (services.meetingPrepSkill && services.agentAdapter?.connected) {
+        }
+
+        // Load presentation script if a prep JSON exists (speakingPlan + scenes)
+        // This powers PRESENTER mode — voice follows the plan, shares screen, scrolls in sync
+        if (!prepBrief?.speakingPlan && services.meetingPrepSkill) {
+          const { homedir } = require("os");
+          const { existsSync } = require("fs");
+          // Look for prep JSON: cc_{meetingId}_prep.json or by topic match
+          const sharedDir = `${homedir()}/.callingclaw/shared`;
+          const prepJsonCandidates = [
+            // Same session ID as prep markdown: cc_{id}_prep.json
+            session.files?.prep?.replace(/_prep\.md$/, "_prep.json"),
+            // Session-specific presentation script
+            `${sharedDir}/${meetingId}_presentation.json`,
+            // Topic-based fallback (for manually created prep scripts)
+            ...(() => {
+              try {
+                const fs = require("fs");
+                return fs.readdirSync(sharedDir)
+                  .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"))
+                  .map((f: string) => `${sharedDir}/${f}`);
+              } catch { return []; }
+            })(),
+          ].filter(Boolean);
+          for (const jsonPath of prepJsonCandidates) {
+            try {
+              if (jsonPath && existsSync(jsonPath)) {
+                const prepData = JSON.parse(await Bun.file(jsonPath).text());
+                if (prepData.speakingPlan && prepData.scenes) {
+                  // Merge presentation data into the brief
+                  if (!prepBrief) {
+                    prepBrief = {
+                      topic: prepData.topic || meetTopic,
+                      goal: prepData.goal || "",
+                      generatedAt: Date.now(),
+                      summary: "",
+                      keyPoints: [],
+                      architectureDecisions: [],
+                      expectedQuestions: [],
+                      filePaths: prepData.filePaths || [],
+                      browserUrls: prepData.browserUrls || [],
+                      folderPaths: [],
+                      attendees: [],
+                      liveNotes: [],
+                      speakingPlan: prepData.speakingPlan,
+                      scenes: prepData.scenes,
+                      decisionPoints: prepData.decisionPoints || [],
+                    };
+                    services.meetingPrepSkill.setBrief(prepBrief);
+                  } else {
+                    prepBrief.speakingPlan = prepData.speakingPlan;
+                    prepBrief.scenes = prepData.scenes;
+                    if (prepData.decisionPoints) prepBrief.decisionPoints = prepData.decisionPoints;
+                    if (prepData.filePaths) prepBrief.filePaths = [...(prepBrief.filePaths || []), ...prepData.filePaths];
+                  }
+                  console.log(`[Meeting] Loaded presentation script: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes`);
+                  // Re-inject with playbook context now that speakingPlan exists
+                  if (services.realtime.connected) {
+                    injectMeetingBrief(services.realtime, prepBrief);
+                    console.log("[Meeting] Layer 2 re-injected with presentation script");
+                  }
+                  break;
+                }
+              }
+            } catch (e: any) {
+              console.warn(`[Meeting] Failed to load prep JSON: ${e.message}`);
+            }
+          }
+        }
+
+        if (!prepBrief && services.meetingPrepSkill && services.agentAdapter?.connected) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
