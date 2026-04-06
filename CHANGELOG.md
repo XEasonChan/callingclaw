@@ -3,6 +3,24 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.8.13] - 2026-04-06
+
+### Added
+- **Claude Code Channels integration** — replace OpenClaw dispatch with Anthropic's first-party Telegram channel. CallingClaw events (meeting.ended, prep.ready) bridged into Claude Code sessions via custom MCP channel plugin. One-command setup: `./scripts/setup-claude-channels.sh`
+- **Page Agent DOM extraction** (`page-extract.ts`) — extracts page title, visible content, interactive elements with indices, and scroll position as compact text for voice AI. Replaces screenshot-based perception for presenting pages
+- **Presentation pipeline** — voice AI now sees live DOM content during screen sharing, uses `interact` tool to scroll/click/navigate while narrating. `presentationMode` synchronizes voice with screen actions
+- **OC-001 scenes/speakingPlan** — meeting prep now generates presentation outline with URL navigation order and talking points
+
+### Fixed
+- **VisionModule wrong tab** — `BrowserCaptureProvider` now prefers "CallingClaw Presenting" tab during screen sharing (was always capturing Meet grid view)
+- **ChromeLauncher tab focus** — `shareScreen()` switches focus to presenting tab after sharing starts (humans look at what they present, not the meeting room)
+- **BrowserCapture reconnect on presentation events** — EventBus `presentation.started/done` triggers CDP reconnect to correct tab
+- **Silent context handling** — Layer 0 system prompt now describes all context prefixes ([PAGE], [Screen], [CONTEXT], [DONE]) so voice AI absorbs them as background knowledge instead of reading aloud
+- **Context accumulation** — DOM injections use fixed ID (`replaceContext`) to replace previous state instead of filling the FIFO queue
+
+### Changed
+- **OpenClaw config** — removed expired OAuth subscription profile (`anthropic:manual`), set OpenRouter Opus 4.6 as default primary model
+
 ## [2.8.12] - 2026-04-04
 
 ### Added
