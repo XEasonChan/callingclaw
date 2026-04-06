@@ -116,6 +116,11 @@ async function main() {
   const responses: string[] = [];
   const sections = COMPILED.sections;
 
+  // Primer: establish the presentation framework before Section 1
+  client.inject(`[PRESENTATION] 你即将进行一个 ${sections.length} 部分的汇报，主题是"${COMPILED.topic}"。每次我会给你一个 [PRESENT NOW] 的内容块，你只讲那个部分的内容。不要自由发挥或编造数据，所有数字和事实都在提供的内容里。`);
+  const primerResponse = await client.chat("好的，我准备好了，请给我第一部分的内容");
+  console.log(`Primer: "${primerResponse.slice(0, 80)}..."\n`);
+
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
     const progress = `[PROGRESS] Section ${i + 1}/${sections.length}: "${section.title}". ${i > 0 ? `已讲完: ${sections.slice(0, i).map((s: any) => s.title).join(", ")}` : "这是第一部分。"}`;
@@ -131,9 +136,12 @@ async function main() {
       client.replace(progress, PROGRESS_ID);
     }
 
-    // 3. Trigger model to present (no user message — model should just start talking)
+    // 3. Wait for server to process the injected context before triggering response
+    await new Promise(r => setTimeout(r, 800));
+
+    // 4. Trigger model to present
     process.stdout.write(`Section ${i + 1}/${sections.length}: "${section.title}" ... `);
-    const response = await client.chat(`请继续介绍下一部分`);
+    const response = await client.chat(i === 0 ? `请介绍第一部分` : `好的，请继续介绍下一部分："${section.title}"`);
     responses.push(response);
     console.log(`${response.length} chars`);
     console.log(`  "${response.slice(0, 120)}..."\n`);

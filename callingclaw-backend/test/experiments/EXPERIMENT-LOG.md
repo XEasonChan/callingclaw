@@ -68,6 +68,16 @@
   - 验证：model 不重复已讲内容 + 知道自己在第几段
 - **Status**: IN PROGRESS
 
+### EXP-7C-run4: BREAKTHROUGH — Primer message fixes hallucination ⭐
+- **Date**: 2026-04-06
+- **Result**: Section 1-6 ALL correctly use injected content (was 3-5 only)
+- **Fix**: Added primer message before Section 1: "你即将进行N部分汇报，只讲提供的内容"
+- **Pika pricing**: ✅ "每分钟0.5美金，一小时30美金，对比我们19.99买断" — first time correct!
+- **Interruption**: ✅ Correct answer + resume signal
+- **No repetition**: ✅
+- **Relevance**: 5/6 (Section 6 too short, timeout issue)
+- **Key learning**: Realtime model needs explicit framework primer before multi-turn injection. Without it, model halluccinates for first 2 turns.
+
 ### EXP-7D: Agent Pipeline Simulation (NEXT NEXT)
 - **Goal**: 测试 Realtime transcript → Haiku intent 识别 → 点击/滚动执行
 - **Approach**: 模拟完整链路：
