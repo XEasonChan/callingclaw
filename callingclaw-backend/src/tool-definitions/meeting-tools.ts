@@ -645,18 +645,53 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // ── If already sharing, navigate instead of opening new tab ──
+          // ── If already sharing, load into Stage iframe or navigate tab ──
           if (resolvedShareUrl && deps.chromeLauncher?.presentingPage) {
             try {
+              // If presenting tab is on /stage, load content into iframe (preferred)
+              const currentUrl = String(deps.chromeLauncher.presentingPage.url());
+              const isOnStage = currentUrl.includes("/stage");
+              const isLocalContent = resolvedShareUrl.startsWith("http://localhost") || resolvedShareUrl.startsWith("/");
+
+              if (isOnStage && isLocalContent) {
+                // Load into Stage iframe — keeps the Meeting Stage layout with dual panels
+                const loaded = await deps.chromeLauncher.loadSlideFrame(resolvedShareUrl);
+                if (loaded) {
+                  console.log(`[share_screen] Loaded into Stage iframe: ${resolvedShareUrl}`);
+                  // Extract DOM from IFRAME for voice context
+                  const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
+                  // Wait for iframe to render
+                  await new Promise(r => setTimeout(r, 1500));
+                  const raw = await deps.chromeLauncher.evaluateOnSlideFrame(`
+                    var body = document.body;
+                    return body ? body.innerText.slice(0, 2000) : '';
+                  `);
+                  if (raw && deps.voice) {
+                    deps.voice.replaceContext(`[PAGE] Stage iframe content:\n${String(raw).slice(0, 1500)}`, PAGE_CONTEXT_ID);
+                  }
+                  if (deps.voice) deps.voice.presentationMode = true;
+                  return `Loaded into Meeting Stage: ${resolvedShareUrl}. The document is showing in the left panel. Describe what you see.`;
+                }
+                // loadSlideFrame failed — fall through to navigate
+                console.warn(`[share_screen] loadSlideFrame failed, falling through to navigate`);
+              }
+
+              // Navigate the presenting tab directly (for external URLs or when Stage isn't active)
               await deps.chromeLauncher.navigatePresentingPage(resolvedShareUrl);
               console.log(`[share_screen] Navigated presenting tab to ${resolvedShareUrl} (reused tab)`);
-              // Re-extract DOM for voice context
+              // Re-extract DOM to verify page loaded + give voice context
+              await new Promise(r => setTimeout(r, 1000)); // wait for page render
               const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
               const raw = await deps.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
               const pageCtx = formatPageContext(raw);
-              if (pageCtx && deps.voice) deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+              if (pageCtx && deps.voice) {
+                deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+                deps.voice.presentationMode = true;
+                return `Now presenting: ${resolvedShareUrl}. Describe what you see on the page.`;
+              }
+              // DOM empty — page didn't load properly
               if (deps.voice) deps.voice.presentationMode = true;
-              return `Now presenting: ${resolvedShareUrl}. Describe what you see on the page.`;
+              return `Navigated to ${resolvedShareUrl} but page content not yet visible. Wait a moment then try scrolling.`;
             } catch (e: any) {
               console.warn(`[share_screen] Navigate failed, falling through to new share: ${e.message}`);
             }
