@@ -56,6 +56,27 @@
 - **Diagnosis**: Model prioritizes narrative over data. Need to add key_points as mandatory callouts.
 - **Next**: Add "[MUST MENTION]" prefix for key_points in injection prompt
 
+### EXP-7B-run3~6: Prompt Iteration (Natural PM Style)
+- **Runs**: 6 total, scores: 80 → 82 → 71 → 76 → 67 → 66
+- **Learning**: Prompt 措辞优化 ROI 递减。Why-What-How 结构 prompt 让回复模板化，Natural PM 风格更好但 eval 分数反而低（eval matcher 太严格）
+- **Decision**: 停止 prompt 措辞迭代。转向验证注入机制 + agent 链路
+
+### EXP-7C: Multi-turn Injection Test (NEXT)
+- **Goal**: 验证 compiled script 能否通过 replaceContext 逐段可靠注入
+- **Approach**: 用 Realtime 1.5 text mode 跑 6 段连续 presentation：
+  - Section 1 注入 → model 回复 → 验证收到 → 替换为 Section 2 → model 回复 → ...
+  - 验证：model 不重复已讲内容 + 知道自己在第几段
+- **Status**: IN PROGRESS
+
+### EXP-7D: Agent Pipeline Simulation (NEXT NEXT)
+- **Goal**: 测试 Realtime transcript → Haiku intent 识别 → 点击/滚动执行
+- **Approach**: 模拟完整链路：
+  1. Realtime model 产出 transcript（文字模式）
+  2. 把 transcript 推给 Haiku 做 intent classification
+  3. 验证 Haiku 识别到 "点击 Features" → 输出 interact(click, Features)
+  4. 执行结果（DOM 变化）反馈给 Realtime
+- **Status**: QUEUED
+
 ## Learnings
 
 1. **gpt-realtime-1.5 支持纯文本模式** — `output_modalities: ["text"]`，可以做快速 eval
