@@ -843,10 +843,15 @@ Respond with JSON only:
           }
         }
 
-        // 3. THE MISSING PIECE: trigger voice model to process result and continue
-        //    Without this, voice sits silent after auditor executes an action.
-        this.voice.sendEvent("response.create", {});
-        console.log(`[TranscriptAuditor] Triggered voice response after ${action}`);
+        // 3. Trigger voice model to process result and continue
+        //    BUT only if it's not already speaking/thinking (prevents response.create spam → repetition)
+        const voiceState = this.voice.audioState;
+        if (voiceState === "listening" || voiceState === "idle") {
+          this.voice.sendEvent("response.create", {});
+          console.log(`[TranscriptAuditor] Triggered voice response after ${action} (was ${voiceState})`);
+        } else {
+          console.log(`[TranscriptAuditor] Skipped response.create — voice is ${voiceState}`);
+        }
       }
 
       console.log(
