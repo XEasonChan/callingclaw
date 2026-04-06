@@ -829,16 +829,36 @@ export class RealtimeClient {
   }
 
   private _lastResponseCreateTs = 0;
+  private _pendingResponseCreate: any | null = null;  // Queued response.create waiting for speech to finish
+  private _isSpeaking = false;
+
+  /** Set by VoiceModule when audio state changes */
+  setSpeaking(speaking: boolean) { this._isSpeaking = speaking; }
+
+  /** Flush pending response.create — call when audio state leaves "speaking" */
+  flushPendingResponse() {
+    if (this._pendingResponseCreate) {
+      const pending = this._pendingResponseCreate;
+      this._pendingResponseCreate = null;
+      console.log(`[Realtime] Flushing queued response.create`);
+      this.sendEvent("response.create", pending);
+    }
+  }
 
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
 
-    // Debounce response.create — prevents rapid-fire from multiple sources
-    // 500ms is enough to catch double-triggers but not block user interaction
+    // Queue response.create if AI is currently speaking — don't cancel mid-sentence
     if (type === "response.create") {
       const now = Date.now();
+      // Debounce: skip if <500ms since last
       if (now - this._lastResponseCreateTs < 500) {
-        console.log(`[Realtime] response.create debounced (${now - this._lastResponseCreateTs}ms since last)`);
+        return true;
+      }
+      // Queue if speaking (set by VoiceModule via setSpeaking)
+      if (this._isSpeaking) {
+        this._pendingResponseCreate = data;
+        console.log(`[Realtime] response.create queued (AI is speaking)`);
         return true;
       }
       this._lastResponseCreateTs = now;

@@ -109,6 +109,8 @@ export class VoiceModule {
       const prev = this._audioState;
       this._audioState = state;
       this._audioStateTs = Date.now();
+      // Sync speaking state to client for response.create queue management
+      this.client.setSpeaking(state === "speaking");
       console.log(`[Voice] Audio state: ${prev} → ${state}`);
     }
   }
@@ -257,6 +259,8 @@ export class VoiceModule {
       this._tracer.mark('ttsPlaybackEnd');
       this._tracer.endTurn();
       this._setAudioState("listening");
+      // Flush any queued response.create that was waiting for speech to finish
+      this.client.flushPendingResponse();
     });
 
     this.client.on("response.done", (event: any) => {
@@ -364,7 +368,7 @@ export class VoiceModule {
             // Gemini auto-responds to context; response.create is a no-op
             this.client.injectContext(`[SYSTEM] You just started the "${name}" tool. Briefly acknowledge you're working on it, one short sentence.`);
           } else {
-            // OpenAI / Grok: response.create with instructions for contextual filler
+            // OpenAI / Grok: filler response (queued automatically if speaking)
             this.client.sendEvent("response.create", {
               response: {
                 instructions: `You just called the "${name}" tool. Briefly and naturally acknowledge you're working on it. One short sentence. Match the conversation language.`,
@@ -383,11 +387,9 @@ export class VoiceModule {
               });
               // Auto-inject screenshot if this was a visual tool (perception-action loop)
               this._feedbackScreenshot(name).catch(() => {});
-              // Trigger model to process the result and decide next action.
-              // Without this, the model sees the context but won't speak or call another tool.
-              // This is what closes the agent loop for slow tools.
+              // Trigger model to process the result — queued if AI is speaking
               this.client.sendEvent("response.create", {});
-              console.log(`[Voice] Slow tool ${name} completed async → triggered response`);
+              console.log(`[Voice] Slow tool ${name} completed async → response.create sent`);
             }).catch((e: any) => {
               this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
               this.context.addTranscript({
@@ -395,8 +397,9 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: Error: ${e.message}`,
                 ts: Date.now(),
               });
+              // Queued automatically if speaking
               this.client.sendEvent("response.create", {});
-              console.error(`[Voice] Slow tool ${name} failed → triggered response:`, e.message);
+              console.error(`[Voice] Slow tool ${name} failed:`, e.message);
             });
           }
         }
