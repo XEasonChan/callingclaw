@@ -54,6 +54,7 @@ export class VoiceModule {
   private _audioState: AudioState = "idle";
   private _audioStateTs: number = 0;
   private _presentationMode = false;
+  private _lastAudioOutputTs: number = 0;  // When AI last produced audio (for echo debounce)
 
   // Heard transcript tracking (interruption truncation)
   private _currentResponseAudioSamples = 0;  // Total samples received from provider
@@ -141,6 +142,16 @@ export class VoiceModule {
 
     // ── Audio State + Interruption: User starts speaking ──
     this.client.on("input_audio_buffer.speech_started", () => {
+      // Echo debounce: if AI was speaking and speech_started fires very soon after
+      // last audio output, this is likely echo (AI's own voice looping back via Meet).
+      // In presentation mode, use a longer debounce to avoid self-interruption.
+      const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
+      const echoThresholdMs = this._presentationMode ? 2000 : 800;
+      if (this._audioState === "speaking" && msSinceLastOutput < echoThresholdMs) {
+        console.log(`[Voice] Echo debounce: speech_started ${msSinceLastOutput}ms after last audio output (threshold: ${echoThresholdMs}ms) — ignoring`);
+        return; // Skip this interruption — likely echo
+      }
+
       // Trace: mark interruption if AI was speaking, then start new turn
       if (this._audioState === "speaking") {
         this._tracer.mark('interruptionTime');
@@ -229,6 +240,9 @@ export class VoiceModule {
       const samples = Math.round(b64len * 3 / 4 / 2);
       this._currentResponseAudioSamples += samples;
       if (!this._currentResponseStartTime) this._currentResponseStartTime = Date.now();
+
+      // Track last audio output for echo debounce
+      this._lastAudioOutputTs = Date.now();
 
       // First audio chunk → transition to speaking
       if (this._audioState !== "speaking") {

@@ -106,7 +106,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
     maxSessionMinutes: 120,
   },
   defaultVoice: CONFIG.openai.voice,
-  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 800 },
+  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 1200 },
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
@@ -174,7 +174,7 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
     maxSessionMinutes: 120,
   },
   defaultVoice: CONFIG.openai15.voice,
-  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 800 },
+  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 1200 },
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
