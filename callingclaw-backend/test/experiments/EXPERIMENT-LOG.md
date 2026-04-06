@@ -2,7 +2,7 @@
 
 > autoresearch 风格：每轮实验有明确目标 → 执行 → 验证 → keep/revert → 下一轮
 
-## Current Score: 72% best (v2.8.14) | Latest: 33% (Chrome mid-session crash, not regression)
+## Current Score: 75% best (2497ad5) | Previous: 72% (v2.8.14)
 
 ## Latest Run (EXP-2 audio fix)
 - product_presentation: 83% (A-01~A-04 all pass) ✅
@@ -95,6 +95,14 @@
   - D-05 navigate vs share_url — same result, different tool name
 - **Bug found**: OpenAI chat completions REST API blocked (ConnectionRefused), but Realtime WebSocket works. Same OpenAI key, different protocol paths. Affects VisionModule fallback + any HTTP-based LLM calls.
 - **Next**: Fix D-02 scroll recognition + adjust eval to accept functional equivalents
+
+### Haiku + Transcript Pipeline Status (verified 2026-04-07)
+- **Intent classification**: ✅ Working — share_url/scroll/click/search/open all correct (0.92-0.95)
+- **File search**: ✅ "video-plan-overview" found and opened
+- **ContextRetriever**: ✅ Topic shift detection + keyword fallback 3/3
+- **DOM injection**: ✅ 191 chars injected after share_file
+- **Dedup**: ✅ Skipping duplicate actions
+- **Issues**: OpenRouter agentic search 400 error (falls back to keyword), DOM context too short (empty Stage page?)
 
 ### BUG-016: OpenAI REST API (chat/completions) ConnectionRefused
 - **Impact**: VisionModule gpt-4o-mini fallback, TranscriptAuditor Haiku calls (if via OpenRouter REST)
