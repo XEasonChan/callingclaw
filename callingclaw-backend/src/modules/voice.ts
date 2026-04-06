@@ -272,9 +272,11 @@ export class VoiceModule {
       if (this._audioState !== "idle") {
         this._setAudioState("listening");
       }
-      // NOW flush queued response.create — the full response (all audio segments) is done.
-      // Wait a brief moment to let the audio pipeline settle before starting a new response.
-      setTimeout(() => this.client.flushPendingResponse(), 300);
+      // Flush queued response.create after full response is done.
+      // 1000ms delay: let Meet's audio buffer finish playing the last few seconds
+      // of the response before starting a new one. Without this, the new response's
+      // audio overlaps with the tail of the previous one in Meet's playback buffer.
+      setTimeout(() => this.client.flushPendingResponse(), 1000);
     });
 
     // ── Live Transcript: User speech ──
