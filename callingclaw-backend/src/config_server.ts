@@ -946,6 +946,19 @@ export function startConfigServer(services: Services) {
         return Response.json({ ok: true }, { headers });
       }
 
+      // POST /api/voice/inject — Inject system context into voice session (no response trigger)
+      if (url.pathname === "/api/voice/inject" && req.method === "POST") {
+        const body = (await req.json()) as { text: string };
+        const id = services.realtime.injectContext(body.text);
+        return Response.json({ ok: true, id }, { headers });
+      }
+
+      // POST /api/voice/respond — Trigger voice model to generate a response
+      if (url.pathname === "/api/voice/respond" && req.method === "POST") {
+        services.realtime.sendEvent("response.create", {});
+        return Response.json({ ok: true }, { headers });
+      }
+
       // ══════════════════════════════════════════════════════════════
       // ── Computer Use API ──
       // ══════════════════════════════════════════════════════════════

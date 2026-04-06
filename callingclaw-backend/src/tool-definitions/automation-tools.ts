@@ -132,6 +132,29 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           required: ["action"],
         },
       },
+      // ── Presenting Tab Control (click/scroll/navigate on shared page) ──
+      {
+        name: "interact",
+        description:
+          "Control the presenting tab (the page you're sharing in Meet). " +
+          "Use this to click buttons, scroll through content, or navigate to a new URL while presenting. " +
+          "After each action, you'll receive updated [PAGE] context showing what's now visible.",
+        parameters: {
+          type: "object",
+          properties: {
+            action: {
+              type: "string",
+              enum: ["click", "scroll", "scroll_down", "scroll_up", "navigate"],
+              description: "Action to perform on presenting page",
+            },
+            target: {
+              type: "string",
+              description: "For click: button/link text to click. For scroll: 'up'/'down' or text to scroll to. For navigate: URL.",
+            },
+          },
+          required: ["action"],
+        },
+      },
     ],
 
     handler: async (name, args) => {
