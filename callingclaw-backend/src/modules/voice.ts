@@ -55,6 +55,8 @@ export class VoiceModule {
   private _audioStateTs: number = 0;
   private _presentationMode = false;
   private _lastAudioOutputTs: number = 0;  // When AI last produced audio (for echo debounce)
+  private _responseDone = false;   // response.done received (generation complete)
+  private _audioDone = false;      // response.audio.done received (playback complete)
 
   // Heard transcript tracking (interruption truncation)
   private _currentResponseAudioSamples = 0;  // Total samples received from provider
@@ -103,6 +105,25 @@ export class VoiceModule {
 
   /** Voice path tracer for observability metrics */
   get tracer(): VoiceTracer { return this._tracer; }
+
+  /**
+   * Flush queued response.create only when BOTH conditions are met:
+   * 1. response.done received (generation complete)
+   * 2. response.audio.done received (audio fully sent to client)
+   *
+   * This prevents new responses from interrupting audio still being played.
+   * OpenAI's response.done fires BEFORE audio.done — if we flush on response.done
+   * alone, the new response cancels the still-playing audio mid-sentence.
+   */
+  private _tryFlushAfterComplete() {
+    if (this._responseDone && this._audioDone) {
+      // Both done — safe to start next response
+      this._responseDone = false;
+      this._audioDone = false;
+      // 500ms settle delay for Meet's audio buffer
+      setTimeout(() => this.client.flushPendingResponse(), 500);
+    }
+  }
 
   private _setAudioState(state: AudioState) {
     if (this._audioState !== state) {
@@ -228,6 +249,9 @@ export class VoiceModule {
     this.client.on("response.created", () => {
       this._setAudioState("thinking");
       this._tracer.mark('modelFirstToken');
+      // Reset completion flags for new response
+      this._responseDone = false;
+      this._audioDone = false;
       // Reset heard-transcript counters for new response
       this._currentResponseAudioSamples = 0;
       this._currentResponseStartTime = 0;
@@ -259,8 +283,9 @@ export class VoiceModule {
       this._tracer.mark('ttsPlaybackEnd');
       this._tracer.endTurn();
       this._setAudioState("listening");
-      // DON'T flush here — audio.done fires per audio segment, not per full response.
-      // Flush on response.done instead (below) to avoid cutting off multi-part responses.
+      // Mark audio as done — flush only when BOTH audio.done AND response.done have fired
+      this._audioDone = true;
+      this._tryFlushAfterComplete();
     });
 
     this.client.on("response.done", (event: any) => {
@@ -272,11 +297,9 @@ export class VoiceModule {
       if (this._audioState !== "idle") {
         this._setAudioState("listening");
       }
-      // Flush queued response.create after full response is done.
-      // 1000ms delay: let Meet's audio buffer finish playing the last few seconds
-      // of the response before starting a new one. Without this, the new response's
-      // audio overlaps with the tail of the previous one in Meet's playback buffer.
-      setTimeout(() => this.client.flushPendingResponse(), 1000);
+      // Mark response generation as done — flush only when BOTH response.done AND audio.done
+      this._responseDone = true;
+      this._tryFlushAfterComplete();
     });
 
     // ── Live Transcript: User speech ──
