@@ -833,13 +833,13 @@ export class RealtimeClient {
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
 
-    // Global debounce for response.create — prevents multiple sources from
-    // triggering rapid consecutive responses (causes AI to repeat itself)
+    // Debounce response.create — prevents rapid-fire from multiple sources
+    // 500ms is enough to catch double-triggers but not block user interaction
     if (type === "response.create") {
       const now = Date.now();
-      if (now - this._lastResponseCreateTs < 2000) {
+      if (now - this._lastResponseCreateTs < 500) {
         console.log(`[Realtime] response.create debounced (${now - this._lastResponseCreateTs}ms since last)`);
-        return true; // pretend it was sent
+        return true;
       }
       this._lastResponseCreateTs = now;
     }
