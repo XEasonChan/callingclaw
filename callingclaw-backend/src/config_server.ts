@@ -1593,7 +1593,7 @@ export function startConfigServer(services: Services) {
 
         // Check for local presentation script (prep JSON with speakingPlan + scenes)
         // This enables PRESENTER mode without waiting for OpenClaw
-        if (services.meetingPrepSkill && !services.meetingPrepSkill.currentBrief?.speakingPlan) {
+        if (services.meetingPrepSkill && !(services.meetingPrepSkill.currentBrief?.speakingPlan?.length > 0)) {
           const { homedir } = require("os");
           const { existsSync, readdirSync } = require("fs");
           const sharedDir = `${homedir()}/.callingclaw/shared`;
