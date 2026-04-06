@@ -28,56 +28,131 @@ const LOG_DIR = resolve(import.meta.dir, "autoeval-logs");
 // ══════════════════════════════════════════════════════════════
 
 /** 当前实验描述（写入 results.tsv） */
-const EXPERIMENT = "voice-only: test intent→action pipeline via sendText";
+const EXPERIMENT = "scenario-eval: business presentation quality + action accuracy";
 
-/** 语音测试用例 — 只用 sendText 驱动，action 由 CallingClaw 自己执行 */
+/**
+ * 业务场景测试用例
+ *
+ * 评分维度 (每项 0-2 分):
+ *   tool:     工具是否被正确调用
+ *   content:  voice 回复是否有具体信息 (不是空话)
+ *   fluency:  是否连贯 (没有重复、没有中断问用户)
+ *   accuracy: 描述是否和实际页面匹配 (不是幻觉)
+ *   system:   系统是否健康 (Chrome alive, voice connected)
+ */
 const VOICE_TESTS: VoiceTest[] = [
+  // ── Scenario A: CallingClaw 产品介绍 (PRESENTER mode) ──
   {
-    id: "V-001",
-    voice: "帮我投屏 CallingClaw 官网",
+    id: "A-01",
+    scenario: "product_presentation",
+    voice: "现在帮我投屏 CallingClaw 官网，然后开始介绍 CallingClaw 是什么产品，它的核心定位是什么",
     expectTool: "share_screen",
-    expectLog: /ShareScreen.*Opened|share_screen/i,
-    expectVoice: /官网|网站|投屏|CallingClaw/,
-    timeoutMs: 20000,
+    expectLog: /share_screen|ShareScreen/i,
+    // Content quality: must mention specific product capabilities, not just "这是一个AI工具"
+    expectVoice: /会议|语音|实时|助手|加入|Meet/,
+    // Anti-patterns: must NOT contain these (empty filler)
+    rejectVoice: /需要我.*介绍|想了解.*更多|你可以告诉我/,
+    timeoutMs: 25000,
   },
   {
-    id: "V-002",
-    voice: "向下滚动页面，介绍一下你看到的功能",
+    id: "A-02",
+    scenario: "product_presentation",
+    voice: "向下滚动，介绍首页的每一个功能模块",
     expectTool: "interact",
     expectLog: /scroll|interact/i,
-    expectVoice: /功能|模块|介绍|特色/,
+    // Must describe SPECIFIC features, not generic "功能模块"
+    expectVoice: /转录|记录|笔记|操作|投屏|截图|语音|日程|action|transcript|note/i,
+    rejectVoice: /需要我.*介绍|如果你想/,
+    timeoutMs: 25000,
+  },
+  {
+    id: "A-03",
+    scenario: "product_presentation",
+    voice: "继续往下，把剩下的功能都介绍完",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    expectVoice: /.{50,}/,  // at least 50 chars of substance
+    rejectVoice: /需要我.*详细|你想.*了解/,
+    timeoutMs: 25000,
+  },
+  {
+    id: "A-04",
+    scenario: "product_presentation",
+    voice: "点击进入 Features 页面，介绍每一个 feature 的价值",
+    expectTool: "interact",
+    expectLog: /click|interact/i,
+    expectVoice: /feature|功能|价值|优势/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
+  // ── Scenario B: Launch Video 计划汇报 ──
+  {
+    id: "B-01",
+    scenario: "launch_video_review",
+    voice: "我们来讨论 CallingClaw 上线视频的计划，你之前准备了相关内容，先给我一个 overview",
+    expectTool: "read_prep",
+    expectLog: /read_prep|recall_context|prep/i,
+    // Must reference actual prep content (storyboard, Personal/Business video, Aha Moment)
+    expectVoice: /视频|脚本|分镜|Personal|Business|Aha|上线|发布/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+  {
+    id: "B-02",
+    scenario: "launch_video_review",
+    voice: "Personal 视频的分镜脚本是怎么设计的？有多少帧？",
+    expectTool: "read_prep",
+    expectLog: /read_prep|recall/i,
+    // Must mention specific numbers (23 frames, 74 seconds, etc.)
+    expectVoice: /23|74|58|16|帧|frame|秒|彩蛋/i,
+    rejectVoice: null,
     timeoutMs: 20000,
   },
   {
-    id: "V-003",
-    voice: "再往下滚动",
-    expectTool: "interact",
-    expectLog: /scroll/i,
-    expectVoice: /.+/,  // any response
-    timeoutMs: 15000,
-  },
-  {
-    id: "V-004",
-    voice: "点击 Features 这个链接",
-    expectTool: "interact",
-    expectLog: /click|Features/i,
-    expectVoice: /功能|Features|点击/,
+    id: "B-03",
+    scenario: "launch_video_review",
+    voice: "竞品 Pika 的情况是怎样的？我们和他们的差异化在哪里？",
+    expectTool: "read_prep",
+    expectLog: /read_prep|recall|prep/i,
+    // Must mention Pika pricing, local vs cloud, $19.99
+    expectVoice: /Pika|0\.50|19\.99|本地|云|买断|local/i,
+    rejectVoice: null,
     timeoutMs: 20000,
   },
+
+  // ── Scenario C: PRD 评审 (REVIEWER mode) ──
   {
-    id: "V-005",
-    voice: "现在帮我切换投屏到 Google，搜索 manus AI 最新新闻",
+    id: "C-01",
+    scenario: "prd_review",
+    voice: "帮我投屏我们的 Tanka Action Card PRD 文档",
     expectTool: "share_screen",
-    expectLog: /ShareScreen.*google|share_screen/i,
-    expectVoice: /Google|搜索|manus/,
-    timeoutMs: 20000,
+    expectLog: /share_screen|ShareScreen|prd/i,
+    expectVoice: /PRD|文档|Action Card|投屏/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
   },
   {
-    id: "V-006",
-    voice: "好的，帮我退出会议",
+    id: "C-02",
+    scenario: "prd_review",
+    voice: "滚动到需求部分，帮我 review 一下有什么盲点或者遗漏",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    // REVIEWER should ask specific questions, not just summarize
+    expectVoice: /验收|标准|边界|优先级|负责|deadline|风险|缺少|遗漏|盲点/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+
+  // ── Scenario D: 退出 ──
+  {
+    id: "D-01",
+    scenario: "exit",
+    voice: "好的今天就到这里，退出会议吧",
     expectTool: "leave_meeting",
-    expectLog: /Left meeting|leave/i,
-    expectVoice: /再见|退出|谢谢/,
+    expectLog: /leave|Left/i,
+    expectVoice: /再见|谢谢|总结|下次/,
+    rejectVoice: null,
     timeoutMs: 15000,
   },
 ];
@@ -106,25 +181,30 @@ const KNOWN_BUGS = [
 
 interface VoiceTest {
   id: string;
+  scenario: string;       // business scenario group
   voice: string;          // sendText input (simulated user speech)
   expectTool: string;     // expected tool call name
   expectLog: RegExp;      // expected pattern in backend log
-  expectVoice: RegExp;    // expected pattern in AI voice response
+  expectVoice: RegExp;    // expected content pattern (specific, not generic)
+  rejectVoice: RegExp | null;  // anti-pattern (filler/repetition) — must NOT match
   timeoutMs: number;
 }
 
 interface TestResult {
   id: string;
-  // Intent → Action layer
-  toolCalled: boolean;    // did the expected tool get called?
-  toolName: string;       // actual tool called (or "none")
-  logMatch: boolean;      // did the log pattern match?
-  // Voice layer
-  voiceMatch: boolean;    // did the voice response match?
-  voiceText: string;      // actual voice response
-  // Ground truth — real system state AFTER action
-  systemOk: boolean;      // is the system healthy? (Chrome alive, voice connected, meeting active)
-  groundTruth: string;    // what the system actually looks like (meeting status, sharing status, etc.)
+  // L1: System health (gate — 0 if broken)
+  systemOk: boolean;
+  groundTruth: string;
+  // L2: Intent → Action
+  toolCalled: boolean;
+  toolName: string;
+  logMatch: boolean;
+  // L3: Voice quality
+  voiceText: string;
+  contentMatch: boolean;    // expectVoice matched (specific info present)
+  noFiller: boolean;        // rejectVoice did NOT match (no empty filler)
+  responseLength: number;   // char count (proxy for information density)
+  // Meta
   durationMs: number;
   error?: string;
 }
@@ -162,24 +242,40 @@ async function checkSystemHealth(): Promise<{ ok: boolean; detail: string }> {
 // SCORING — weighted, ground truth is a gate (0 if system broken)
 // ══════════════════════════════════════════════════════════════
 
-function scoreResults(results: TestResult[]): { total: number; breakdown: string } {
+function scoreResults(results: TestResult[]): { total: number; breakdown: string; details: string } {
   let score = 0;
-  // Ground truth is a GATE: if system broke, the step scores 0 regardless of tool/voice
-  const weights = { tool: 30, voice: 30, system: 40 };
-  const maxScore = results.length * 100;
+  const n = results.length;
+  // Multi-dimensional scoring:
+  //   system (20): Chrome alive, voice connected — GATE (0 if broken)
+  //   tool (20):   correct tool called
+  //   content (30): voice response has specific relevant info
+  //   fluency (20): no filler/repetition + sufficient length
+  //   accuracy (10): log confirms action actually happened
+  const maxScore = n * 100;
+
+  const counts = { system: 0, tool: 0, content: 0, fluency: 0, accuracy: 0 };
 
   for (const r of results) {
-    if (!r.systemOk) continue; // system broken = 0 points for this step
-    if (r.toolCalled) score += weights.tool;
-    if (r.voiceMatch) score += weights.voice;
-    score += weights.system; // system healthy = base 40 points
+    if (!r.systemOk) continue; // gate
+    counts.system++; score += 20;
+
+    if (r.toolCalled) { counts.tool++; score += 20; }
+    if (r.contentMatch) { counts.content++; score += 30; }
+    if (r.noFiller && r.responseLength > 30) { counts.fluency++; score += 20; }
+    if (r.logMatch) { counts.accuracy++; score += 10; }
   }
 
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-  const sysOk = results.filter(r => r.systemOk).length;
   return {
     total: pct,
-    breakdown: `system:${sysOk}/${results.length} tool:${results.filter(r => r.toolCalled).length}/${results.length} voice:${results.filter(r => r.voiceMatch).length}/${results.length}`,
+    breakdown: `sys:${counts.system}/${n} tool:${counts.tool}/${n} content:${counts.content}/${n} fluency:${counts.fluency}/${n} accuracy:${counts.accuracy}/${n}`,
+    details: [
+      `System healthy: ${counts.system}/${n}`,
+      `Tool called correctly: ${counts.tool}/${n}`,
+      `Content has specifics: ${counts.content}/${n} (30% weight — most important)`,
+      `Fluent, no filler: ${counts.fluency}/${n}`,
+      `Log confirms action: ${counts.accuracy}/${n}`,
+    ].join("\n    "),
   };
 }
 
@@ -231,7 +327,7 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
   const start = Date.now();
   const result: TestResult = {
     id: test.id, toolCalled: false, toolName: "none",
-    logMatch: false, voiceMatch: false, voiceText: "",
+    logMatch: false, contentMatch: false, noFiller: true, voiceText: "", responseLength: 0,
     systemOk: false, groundTruth: "", durationMs: 0,
   };
 
@@ -272,10 +368,12 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     // Check: did the log pattern match?
     result.logMatch = test.expectLog.test(log);
 
-    // Check: did the voice response match?
+    // Check: voice quality (content + fluency)
     const aiResponses = newEntries.filter(e => e.role === "assistant");
     result.voiceText = aiResponses.map(e => e.text).join(" ");
-    result.voiceMatch = test.expectVoice.test(result.voiceText);
+    result.responseLength = result.voiceText.length;
+    result.contentMatch = test.expectVoice.test(result.voiceText);
+    result.noFiller = test.rejectVoice ? !test.rejectVoice.test(result.voiceText) : true;
 
     // GROUND TRUTH: is the system actually healthy after this step?
     const postHealth = await checkSystemHealth();
@@ -354,10 +452,11 @@ Tests:      ${VOICE_TESTS.length}
 
     const sysIcon = r.systemOk ? "✅" : "💀";
     const toolIcon = r.toolCalled ? "✅" : "❌";
-    const voiceIcon = r.voiceMatch ? "✅" : "❌";
-    console.log(`[${now()}]   System: ${sysIcon}  Tool: ${toolIcon} ${r.toolName}  Voice: ${voiceIcon}`);
-    console.log(`[${now()}]   Ground truth: ${r.groundTruth}`);
-    if (r.voiceText) console.log(`[${now()}]   AI: "${r.voiceText.slice(0, 80)}"`);
+    const contentIcon = r.contentMatch ? "✅" : "❌";
+    const fillerIcon = r.noFiller ? "✅" : "🔁";
+    console.log(`[${now()}]   sys:${sysIcon} tool:${toolIcon}(${r.toolName}) content:${contentIcon} filler:${fillerIcon} len:${r.responseLength}`);
+    console.log(`[${now()}]   ground: ${r.groundTruth}`);
+    if (r.voiceText) console.log(`[${now()}]   AI: "${r.voiceText.slice(0, 100)}"`);
     if (r.error) console.log(`[${now()}]   ⛔ ${r.error}`);
     console.log("");
 
@@ -372,21 +471,29 @@ Tests:      ${VOICE_TESTS.length}
     await api("POST", "/api/meeting/leave");
   }
 
-  // ── Score (autoresearch's val_bpb equivalent) ──
-  const { total, breakdown } = scoreResults(results);
+  // ── Score ──
+  const { total, breakdown, details } = scoreResults(results);
   const duration = Math.round((Date.now() - allStart) / 1000);
 
-  // ── Print results ──
   console.log(`═══════════════════════════════════════════`);
   console.log(`  SCORE: ${total}%  (${breakdown})`);
   console.log(`  Duration: ${duration}s`);
+  console.log(`  ---`);
+  console.log(`    ${details}`);
   console.log(`═══════════════════════════════════════════\n`);
 
-  for (const r of results) {
-    const s = r.systemOk ? "✅" : "💀";
-    const t = r.toolCalled ? "✅" : "❌";
-    const v = r.voiceMatch ? "✅" : "❌";
-    console.log(`  ${s}${t}${v} ${r.id}: ${r.toolName}  "${r.voiceText.slice(0, 40)}"  [${r.groundTruth.slice(0, 40)}]`);
+  // Per-scenario breakdown
+  const scenarios = [...new Set(VOICE_TESTS.map(t => t.scenario))];
+  for (const sc of scenarios) {
+    const scResults = results.filter((r, i) => VOICE_TESTS[i]?.scenario === sc);
+    const scScore = scoreResults(scResults);
+    console.log(`  ${sc}: ${scScore.total}%`);
+    for (const r of scResults) {
+      const s = r.systemOk ? "✅" : "💀";
+      const t = r.toolCalled ? "✅" : "❌";
+      const c = r.contentMatch ? "✅" : "❌";
+      console.log(`    ${s}${t}${c} ${r.id}: "${r.voiceText.slice(0, 50)}"`);
+    }
   }
 
   // ── Persist to results.tsv (autoresearch's keep-or-discard log) ──
