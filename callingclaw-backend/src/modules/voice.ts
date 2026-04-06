@@ -509,6 +509,17 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
+   * Inject context with a fixed ID — replaces previous injection with the same ID.
+   * Used for page DOM context that should show only the LATEST state,
+   * not accumulate in the FIFO queue.
+   */
+  replaceContext(text: string, id: string): string | false {
+    if (!this.client.connected) return false;
+    this.client.removeContext(id);
+    return this.client.injectContext(text, id);
+  }
+
+  /**
    * Inject a screenshot into the voice model's conversation.
    * Provider-aware: openai15/gemini get actual images, others get text caption.
    *

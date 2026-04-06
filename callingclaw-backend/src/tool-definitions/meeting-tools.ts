@@ -4,6 +4,7 @@
 
 import type { ToolModule } from "./types";
 import { CONFIG } from "../config";
+import { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
 import type { GoogleCalendarClient, CalendarAttendee } from "../mcp_client/google_cal";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { ChromeLauncher } from "../chrome-launcher";
@@ -608,48 +609,64 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             await meetJoiner.shareScreen();
           }
 
-          // Native voice-driven presentation: inject narrative plan + screenshot
-          // Voice model sees the screen and drives naturally using interact/scroll tools
+          // ── Presentation mode: sync voice with screen actions ──
+          if (deps.voice) deps.voice.presentationMode = true;
+
+          // Native voice-driven presentation: inject narrative plan + live DOM context
           const brief = meetingPrepSkill?.currentBrief;
           const cl = deps.chromeLauncher;
-          if (brief && cl && deps.voice) {
-            // Take screenshot of the shared content
+          if (cl && deps.voice) {
+            // Screenshot (best-effort, works for OpenAI 1.5 with image support)
             try {
               const page = cl.presentingPage;
               if (page) {
                 const buf = await page.screenshot({ type: "jpeg", quality: 60 });
-                const screenshot = buf.toString("base64");
-                deps.voice.injectScreenshot(screenshot, `[PRESENTING] ${shareUrl || "screen"}`);
+                deps.voice.injectScreenshot(buf.toString("base64"), `[PRESENTING] ${shareUrl || "screen"}`);
               }
             } catch {}
 
-            // Inject narrative plan so voice knows what to present
+            // DOM extraction: voice AI sees actual page content (Page Agent approach)
+            // Uses fixed ID so each update REPLACES the previous, not accumulates
+            try {
+              const raw = await cl.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+              const pageCtx = formatPageContext(raw);
+              if (pageCtx) deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+            } catch {}
+
+            // Narrative plan from prep brief
             const narrativeParts: string[] = [];
-            if (brief.goal) narrativeParts.push(`Goal: ${brief.goal}`);
-            if (brief.keyPoints?.length) {
+            if (brief?.goal) narrativeParts.push(`Goal: ${brief.goal}`);
+            if (brief?.keyPoints?.length) {
               narrativeParts.push(`Key points:\n${brief.keyPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}`);
             }
-            if (brief.speakingPlan?.length) {
+            if (brief?.speakingPlan?.length) {
               const phases = brief.speakingPlan.map((p: any) => `- ${p.phase}: ${p.points}`).join("\n");
               narrativeParts.push(`Speaking plan:\n${phases}`);
             }
-            if (brief.browserUrls?.length) {
+            if (brief?.scenes?.length) {
+              const sceneGuide = brief.scenes.map((s: any, i: number) =>
+                `Scene ${i + 1}: ${s.url}${s.scrollTarget ? " → " + s.scrollTarget : ""}\n  Say: ${s.talkingPoints}`
+              ).join("\n");
+              narrativeParts.push(`Presentation scenes (use interact tool to navigate):\n${sceneGuide}`);
+            }
+            if (brief?.browserUrls?.length) {
               const urls = brief.browserUrls.map((u: any) => `- ${u.url}: ${u.description}`).join("\n");
               narrativeParts.push(`Materials to show:\n${urls}`);
             }
 
             if (narrativeParts.length > 0) {
               deps.voice.injectContext(
-                `[PRESENTATION MODE] You are now presenting to the meeting. Present naturally — scroll, click, and navigate using your tools. Here is your narrative guide:\n\n${narrativeParts.join("\n\n")}`
+                `[PRESENTATION MODE] You are presenting to the meeting. Describe what you see on the page, scroll to show key sections, and click links to navigate. Use interact tool.\n\n${narrativeParts.join("\n\n")}`
               );
             }
             eventBus.emit("presentation.started", { mode: "native" });
-            return `Screen sharing started. You can see the content — present it naturally. Use interact/scroll to navigate the page.`;
+            return `Screen sharing started. You can see the page content — present it naturally using interact to scroll and click.`;
           }
 
           return "Screen sharing started.";
         }
         case "stop_sharing": {
+          if (deps.voice) deps.voice.presentationMode = false;
           await meetJoiner.stopSharing();
           eventBus.emit("presentation.done", { mode: "native" });
           return "Screen sharing stopped.";

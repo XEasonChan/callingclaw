@@ -33,6 +33,8 @@ export interface OC001_Response {
   filePaths: Array<{ path: string; description: string; action?: "open" | "scroll" | "present" }>;
   browserUrls: Array<{ url: string; description: string; action?: "navigate" | "demo" | "show" }>;
   folderPaths: Array<{ path: string; description: string }>;
+  speakingPlan?: Array<{ phase: string; durationMin: number; points: string; sceneIndices?: number[] }>;
+  scenes?: Array<{ url: string; scrollTarget?: string; talkingPoints: string; durationMs: number }>;
 }
 
 export const OC001_PROMPT = (req: OC001_Request) => {
@@ -63,6 +65,8 @@ ${req.userContext || "(no additional context)"}${attendeeSection}
 6. **filePaths**: All relevant local files with absolute paths. Suggest action: "open" / "scroll" / "present".
 7. **browserUrls**: All relevant web URLs (GitHub, deployed apps, Figma, docs).
 8. **folderPaths**: Key project directories the user might want to show.
+9. **speakingPlan** (if this is a presentation/demo meeting): Ordered phases with timing and talking points. The voice AI follows this narrative structure.
+10. **scenes** (if browserUrls should be presented on screen): Ordered list of URLs/sections to show, with what to say at each. The AI will navigate to these using scroll/click tools. Use approximate section descriptions for scrollTarget (exact CSS selectors not needed — the AI sees the live DOM).
 
 ## CRITICAL: Surface Past Mistakes
 Search MEMORY.md "Lessons Learned" section and daily memory files for past mistakes, failures, and debugging experiences related to this topic. These learnings MUST be surfaced — put them in keyPoints (prefixed "⚠️ Past lesson:") and expectedQuestions. The goal: ensure the same errors are never repeated.
@@ -80,7 +84,9 @@ Return ONLY valid JSON matching this exact structure:
   "previousContext": "string or null — prior meeting summary",
   "filePaths": [{"path": "/absolute/path", "description": "string", "action": "open|scroll|present"}],
   "browserUrls": [{"url": "https://...", "description": "string", "action": "navigate|demo|show"}],
-  "folderPaths": [{"path": "/absolute/path", "description": "string"}]
+  "folderPaths": [{"path": "/absolute/path", "description": "string"}],
+  "speakingPlan": [{"phase": "string", "durationMin": 2, "points": "what to say in 1-2 sentences"}],
+  "scenes": [{"url": "https://...", "scrollTarget": "section description or heading text", "talkingPoints": "what to say", "durationMs": 30000}]
 }
 \`\`\`
 
@@ -103,6 +109,8 @@ export function parseOC001(raw: string, fallbackTopic: string): OC001_Response {
         filePaths: Array.isArray(p.filePaths) ? p.filePaths : [],
         browserUrls: Array.isArray(p.browserUrls) ? p.browserUrls : [],
         folderPaths: Array.isArray(p.folderPaths) ? p.folderPaths : [],
+        speakingPlan: Array.isArray(p.speakingPlan) ? p.speakingPlan : undefined,
+        scenes: Array.isArray(p.scenes) ? p.scenes : undefined,
       };
     } catch {}
   }

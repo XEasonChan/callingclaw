@@ -12,6 +12,7 @@ import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { ZoomSkill } from "../skills/zoom";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion } from "../voice-persona";
+import { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
 
 export interface AutomationToolDeps {
   automationRouter: AutomationRouter;
@@ -360,22 +361,23 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           }
         }
         // ── interact: click/scroll/navigate on presenting page ──
+        // After each action, re-extract DOM so voice AI sees updated content.
         case "interact": {
           const action = (args.action as string) || "";
           const target = (args.target as string) || "";
           eventBus.emit("voice.tool_call", { tool: "interact", summary: `${action} ${target}`.slice(0, 80) });
           const cl = deps.chromeLauncher;
           if (!cl?.presentingPage) return "No presenting page active. Use share_screen first.";
+          let actionResult: string;
           try {
             switch (action) {
               case "click": {
-                // DOM snapshot → find element → click
-                const elements = await cl.evaluateOnPresentingPage(`(() => {
-                  const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
-                  return Array.from(els).slice(0, 30).map((el, i) => i + '. ' + (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 60));
-                })()`);
-                if (!target) return `Clickable elements:\n${elements}\nCall interact again with action="click" and target="<element text>".`;
-                // Find best match
+                if (!target) {
+                  // No target: extract DOM to show what's clickable
+                  const raw = await cl.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+                  const ctx = formatPageContext(raw);
+                  return ctx || "No clickable elements found.";
+                }
                 await cl.evaluateOnPresentingPage(`(() => {
                   const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
                   for (const el of els) {
@@ -385,25 +387,42 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                   }
                   return 'not found';
                 })()`);
-                return `Clicked "${target}".`;
+                actionResult = `Clicked "${target}".`;
+                break;
               }
               case "scroll":
               case "scroll_down":
                 await cl.evaluateOnPresentingPage(`window.scrollBy(0, ${target === "up" ? -600 : 600})`);
-                return `Scrolled ${target || "down"}.`;
+                actionResult = `Scrolled ${target || "down"}.`;
+                break;
               case "scroll_up":
                 await cl.evaluateOnPresentingPage(`window.scrollBy(0, -600)`);
-                return "Scrolled up.";
+                actionResult = "Scrolled up.";
+                break;
               case "navigate":
                 if (!target) return "Provide a URL to navigate to.";
                 await cl.navigatePresentingPage(target);
-                return `Navigated to ${target}.`;
+                actionResult = `Navigated to ${target}.`;
+                break;
               default:
                 return `Unknown action: ${action}. Use click, scroll, scroll_up, scroll_down, or navigate.`;
             }
           } catch (e: any) {
             return `Interact error: ${e.message}`;
           }
+
+          // Re-extract DOM after action so voice AI sees updated page content.
+          // Uses fixed ID — replaces previous DOM context, not accumulates.
+          try {
+            await new Promise(r => setTimeout(r, 300)); // brief pause for page to settle
+            const raw = await cl.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+            const pageCtx = formatPageContext(raw);
+            if (pageCtx && deps.voice) {
+              deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+            }
+          } catch {}
+
+          return actionResult;
         }
         default:
           return `Unknown automation tool: ${name}`;
