@@ -888,7 +888,22 @@ function updateStageDocsContext() {
 }
 eventBus.on("meeting.prep_ready", (data: any) => {
   const fp = data?.filepath || data?.filePath;
-  if (fp) { context.addStageDocument(fp, "new"); updateStageDocsContext(); }
+  if (fp) { context.addStageDocument(fp, "new"); }
+  // Also add prep's filePaths and browserUrls to stage documents
+  const brief = data?.prepBrief;
+  if (brief) {
+    if (Array.isArray(brief.filePaths)) {
+      for (const f of brief.filePaths) {
+        if (f.path) context.addStageDocument(f.path, "new");
+      }
+    }
+    if (Array.isArray(brief.browserUrls)) {
+      for (const u of brief.browserUrls) {
+        if (u.url) context.addStageDocument(u.url, "new");
+      }
+    }
+  }
+  updateStageDocsContext();
 });
 eventBus.on("meeting.summary_ready", (data: any) => {
   if (data?.filepath) { context.addStageDocument(data.filepath, "new"); updateStageDocsContext(); }

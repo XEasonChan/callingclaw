@@ -1324,9 +1324,12 @@ export class ChromeLauncher {
     if (!this._isOnStage()) {
       const ok = await this.navigatePresentingPage(`http://localhost:${CONFIG.port}/stage`);
       if (!ok) return false;
-      await this._presentingPage.waitForTimeout(1000);
+      // Wait for the stage page to fully render the iframe element
+      await this._presentingPage.waitForTimeout(2000);
     }
     try {
+      // Ensure the iframe element exists before trying to set its src
+      await this._presentingPage.waitForSelector('#slideFrame', { timeout: 5000 });
       await this._presentingPage.evaluate(`(() => {
         var frame = document.getElementById('slideFrame');
         var placeholder = document.getElementById('slidePlaceholder');

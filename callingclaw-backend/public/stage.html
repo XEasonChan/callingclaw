@@ -634,7 +634,7 @@
       </div>
       <span class="stage-title">CallingClaw</span>
       <div class="stage-divider"></div>
-      <span class="stage-meeting" id="meetingName">Weekly Standup</span>
+      <span class="stage-meeting" id="meetingName">Connecting...</span>
       <span class="stage-clock" id="clock"></span>
       <span class="stage-status connected" id="wsStatus">
         <span class="dot"></span>
@@ -909,16 +909,17 @@
       gdrive: '<svg viewBox="0 0 20 20" fill="none"><path d="M7 3l6 10H3l6-10z" stroke="#f4b400" stroke-width="1.3" fill="none"/><path d="M13 13l3-5H7" stroke="#4285f4" stroke-width="1.3" fill="none"/></svg>',
       json: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#d97706" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#d97706" font-size="5.5" font-weight="600" font-family="Inter">{}</text></svg>',
       ts: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#3178c6" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#3178c6" font-size="6" font-weight="700" font-family="Inter">TS</text></svg>',
+      js: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#f7df1e" stroke-width="1.5"/><text x="10" y="13" text-anchor="middle" fill="#b8a200" font-size="6" font-weight="700" font-family="Inter">JS</text></svg>',
       png: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#8b5cf6" stroke-width="1.5"/><circle cx="8" cy="8" r="2" stroke="#8b5cf6" stroke-width="1"/><path d="M3 14l4-3 3 2 3-4 4 5" stroke="#8b5cf6" stroke-width="1" fill="none"/></svg>',
       default: '<svg viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="#9ca3af" stroke-width="1.5"/><path d="M7 7h6M7 10h6M7 13h3" stroke="#9ca3af" stroke-width="1" stroke-linecap="round"/></svg>'
     };
 
     function getFileIcon(name) {
       var ext = (name.split('.').pop() || '').toLowerCase();
-      // Google Drive detection
-      if (name.includes('gdoc') || name.includes('Google Doc')) return FILE_ICONS.gdoc;
-      if (name.includes('gsheet') || name.includes('Google Sheet')) return FILE_ICONS.gsheet;
-      if (name.includes('gdrive') || name.includes('Google Drive')) return FILE_ICONS.gdrive;
+      // Google Drive / Workspace URL detection
+      if (name.includes('docs.google.com/document') || name.includes('gdoc') || name.includes('Google Doc')) return FILE_ICONS.gdoc;
+      if (name.includes('docs.google.com/spreadsheets') || name.includes('gsheet') || name.includes('Google Sheet')) return FILE_ICONS.gsheet;
+      if (name.includes('drive.google.com') || name.includes('gdrive') || name.includes('Google Drive')) return FILE_ICONS.gdrive;
       return FILE_ICONS[ext] || FILE_ICONS.default;
     }
 
@@ -953,9 +954,17 @@
         ws = new WebSocket(WS_URL);
         ws.onopen = function() {
           DEMO_MODE = false; // real backend connected, stop demo
+          // Cancel pending demo timer so demo data never appears
+          if (_demoTimer) { clearTimeout(_demoTimer); _demoTimer = null; }
+          // Clear any demo documents that may have sneaked in
+          documents.clear();
+          renderDocs();
           var status = document.getElementById('wsStatus');
           status.className = 'stage-status connected';
           document.getElementById('wsStatusText').textContent = 'Live';
+          // Fetch real documents and meeting status from backend
+          fetchRealDocuments();
+          fetchMeetingStatus();
         };
         ws.onmessage = function(e) {
           try { processEvent(JSON.parse(e.data)); } catch (err) {}
@@ -984,10 +993,43 @@
       document.getElementById('meetingName').textContent = params.get('meeting');
     }
 
+    // ── Fetch real documents from backend on load ─────
+    function fetchRealDocuments() {
+      fetch(API + '/api/stage/documents')
+        .then(function(r) { return r.json(); })
+        .then(function(body) {
+          var docs = body.documents || [];
+          if (docs.length > 0) {
+            documents.clear();
+            docs.forEach(function(d) {
+              documents.set(d.path, { name: d.name, badge: d.badge || null, ts: d.addedAt || Date.now() });
+            });
+            renderDocs();
+          }
+        })
+        .catch(function() { /* backend not ready yet */ });
+    }
+
+    // ── Fetch real meeting status on load ────────────
+    function fetchMeetingStatus() {
+      fetch(API + '/api/status')
+        .then(function(r) { return r.json(); })
+        .then(function(body) {
+          if (body.meeting && body.meeting.topic) {
+            document.getElementById('meetingName').textContent = body.meeting.topic;
+          }
+        })
+        .catch(function() { /* backend not ready yet */ });
+    }
+
     // ══════════════════════════════════════════════════
-    // DEMO MODE — Simulated events
+    // DEMO MODE — Simulated events (deferred: only runs
+    // if WebSocket has NOT connected after 3 seconds)
     // ══════════════════════════════════════════════════
-    (function runDemo() {
+    var _demoTimer = setTimeout(function() {
+      if (!DEMO_MODE) return; // WS already connected, skip demo
+
+      document.getElementById('meetingName').textContent = 'Weekly Standup';
       // Demo documents — various file types
       documents.set('/prep/weekly_standup_prep.md', { name: 'weekly_standup_prep.md', badge: 'new', ts: Date.now() });
       documents.set('/gdrive/Q1 Sprint Review.gdoc', { name: 'Q1 Sprint Review (Google Doc)', badge: null, ts: Date.now() - 1000 });
@@ -1080,7 +1122,7 @@
       // Start demo with staggered timing
       setTimeout(emitS1, 800);
       setTimeout(emitS2, 2500);
-    })();
+    }, 3000);
   </script>
 </body>
 </html>
