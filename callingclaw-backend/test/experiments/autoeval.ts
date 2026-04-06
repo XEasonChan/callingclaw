@@ -1,14 +1,18 @@
 #!/usr/bin/env bun
 /**
- * E2E Presentation Experiment Harness
- * ====================================
+ * AutoEval — CallingClaw 自动化 E2E 测试 & 实验 Harness
+ * ======================================================
  * 独立实验环境，不修改生产代码。所有 prompt / action 参数复制在此文件中。
  * 参考 autoresearch 模式：每轮实验有明确目标 + 验证指标 + bug 记录。
  *
  * Usage:
- *   bun run test/experiments/e2e-presentation-test.ts [meetUrl]
+ *   bun run test/experiments/autoeval.ts [meetUrl]
  *
- * 实验目标：验证 voice + screen share + scroll + click + navigate 全链路
+ * 测试链路:
+ *   A. Meeting Stage + iframe (PRD 文档演示)
+ *   B. CallingClaw 官网投屏 + 滚动 + 点击
+ *   C. Google 搜索 manus + 浏览结果
+ *   D. 退出会议
  */
 
 const BASE = "http://localhost:4000";
@@ -25,73 +29,88 @@ const VOICE_TEST_CONTEXT = `[PRESENTATION MODE] 你正在进行 E2E 投屏演示
 当收到指令时，使用你的工具（share_screen, interact, leave_meeting）来执行。
 用中文，简洁。每次操作后等待 [PAGE] 或 [DONE] context 再继续。`;
 
+/** 真实会议的 prep 数据 — autoeval 用实际会议的 prep 和文件 */
+const MEETING_TOPIC = "CallingClaw 上线视频脚本讨论";
+const PREP_FILE = "cc_mnk9jbh8_qyr4_prep.md";
+const STAGE_URL = `http://localhost:4000/stage?meeting=${encodeURIComponent(MEETING_TOPIC)}&slide=${encodeURIComponent("http://localhost:4000/prd-phase1.html")}`;
+
 /** 测试步骤 — 每步是一个 { action, voice, verify } */
 const STEPS: Step[] = [
+  // ── Phase A: Meeting Stage + iframe 演示 ──
   {
-    name: "1. 投屏官网",
+    name: "A1. 打开 Meeting Stage (带真实会议名 + PRD iframe)",
+    action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: STAGE_URL } },
+    voice: "现在投屏了 Meeting Stage，左边加载了 Tanka Action Card Phase 1 的 PRD 文档，请介绍你看到的文档内容",
+    verify: (r: any) => r.success === true,
+    waitMs: 18000,
+  },
+  {
+    name: "A2. 在 Stage iframe 里向下滚动 PRD",
+    action: { type: "eval_iframe", code: "window.scrollBy(0, 500); return document.title || 'scrolled'" },
+    voice: "PRD 文档往下滚动了，介绍新出现的部分",
+    verify: () => true,
+    waitMs: 15000,
+  },
+  {
+    name: "A3. 继续滚动 PRD",
+    action: { type: "eval_iframe", code: "window.scrollBy(0, 500); return 'scrolled'" },
+    voice: "继续介绍这部分内容",
+    verify: () => true,
+    waitMs: 12000,
+  },
+
+  // ── Phase B: CallingClaw 官网投屏 + 滚动 + 点击 ──
+  {
+    name: "B1. 切换投屏到 CallingClaw 官网",
     action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: "https://www.callingclaw.com" } },
-    voice: "我已经投屏了 CallingClaw 官网，请介绍你看到的首页内容",
+    voice: "现在切换到了 CallingClaw 官方网站，介绍你看到的首页内容",
     verify: (r: any) => r.success === true,
     waitMs: 15000,
   },
   {
-    name: "2. 向下滚动",
+    name: "B2. 向下滚动官网",
     action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { direction: "down", pixels: 600 } },
-    voice: "页面已经向下滚动了，描述新出现的内容",
+    voice: "页面向下滚动了，介绍新出现的功能模块",
     verify: (r: any) => r.success === true,
     waitMs: 15000,
   },
   {
-    name: "3. 再次滚动",
+    name: "B3. 再次滚动",
     action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { direction: "down", pixels: 600 } },
-    voice: "继续向下，介绍这部分的功能",
+    voice: "继续介绍这部分",
     verify: (r: any) => r.success === true,
     waitMs: 12000,
   },
   {
-    name: "4. 滚动到 Vision 部分",
-    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { target: "vision" } },
-    voice: "现在到了 Vision 部分，介绍一下 CallingClaw 的愿景",
+    name: "B4. 点击页面中的链接测试",
+    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { target: "Features" } },
+    voice: "跳转到了 Features 部分，介绍一下",
+    verify: (r: any) => r.success === true,
+    waitMs: 15000,
+  },
+
+  // ── Phase C: Google 搜索 manus + 点击结果 ──
+  {
+    name: "C1. 打开 Google 搜索 manus",
+    action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: "https://www.google.com/search?q=manus+AI+agent+latest+news+2026" } },
+    voice: "现在打开了 Google 搜索 manus AI 最新新闻，描述搜索结果页面",
     verify: (r: any) => r.success === true,
     waitMs: 15000,
   },
   {
-    name: "5. 切换到 Meeting Stage + iframe",
-    action: { type: "sequence", steps: [
-      { method: "POST", path: "/api/screen/share", body: {} },  // share stage (default)
-      { method: "POST", path: "/api/screen/iframe/load", body: { url: "http://localhost:4000/prd-phase1.html" } },
-    ]},
-    voice: "现在切换到了 Meeting Stage，左边加载了 Tanka Action Card Phase 1 的 PRD 文档，请介绍你看到的内容",
-    verify: () => true,
-    waitMs: 18000,
-  },
-  {
-    name: "6. 在 iframe 里滚动 PRD",
-    action: { type: "eval_iframe", code: "window.scrollBy(0, 500); return 'scrolled'" },
-    voice: "PRD 文档已经向下滚动了，介绍新出现的内容",
-    verify: () => true,
-    waitMs: 15000,
-  },
-  {
-    name: "7. 切换到 Google 搜索 manus",
-    action: { type: "api", method: "POST", path: "/api/screen/share", body: { url: "https://www.google.com/search?q=manus+AI+latest+news" } },
-    voice: "现在打开了 Google 搜索 manus 最新新闻，描述搜索结果",
+    name: "C2. 滚动搜索结果",
+    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { direction: "down", pixels: 400 } },
+    voice: "搜索结果里有什么相关的新闻",
     verify: (r: any) => r.success === true,
-    waitMs: 15000,
+    waitMs: 12000,
   },
+
+  // ── Phase D: 退出 ──
   {
-    name: "8. 点击第一个搜索结果",
-    action: { type: "api", method: "POST", path: "/api/screen/scroll", body: { target: "manus" } },
-    voiceAfterAction: true,  // 先执行 action 再说话
-    voice: "点击了搜索结果，描述打开的页面内容",
-    verify: () => true,
-    waitMs: 15000,
-  },
-  {
-    name: "9. 退出会议",
+    name: "D1. 退出会议",
     action: { type: "api", method: "POST", path: "/api/meeting/leave" },
-    voice: null,  // 不需要语音
-    verify: (r: any) => r.ok === true || r.filepath,
+    voice: null,
+    verify: (r: any) => r.ok === true || !!r.filepath,
     waitMs: 3000,
   },
 ];
@@ -242,8 +261,8 @@ async function runStep(step: Step): Promise<StepResult> {
 async function main() {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║  CallingClaw E2E Presentation Experiment                   ║
-║  Harness v2 — autoresearch pattern (isolated, iterable)    ║
+║  CallingClaw AutoEval — E2E Presentation Test              ║
+║  autoresearch pattern: isolated, iterable, measurable      ║
 ╚════════════════════════════════════════════════════════════╝
 `);
 
