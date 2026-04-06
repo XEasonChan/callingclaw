@@ -697,8 +697,28 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
+          // Check for pre-generated custom Stage HTML (iframe src already baked in)
           if (!resolvedShareUrl && deps.chromeLauncher) {
-            // Try to find presentable content from prep brief
+            const stageFile = (() => {
+              try {
+                const fs = require("fs");
+                // Find the most recent custom stage file for any meeting
+                const files = fs.readdirSync("/tmp")
+                  .filter((f: string) => f.startsWith("callingclaw-stage-") && f.endsWith(".html"))
+                  .map((f: string) => ({ name: f, mtime: fs.statSync(`/tmp/${f}`).mtimeMs }))
+                  .sort((a: any, b: any) => b.mtime - a.mtime);
+                return files[0] ? `file:///tmp/${files[0].name}` : null;
+              } catch { return null; }
+            })();
+
+            if (stageFile) {
+              resolvedShareUrl = stageFile;
+              console.log(`[share_screen] Using pre-generated Stage: ${stageFile}`);
+            }
+          }
+
+          if (!resolvedShareUrl && deps.chromeLauncher) {
+            // Fallback: try to find presentable content from prep brief
             const brief = meetingPrepSkill?.currentBrief;
 
             // 1. Check scenes[] for a URL (presentation.json scenes)

@@ -37,6 +37,7 @@ import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "./voice-persona";
+import { generateStageHtml, resolveDocumentUrl } from "./modules/stage-generator";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
@@ -1742,6 +1743,31 @@ export function startConfigServer(services: Services) {
           joinSuccess = session.status === "in_meeting";
           joinState = joinSuccess ? "in_meeting" : "failed";
           joinSummary = joinSuccess ? "Joined via MeetJoiner" : (session.error || "Unknown error");
+        }
+
+        // ── Generate custom Meeting Stage HTML (iframe src pre-baked) ──
+        let customStageUrl: string | null = null;
+        {
+          const brief = prepBrief || services.meetingPrepSkill?.currentBrief;
+          const docUrl = resolveDocumentUrl(brief);
+          if (docUrl) {
+            try {
+              const docs = (brief?.filePaths || []).map((f: any) => ({
+                name: f.path.split("/").pop() || f.path,
+                path: f.path,
+                badge: "new" as const,
+              }));
+              customStageUrl = await generateStageHtml({
+                meetingId,
+                title: meetTopic,
+                documentUrl: docUrl,
+                documents: docs,
+              });
+              console.log(`[Meeting] ✅ Custom Stage generated: ${customStageUrl}`);
+            } catch (e: any) {
+              console.warn(`[Meeting] Stage generation failed: ${e.message}`);
+            }
+          }
         }
 
         // Only emit meeting.started when ACTUALLY in the meeting (not waiting_room)
