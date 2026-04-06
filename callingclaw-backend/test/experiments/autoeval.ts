@@ -115,34 +115,71 @@ interface VoiceTest {
 
 interface TestResult {
   id: string;
+  // Intent → Action layer
   toolCalled: boolean;    // did the expected tool get called?
   toolName: string;       // actual tool called (or "none")
   logMatch: boolean;      // did the log pattern match?
+  // Voice layer
   voiceMatch: boolean;    // did the voice response match?
   voiceText: string;      // actual voice response
+  // Ground truth — real system state AFTER action
+  systemOk: boolean;      // is the system healthy? (Chrome alive, voice connected, meeting active)
+  groundTruth: string;    // what the system actually looks like (meeting status, sharing status, etc.)
   durationMs: number;
   error?: string;
 }
 
 // ══════════════════════════════════════════════════════════════
-// SCORING (autoresearch's val_bpb equivalent)
+// GROUND TRUTH CHECKS — the eval must not lie
+// ══════════════════════════════════════════════════════════════
+
+async function checkSystemHealth(): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const s = await api("GET", "/api/status");
+    const issues: string[] = [];
+
+    // Chrome / meeting still alive?
+    if (s.meeting !== "recording" && s.meeting !== "idle") issues.push(`meeting=${s.meeting}`);
+
+    // Voice connected?
+    if (!s.voiceSession?.connected) issues.push("voice=disconnected");
+
+    // Check Chrome process still running
+    const log = await getBackendLog(10);
+    if (log.includes("gracefully close") || log.includes("CDP disconnected")) issues.push("chrome=crashed");
+    if (log.includes("Timeout") && log.includes("ShareScreen")) issues.push("share=timeout");
+
+    return {
+      ok: issues.length === 0,
+      detail: issues.length === 0 ? `meeting=${s.meeting} voice=✅ sharing=${s.sharing}` : issues.join(", "),
+    };
+  } catch (e: any) {
+    return { ok: false, detail: `health_check_failed: ${e.message}` };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SCORING — weighted, ground truth is a gate (0 if system broken)
 // ══════════════════════════════════════════════════════════════
 
 function scoreResults(results: TestResult[]): { total: number; breakdown: string } {
   let score = 0;
-  const weights = { tool: 40, log: 20, voice: 40 }; // out of 100 per test
+  // Ground truth is a GATE: if system broke, the step scores 0 regardless of tool/voice
+  const weights = { tool: 30, voice: 30, system: 40 };
   const maxScore = results.length * 100;
 
   for (const r of results) {
+    if (!r.systemOk) continue; // system broken = 0 points for this step
     if (r.toolCalled) score += weights.tool;
-    if (r.logMatch) score += weights.log;
     if (r.voiceMatch) score += weights.voice;
+    score += weights.system; // system healthy = base 40 points
   }
 
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  const sysOk = results.filter(r => r.systemOk).length;
   return {
     total: pct,
-    breakdown: `tool:${results.filter(r => r.toolCalled).length}/${results.length} log:${results.filter(r => r.logMatch).length}/${results.length} voice:${results.filter(r => r.voiceMatch).length}/${results.length}`,
+    breakdown: `system:${sysOk}/${results.length} tool:${results.filter(r => r.toolCalled).length}/${results.length} voice:${results.filter(r => r.voiceMatch).length}/${results.length}`,
   };
 }
 
@@ -194,10 +231,20 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
   const start = Date.now();
   const result: TestResult = {
     id: test.id, toolCalled: false, toolName: "none",
-    logMatch: false, voiceMatch: false, voiceText: "", durationMs: 0,
+    logMatch: false, voiceMatch: false, voiceText: "",
+    systemOk: false, groundTruth: "", durationMs: 0,
   };
 
   try {
+    // Pre-check: is system healthy before we even send the command?
+    const preHealth = await checkSystemHealth();
+    if (!preHealth.ok) {
+      result.error = `SYSTEM BROKEN before test: ${preHealth.detail}`;
+      result.groundTruth = preHealth.detail;
+      result.durationMs = Date.now() - start;
+      return result; // Don't even try — system is already down
+    }
+
     // Send voice command (the ONLY way to drive action)
     await api("POST", "/api/voice/text", { text: test.voice });
 
@@ -207,7 +254,7 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     // Collect evidence
     const entries = await getTranscript(20);
     const newEntries = entries.filter(e => e.ts > transcriptBefore);
-    const log = await getBackendLog(30);
+    const log = await getBackendLog(50);
 
     // Check: did the expected tool get called?
     const toolCalls = newEntries
@@ -216,7 +263,7 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     result.toolName = toolCalls.join(",") || "none";
     result.toolCalled = toolCalls.some(t => t === test.expectTool);
 
-    // Also check TranscriptAuditor executed (it doesn't show as Tool Call in transcript)
+    // Also check TranscriptAuditor executed (shows in log, not transcript)
     if (!result.toolCalled) {
       result.toolCalled = test.expectLog.test(log);
       if (result.toolCalled) result.toolName = `auditor:${test.expectTool}`;
@@ -229,6 +276,21 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     const aiResponses = newEntries.filter(e => e.role === "assistant");
     result.voiceText = aiResponses.map(e => e.text).join(" ");
     result.voiceMatch = test.expectVoice.test(result.voiceText);
+
+    // GROUND TRUTH: is the system actually healthy after this step?
+    const postHealth = await checkSystemHealth();
+    result.systemOk = postHealth.ok;
+    result.groundTruth = postHealth.detail;
+
+    // Detect specific failures even if tool "succeeded"
+    if (log.includes("Timeout") && log.includes("ShareScreen")) {
+      result.systemOk = false;
+      result.groundTruth += " | share_timeout";
+    }
+    if (log.includes("gracefully close") || log.includes("Chrome.*crash")) {
+      result.systemOk = false;
+      result.groundTruth += " | chrome_crashed";
+    }
 
   } catch (e: any) {
     result.error = e.message;
@@ -290,11 +352,13 @@ Tests:      ${VOICE_TESTS.length}
     const r = await runVoiceTest(test, transcriptTs);
     results.push(r);
 
+    const sysIcon = r.systemOk ? "✅" : "💀";
     const toolIcon = r.toolCalled ? "✅" : "❌";
     const voiceIcon = r.voiceMatch ? "✅" : "❌";
-    console.log(`[${now()}]   Tool: ${toolIcon} ${r.toolName}  Voice: ${voiceIcon}`);
+    console.log(`[${now()}]   System: ${sysIcon}  Tool: ${toolIcon} ${r.toolName}  Voice: ${voiceIcon}`);
+    console.log(`[${now()}]   Ground truth: ${r.groundTruth}`);
     if (r.voiceText) console.log(`[${now()}]   AI: "${r.voiceText.slice(0, 80)}"`);
-    if (r.error) console.log(`[${now()}]   Error: ${r.error}`);
+    if (r.error) console.log(`[${now()}]   ⛔ ${r.error}`);
     console.log("");
 
     // Early exit if meeting ended
@@ -319,9 +383,10 @@ Tests:      ${VOICE_TESTS.length}
   console.log(`═══════════════════════════════════════════\n`);
 
   for (const r of results) {
+    const s = r.systemOk ? "✅" : "💀";
     const t = r.toolCalled ? "✅" : "❌";
     const v = r.voiceMatch ? "✅" : "❌";
-    console.log(`  ${r.id}: tool${t} voice${v}  ${r.toolName}  "${r.voiceText.slice(0, 50)}"`);
+    console.log(`  ${s}${t}${v} ${r.id}: ${r.toolName}  "${r.voiceText.slice(0, 40)}"  [${r.groundTruth.slice(0, 40)}]`);
   }
 
   // ── Persist to results.tsv (autoresearch's keep-or-discard log) ──
