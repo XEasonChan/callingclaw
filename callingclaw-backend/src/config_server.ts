@@ -3380,7 +3380,22 @@ STEP-BY-STEP FLOW:
           return Response.json({ error: "ChromeLauncher not active — join a meeting first" }, { status: 400, headers });
         }
         const body = (await req.json().catch(() => ({}))) as { url?: string };
-        const result = await services.chromeLauncher.shareScreen(body.url);
+        let shareUrl = body.url;
+        // If no URL specified, use pre-generated Stage HTML (has iframe content baked in)
+        if (!shareUrl) {
+          try {
+            const fs = require("fs");
+            const stageFiles = fs.readdirSync("/tmp")
+              .filter((f: string) => f.startsWith("callingclaw-stage-") && f.endsWith(".html"))
+              .map((f: string) => ({ name: f, mtime: fs.statSync(`/tmp/${f}`).mtimeMs }))
+              .sort((a: any, b: any) => b.mtime - a.mtime);
+            if (stageFiles[0]) {
+              shareUrl = `file:///tmp/${stageFiles[0].name}`;
+              console.log(`[API] Using pre-generated Stage: ${shareUrl}`);
+            }
+          } catch {}
+        }
+        const result = await services.chromeLauncher.shareScreen(shareUrl);
         return Response.json(result, { headers });
       }
 
