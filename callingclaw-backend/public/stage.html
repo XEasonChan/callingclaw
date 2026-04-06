@@ -667,13 +667,13 @@
 
       <!-- Right: Workspace -->
       <div class="workspace">
-        <!-- System 1: Realtime Voice -->
+        <!-- System 1: Voice -->
         <div class="model-panel sketch-box s1" id="panel-s1">
           <div class="model-head">
             <div class="model-icon">S1</div>
             <div>
-              <div class="model-name">Realtime Voice</div>
-              <div class="model-provider" id="s1-provider">OpenAI Realtime</div>
+              <div class="model-name">System One</div>
+              <div class="model-provider" id="s1-provider">Voice + Presentation</div>
             </div>
             <div class="model-status-label">
               <span class="indicator active" id="s1-ind"></span>
@@ -681,25 +681,25 @@
             </div>
           </div>
           <div class="model-log" id="s1-log">
-            <div class="log-empty">Waiting for voice events...</div>
+            <div class="log-empty">Voice transcript will appear here...</div>
           </div>
         </div>
 
-        <!-- System 2: Deep Reasoning -->
+        <!-- System 2: Agent -->
         <div class="model-panel sketch-box-alt s2" id="panel-s2">
           <div class="model-head">
             <div class="model-icon">S2</div>
             <div>
-              <div class="model-name">Deep Reasoning</div>
-              <div class="model-provider">OpenClaw Agent</div>
+              <div class="model-name">System Two</div>
+              <div class="model-provider">Agent + Action</div>
             </div>
             <div class="model-status-label">
               <span class="indicator" id="s2-ind"></span>
-              <span id="s2-status">Idle</span>
+              <span id="s2-status">Standby</span>
             </div>
           </div>
           <div class="model-log" id="s2-log">
-            <div class="log-empty">Standing by for complex tasks...</div>
+            <div class="log-empty">Agent actions will appear here...</div>
           </div>
         </div>
 
@@ -739,36 +739,58 @@
     }
 
     // ── Categorize into S1 or S2 ─────────────────────
+    // S1 = Voice Panel: transcript + tool calls only (no vision noise)
     function isSystem1(type) {
-      return type.startsWith('voice.') || type.startsWith('auditor.') ||
-             type.startsWith('retriever.') || type.startsWith('meeting.') ||
-             type.startsWith('presentation.');
+      return type === 'meeting.live_entry' || type === 'voice.tool_call' ||
+             type === 'voice.started' || type === 'voice.stopped' ||
+             type === 'presentation.slide';
     }
 
+    // S2 = Agent Panel: intent classification + search + actions (no openclaw.done noise)
     function isSystem2(type) {
-      return type.startsWith('computer.') || type.startsWith('openclaw.') ||
-             type.startsWith('opencli.') || type.startsWith('browser_loop.') ||
-             type.startsWith('automation.');
+      return type === 'auditor.intent' || type === 'auditor.executing' ||
+             type === 'auditor.fast_lane' || type === 'auditor.suggest' ||
+             type.startsWith('retriever.') ||
+             type === 'computer.task_started' || type === 'computer.task_done' ||
+             type === 'meeting.prep_ready';
     }
 
     // ── Format event detail for log ──────────────────
     function fmtDetail(type, data) {
       if (!data) return '';
-      if (type === 'voice.tool_call') return '<span class="hl">' + esc(data.tool || '') + '</span>' + (data.summary ? ' — ' + esc(trunc(data.summary, 50)) : '');
-      if (type === 'voice.started') return 'provider: <span class="hl">' + esc(data.provider || '') + '</span>';
-      if (type === 'voice.stopped') return '<span class="hl">session ended</span>';
+      // S1 Voice Panel — transcript + tool calls with icons
+      if (type === 'meeting.live_entry') {
+        var entry = data.entry || data.text || '';
+        // Parse role from entry format: [AI] text, [USER] text, [SYSTEM] text
+        var icon = '💬';
+        if (/^\[AI\]/.test(entry)) { icon = '🗣️'; entry = entry.replace(/^\[AI\]\s*/, ''); }
+        else if (/^\[USER\]/.test(entry)) { icon = '👤'; entry = entry.replace(/^\[USER\]\s*/, ''); }
+        else if (/^\[SYSTEM\]/.test(entry)) { icon = '⚙️'; entry = entry.replace(/^\[SYSTEM\]\s*/, ''); }
+        else if (/^\[NOTE\]/.test(entry)) { icon = '📝'; entry = entry.replace(/^\[NOTE\]\s*/, ''); }
+        return icon + ' ' + esc(trunc(entry, 80));
+      }
+      if (type === 'voice.tool_call') return '🔧 <span class="hl">' + esc(data.tool || '') + '</span>' + (data.summary ? ' — ' + esc(trunc(data.summary, 40)) : '');
+      if (type === 'voice.started') return '🎙️ Connected <span class="hl">(' + esc(data.provider || '') + ')</span>';
+      if (type === 'voice.stopped') return '🔇 Session ended';
+      if (type === 'presentation.slide') return '📊 ' + esc(trunc(data.title || data.text || '', 50));
+
+      // S2 Agent Panel — intent + search + actions with icons
+      if (type === 'auditor.intent') return '🎯 Intent: <span class="hl">' + esc(data.action || data.intent || '') + '</span>' + (data.confidence ? ' (' + Math.round(data.confidence * 100) + '%)' : '');
+      if (type === 'auditor.executing') return '⚡ Executing: <span class="hl">' + esc(data.action || '') + '</span>';
+      if (type === 'auditor.fast_lane') return '⚡ Fast: ' + esc(data.action || '');
+      if (type === 'auditor.suggest') return '💡 Suggest: ' + esc(trunc(data.action || '', 50));
+      if (type === 'retriever.topic') return '🔍 Topic: <span class="hl">' + esc(trunc(data.topic || '', 40)) + '</span>';
+      if (type === 'retriever.searching') return '🔍 Searching: ' + esc(trunc(data.query || '', 40));
+      if (type === 'retriever.complete') return '📂 Found ' + (data.results || 0) + ' results';
+      if (type === 'computer.task_started') return '🖥️ <span class="hl">' + esc(trunc(data.instruction || data.task || '', 50)) + '</span>';
+      if (type === 'computer.task_done') return '✅ Done: ' + esc(trunc(data.summary || '', 50));
+      if (type === 'meeting.prep_ready') return '📋 Prep materials ready';
+
+      // Fallback for other events
       if (type === 'meeting.started') return '<span class="hl">joined</span>';
       if (type === 'meeting.vision') return esc(trunc(data.description || data.scene || '', 60));
       if (type === 'meeting.context_pushed') return 'source: <span class="hl">' + esc(data.source || '') + '</span>';
       if (type === 'meeting.action_item') return esc(trunc(data.text || '', 60));
-      if (type === 'meeting.prep_ready') return '<span class="hl">materials ready</span>';
-      if (type === 'meeting.prep_progress') return esc(data.step || '');
-      if (type === 'auditor.intent') return '<span class="hl">' + esc(data.intent || '') + '</span>';
-      if (type === 'auditor.fast_lane') return esc(data.action || '');
-      if (type === 'retriever.topic') return '<span class="hl">' + esc(data.topic || '') + '</span>';
-      if (type === 'retriever.searching') return esc(data.query || '');
-      if (type === 'retriever.complete') return (data.results || 0) + ' results';
-      if (type === 'computer.task_started') return '<span class="hl">' + esc(trunc(data.instruction || data.task || '', 60)) + '</span>';
       if (type === 'computer.task_done') return (data.error ? 'ERR ' : '') + esc(trunc(data.summary || data.error || '', 60));
       if (type === 'openclaw.delta') return esc(trunc(data.text || '', 80));
       if (type === 'opencli.adapter_start') return '<span class="hl">' + esc(data.adapter || '') + '</span>';
