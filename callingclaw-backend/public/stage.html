@@ -1015,8 +1015,15 @@
       fetch(API + '/api/status')
         .then(function(r) { return r.json(); })
         .then(function(body) {
-          if (body.meeting && body.meeting.topic) {
-            document.getElementById('meetingName').textContent = body.meeting.topic;
+          // body.meeting is a string ("idle"/"recording"), not an object
+          // Topic is in voiceSession or workspace context
+          var topic = (body.voiceSession && body.voiceSession.topic)
+            || (body.workspace && body.workspace.topic)
+            || null;
+          if (topic) {
+            document.getElementById('meetingName').textContent = topic;
+          } else if (body.meeting === 'recording') {
+            document.getElementById('meetingName').textContent = 'Meeting in Progress';
           }
         })
         .catch(function() { /* backend not ready yet */ });

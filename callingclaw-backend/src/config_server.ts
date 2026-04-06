@@ -1752,6 +1752,7 @@ export function startConfigServer(services: Services) {
             url: validated.url,
             platform: validated.platform,
             meetingId,
+            title: meetTopic,
           });
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
