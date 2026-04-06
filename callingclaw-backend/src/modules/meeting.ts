@@ -30,6 +30,9 @@ export class MeetingModule {
   private _openclawBridge: OpenClawBridge | null = null;
   private _meetingStartTime: number | null = null;
   private _extractionTimer: Timer | null = null;
+  private _extracting = false;
+  private _extractionCount = 0;
+  private _lastExtractionHash = "";
   private _transcriptHandler: ((entry: any) => void) | null = null;
 
   constructor(context: SharedContext) {
@@ -49,6 +52,9 @@ export class MeetingModule {
     this._meetingStartTime = Date.now();
     this._summaryCount = 0;
     this._lastSummaryHash = "";
+    this._extractionCount = 0;
+    this._lastExtractionHash = "";
+    this._extracting = false;
     console.log("[Meeting] Recording started");
 
     // Extract action items every 2 minutes
@@ -95,8 +101,30 @@ export class MeetingModule {
    * Falls back to direct LLM if OpenClaw unavailable.
    */
   async extractActionItems(): Promise<MeetingNote[]> {
+    // Guard: prevent concurrent extraction
+    if (this._extracting) {
+      console.warn("[Meeting] Extraction already in progress — skipping");
+      return [];
+    }
+    // Circuit breaker: max 5 extractions per meeting session
+    if (this._extractionCount >= 5) {
+      console.warn(`[Meeting] Extraction circuit breaker: ${this._extractionCount} extractions already — refusing`);
+      return [];
+    }
+
     const transcript = this.context.getTranscriptText(50);
     if (!transcript) return [];
+
+    // Idempotency: skip if transcript hasn't changed since last extraction
+    const hash = Bun.hash(transcript).toString(16);
+    if (hash === this._lastExtractionHash && this._extractionCount > 0) {
+      console.warn(`[Meeting] Transcript unchanged (hash ${hash}) — skipping duplicate extraction`);
+      return [];
+    }
+
+    this._extracting = true;
+    this._extractionCount++;
+    this._lastExtractionHash = hash;
 
     try {
       let text: string;
@@ -150,6 +178,8 @@ export class MeetingModule {
     } catch (e: any) {
       console.error("[Meeting] Extraction error:", e.message);
       return [];
+    } finally {
+      this._extracting = false;
     }
   }
 
