@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CallingClaw Document</title>
+<style>
+  :root {
+    --accent: #E63946;
+    --accent-light: #FEE2E2;
+    --bg: #FFFFFF;
+    --text: #1a1a2e;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --code-bg: #f8f9fa;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 48px 40px;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* Headings */
+  h1 { font-size: 28px; font-weight: 700; margin: 0 0 12px; border-bottom: 3px solid var(--accent); padding-bottom: 8px; }
+  h2 { font-size: 22px; font-weight: 600; margin: 40px 0 12px; color: var(--accent); }
+  h3 { font-size: 17px; font-weight: 600; margin: 28px 0 8px; }
+  h4 { font-size: 15px; font-weight: 600; margin: 20px 0 6px; color: var(--muted); }
+
+  /* Paragraphs */
+  p { margin: 8px 0 16px; }
+  strong { color: var(--accent); font-weight: 600; }
+  em { color: var(--muted); }
+
+  /* Links */
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-light); }
+  a:hover { border-color: var(--accent); }
+
+  /* Lists */
+  ul, ol { margin: 8px 0 16px; padding-left: 24px; }
+  li { margin: 4px 0; }
+  li::marker { color: var(--accent); }
+
+  /* Blockquotes */
+  blockquote {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-light);
+    padding: 12px 16px;
+    margin: 12px 0;
+    border-radius: 0 8px 8px 0;
+    color: var(--text);
+  }
+  blockquote p { margin: 0; }
+
+  /* Code */
+  code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  pre {
+    background: #1a1a2e;
+    color: #e2e8f0;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th {
+    background: var(--accent);
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  /* Horizontal rules */
+  hr {
+    border: none;
+    height: 2px;
+    background: var(--border);
+    margin: 32px 0;
+  }
+
+  /* Task lists */
+  li input[type="checkbox"] { margin-right: 8px; accent-color: var(--accent); }
+
+  /* Images */
+  img { max-width: 100%; border-radius: 8px; margin: 12px 0; }
+
+  /* Emoji sections (📌 📎 🏗️ etc) */
+  h2:has(+ *), h2 { position: relative; }
+
+  /* CallingClaw branding footer */
+  .cc-footer {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  /* Loading state */
+  #loading { text-align: center; padding: 80px 20px; color: var(--muted); }
+  #content { display: none; }
+</style>
+</head>
+<body>
+
+<div id="loading">Loading document...</div>
+<div id="content"></div>
+<div class="cc-footer" id="footer" style="display:none">Rendered by CallingClaw</div>
+
+<script>
+  // Simple markdown → HTML renderer (no dependencies)
+  function renderMarkdown(md) {
+    var html = md
+      // Escape HTML
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      // Code blocks (``` ... ```)
+      .replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+        return '<pre><code>' + code.trim() + '</code></pre>';
+      })
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Headers
+      .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Bold + Italic
+      .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Blockquotes
+      .replace(/^&gt; (.+)$/gm, '<blockquote><p>$1</p></blockquote>')
+      // Horizontal rules
+      .replace(/^---+$/gm, '<hr>')
+      .replace(/^\*\*\*+$/gm, '<hr>')
+      // Images
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">')
+      // Links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      // Tables (simple)
+      .replace(/^\|(.+)\|$/gm, function(line) {
+        if (/^[\s|:-]+$/.test(line.replace(/\|/g, '').trim())) return '<!-- table sep -->';
+        var cells = line.split('|').filter(function(c) { return c.trim(); });
+        return cells.map(function(c) { return '<td>' + c.trim() + '</td>'; }).join('');
+      })
+      // Unordered lists
+      .replace(/^[\-\*] (.+)$/gm, '<li>$1</li>')
+      // Ordered lists
+      .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+      // Task lists
+      .replace(/<li>\[x\] /gi, '<li><input type="checkbox" checked disabled> ')
+      .replace(/<li>\[ \] /gi, '<li><input type="checkbox" disabled> ')
+      // Paragraphs (wrap loose lines)
+      .replace(/^([^<\n].+)$/gm, function(line) {
+        if (/^<(h[1-4]|li|blockquote|pre|hr|img|td|table)/.test(line)) return line;
+        return '<p>' + line + '</p>';
+      })
+      // Wrap consecutive <li> in <ul>
+      .replace(/(<li>[\s\S]*?<\/li>\n?)+/g, '<ul>$&</ul>')
+      // Wrap consecutive <td> rows in <table>
+      .replace(/((<td>[\s\S]*?<\/td>\n?)+)/g, function(block) {
+        var rows = block.trim().split('\n').filter(function(r) { return r.includes('<td>'); });
+        if (rows.length < 2) return '<table><tr>' + block + '</tr></table>';
+        var header = '<tr>' + rows[0].replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>') + '</tr>';
+        var body = rows.slice(1).map(function(r) { return '<tr>' + r + '</tr>'; }).join('\n');
+        return '<table><thead>' + header + '</thead><tbody>' + body + '</tbody></table>';
+      })
+      // Clean up table separators
+      .replace(/<!-- table sep -->\n?/g, '')
+      // Clean up empty paragraphs
+      .replace(/<p>\s*<\/p>/g, '');
+
+    return html;
+  }
+
+  // Load markdown from URL parameter: /render?file=path or /render.html?file=path
+  var params = new URLSearchParams(window.location.search);
+  var filePath = params.get('file');
+
+  if (filePath) {
+    // Fetch from backend API
+    var apiUrl = '/api/file/read?path=' + encodeURIComponent(filePath);
+    fetch(apiUrl)
+      .then(function(r) {
+        if (!r.ok) throw new Error('File not found: ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        var md = data.content || '';
+        document.getElementById('content').innerHTML = renderMarkdown(md);
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('footer').style.display = 'block';
+        // Set title from first h1
+        var h1 = document.querySelector('h1');
+        if (h1) document.title = h1.textContent + ' — CallingClaw';
+      })
+      .catch(function(err) {
+        document.getElementById('loading').textContent = 'Error: ' + err.message;
+      });
+  } else if (params.get('content')) {
+    // Direct content via URL param (for short docs)
+    var md = decodeURIComponent(params.get('content'));
+    document.getElementById('content').innerHTML = renderMarkdown(md);
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('footer').style.display = 'block';
+  } else {
+    document.getElementById('loading').textContent = 'No file specified. Use ?file=/path/to/file.md';
+  }
+</script>
+</body>
+</html>

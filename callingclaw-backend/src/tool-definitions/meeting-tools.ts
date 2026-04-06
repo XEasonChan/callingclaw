@@ -623,8 +623,13 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               resolvedShareUrl = knownUrl.url;
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep URLs)`);
             } else if (knownFile) {
-              resolvedShareUrl = knownFile.path.startsWith("/")
-                ? `http://localhost:${CONFIG.port}${knownFile.path}` : knownFile.path;
+              // Markdown files → use renderer for CallingClaw-styled display
+              if (/\.md$/i.test(knownFile.path)) {
+                resolvedShareUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(knownFile.path)}`;
+              } else {
+                resolvedShareUrl = knownFile.path.startsWith("/")
+                  ? `http://localhost:${CONFIG.port}${knownFile.path}` : knownFile.path;
+              }
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep files)`);
             } else if (/google/i.test(query)) {
               // Google search: extract search terms

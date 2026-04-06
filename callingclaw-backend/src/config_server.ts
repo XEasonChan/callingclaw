@@ -3313,6 +3313,29 @@ STEP-BY-STEP FLOW:
         return Response.json({ documents: services.context.stageDocuments }, { headers });
       }
 
+      // GET /api/file/read — Read a local file (for markdown renderer + voice context)
+      if (url.pathname === "/api/file/read" && req.method === "GET") {
+        const filePath = url.searchParams.get("path");
+        if (!filePath) return Response.json({ error: "path required" }, { status: 400, headers });
+        // Security: only allow reading from known safe directories
+        const safePrefixes = [
+          require("os").homedir() + "/.callingclaw/",
+          require("os").homedir() + "/.openclaw/",
+          require("os").homedir() + "/Library/Mobile Documents/com~apple~CloudDocs/Tanka/",
+          require("os").homedir() + "/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw",
+        ];
+        const resolved = require("path").resolve(filePath);
+        if (!safePrefixes.some(p => resolved.startsWith(p))) {
+          return Response.json({ error: "Access denied — path outside allowed directories" }, { status: 403, headers });
+        }
+        try {
+          const content = await Bun.file(resolved).text();
+          return Response.json({ content, path: resolved, size: content.length }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: `File not found: ${e.message}` }, { status: 404, headers });
+        }
+      }
+
       // POST /api/screen/iframe/load — Load URL into stage slide iframe
       if (url.pathname === "/api/screen/iframe/load" && req.method === "POST") {
         if (!services.chromeLauncher?.presentingPage) {
