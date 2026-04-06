@@ -916,9 +916,13 @@ export class RealtimeClient {
    *  GA API requires session.type on EVERY session.update, not just the first one. */
   private _buildSessionUpdate(fields: Record<string, any>) {
     const session: Record<string, any> = { ...fields };
-    // GA API (openai/openai15): every session.update must include type: "realtime"
+    // GA API (openai/openai15): every session.update must include type + output_modalities
+    // CRITICAL: partial session.update without output_modalities may reset to text-only
     if (this._provider.name === "openai" || this._provider.name === "openai15") {
       session.type = "realtime";
+      if (!session.output_modalities) {
+        session.output_modalities = ["audio"];
+      }
     }
     return { session };
   }
