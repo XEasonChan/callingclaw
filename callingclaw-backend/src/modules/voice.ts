@@ -57,6 +57,7 @@ export class VoiceModule {
   private _lastAudioOutputTs: number = 0;  // When AI last produced audio (for echo debounce)
   private _responseDone = false;   // response.done received (generation complete)
   private _audioDone = false;      // response.audio.done received (playback complete)
+  private _responseHadAudio = false; // did this response produce any audio.delta?
 
   // Heard transcript tracking (interruption truncation)
   private _currentResponseAudioSamples = 0;  // Total samples received from provider
@@ -117,11 +118,18 @@ export class VoiceModule {
    */
   private _tryFlushAfterComplete() {
     if (this._responseDone && this._audioDone) {
-      // Both done — safe to start next response
+      // Both done — safe to start next response (audio was played)
       this._responseDone = false;
       this._audioDone = false;
-      // 500ms settle delay for Meet's audio buffer
+      this._responseHadAudio = false;
       setTimeout(() => this.client.flushPendingResponse(), 500);
+    } else if (this._responseDone && !this._responseHadAudio) {
+      // Response done but NO audio was produced (text-only response, e.g., from sendText)
+      // Flush immediately — no audio to wait for
+      this._responseDone = false;
+      this._audioDone = false;
+      this._responseHadAudio = false;
+      this.client.flushPendingResponse();
     }
   }
 
@@ -252,6 +260,7 @@ export class VoiceModule {
       // Reset completion flags for new response
       this._responseDone = false;
       this._audioDone = false;
+      this._responseHadAudio = false;
       // Reset heard-transcript counters for new response
       this._currentResponseAudioSamples = 0;
       this._currentResponseStartTime = 0;
@@ -267,6 +276,8 @@ export class VoiceModule {
       this._currentResponseAudioSamples += samples;
       if (!this._currentResponseStartTime) this._currentResponseStartTime = Date.now();
 
+      // Track audio presence for flush logic (text-only responses have no audio.delta)
+      this._responseHadAudio = true;
       // Track last audio output for echo debounce
       this._lastAudioOutputTs = Date.now();
 
