@@ -126,13 +126,16 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "share_screen",
         description:
-          "Share CallingClaw's screen in the current Google Meet call. Use target 'iframe' to load local content into the Meeting Stage's slide frame without leaving the stage view. Omit target to share the full Meeting Stage (default).",
+          "Share a URL or file in the Google Meet call. ALWAYS provide a url when the user mentions a specific page or file. " +
+          "Examples: '投屏官网' → url='https://www.callingclaw.com', '投屏PRD' → url='http://localhost:4000/prd-phase1.html'. " +
+          "Use target='iframe' for local HTML files to load into the Meeting Stage slide frame.",
         parameters: {
           type: "object",
           properties: {
-            url: { type: "string", description: "URL or file path to present. Omit to show default Meeting Stage." },
-            target: { type: "string", description: "Where to load: 'iframe' loads into stage slide frame (local content only), omit for full page." },
+            url: { type: "string", description: "URL to present. REQUIRED when user mentions a specific page. Examples: 'https://www.callingclaw.com', 'http://localhost:4000/prd-phase1.html'" },
+            target: { type: "string", description: "'iframe' = load into Meeting Stage slide frame (localhost only). Omit for full page share." },
           },
+          required: ["url"],
         },
       },
       {
