@@ -26,6 +26,7 @@ import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion, pushContextUpdate } from "../voice-persona";
 import { callModel, parseJSON } from "../ai_gateway/llm-client";
 import { CONFIG } from "../config";
+import { PAGE_EXTRACT_JS, formatPageContext } from "../utils/page-extract";
 
 // ── Types ──
 
@@ -810,18 +811,42 @@ Respond with JSON only:
         source: "transcript_auditor",
       });
 
-      // Push completion to Voice AI as a live note
-      if (
-        this.voice?.connected &&
-        this.meetingPrepSkill.currentBrief
-      ) {
-        notifyTaskCompletion(
-          this.voice,
-          this.meetingPrepSkill,
-          instruction,
-          executionResult,
-          this.eventBus
-        );
+      // ── Close the loop: inject result + DOM context → trigger voice to continue ──
+      if (this.voice?.connected) {
+        // 1. Push completion as live note (existing behavior)
+        if (this.meetingPrepSkill.currentBrief) {
+          notifyTaskCompletion(
+            this.voice,
+            this.meetingPrepSkill,
+            instruction,
+            executionResult,
+            this.eventBus
+          );
+        } else {
+          // No prep brief — inject directly
+          this.voice.injectContext(`[DONE] ${action}: ${executionResult}`);
+        }
+
+        // 2. For visual actions: re-extract DOM and inject page context
+        const visualActions = new Set(["click", "scroll", "navigate", "share_url", "share_file", "share_screen", "open_url"]);
+        if (action && visualActions.has(action) && this.chromeLauncher?.presentingPage) {
+          try {
+            await new Promise(r => setTimeout(r, 500)); // wait for page settle
+            const raw = await this.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+            const pageCtx = formatPageContext(raw);
+            if (pageCtx) {
+              this.voice.injectContext(pageCtx);
+              console.log(`[TranscriptAuditor] DOM context injected after ${action} (${pageCtx.length} chars)`);
+            }
+          } catch (e: any) {
+            console.warn(`[TranscriptAuditor] DOM extract failed after ${action}: ${e.message}`);
+          }
+        }
+
+        // 3. THE MISSING PIECE: trigger voice model to process result and continue
+        //    Without this, voice sits silent after auditor executes an action.
+        this.voice.sendEvent("response.create", {});
+        console.log(`[TranscriptAuditor] Triggered voice response after ${action}`);
       }
 
       console.log(
