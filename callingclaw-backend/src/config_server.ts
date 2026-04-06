@@ -1750,6 +1750,7 @@ export function startConfigServer(services: Services) {
         {
           const brief = prepBrief || services.meetingPrepSkill?.currentBrief;
           const docUrl = resolveDocumentUrl(brief);
+          console.log(`[Meeting] Stage check: prepBrief=${!!prepBrief}, currentBrief=${!!services.meetingPrepSkill?.currentBrief}, docUrl=${docUrl || "null"}, scenes=${brief?.scenes?.length || 0}, files=${brief?.filePaths?.length || 0}`);
           if (docUrl) {
             try {
               const docs = (brief?.filePaths || []).map((f: any) => ({
