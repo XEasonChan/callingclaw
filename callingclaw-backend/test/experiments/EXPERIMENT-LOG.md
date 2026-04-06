@@ -2,7 +2,14 @@
 
 > autoresearch 风格：每轮实验有明确目标 → 执行 → 验证 → keep/revert → 下一轮
 
-## Current Score: 72% (v2.8.14, commit 117a917)
+## Current Score: 72% best (v2.8.14) | Latest: 33% (Chrome mid-session crash, not regression)
+
+## Latest Run (EXP-2 audio fix)
+- product_presentation: 83% (A-01~A-04 all pass) ✅
+- Chrome crashed at B-01 → rest of tests got 0
+- Echo debounce NOT testable via autoeval (sendText doesn't trigger VAD)
+- Need real voice meeting to verify audio truncation fix
+- silence_duration_ms 800→1200 applied but untestable without voice
 
 ---
 
