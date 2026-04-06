@@ -126,16 +126,15 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "share_screen",
         description:
-          "Share a URL or file in the Google Meet call. ALWAYS provide a url when the user mentions a specific page or file. " +
-          "Examples: '投屏官网' → url='https://www.callingclaw.com', '投屏PRD' → url='http://localhost:4000/prd-phase1.html'. " +
-          "Use target='iframe' for local HTML files to load into the Meeting Stage slide frame.",
+          "Share a page in the Google Meet call. Pass what the user said as the url — " +
+          "your agent will resolve it to a real URL. Examples: url='CallingClaw 官网', url='PRD 文档', url='Google'. " +
+          "Use target='iframe' for local files to load into the Meeting Stage slide frame.",
         parameters: {
           type: "object",
           properties: {
-            url: { type: "string", description: "URL to present. REQUIRED when user mentions a specific page. Examples: 'https://www.callingclaw.com', 'http://localhost:4000/prd-phase1.html'" },
+            url: { type: "string", description: "What to share — can be a natural language description (e.g. '官网', 'PRD', 'Google') or a real URL. Your agent resolves it." },
             target: { type: "string", description: "'iframe' = load into Meeting Stage slide frame (localhost only). Omit for full page share." },
           },
-          required: ["url"],
         },
       },
       {
@@ -604,9 +603,59 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // Default: share screen with full page
-          // NEVER share an empty Meeting Stage — resolve content first.
+          // ── Resolve natural language → URL ──
+          // Voice model passes user intent ("官网", "PRD", "Google manus"), agent resolves to real URL
           let resolvedShareUrl = shareUrl;
+          if (resolvedShareUrl && !resolvedShareUrl.startsWith("http") && !resolvedShareUrl.startsWith("/") && !resolvedShareUrl.startsWith("file:")) {
+            // Natural language → URL resolution
+            const query = resolvedShareUrl.toLowerCase();
+            const brief = meetingPrepSkill?.currentBrief;
+
+            // 1. Check prep brief's known URLs/files
+            const knownUrl = brief?.browserUrls?.find(u =>
+              query.split(/\s+/).some(w => u.description.toLowerCase().includes(w) || u.url.toLowerCase().includes(w))
+            );
+            const knownFile = brief?.filePaths?.find(f =>
+              query.split(/\s+/).some(w => f.description.toLowerCase().includes(w) || f.path.toLowerCase().includes(w))
+            );
+
+            if (knownUrl) {
+              resolvedShareUrl = knownUrl.url;
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep URLs)`);
+            } else if (knownFile) {
+              resolvedShareUrl = knownFile.path.startsWith("/")
+                ? `http://localhost:${CONFIG.port}${knownFile.path}` : knownFile.path;
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep files)`);
+            } else if (/google/i.test(query)) {
+              // Google search: extract search terms
+              const searchTerms = query.replace(/google|搜索|搜一下|search/gi, "").trim();
+              resolvedShareUrl = searchTerms
+                ? `https://www.google.com/search?q=${encodeURIComponent(searchTerms)}`
+                : "https://www.google.com";
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (Google search)`);
+            } else {
+              // Try as direct URL with https://
+              resolvedShareUrl = `https://www.${query.replace(/官网|网站|首页|homepage/gi, "").trim().replace(/\s+/g, "")}.com`;
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
+            }
+          }
+
+          // ── If already sharing, navigate instead of opening new tab ──
+          if (resolvedShareUrl && deps.chromeLauncher?.presentingPage) {
+            try {
+              await deps.chromeLauncher.navigatePresentingPage(resolvedShareUrl);
+              console.log(`[share_screen] Navigated presenting tab to ${resolvedShareUrl} (reused tab)`);
+              // Re-extract DOM for voice context
+              const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
+              const raw = await deps.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+              const pageCtx = formatPageContext(raw);
+              if (pageCtx && deps.voice) deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+              if (deps.voice) deps.voice.presentationMode = true;
+              return `Now presenting: ${resolvedShareUrl}. Describe what you see on the page.`;
+            } catch (e: any) {
+              console.warn(`[share_screen] Navigate failed, falling through to new share: ${e.message}`);
+            }
+          }
 
           if (!resolvedShareUrl && deps.chromeLauncher) {
             // Try to find presentable content from prep brief
