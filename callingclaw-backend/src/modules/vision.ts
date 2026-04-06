@@ -302,16 +302,22 @@ ${recentTranscript}`;
       if (CONFIG.openai.apiKey && this.visionModel !== "gpt-4o-mini") {
         try {
           const fallbackClient = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+          const fbSystem = meetingMode
+            ? "Describe what's on the meeting screen. Focus on shared/presented content. 1-3 sentences."
+            : "Describe what's on screen concisely. Focus on active app and visible content. 1-3 sentences.";
+          const fbUser = meetingMode
+            ? "What's currently shown on the meeting screen?"
+            : "Describe what's currently on screen.";
           const fallbackResp = await fallbackClient.chat.completions.create({
             model: "gpt-4o-mini",
             max_tokens: meetingMode ? 300 : 500,
             messages: [
-              { role: "system", content: systemPrompt },
+              { role: "system", content: fbSystem },
               {
                 role: "user",
                 content: [
                   { type: "image_url", image_url: { url: `data:image/jpeg;base64,${screenshot}`, detail: "low" } },
-                  { type: "text", text: userText },
+                  { type: "text", text: fbUser },
                 ],
               },
             ],
