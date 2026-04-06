@@ -1,0 +1,4 @@
+timestamp	commit	score	breakdown	experiment	details
+2026-04-06T13:31:35	f4413f8	70	tool:6/6 log:1/6 voice:4/6	voice-only: test intent→action pipeline via sendText	V-002,V-006
+2026-04-06T13:37:57	2f8099e	100	system:6/6 tool:6/6 voice:6/6	voice-only: test intent→action pipeline via sendText	all_pass
+2026-04-06T13:48:02	3c2658b	55	system:4/4 tool:0/4 voice:2/4	voice-only: test intent→action pipeline via sendText	V-001,V-002,V-003,V-004
