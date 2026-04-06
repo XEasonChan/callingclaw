@@ -3,7 +3,7 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [2.8.14] - 2026-04-06
+## [2.9.0] - 2026-04-07
 
 ### Added
 - **Meeting Stage pre-generation** — per-meeting Stage HTML with iframe content baked in. No more "Your AI is preparing..." placeholder. Markdown files rendered via `render.html` with CallingClaw branding (white bg, coral red accent)

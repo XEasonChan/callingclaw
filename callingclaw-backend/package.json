@@ -9,6 +9,10 @@
     "dev": "bun --hot run src/callingclaw.ts",
     "setup:python": "pip3 install -r requirements.txt",
     "test": "bun test",
+    "eval": "bun eval/run.ts",
+    "eval:tool": "bun eval/run.ts --suite tool",
+    "eval:auditor": "bun eval/run.ts --suite auditor",
+    "eval:export": "bun eval/run.ts --export",
     "check": "bun scripts/check-wiring.ts"
   },
   "devDependencies": {
