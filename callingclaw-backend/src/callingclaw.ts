@@ -584,6 +584,13 @@ eventBus.on("meeting.ended", async () => {
   if (contextRetriever.active) {
     contextRetriever.deactivate();
   }
+
+  // ── Reset voice session for clean next meeting ──
+  // Clears all injected context + refreshes instructions so new meeting
+  // starts without old conversation history leaking in
+  if (voice.connected) {
+    voice.resetForNewMeeting();
+  }
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
 

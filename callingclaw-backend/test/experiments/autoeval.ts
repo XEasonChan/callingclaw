@@ -166,13 +166,14 @@ const KNOWN_BUGS = [
   { id: "BUG-002", status: "FIXED", desc: "Voice provider param passed as object" },
   { id: "BUG-003", status: "FIXED", desc: "--no-startup-window blocks Chrome" },
   { id: "BUG-004", status: "FIXED", desc: "context.on('page') kills presenting tabs" },
-  { id: "BUG-005", status: "OPEN", desc: "BrowserCapture CDP not found → no screenshots" },
-  { id: "BUG-006", status: "OPEN", desc: "Voice model won't self-drive tool calls" },
-  { id: "BUG-007", status: "OPEN", desc: "VisionModule Gemini/OpenRouter connection fail" },
-  { id: "BUG-008", status: "OPEN", desc: "scroll target 'Vision' not found on site" },
-  { id: "BUG-009", status: "OPEN", desc: "interact can't operate on Stage iframe" },
-  { id: "BUG-010", status: "OPEN", desc: "Audio playback to Meet not verified" },
-  { id: "BUG-011", status: "OPEN", desc: "Stage iframe resets when share_screen switches URL" },
+  { id: "BUG-005", status: "MITIGATED", desc: "BrowserCapture CDP — Vision fallback (gpt-4o-mini) works" },
+  { id: "BUG-006", status: "FIXED", desc: "Voice model self-drives tool calls (75% autoeval)" },
+  { id: "BUG-007", status: "MITIGATED", desc: "VisionModule Gemini fail — gpt-4o-mini fallback + NO_PROXY fix" },
+  { id: "BUG-009", status: "FIXED", desc: "iframe scroll via contentWindow.scrollBy (11%→22%→34%)" },
+  { id: "BUG-010", status: "OPEN", desc: "Audio playback to Meet — need real voice test. /api/audio/status added." },
+  { id: "BUG-011", status: "FIXED", desc: "Pre-generated Stage HTML, iframe src baked in" },
+  { id: "BUG-016", status: "FIXED", desc: "REST API — NO_PROXY added for api.openai.com + openrouter.ai" },
+  { id: "BUG-017", status: "FIXED", desc: "Voice session resetForNewMeeting() on meeting.ended" },
 ];
 
 // ══════════════════════════════════════════════════════════════

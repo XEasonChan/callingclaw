@@ -3335,6 +3335,24 @@ STEP-BY-STEP FLOW:
       // ── Bridge / Google / Static ──
       // ══════════════════════════════════════════════════════════════
 
+      // GET /api/audio/status — Audio pipeline diagnostic
+      if (url.pathname === "/api/audio/status" && req.method === "GET") {
+        const log = (() => { try { return require("child_process").execSync("strings /tmp/callingclaw-backend.log | tail -100").toString(); } catch { return ""; } })();
+        const audioChunks = (log.match(/Mic audio chunk/g) || []).length;
+        const pipelineReady = log.includes("pipeline_ready");
+        const echoSuppressed = (log.match(/Echo suppressed/g) || []).length;
+        const interrupted = (log.match(/interrupted AI response/g) || []).length;
+        const speechStarted = (log.match(/speech_started/g) || []).length;
+        const audioDeltas = (log.match(/response\.audio\.d/g) || []).length;
+        return Response.json({
+          pipeline: pipelineReady ? "ready" : "not_ready",
+          capture: { chunks: audioChunks, flowing: audioChunks > 0 },
+          playback: { audioDeltas, hasOutput: audioDeltas > 0 },
+          echo: { suppressed: echoSuppressed },
+          vad: { speechStarted, interrupted },
+        }, { headers });
+      }
+
       // GET /api/stage/documents — Working documents on the Meeting Stage
       if (url.pathname === "/api/stage/documents" && req.method === "GET") {
         return Response.json({ documents: services.context.stageDocuments }, { headers });

@@ -575,6 +575,28 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
+   * Reset session state for a new meeting.
+   * Clears all injected context and conversation history so the next meeting
+   * starts fresh. Does NOT disconnect — voice stays connected for continuity.
+   */
+  resetForNewMeeting() {
+    // Clear all injected context items (Layer 2 + Layer 3)
+    this.client.clearContextQueue();
+    // Reset audio state tracking
+    this._currentResponseAudioSamples = 0;
+    this._currentResponseStartTime = 0;
+    this._currentResponseTranscript = "";
+    this._lastAudioOutputTs = 0;
+    this._presentationMode = false;
+    this._setAudioState("listening");
+    // Force a fresh session.update to reset server-side state
+    if (this.client.connected && this._lastInstructions) {
+      this.client.updateInstructions(this._lastInstructions);
+      console.log("[Voice] Session reset for new meeting (context cleared, instructions refreshed)");
+    }
+  }
+
+  /**
    * Send audio chunk from Python sidecar
    */
   sendAudio(base64Pcm: string) {
