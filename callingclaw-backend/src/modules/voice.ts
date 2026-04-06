@@ -259,8 +259,8 @@ export class VoiceModule {
       this._tracer.mark('ttsPlaybackEnd');
       this._tracer.endTurn();
       this._setAudioState("listening");
-      // Flush any queued response.create that was waiting for speech to finish
-      this.client.flushPendingResponse();
+      // DON'T flush here — audio.done fires per audio segment, not per full response.
+      // Flush on response.done instead (below) to avoid cutting off multi-part responses.
     });
 
     this.client.on("response.done", (event: any) => {
@@ -272,6 +272,9 @@ export class VoiceModule {
       if (this._audioState !== "idle") {
         this._setAudioState("listening");
       }
+      // NOW flush queued response.create — the full response (all audio segments) is done.
+      // Wait a brief moment to let the audio pipeline settle before starting a new response.
+      setTimeout(() => this.client.flushPendingResponse(), 300);
     });
 
     // ── Live Transcript: User speech ──
