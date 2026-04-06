@@ -3385,12 +3385,13 @@ STEP-BY-STEP FLOW:
         if (!shareUrl) {
           try {
             const fs = require("fs");
-            const stageFiles = fs.readdirSync("/tmp")
-              .filter((f: string) => f.startsWith("callingclaw-stage-") && f.endsWith(".html"))
-              .map((f: string) => ({ name: f, mtime: fs.statSync(`/tmp/${f}`).mtimeMs }))
+            const publicDir = require("path").resolve(import.meta.dir, "../public");
+            const stageFiles = fs.readdirSync(publicDir)
+              .filter((f: string) => f.startsWith("stage-") && f.endsWith(".html") && f !== "stage.html")
+              .map((f: string) => ({ name: f, mtime: fs.statSync(`${publicDir}/${f}`).mtimeMs }))
               .sort((a: any, b: any) => b.mtime - a.mtime);
             if (stageFiles[0]) {
-              shareUrl = `file:///tmp/${stageFiles[0].name}`;
+              shareUrl = `http://localhost:${CONFIG.port}/${stageFiles[0].name}`;
               console.log(`[API] Using pre-generated Stage: ${shareUrl}`);
             }
           } catch {}
@@ -3408,12 +3409,38 @@ STEP-BY-STEP FLOW:
         return Response.json(result, { headers });
       }
 
-      // POST /api/screen/scroll — Scroll the presenting tab
+      // POST /api/screen/scroll — Scroll the presenting tab (or iframe if on Stage)
       if (url.pathname === "/api/screen/scroll" && req.method === "POST") {
         if (!services.chromeLauncher?.presentingPage) {
           return Response.json({ error: "No presenting tab open" }, { status: 400, headers });
         }
         const body = (await req.json().catch(() => ({}))) as { direction?: "up" | "down"; target?: string; pixels?: number };
+
+        // If on Stage, scroll the IFRAME content (not the Stage outer page)
+        const pageUrl = String(services.chromeLauncher.presentingPage.url());
+        const isOnStage = pageUrl.includes("/stage") || pageUrl.includes("callingclaw-stage-");
+        if (isOnStage) {
+          try {
+            const px = body.pixels || 500;
+            const dir = body.direction === "up" ? -px : px;
+            const iframeResult = await services.chromeLauncher.evaluateOnSlideFrame(`
+              window.scrollBy({ top: ${dir}, behavior: 'smooth' });
+              return JSON.stringify({
+                scrollY: Math.round(window.scrollY),
+                scrollMax: Math.round(document.documentElement.scrollHeight - window.innerHeight),
+                pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100)
+              });
+            `);
+            const info = iframeResult ? JSON.parse(String(iframeResult)) : null;
+            return Response.json({
+              success: true,
+              result: info ? `iframe scrolled ${body.direction || "down"}: ${info.pct}% (${info.scrollY}/${info.scrollMax}px)` : "iframe scrolled"
+            }, { headers });
+          } catch (e: any) {
+            return Response.json({ success: false, error: `iframe scroll failed: ${e.message}` }, { headers });
+          }
+        }
+
         try {
           let scrollResult: any;
           if (body.target) {

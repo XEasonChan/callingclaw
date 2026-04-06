@@ -702,12 +702,12 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             const stageFile = (() => {
               try {
                 const fs = require("fs");
-                // Find the most recent custom stage file for any meeting
-                const files = fs.readdirSync("/tmp")
-                  .filter((f: string) => f.startsWith("callingclaw-stage-") && f.endsWith(".html"))
-                  .map((f: string) => ({ name: f, mtime: fs.statSync(`/tmp/${f}`).mtimeMs }))
+                const publicDir = require("path").resolve(import.meta.dir, "../../public");
+                const files = fs.readdirSync(publicDir)
+                  .filter((f: string) => f.startsWith("stage-") && f.endsWith(".html") && f !== "stage.html")
+                  .map((f: string) => ({ name: f, mtime: fs.statSync(`${publicDir}/${f}`).mtimeMs }))
                   .sort((a: any, b: any) => b.mtime - a.mtime);
-                return files[0] ? `file:///tmp/${files[0].name}` : null;
+                return files[0] ? `http://localhost:${CONFIG.port}/${files[0].name}` : null;
               } catch { return null; }
             })();
 

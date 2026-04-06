@@ -85,12 +85,15 @@ export async function generateStageHtml(options: StageGeneratorOptions): Promise
     'var DEMO_MODE = false; // Pre-generated stage — no demo needed'
   );
 
-  // Write to /tmp
-  const outPath = `/tmp/callingclaw-stage-${meetingId}.html`;
+  // Write to public/ directory so it's served via localhost (same-origin as iframe content)
+  // file:// would be cross-origin with http://localhost iframe → contentDocument blocked
+  const publicDir = resolve(import.meta.dir, "../../public");
+  const outFilename = `stage-${meetingId}.html`;
+  const outPath = resolve(publicDir, outFilename);
   await Bun.write(outPath, html);
   console.log(`[StageGenerator] Generated: ${outPath} (title: "${title}", doc: ${documentUrl})`);
 
-  return `file://${outPath}`;
+  return `http://localhost:${CONFIG.port}/${outFilename}`;
 }
 
 /**
