@@ -406,6 +406,9 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           eventBus.emit("voice.tool_call", { tool: "interact", summary: `${action} ${target}`.slice(0, 80) });
           const cl = deps.chromeLauncher;
           if (!cl?.presentingPage) return "No presenting page active. Use share_screen first.";
+          // Detect if presenting tab is on Meeting Stage (scroll/click should target iframe)
+          const currentPageUrl = String(cl.presentingPage?.url() || "");
+          const onStage = currentPageUrl.includes("/stage") || currentPageUrl.includes("callingclaw-stage-");
           let actionResult: string;
           try {
             switch (action) {
@@ -482,8 +485,56 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
               }
               case "scroll":
               case "scroll_down": {
-                // Section-aware scroll: find next heading below viewport and scroll to it
-                // Falls back to 75% viewport scroll if no heading found
+                // If on Stage page, scroll the IFRAME content (not the outer Stage)
+                if (onStage) {
+                  const dir = target === "up" ? -1 : 1;
+                  const iframeScroll = await cl.evaluateOnPresentingPage(`(() => {
+                    var iframe = document.getElementById('slideFrame');
+                    if (!iframe || !iframe.contentWindow) return JSON.stringify({ error: 'no iframe' });
+                    var doc = iframe.contentDocument;
+                    var vh = iframe.clientHeight;
+
+                    // Section-aware: find next heading in iframe
+                    if (${dir} > 0 && doc) {
+                      var headings = doc.querySelectorAll('h1,h2,h3');
+                      var currentTop = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                      for (var h of headings) {
+                        var hTop = h.getBoundingClientRect().top + currentTop;
+                        if (hTop > currentTop + vh * 0.3) {
+                          h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                          var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+                          return JSON.stringify({
+                            scrollY: Math.round(st), scrollMax: Math.round(sh - vh),
+                            pct: Math.round(st / Math.max(1, sh - vh) * 100),
+                            nextSection: (h.textContent || '').trim().substring(0, 60)
+                          });
+                        }
+                      }
+                    }
+
+                    // Fallback: scroll by viewport height
+                    iframe.contentWindow.scrollBy({ top: ${dir} * Math.round(vh * 0.75), behavior: 'smooth' });
+                    var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                    var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+                    return JSON.stringify({
+                      scrollY: Math.round(st), scrollMax: Math.round(sh - vh),
+                      pct: Math.round(st / Math.max(1, sh - vh) * 100), nextSection: null
+                    });
+                  })()`);
+                  try {
+                    const info = JSON.parse(String(iframeScroll));
+                    if (info.error) { actionResult = `iframe: ${info.error}`; }
+                    else {
+                      actionResult = info.nextSection
+                        ? `Scrolled iframe to: "${info.nextSection}". Position: ${info.pct}%.`
+                        : `Scrolled iframe ${target || "down"}. Position: ${info.pct}%.`;
+                    }
+                  } catch { actionResult = `Scrolled iframe ${target || "down"}.`; }
+                  break;
+                }
+
+                // Regular page scroll (not Stage)
                 const scrollInfo = await cl.evaluateOnPresentingPage(`(() => {
                   var vh = window.innerHeight;
                   var currentY = window.scrollY;
@@ -534,6 +585,23 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                 break;
               }
               case "scroll_up": {
+                // Reuse the scroll_down Stage detection (target="up")
+                if (onStage) {
+                  const iframeUp = await cl.evaluateOnPresentingPage(`(() => {
+                    var iframe = document.getElementById('slideFrame');
+                    if (!iframe || !iframe.contentWindow) return JSON.stringify({ error: 'no iframe' });
+                    iframe.contentWindow.scrollBy({ top: -Math.round(iframe.clientHeight * 0.75), behavior: 'smooth' });
+                    var doc = iframe.contentDocument;
+                    var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                    var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+                    return JSON.stringify({ scrollY: Math.round(st), pct: Math.round(st / Math.max(1, sh - iframe.clientHeight) * 100) });
+                  })()`);
+                  try {
+                    const info = JSON.parse(String(iframeUp));
+                    actionResult = info.error ? `iframe: ${info.error}` : `Scrolled iframe up. Position: ${info.pct}%.`;
+                  } catch { actionResult = "Scrolled iframe up."; }
+                  break;
+                }
                 const upInfo = await cl.evaluateOnPresentingPage(`(() => {
                   window.scrollBy(0, -Math.round(window.innerHeight * 0.75));
                   return JSON.stringify({ scrollY: Math.round(window.scrollY), pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100) });
