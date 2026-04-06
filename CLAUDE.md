@@ -81,7 +81,12 @@ See `callingclaw-backend/CONTEXT-ENGINEERING.md` for full details. Critical cons
 
 ### Tool Definitions
 
-`tool-definitions/index.ts` exports `buildAllTools(deps)` which collects tools from modular files (calendar-tools, meeting-tools, automation-tools, ai-tools). Each module returns `{ definitions, handler }`.
+`tool-definitions/index.ts` exports `buildAllTools(deps)` which collects tools from modular files (calendar-tools, meeting-tools, automation-tools, ai-tools, prep-tools). Each module returns `{ definitions, handler }`.
+
+Key tools added in v2.8.14+:
+- `read_prep` (prep-tools) — Zero-cost local query of prep sections (resources, decisions, questions, history, scenes)
+- `interact` (automation-tools) — Click/scroll/navigate on presenting page with DOM re-extraction
+- `share_screen` — Natural language URL resolution ("官网" → callingclaw.com), tab reuse, iframe pre-loading
 
 ### EventBus
 
@@ -103,12 +108,15 @@ Event-driven integration hub (`modules/event-bus.ts`). Supports WebSocket subscr
 
 ### Meeting Stage (`/stage`)
 
-Transparent AI workspace screen-shared during meetings. ChromeLauncher opens `/stage` by default when `shareScreen()` is called without a URL.
+Transparent AI workspace screen-shared during meetings. Per-meeting Stage HTML is **pre-generated** during meeting join (`stage-generator.ts`) with iframe src already baked in — no dynamic `loadSlideFrame()` needed.
 
-- **Left**: Presentation iframe, controlled via `loadSlideFrame()` / `evaluateOnSlideFrame()` / `clickOnSlideFrame()` (Playwright, same-origin only). Cross-origin URLs fall back to `navigatePresentingPage()` (same tab, share persists).
-- **Right**: Dual-model EventBus feed (S1 voice events + S2 compute events) + Working Documents panel
-- **Working Documents**: Tracked server-side in `SharedContext.stageDocuments`, injected into voice Layer 3 as numbered list. Users say "open the first document" → `open_file({ doc_number: 1 })`.
-- **API**: `GET /api/stage/documents`, `POST /api/screen/iframe/load`
+- **Left**: Presentation iframe. Content loaded at page render time (no race condition). Supports localhost HTML and markdown files via `render.html?file=...`. Scrollable via `contentWindow.scrollBy()` from parent page.
+- **Right**: Dual-system panels:
+  - **System One** (S1): Voice transcript (🗣️ AI / 👤 user) + tool calls (🔧)
+  - **System Two** (S2): Agent actions — intent classification (🎯), file search (🔍), execution (⚡), completion (✅)
+- **Working Documents**: From prep brief's `filePaths` + `browserUrls`, registered via `meeting.prep_ready` event.
+- **Markdown Renderer**: `public/render.html` — universal CallingClaw-branded markdown renderer. Usage: `/render.html?file=/path/to/file.md`
+- **API**: `GET /api/stage/documents`, `GET /api/file/read?path=...`, `POST /api/screen/scroll` (auto-detects Stage → scrolls iframe), `GET /api/audio/status`
 
 ### Meeting-Time Model Usage
 
@@ -117,7 +125,7 @@ During meetings, CallingClaw uses its own fast models, NOT OpenClaw:
 | Module | Model | Purpose |
 |--------|-------|---------|
 | VoiceModule | OpenAI Realtime / Gemini Live | Real-time voice conversation |
-| VisionModule | Gemini Flash (OpenRouter) | Screenshot analysis every ~40s |
+| VisionModule | Gemini Flash (OpenRouter) → gpt-4o-mini fallback | Screenshot analysis every ~40s |
 | ContextRetriever | Haiku (OpenRouter) | Gap detection + agentic search |
 | TranscriptAuditor | Haiku (OpenRouter) | Real-time intent classification |
 | ComputerUseModule | Haiku/Sonnet (Anthropic API) | Screen control when voice AI requests |
@@ -157,3 +165,8 @@ OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-00
 | **Admit monitor missing** | **FIXED v2.7.12**: Admission monitor ported to ChromeLauncher (startAdmissionMonitor, _admitEvalLib, onMeetingEnd). Uses page.evaluate() directly | v2.7.12 |
 | **BlackHole in Chrome prefs** | Chrome profile saves last-used audio devices. If BlackHole was previously selected, Meet picks it on next launch → muted audio. ChromeLauncher.clearAudioDevicePrefs() resets to system default on every launch | v2.7.19 |
 | **Screen share native dialog** | Chrome's screen picker dialog is NATIVE (not DOM), Playwright CANNOT click it. Use `--auto-select-desktop-capture-source=CallingClaw Presenting` flag to auto-select tab by title match. Set tab title via `document.title = "CallingClaw Presenting"` before sharing | v2.7.19 |
+| **Stage iframe cross-origin** | Pre-generated Stage HTML must be served via localhost (not `file://`). `file://` parent + `http://localhost` iframe = cross-origin → `contentDocument` blocked. Stage generator writes to `public/` dir | v2.8.14 |
+| **Whisper Chinese recognition** | OpenAI transcription defaults to English, misrecognizes Chinese as Russian/Korean/Polish. Set `language` in transcription config. Configurable via `TRANSCRIPTION_LANGUAGE` env var (default: `zh,en`) | v2.8.14 |
+| **Transcript reset on re-join** | `meeting.started` was clearing transcript on every join. Now only resets for DIFFERENT meeting URLs. Same URL re-join preserves conversation history | v2.8.14 |
+| **Voice session context leak** | Old meeting context leaked into new meetings. `voice.resetForNewMeeting()` now called on `meeting.ended` — clears context queue + refreshes instructions | v2.8.14 |
+| **Empty Stage presentation** | `share_screen` without URL defaulted to empty `/stage`. Now uses pre-generated Stage HTML with iframe content baked in. Falls back to `render.html` for markdown files | v2.8.14 |
