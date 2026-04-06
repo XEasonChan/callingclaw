@@ -336,8 +336,18 @@ eventBus.on("meeting.started", (data) => {
     || sessionManager.generateId();
   // Reset incremental context injection state for new meeting
   resetContextInjectionState();
-  // Reset transcript from previous meeting to prevent context leakage
-  context.resetTranscript();
+  // Only reset transcript if joining a DIFFERENT meeting (not re-joining same one)
+  // This preserves conversation history across multiple join/leave cycles in the same meeting
+  const currentUrl = data?.url || "";
+  const prevUrl = context.workspace?.meetUrl || "";
+  if (currentUrl && prevUrl && currentUrl !== prevUrl) {
+    context.resetTranscript();
+    console.log(`[Init] Transcript reset (new meeting URL: ${currentUrl.slice(-15)})`);
+  } else if (context.transcript.length === 0) {
+    // Fresh start, no need to log
+  } else {
+    console.log(`[Init] Transcript preserved (${context.transcript.length} entries, same meeting)`);
+  }
   // Start KeyFrameStore for multimodal timeline (screenshots saved to disk)
   keyFrameStore.start(activeMeetingId).catch((e) => {
     console.error(`[Init] KeyFrameStore start failed: ${e.message}`);

@@ -213,29 +213,77 @@ interface TestResult {
 // GROUND TRUTH CHECKS — the eval must not lie
 // ══════════════════════════════════════════════════════════════
 
-async function checkSystemHealth(): Promise<{ ok: boolean; detail: string }> {
+/** Full pipeline health check — monitors every layer of the data flow */
+async function checkPipelineHealth(): Promise<{ ok: boolean; detail: string; metrics: PipelineMetrics }> {
+  const m: PipelineMetrics = {
+    meetingStatus: "unknown",
+    voiceConnected: false,
+    sharing: false,
+    transcriptCount: 0,
+    audioChunksFlowing: false,
+    sttEventsPresent: false,
+    transcriptHasForeignLang: false,
+    chromeAlive: true,
+    lastAIResponseAge: -1,
+  };
+
   try {
     const s = await api("GET", "/api/status");
+    m.meetingStatus = s.meeting || "unknown";
+    m.voiceConnected = !!s.voiceSession?.connected;
+    m.sharing = !!s.sharing;
+    m.transcriptCount = s.transcriptLength || 0;
+
+    const log = await getBackendLog(30);
+
+    // Audio pipeline: are mic chunks flowing?
+    m.audioChunksFlowing = log.includes("Mic audio chunk");
+
+    // STT: are transcription events firing?
+    m.sttEventsPresent = log.includes("transcription") || log.includes("Meet caption");
+
+    // Transcript quality: any foreign language misrecognition?
+    const entries = await getTranscript(10);
+    const foreignPatterns = /[\u0400-\u04FF]|[\uAC00-\uD7AF]|[\u0600-\u06FF]|Cześć|Todavía|Goodbye|Lesão/;
+    m.transcriptHasForeignLang = entries.some(e => e.role === "user" && foreignPatterns.test(e.text));
+
+    // Chrome alive?
+    if (log.includes("gracefully close") || log.includes("CDP disconnected")) m.chromeAlive = false;
+    if (log.includes("Timeout") && log.includes("ShareScreen")) m.chromeAlive = false;
+
+    // Last AI response age
+    const lastAI = entries.filter(e => e.role === "assistant").pop();
+    m.lastAIResponseAge = lastAI ? Math.round((Date.now() - (lastAI.ts || 0)) / 1000) : -1;
+
     const issues: string[] = [];
-
-    // Chrome / meeting still alive?
-    if (s.meeting !== "recording" && s.meeting !== "idle") issues.push(`meeting=${s.meeting}`);
-
-    // Voice connected?
-    if (!s.voiceSession?.connected) issues.push("voice=disconnected");
-
-    // Check Chrome process still running
-    const log = await getBackendLog(10);
-    if (log.includes("gracefully close") || log.includes("CDP disconnected")) issues.push("chrome=crashed");
-    if (log.includes("Timeout") && log.includes("ShareScreen")) issues.push("share=timeout");
+    if (m.meetingStatus !== "recording" && m.meetingStatus !== "idle") issues.push(`meeting=${m.meetingStatus}`);
+    if (!m.voiceConnected) issues.push("voice=disconnected");
+    if (!m.chromeAlive) issues.push("chrome=crashed");
+    if (m.transcriptHasForeignLang) issues.push("stt=foreign_lang_detected");
+    if (!m.audioChunksFlowing) issues.push("audio=no_chunks");
 
     return {
       ok: issues.length === 0,
-      detail: issues.length === 0 ? `meeting=${s.meeting} voice=✅ sharing=${s.sharing}` : issues.join(", "),
+      detail: issues.length === 0
+        ? `meeting=${m.meetingStatus} voice=✅ transcript=${m.transcriptCount} audio=✅ stt=${m.sttEventsPresent ? "✅" : "⚠️"}`
+        : issues.join(", "),
+      metrics: m,
     };
   } catch (e: any) {
-    return { ok: false, detail: `health_check_failed: ${e.message}` };
+    return { ok: false, detail: `health_check_failed: ${e.message}`, metrics: m };
   }
+}
+
+interface PipelineMetrics {
+  meetingStatus: string;
+  voiceConnected: boolean;
+  sharing: boolean;
+  transcriptCount: number;
+  audioChunksFlowing: boolean;
+  sttEventsPresent: boolean;
+  transcriptHasForeignLang: boolean;
+  chromeAlive: boolean;
+  lastAIResponseAge: number;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -332,13 +380,13 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
   };
 
   try {
-    // Pre-check: is system healthy before we even send the command?
-    const preHealth = await checkSystemHealth();
+    // Pre-check: is pipeline healthy before we even send the command?
+    const preHealth = await checkPipelineHealth();
     if (!preHealth.ok) {
-      result.error = `SYSTEM BROKEN before test: ${preHealth.detail}`;
+      result.error = `PIPELINE BROKEN before test: ${preHealth.detail}`;
       result.groundTruth = preHealth.detail;
       result.durationMs = Date.now() - start;
-      return result; // Don't even try — system is already down
+      return result;
     }
 
     // Send voice command (the ONLY way to drive action)
@@ -375,19 +423,17 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     result.contentMatch = test.expectVoice.test(result.voiceText);
     result.noFiller = test.rejectVoice ? !test.rejectVoice.test(result.voiceText) : true;
 
-    // GROUND TRUTH: is the system actually healthy after this step?
-    const postHealth = await checkSystemHealth();
+    // GROUND TRUTH: full pipeline health after this step
+    const postHealth = await checkPipelineHealth();
     result.systemOk = postHealth.ok;
     result.groundTruth = postHealth.detail;
 
-    // Detect specific failures even if tool "succeeded"
-    if (log.includes("Timeout") && log.includes("ShareScreen")) {
-      result.systemOk = false;
-      result.groundTruth += " | share_timeout";
+    // Pipeline-specific failure detection
+    if (postHealth.metrics.transcriptHasForeignLang) {
+      result.groundTruth += " | ⚠️STT_FOREIGN_LANG";
     }
-    if (log.includes("gracefully close") || log.includes("Chrome.*crash")) {
-      result.systemOk = false;
-      result.groundTruth += " | chrome_crashed";
+    if (!postHealth.metrics.audioChunksFlowing) {
+      result.groundTruth += " | ⚠️NO_AUDIO";
     }
 
   } catch (e: any) {
@@ -495,6 +541,20 @@ Tests:      ${VOICE_TESTS.length}
       console.log(`    ${s}${t}${c} ${r.id}: "${r.voiceText.slice(0, 50)}"`);
     }
   }
+
+  // ── Pipeline Health Dashboard ──
+  const finalPipeline = await checkPipelineHealth();
+  console.log(`
+  Pipeline Health:
+    Meeting:     ${finalPipeline.metrics.meetingStatus}
+    Voice:       ${finalPipeline.metrics.voiceConnected ? "✅" : "❌"}
+    Audio flow:  ${finalPipeline.metrics.audioChunksFlowing ? "✅" : "❌"}
+    STT events:  ${finalPipeline.metrics.sttEventsPresent ? "✅" : "❌"}
+    STT quality: ${finalPipeline.metrics.transcriptHasForeignLang ? "❌ foreign lang detected" : "✅"}
+    Chrome:      ${finalPipeline.metrics.chromeAlive ? "✅" : "❌"}
+    Transcript:  ${finalPipeline.metrics.transcriptCount} entries
+    Sharing:     ${finalPipeline.metrics.sharing ? "✅" : "❌"}
+`);
 
   // ── Persist to results.tsv (autoresearch's keep-or-discard log) ──
   const failedTests = results.filter(r => !r.toolCalled || !r.voiceMatch).map(r => r.id).join(",");

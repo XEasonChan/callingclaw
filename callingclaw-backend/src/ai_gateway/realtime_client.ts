@@ -116,7 +116,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             turn_detection: { type: "semantic_vad" },
-            transcription: { model: "gpt-4o-transcribe" },
+            transcription: { model: "gpt-4o-transcribe", language: "zh" },
           },
           output: {
             format: { type: "audio/pcm", rate: 24000 },
@@ -143,7 +143,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
 //   - session.update requires type: "realtime"
 //   - Event names changed: response.text.delta → response.output_text.delta, etc.
 //   - New features: semantic_vad, image input, MCP servers, async function calling
-//   - Transcription: gpt-4o-transcribe (better than whisper-1)
+//   - Transcription: gpt-4o-transcribe with language hint (prevents zh→foreign misrecognition)
 
 export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
   name: "openai15",
@@ -186,7 +186,7 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             turn_detection: { type: "semantic_vad" },
-            transcription: { model: "gpt-4o-transcribe" },
+            transcription: { model: "gpt-4o-transcribe", language: "zh" },
           },
           output: {
             format: { type: "audio/pcm", rate: 24000 },
