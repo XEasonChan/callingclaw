@@ -36,7 +36,7 @@ import type { OpenClawBridge } from "./openclaw_bridge";
 import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro } from "./voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "./voice-persona";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
@@ -1590,7 +1590,48 @@ export function startConfigServer(services: Services) {
         // Generate meeting prep brief via OpenClaw — BACKGROUND, NEVER blocks join
         const meetTopic = body.topic || calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
         let prepBrief: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+
+        // Check for local presentation script (prep JSON with speakingPlan + scenes)
+        // This enables PRESENTER mode without waiting for OpenClaw
+        if (services.meetingPrepSkill && !services.meetingPrepSkill.currentBrief?.speakingPlan) {
+          const { homedir } = require("os");
+          const { existsSync, readdirSync } = require("fs");
+          const sharedDir = `${homedir()}/.callingclaw/shared`;
+          try {
+            const jsonFiles = readdirSync(sharedDir)
+              .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"));
+            for (const fname of jsonFiles) {
+              const jsonPath = `${sharedDir}/${fname}`;
+              const prepData = JSON.parse(await Bun.file(jsonPath).text());
+              if (prepData.speakingPlan && prepData.scenes) {
+                prepBrief = {
+                  topic: prepData.topic || meetTopic,
+                  goal: prepData.goal || "",
+                  generatedAt: Date.now(),
+                  summary: prepData.summary || "",
+                  keyPoints: prepData.keyPoints || [],
+                  architectureDecisions: [],
+                  expectedQuestions: [],
+                  filePaths: prepData.filePaths || [],
+                  browserUrls: prepData.browserUrls || [],
+                  folderPaths: [],
+                  attendees: meetAttendees || [],
+                  liveNotes: [],
+                  speakingPlan: prepData.speakingPlan,
+                  scenes: prepData.scenes,
+                  decisionPoints: prepData.decisionPoints || [],
+                };
+                services.meetingPrepSkill.setBrief(prepBrief);
+                console.log(`[Meeting] ✅ Loaded presentation script from ${fname}: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes`);
+                break;
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[Meeting] Prep JSON scan failed: ${e.message}`);
+          }
+        }
+
+        if (!prepBrief && services.meetingPrepSkill && services.openclawBridge?.connected) {
           // Fire-and-forget: prep runs in background, injects when ready
           (async () => {
             try {
@@ -1715,15 +1756,40 @@ export function startConfigServer(services: Services) {
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
 
-          // Self-introduction: tell participants who CallingClaw is and why it's here
+          // Self-introduction + presentation mode setup
           if (services.realtime.connected) {
-            setTimeout(() => {
+            setTimeout(async () => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
               const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
-            }, 2000); // Wait 2s for audio bridge to fully initialize
+
+              // If we have a presentation script (speakingPlan + scenes), inject it
+              const brief = prepBrief || services.meetingPrepSkill?.currentBrief;
+              if (brief?.speakingPlan && brief.scenes?.length > 0) {
+                // Inject playbook context so voice knows the presentation plan
+                injectMeetingBrief(services.realtime, brief);
+                console.log(`[Meeting] ✅ Presentation mode: ${brief.speakingPlan.length} phases, ${brief.scenes.length} scenes`);
+
+                // Also inject the presentation ready context
+                const readyCtx = buildPresentationReadyContext(brief.scenes);
+                if (readyCtx) services.realtime.injectContext(readyCtx);
+
+                // Idle nudge: if no conversation after 30s, prompt AI to start presenting
+                const idleTimer = setTimeout(() => {
+                  const recentEntries = services.context.getRecentTranscript(5);
+                  const hasRealConversation = recentEntries.some(
+                    (e: any) => e.role === "user" && e.text.length > 20 && (Date.now() - e.ts) < 25000
+                  );
+                  if (!hasRealConversation && services.realtime.connected) {
+                    services.realtime.injectContext(buildIdleNudgeContext());
+                    console.log("[Meeting] Idle nudge sent — prompting AI to start presentation");
+                  }
+                }, 30000);
+                services.eventBus.on("meeting.ended", () => clearTimeout(idleTimer));
+              }
+            }, 2000);
           }
         };
 

@@ -202,6 +202,7 @@ export function meetingRoutes(services: Services): RouteHandler {
               } catch { return []; }
             })(),
           ].filter(Boolean);
+          console.log(`[Meeting] Scanning ${prepJsonCandidates.length} prep JSON candidates...`);
           for (const jsonPath of prepJsonCandidates) {
             try {
               if (jsonPath && existsSync(jsonPath)) {
