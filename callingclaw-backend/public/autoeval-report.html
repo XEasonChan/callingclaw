@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CallingClaw AutoEval Report</title>
+<style>
+  :root {
+    --bg: #FFFFFF; --bg-subtle: #F8F8FA; --surface: #ffffff;
+    --text: #1f2937; --text2: #6b7280; --text3: #9ca3af;
+    --accent: #dc4a3a; --accent-hover: #c43d2e; --accent-light: #fef2f1;
+    --green: #4aa682; --green-light: #e6f4ee;
+    --yellow: #d97706; --yellow-light: #fef3c7;
+    --blue: #6366f1; --blue-light: #eef2ff;
+    --border: #e5e7eb; --border2: #d1d5db;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-subtle); color: var(--text); line-height: 1.6; }
+
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 24px 40px; display: flex; align-items: center; gap: 16px;
+  }
+  .header-logo { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px; font-family: 'Space Grotesk', sans-serif; }
+  .header-title { font-size: 20px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; }
+  .header-sub { color: var(--text2); font-size: 13px; margin-left: auto; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Score hero */
+  .score-hero { display: grid; grid-template-columns: 200px 1fr; gap: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; margin-bottom: 24px; }
+  .score-circle { width: 160px; height: 160px; border-radius: 50%; border: 8px solid var(--accent); display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 auto; }
+  .score-num { font-size: 48px; font-weight: 700; color: var(--accent); font-family: 'Space Grotesk', sans-serif; }
+  .score-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+  .score-details h3 { font-size: 16px; margin-bottom: 12px; }
+  .metric-bar { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+  .metric-bar-fill { height: 8px; border-radius: 4px; background: var(--accent); }
+  .metric-bar-track { flex: 1; height: 8px; border-radius: 4px; background: var(--bg-subtle); overflow: hidden; }
+  .metric-label { width: 80px; color: var(--text2); }
+  .metric-value { width: 40px; text-align: right; font-weight: 600; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card-title .icon { font-size: 18px; }
+
+  /* Score trend chart */
+  .trend-chart { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding: 8px 0; }
+  .trend-bar { flex: 1; min-width: 24px; max-width: 60px; border-radius: 4px 4px 0 0; background: var(--accent-light); position: relative; transition: all 0.3s; cursor: pointer; }
+  .trend-bar:hover { background: var(--accent); }
+  .trend-bar:hover .trend-tooltip { display: block; }
+  .trend-bar .trend-tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--text); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; margin-bottom: 4px; }
+  .trend-bar.best { background: var(--green); }
+  .trend-bar.latest { background: var(--accent); }
+  .trend-bar.crash { background: var(--yellow-light); }
+
+  /* Scenario cards */
+  .scenarios { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .scenario-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .scenario-score { font-size: 32px; font-weight: 700; color: var(--accent); font-family: 'Space Grotesk', sans-serif; }
+  .scenario-name { font-size: 13px; color: var(--text2); margin-top: 4px; }
+  .scenario-tests { margin-top: 8px; font-size: 12px; }
+  .scenario-tests .pass { color: var(--green); }
+  .scenario-tests .fail { color: var(--accent); }
+
+  /* Experiment table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg-subtle); padding: 10px 12px; text-align: left; font-weight: 600; color: var(--text2); border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: var(--accent-light); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tag-pass { background: var(--green-light); color: #166534; }
+  .tag-fail { background: #fef2f2; color: #991b1b; }
+  .tag-partial { background: var(--yellow-light); color: #92400e; }
+  .tag-breakthrough { background: var(--blue-light); color: #3730a3; }
+
+  /* Bug list */
+  .bug-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .bug-status { font-size: 16px; flex-shrink: 0; }
+  .bug-id { font-weight: 600; color: var(--accent); min-width: 70px; }
+
+  /* Insights */
+  .insight { background: var(--accent-light); border-left: 3px solid var(--accent); padding: 12px 16px; margin: 8px 0; border-radius: 0 8px 8px 0; font-size: 13px; }
+  .insight strong { color: var(--accent); }
+
+  .footer { text-align: center; padding: 24px; color: var(--text3); font-size: 12px; }
+
+  @media (max-width: 700px) {
+    .score-hero { grid-template-columns: 1fr; }
+    .scenarios { grid-template-columns: 1fr; }
+  }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">CC</div>
+  <span class="header-title">AutoEval Report</span>
+  <span class="header-sub">v2.9.0 · 11 runs · 2026-04-06 ~ 04-07</span>
+</div>
+
+<div class="container">
+
+<!-- Score Hero -->
+<div class="score-hero">
+  <div>
+    <div class="score-circle">
+      <div class="score-num">79%</div>
+      <div class="score-label">Latest Score</div>
+    </div>
+  </div>
+  <div class="score-details">
+    <h3>5-Dimensional Quality Metrics</h3>
+    <div class="metric-bar">
+      <span class="metric-label">System</span>
+      <div class="metric-bar-track"><div class="metric-bar-fill" style="width:100%"></div></div>
+      <span class="metric-value">10/10</span>
+    </div>
+    <div class="metric-bar">
+      <span class="metric-label">Tool</span>
+      <div class="metric-bar-track"><div class="metric-bar-fill" style="width:80%"></div></div>
+      <span class="metric-value">8/10</span>
+    </div>
+    <div class="metric-bar">
+      <span class="metric-label">Content</span>
+      <div class="metric-bar-track"><div class="metric-bar-fill" style="width:70%"></div></div>
+      <span class="metric-value">7/10</span>
+    </div>
+    <div class="metric-bar">
+      <span class="metric-label">Fluency</span>
+      <div class="metric-bar-track"><div class="metric-bar-fill" style="width:90%"></div></div>
+      <span class="metric-value">9/10</span>
+    </div>
+    <div class="metric-bar">
+      <span class="metric-label">Accuracy</span>
+      <div class="metric-bar-track"><div class="metric-bar-fill" style="width:40%"></div></div>
+      <span class="metric-value">4/10</span>
+    </div>
+    <p style="margin-top:12px;font-size:12px;color:var(--text2)">Content (30% weight) = voice has specific info, not filler. Accuracy = log confirms action executed.</p>
+  </div>
+</div>
+
+<!-- Score Trend -->
+<div class="card">
+  <div class="card-title"><span class="icon">📈</span> Score Trend (11 runs)</div>
+  <div class="trend-chart">
+    <div class="trend-bar" style="height:70%"><div class="trend-tooltip">Run 1: 70%</div></div>
+    <div class="trend-bar" style="height:100%"><div class="trend-tooltip">Run 2: 100% (虚高)</div></div>
+    <div class="trend-bar" style="height:55%"><div class="trend-tooltip">Run 3: 55% (session crash)</div></div>
+    <div class="trend-bar" style="height:72%"><div class="trend-tooltip">Run 4: 72%</div></div>
+    <div class="trend-bar crash" style="height:60%"><div class="trend-tooltip">Run 5: 60% (Chrome crash)</div></div>
+    <div class="trend-bar crash" style="height:33%"><div class="trend-tooltip">Run 6: 33% (Chrome crash)</div></div>
+    <div class="trend-bar crash" style="height:2%"><div class="trend-tooltip">Run 7: 0% (health check bug)</div></div>
+    <div class="trend-bar crash" style="height:2%"><div class="trend-tooltip">Run 8: 0% (health check bug)</div></div>
+    <div class="trend-bar best" style="height:75%"><div class="trend-tooltip">Run 9: 75% ✅</div></div>
+    <div class="trend-bar" style="height:71%"><div class="trend-tooltip">Run 10: 71%</div></div>
+    <div class="trend-bar latest" style="height:79%"><div class="trend-tooltip">Run 11: 79% 🏆 Best</div></div>
+  </div>
+  <p style="font-size:12px;color:var(--text2);margin-top:8px">Yellow = Chrome/system crash. Green = stable best. Red = latest.</p>
+</div>
+
+<!-- Scenario Scores -->
+<div class="scenarios">
+  <div class="scenario-card">
+    <div class="scenario-score">85%</div>
+    <div class="scenario-name">Product Presentation (A)</div>
+    <div class="scenario-tests">
+      <span class="pass">✅ A-02 scroll+describe</span><br>
+      <span class="pass">✅ A-03 continue scroll</span><br>
+      <span class="pass">✅ A-04 click Features</span><br>
+      <span class="fail">❌ A-01 content (agenda not page)</span>
+    </div>
+  </div>
+  <div class="scenario-card">
+    <div class="scenario-score" style="color:var(--green)">90%</div>
+    <div class="scenario-name">Launch Video Review (B)</div>
+    <div class="scenario-tests">
+      <span class="pass">✅ B-01 read_prep overview</span><br>
+      <span class="pass">✅ B-03 Pika competitor</span><br>
+      <span class="fail">❌ B-02 tool (no read_prep)</span>
+    </div>
+  </div>
+  <div class="scenario-card">
+    <div class="scenario-score">70%</div>
+    <div class="scenario-name">PRD Review (C)</div>
+    <div class="scenario-tests">
+      <span class="pass">✅ C-01 share PRD</span><br>
+      <span class="fail">❌ C-02 URL not reachable</span>
+    </div>
+  </div>
+  <div class="scenario-card">
+    <div class="scenario-score" style="color:var(--yellow)">40%</div>
+    <div class="scenario-name">Exit (D)</div>
+    <div class="scenario-tests">
+      <span class="pass">✅ leave_meeting called</span><br>
+      <span class="fail">❌ no goodbye message</span>
+    </div>
+  </div>
+</div>
+
+<!-- Experiments -->
+<div class="card">
+  <div class="card-title"><span class="icon">🧪</span> Experiment History</div>
+  <table>
+    <thead><tr><th>Experiment</th><th>Runs</th><th>Score</th><th>Result</th><th>Key Finding</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>EXP-7A</strong> Compiled Narration</td>
+        <td>1</td>
+        <td>—</td>
+        <td><span class="tag tag-pass">DONE</span></td>
+        <td>Opus compiled 6 sections with full/brief narration + FAQ + resume hints</td>
+      </tr>
+      <tr>
+        <td><strong>EXP-7B</strong> Text Simulation Eval</td>
+        <td>6</td>
+        <td>66-82%</td>
+        <td><span class="tag tag-partial">INSIGHT</span></td>
+        <td>Why-What-How prompt works but makes responses formulaic. Natural PM style better but eval too strict. Prompt ROI diminishing.</td>
+      </tr>
+      <tr>
+        <td><strong>EXP-7C</strong> Multi-turn Injection</td>
+        <td>4</td>
+        <td>—</td>
+        <td><span class="tag tag-breakthrough">BREAKTHROUGH</span></td>
+        <td>Primer message eliminates hallucination. Section 1-6 ALL correct with primer. Pika pricing first time correct ($0.50/min).</td>
+      </tr>
+      <tr>
+        <td><strong>EXP-7D</strong> Agent Pipeline</td>
+        <td>1</td>
+        <td>75%</td>
+        <td><span class="tag tag-pass">VERIFIED</span></td>
+        <td>Intent classification: share_url ✅, click ✅, stop_sharing ✅. Chinese scroll "往下滚动" not recognized.</td>
+      </tr>
+      <tr>
+        <td><strong>EXP-2</strong> Audio Truncation</td>
+        <td>5</td>
+        <td>—</td>
+        <td><span class="tag tag-fail">ONGOING</span></td>
+        <td>5 rounds: audioState→queue→response.done→dual-flag→text-only. Root cause: response.create cancels playing audio. Direction A (silent inject) deployed.</td>
+      </tr>
+      <tr>
+        <td><strong>EXP-1</strong> Production Integration</td>
+        <td>1</td>
+        <td>—</td>
+        <td><span class="tag tag-pass">DEPLOYED</span></td>
+        <td>Primer + replaceContext + compiled narration integrated into meeting join flow.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Bug Status -->
+<div class="card">
+  <div class="card-title"><span class="icon">🐛</span> Bug Tracker (17 total: 10 fixed, 3 mitigated, 4 open)</div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-001</span><span>CONFIG not defined in chrome-launcher (missing import)</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-002</span><span>Voice provider param passed as object not string</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-003</span><span>--no-startup-window blocks Chrome windows</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-004</span><span>context.on('page') auto-closes presenting tabs</span></div>
+  <div class="bug-item"><span class="bug-status">⚠️</span><span class="bug-id">BUG-005</span><span>BrowserCapture CDP not found → Vision fallback (gpt-4o-mini) works</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-006</span><span>Voice model self-drives tool calls (autoeval 79%)</span></div>
+  <div class="bug-item"><span class="bug-status">⚠️</span><span class="bug-id">BUG-007</span><span>VisionModule Gemini/OpenRouter fail → gpt-4o-mini fallback + NO_PROXY</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-009</span><span>iframe scroll via contentWindow.scrollBy (11%→22%→34%)</span></div>
+  <div class="bug-item"><span class="bug-status">🔴</span><span class="bug-id">BUG-010</span><span>Audio playback to Meet — need real voice test</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-011</span><span>Pre-generated Stage HTML, iframe src baked in</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-012</span><span>Transcript preserved across re-joins (was clearing on every join)</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-013</span><span>PRESENTER doesn't ask "有问题吗" every sentence</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-014</span><span>Whisper Chinese recognition (language: "zh" hint)</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-015</span><span>Transcript API returns correct session</span></div>
+  <div class="bug-item"><span class="bug-status">⚠️</span><span class="bug-id">BUG-016</span><span>OpenAI REST API — NO_PROXY added for api.openai.com</span></div>
+  <div class="bug-item"><span class="bug-status">✅</span><span class="bug-id">BUG-017</span><span>Voice session isolation between meetings (resetForNewMeeting)</span></div>
+  <div class="bug-item"><span class="bug-status">🔴</span><span class="bug-id">BUG-018</span><span>Audio capture: Chrome worklet receiver not capturing Meet remote audio</span></div>
+</div>
+
+<!-- Key Insights -->
+<div class="card">
+  <div class="card-title"><span class="icon">💡</span> Key Learnings</div>
+  <div class="insight"><strong>Primer message</strong> — gpt-realtime-1.5 needs explicit behavioral framing at session start. Without it, model halluccinates for first 2 turns. With it, all 6 sections correctly use injected content.</div>
+  <div class="insight"><strong>response.create = dangerous</strong> — Sending response.create cancels in-progress audio. Direction A: stop ALL background response.create. Only user speech (VAD) and presentSlide() should trigger responses.</div>
+  <div class="insight"><strong>response.done ≠ audio done</strong> — OpenAI's response.done fires BEFORE audio.done. Flushing on response.done causes next response to cancel still-playing audio.</div>
+  <div class="insight"><strong>conversation.item.create = safe</strong> — Silent context injection. Model sees it on next turn. No audio interruption. All background updates should use this, not response.create.</div>
+  <div class="insight"><strong>Ring buffer 10s → 30s</strong> — Playback worklet overflowed on long responses (>10s). Increased to 30s.</div>
+  <div class="insight"><strong>Prompt ROI diminishes</strong> — 6 rounds of prompt tweaking (80→82→71→76→67→66%). Better to fix injection mechanism than polish prompt words.</div>
+</div>
+
+<!-- Architecture -->
+<div class="card">
+  <div class="card-title"><span class="icon">🏗️</span> Dual-System Architecture</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+    <div style="background:var(--accent-light);border-radius:8px;padding:16px">
+      <div style="font-weight:600;margin-bottom:8px">System One — Voice</div>
+      <div style="font-size:12px;color:var(--text2)">
+        🗣️ Transcript (AI + user speech)<br>
+        🔧 Tool calls (share_screen, interact, read_prep)<br>
+        📊 Presentation slides<br>
+        <br>
+        <strong>Model:</strong> OpenAI gpt-realtime-1.5<br>
+        <strong>Latency:</strong> 625-3297ms first token
+      </div>
+    </div>
+    <div style="background:var(--blue-light);border-radius:8px;padding:16px">
+      <div style="font-weight:600;margin-bottom:8px">System Two — Agent</div>
+      <div style="font-size:12px;color:var(--text2)">
+        🎯 Intent classification (Haiku, 0.92-0.95 confidence)<br>
+        🔍 File search (FileAliasIndex)<br>
+        📂 Context retrieval (keyword fallback 3/3)<br>
+        ⚡ Action execution (click, scroll, navigate)<br>
+        <br>
+        <strong>Model:</strong> Claude Haiku via OpenRouter<br>
+        <strong>Latency:</strong> 1.2s debounce + 2-5s execution
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="footer">
+  Generated by CallingClaw AutoEval · autoresearch pattern · v2.9.0
+</div>
+
+</body>
+</html>
