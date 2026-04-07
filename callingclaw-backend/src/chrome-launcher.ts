@@ -1501,6 +1501,7 @@ export class ChromeLauncher {
 
   get debuggingPort(): number { return this.port; }
   get page(): any { return this._page; }
+  get context(): any { return this._context; }
 
   /**
    * Import Google cookies from the user's main Chrome profile into the CallingClaw profile.

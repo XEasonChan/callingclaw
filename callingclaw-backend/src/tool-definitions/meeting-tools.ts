@@ -982,8 +982,27 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               // Fallback: open in new tab via shareScreen
               await deps.chromeLauncher.shareScreen(presentUrl);
             }
+          } else if (deps.chromeLauncher?.context) {
+            // Not presenting but Playwright Chrome is running → open in Playwright Chrome
+            // (so it's in the same Chrome instance as Meet, visible when screen share starts)
+            let presentUrl: string;
+            if (/\.md$/i.test(resolvedPath)) {
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            } else if (/\.html?$/i.test(resolvedPath)) {
+              const fileName = resolvedPath.split("/").pop() || "";
+              const publicPath = require("path").resolve(import.meta.dir, "../../public", fileName);
+              presentUrl = require("fs").existsSync(publicPath)
+                ? `http://localhost:${CONFIG.port}/${fileName}`
+                : `file://${resolvedPath}`;
+            } else {
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            }
+            // Open as new page in Playwright context (same Chrome window as Meet)
+            const newPage = await deps.chromeLauncher.context.newPage();
+            await newPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
+            console.log(`[open_file] Opened in Playwright Chrome: ${presentUrl}`);
           } else {
-            // Not presenting → open in default app
+            // No Playwright Chrome → open in system default app
             const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
             await meetJoiner.openFile(resolvedPath, app);
           }
