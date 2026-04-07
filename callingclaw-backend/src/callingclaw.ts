@@ -816,13 +816,11 @@ const FILLER_PHRASES = [
 ];
 let _lastFillerTs = 0;
 eventBus.on("retriever.searching", (data) => {
-  // Only inject filler if voice is connected and not too frequent
-  const now = Date.now();
-  if (voice.connected && now - _lastFillerTs > 30_000) {
-    _lastFillerTs = now;
-    const filler = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
-    voice.sendText(filler!);
-    console.log(`[Filler] Sent "${filler}" while searching for "${(data as any).topic?.slice(0, 30)}"`);
+  // Silent context injection — model sees the search is happening but doesn't
+  // interrupt its current speech with "好的". It can mention it when it next speaks.
+  if (voice.connected) {
+    voice.injectContext(`[SYSTEM] Searching for context about "${(data as any).topic?.slice(0, 50)}"... results will arrive shortly.`);
+    console.log(`[Filler] Silent context injected for "${(data as any).topic?.slice(0, 30)}"`);
   }
 });
 

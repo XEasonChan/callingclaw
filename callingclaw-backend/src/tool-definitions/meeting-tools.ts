@@ -674,7 +674,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // ── If already sharing, load into Stage iframe or navigate tab ──
+          // ── If presenting tab exists, navigate it then ensure Meet is sharing ──
           if (resolvedShareUrl && deps.chromeLauncher?.presentingPage) {
             try {
               // If presenting tab is on /stage, load content into iframe (preferred)
@@ -687,16 +687,21 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
                 const loaded = await deps.chromeLauncher.loadSlideFrame(resolvedShareUrl);
                 if (loaded) {
                   console.log(`[share_screen] Loaded into Stage iframe: ${resolvedShareUrl}`);
+                  // Emit so BrowserCapture reconnects to presenting tab
+                  eventBus.emit("presentation.started", { mode: "iframe", url: resolvedShareUrl });
                   // Extract DOM from IFRAME for voice context
-                  const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
-                  // Wait for iframe to render
                   await new Promise(r => setTimeout(r, 1500));
-                  const raw = await deps.chromeLauncher.evaluateOnSlideFrame(`
-                    var body = document.body;
-                    return body ? body.innerText.slice(0, 2000) : '';
-                  `);
-                  if (raw && deps.voice) {
-                    deps.voice.replaceContext(`[PAGE] Stage iframe content:\n${String(raw).slice(0, 1500)}`, PAGE_CONTEXT_ID);
+                  try {
+                    const raw = await deps.chromeLauncher.evaluateOnSlideFrame(`
+                      var body = document.body;
+                      return body ? body.innerText.slice(0, 2000) : '';
+                    `);
+                    if (raw && deps.voice) {
+                      deps.voice.replaceContext(`[PAGE] Stage iframe content:\n${String(raw).slice(0, 1500)}`, PAGE_CONTEXT_ID);
+                      console.log(`[share_screen] Stage iframe DOM injected to voice`);
+                    }
+                  } catch (domErr: any) {
+                    console.warn(`[share_screen] Stage iframe DOM extraction failed: ${domErr.message}`);
                   }
                   if (deps.voice) deps.voice.presentationMode = true;
                   return `Loaded into Meeting Stage: ${resolvedShareUrl}. The document is showing in the left panel. Describe what you see.`;
@@ -708,19 +713,35 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               // Navigate the presenting tab directly (for external URLs or when Stage isn't active)
               await deps.chromeLauncher.navigatePresentingPage(resolvedShareUrl);
               console.log(`[share_screen] Navigated presenting tab to ${resolvedShareUrl} (reused tab)`);
-              // Re-extract DOM to verify page loaded + give voice context
-              await new Promise(r => setTimeout(r, 1000)); // wait for page render
-              const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
-              const raw = await deps.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
-              const pageCtx = formatPageContext(raw);
-              if (pageCtx && deps.voice) {
-                deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
-                deps.voice.presentationMode = true;
-                return `Now presenting: ${resolvedShareUrl}. The page is now visible to all participants. Look at the [PAGE] context to see what's on screen and describe the actual content — headings, features, text you can see. Don't talk about the meeting agenda, describe what the page shows.`;
+
+              // If Meet isn't sharing yet, start sharing now (presenting tab already has content)
+              if (!deps.chromeLauncher.isSharing) {
+                console.log(`[share_screen] Meet not sharing yet — clicking Share in Meet`);
+                // shareScreen will reuse existing presenting page since it already exists
+                const startResult = await deps.chromeLauncher.shareScreen(resolvedShareUrl);
+                if (!startResult.success) {
+                  return `Navigated to ${resolvedShareUrl} but screen share failed: ${startResult.message}`;
+                }
               }
-              // DOM empty — page didn't load properly
+
+              // Emit presentation.started so BrowserCapture reconnects to presenting tab
+              eventBus.emit("presentation.started", { mode: "navigate", url: resolvedShareUrl });
+
+              // Re-extract DOM to verify page loaded + give voice context
+              await new Promise(r => setTimeout(r, 1500)); // wait for page render
+              const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
+              try {
+                const raw = await deps.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+                const pageCtx = formatPageContext(raw);
+                if (pageCtx && deps.voice) {
+                  deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+                  console.log(`[share_screen] DOM context injected to voice (${pageCtx.length} chars)`);
+                }
+              } catch (domErr: any) {
+                console.warn(`[share_screen] DOM extraction failed after navigate: ${domErr.message}`);
+              }
               if (deps.voice) deps.voice.presentationMode = true;
-              return `Navigated to ${resolvedShareUrl} but page content not yet visible. Wait a moment then try scrolling.`;
+              return `Now presenting: ${resolvedShareUrl}. The page is now visible to all participants. Look at the [PAGE] context to see what's on screen and describe the actual content — headings, features, text you can see. Don't talk about the meeting agenda, describe what the page shows.`;
             } catch (e: any) {
               console.warn(`[share_screen] Navigate failed, falling through to new share: ${e.message}`);
             }
@@ -983,8 +1004,8 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               await deps.chromeLauncher.shareScreen(presentUrl);
             }
           } else if (deps.chromeLauncher?.context) {
-            // Not presenting but Playwright Chrome is running → open in Playwright Chrome
-            // (so it's in the same Chrome instance as Meet, visible when screen share starts)
+            // Not presenting but Playwright Chrome is running → open via shareScreen
+            // so it becomes the presenting tab AND starts screen share in one step.
             let presentUrl: string;
             if (/\.md$/i.test(resolvedPath)) {
               presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
@@ -997,12 +1018,10 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             } else {
               presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
             }
-            // Open as new page in Playwright context (same Chrome window as Meet).
-            // Set title to "CallingClaw Presenting" so future share_screen auto-selects this tab.
-            const newPage = await deps.chromeLauncher.context.newPage();
-            await newPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
-            await newPage.evaluate(`document.title = "CallingClaw Presenting"`);
-            console.log(`[open_file] Opened in Playwright Chrome: ${presentUrl}`);
+            // Use shareScreen to open + start sharing in one step.
+            // This creates the presenting tab, sets title, and clicks Meet share button.
+            const shareResult = await deps.chromeLauncher.shareScreen(presentUrl);
+            console.log(`[open_file] Opened + shared via shareScreen: ${presentUrl} (${shareResult.success ? "✅" : "❌"})`);
           } else {
             // No Playwright Chrome → open in system default app
             const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");

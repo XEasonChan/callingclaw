@@ -1123,6 +1123,7 @@ export class ChromeLauncher {
 
   // The presenting tab — kept alive for screen sharing
   private _presentingPage: any = null;
+  private _isSharing = false;  // True when Meet is actively screen sharing
 
   /**
    * Share a URL or the current screen in Google Meet.
@@ -1192,6 +1193,7 @@ export class ChromeLauncher {
       })()`));
 
       const success = status !== "not_sharing";
+      this._isSharing = success;
       console.log(`[ShareScreen] Status: ${status} (${success ? "✅" : "❌"})`);
 
       // After sharing starts, switch focus to the presenting tab.
@@ -1228,6 +1230,7 @@ export class ChromeLauncher {
         return 'no_button';
       })()`));
       // Close presenting tab
+      this._isSharing = false;
       if (this._presentingPage) {
         try { await this._presentingPage.close(); } catch {}
         this._presentingPage = null;
@@ -1245,6 +1248,7 @@ export class ChromeLauncher {
 
   /** Get the presenting page (the tab showing shared content) */
   get presentingPage(): any { return this._presentingPage; }
+  get isSharing(): boolean { return this._isSharing; }
 
   /** Execute JavaScript on the presenting tab */
   async evaluateOnPresentingPage(code: string): Promise<any> {
@@ -1279,6 +1283,23 @@ export class ChromeLauncher {
       return true;
     } catch (e: any) {
       console.warn("[ChromeLauncher] Presenting page navigate failed:", e.message);
+      // If page is dead, null it so next call recreates instead of retrying dead page
+      if (e.message?.includes("closed") || e.message?.includes("Target")) {
+        this._presentingPage = null;
+        // Try once more with a fresh page
+        if (this._context) {
+          try {
+            this._presentingPage = await this._context.newPage();
+            await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+            await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+            console.log("[ChromeLauncher] Presenting page recreated successfully");
+            return true;
+          } catch (e2: any) {
+            console.warn("[ChromeLauncher] Presenting page recreate also failed:", e2.message);
+            this._presentingPage = null;
+          }
+        }
+      }
       return false;
     }
   }

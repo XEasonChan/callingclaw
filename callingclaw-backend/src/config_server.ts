@@ -3454,11 +3454,16 @@ STEP-BY-STEP FLOW:
             }
           } catch {}
         }
-        // If already sharing, navigate instead of opening new tab
+        // If presenting tab exists, navigate it. Then ensure Meet is sharing.
         if (shareUrl && services.chromeLauncher.presentingPage) {
           try {
             await services.chromeLauncher.navigatePresentingPage(shareUrl);
             console.log(`[API] Navigated presenting tab to ${shareUrl} (reused)`);
+            // If Meet isn't sharing yet, start sharing
+            if (!services.chromeLauncher.isSharing) {
+              const startResult = await services.chromeLauncher.shareScreen(shareUrl);
+              return Response.json(startResult, { headers });
+            }
             return Response.json({ success: true, message: `Presenting: ${shareUrl}` }, { headers });
           } catch {
             // Navigate failed — fall through to new share
