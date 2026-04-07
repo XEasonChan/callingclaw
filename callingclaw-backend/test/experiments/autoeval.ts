@@ -144,6 +144,28 @@ const VOICE_TESTS: VoiceTest[] = [
     timeoutMs: 30000,
   },
 
+  // ── Scenario E: Multi-tab Navigation (丝滑跳转) ──
+  {
+    id: "E-01",
+    scenario: "multi_tab",
+    voice: "帮我打开 CallingClaw 官网，然后介绍一下 Features 页面",
+    expectTool: "share_screen",
+    expectLog: /share_screen|ShareScreen|callingclaw/i,
+    expectVoice: /官网|CallingClaw|feature|功能/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+  {
+    id: "E-02",
+    scenario: "multi_tab",
+    voice: "现在切换回我们之前的文档，继续看分镜脚本",
+    expectTool: "share_screen",
+    expectLog: /share_screen|Navigated|stage/i,
+    expectVoice: /分镜|脚本|文档|切换/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
   // ── Scenario D: 退出 ──
   {
     id: "D-01",
@@ -588,6 +610,23 @@ Tests:      ${VOICE_TESTS.length}
     Transcript:  ${finalPipeline.metrics.transcriptCount} entries
     Sharing:     ${finalPipeline.metrics.sharing ? "✅" : "❌"}
 `);
+
+  // ── Voice Repetition Detection ──
+  const allAI = results.filter(r => r.voiceText.length > 20);
+  let repetitions = 0;
+  for (let i = 1; i < allAI.length; i++) {
+    const prev = allAI[i - 1]!.voiceText;
+    const curr = allAI[i]!.voiceText;
+    // Check: >40% of current response's words appear in previous response
+    const currWords = new Set(curr.split(/\s+/).filter(w => w.length > 2));
+    const prevWords = prev.split(/\s+/).filter(w => w.length > 2);
+    const overlap = prevWords.filter(w => currWords.has(w)).length;
+    if (prevWords.length > 0 && overlap / prevWords.length > 0.4) {
+      repetitions++;
+      console.log(`  ⚠️ Repetition: ${allAI[i]!.id} repeats ${allAI[i-1]!.id} (${Math.round(overlap/prevWords.length*100)}% overlap)`);
+    }
+  }
+  console.log(`  Voice repetitions: ${repetitions === 0 ? "✅ none detected" : `❌ ${repetitions} found`}`);
 
   // ── Persist to results.tsv (autoresearch's keep-or-discard log) ──
   const failedTests = results.filter(r => !r.toolCalled || !r.voiceMatch).map(r => r.id).join(",");

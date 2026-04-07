@@ -503,7 +503,7 @@ export class ChromeLauncher {
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
         "--restore-last-session=false",             // Don't restore previous session tabs
-        "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab/window matching this title
+        "--auto-select-desktop-capture-source=Entire screen",  // Share entire screen (supports multi-tab switching)
         "--enable-usermedia-screen-capturing",    // Enable screen capture API
         "--start-maximized",                      // Start Chrome maximized for presentation
         `--remote-debugging-port=${port}`,

@@ -638,10 +638,13 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
                 const publicDir = require("path").resolve(import.meta.dir, "../../public");
                 const htmlFiles = fs.readdirSync(publicDir).filter((f: string) => f.endsWith(".html") && !f.startsWith("stage-"));
                 const queryWords = query.split(/[\s\-_]+/).filter((w: string) => w.length > 2);
-                const matched = htmlFiles.find((f: string) => {
+                // Score each file: count matching query words
+                const scored = htmlFiles.map((f: string) => {
                   const fLower = f.toLowerCase();
-                  return queryWords.filter((w: string) => fLower.includes(w.toLowerCase())).length >= Math.min(2, queryWords.length);
-                });
+                  const hits = queryWords.filter((w: string) => fLower.includes(w.toLowerCase())).length;
+                  return { file: f, hits };
+                }).filter(s => s.hits > 0).sort((a, b) => b.hits - a.hits);
+                const matched = scored[0]?.file;
                 if (matched) {
                   resolvedShareUrl = `http://localhost:${CONFIG.port}/${matched}`;
                   console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from public/ files)`);
