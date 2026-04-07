@@ -144,6 +144,38 @@ const VOICE_TESTS: VoiceTest[] = [
     timeoutMs: 30000,
   },
 
+  // ── Scenario F: PRD + Prototype 评审演示 (employee presenting) ──
+  {
+    id: "F-01",
+    scenario: "prd_present",
+    voice: "帮我投屏 Tanka Action Card Phase I 的 PRD，然后你作为员工来给我讲一下这个 PRD 的整体结构和为什么这么设计",
+    expectTool: "share_screen",
+    expectLog: /share_screen|ShareScreen|prd/i,
+    expectVoice: /PRD|Action Card|Phase|架构|设计|为什么|背景|目标/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+  {
+    id: "F-02",
+    scenario: "prd_present",
+    voice: "滚动到 Action 类型和开发方案的部分，讲讲为什么选择这个技术方案",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    expectVoice: /Action|API|方案|类型|选择|原因|trade.?off|权衡/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+  {
+    id: "F-03",
+    scenario: "prd_present",
+    voice: "继续往下看权限控制和审核流程的部分，你觉得有什么风险或者可以优化的地方",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    expectVoice: /权限|审核|风险|优化|安全|流程|控制/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+
   // ── Scenario E: Multi-tab Navigation (丝滑跳转) ──
   {
     id: "E-01",
