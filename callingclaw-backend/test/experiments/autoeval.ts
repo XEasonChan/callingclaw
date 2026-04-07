@@ -404,7 +404,7 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     // Collect evidence
     const entries = await getTranscript(20);
     const newEntries = entries.filter(e => e.ts > transcriptBefore);
-    const log = await getBackendLog(50);
+    const log = await getBackendLog(200);
 
     // Check: did the expected tool get called?
     const toolCalls = newEntries

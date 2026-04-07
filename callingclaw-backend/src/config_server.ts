@@ -3454,6 +3454,16 @@ STEP-BY-STEP FLOW:
             }
           } catch {}
         }
+        // If already sharing, navigate instead of opening new tab
+        if (shareUrl && services.chromeLauncher.presentingPage) {
+          try {
+            await services.chromeLauncher.navigatePresentingPage(shareUrl);
+            console.log(`[API] Navigated presenting tab to ${shareUrl} (reused)`);
+            return Response.json({ success: true, message: `Presenting: ${shareUrl}` }, { headers });
+          } catch {
+            // Navigate failed — fall through to new share
+          }
+        }
         const result = await services.chromeLauncher.shareScreen(shareUrl);
         return Response.json(result, { headers });
       }
