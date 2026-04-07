@@ -4,7 +4,7 @@
 
 **v2.8.3** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
 
-One of the first production applications of **Google Gemini 3.1 Flash Live** for real-time voice AI. Full duplex voice conversation with long-context understanding, native tool calling, and session resumption... at 10x lower cost than OpenAI Realtime.
+<img width="1277" height="872" alt="image" src="https://github.com/user-attachments/assets/6b32dee0-d41c-4cc1-b572-ad7b9b549bf6" />
 
 ---
 
