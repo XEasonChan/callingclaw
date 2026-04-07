@@ -611,11 +611,21 @@ Respond with JSON only:
         }
 
         case "open_url": {
-          instruction = `open ${params.url} in browser`;
-          const r = await this.automationRouter.execute(instruction);
-          executionResult = r.success
-            ? r.result
-            : `Router failed: ${r.result}`;
+          const openUrl = params.url || "";
+          instruction = `open ${openUrl} in browser`;
+          // Prefer Playwright Chrome (same window as Meet) over system browser
+          try {
+            const resp = await fetch("http://localhost:4000/api/screen/share", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: openUrl }),
+            });
+            const data = await resp.json() as any;
+            executionResult = data.success ? `Opened ${openUrl}` : `Share failed: ${data.message}`;
+          } catch (e: any) {
+            // Fallback: system browser
+            const r = await this.automationRouter.execute(instruction);
+            executionResult = r.success ? r.result : `Router failed: ${r.result}`;
+          }
           break;
         }
 
