@@ -997,9 +997,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             } else {
               presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
             }
-            // Open as new page in Playwright context (same Chrome window as Meet)
+            // Open as new page in Playwright context (same Chrome window as Meet).
+            // Set title to "CallingClaw Presenting" so future share_screen auto-selects this tab.
             const newPage = await deps.chromeLauncher.context.newPage();
             await newPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
+            await newPage.evaluate(`document.title = "CallingClaw Presenting"`);
             console.log(`[open_file] Opened in Playwright Chrome: ${presentUrl}`);
           } else {
             // No Playwright Chrome → open in system default app

@@ -196,6 +196,8 @@ const KNOWN_BUGS = [
   { id: "BUG-011", status: "FIXED", desc: "Pre-generated Stage HTML, iframe src baked in" },
   { id: "BUG-016", status: "FIXED", desc: "REST API — NO_PROXY added for api.openai.com + openrouter.ai" },
   { id: "BUG-017", status: "FIXED", desc: "Voice session resetForNewMeeting() on meeting.ended" },
+  { id: "BUG-018", status: "FIXED", desc: "Screen share flag 'Entire screen' doesn't match any source — reverted to 'CallingClaw Presenting' tab title match" },
+  { id: "BUG-019", status: "FIXED", desc: "open_file in Playwright Chrome didn't set tab title — share_screen couldn't auto-select" },
 ];
 
 // ══════════════════════════════════════════════════════════════
@@ -629,7 +631,7 @@ Tests:      ${VOICE_TESTS.length}
   console.log(`  Voice repetitions: ${repetitions === 0 ? "✅ none detected" : `❌ ${repetitions} found`}`);
 
   // ── Persist to results.tsv (autoresearch's keep-or-discard log) ──
-  const failedTests = results.filter(r => !r.toolCalled || !r.voiceMatch).map(r => r.id).join(",");
+  const failedTests = results.filter(r => !r.toolCalled || !r.contentMatch).map(r => r.id).join(",");
   appendResult(total, breakdown, EXPERIMENT, failedTests || "all_pass");
   console.log(`\n📊 Results appended to ${RESULTS_FILE}`);
 
