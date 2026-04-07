@@ -429,7 +429,14 @@ async function getTranscript(count = 10): Promise<Array<{ role: string; text: st
 }
 
 async function getBackendLog(lines = 50): Promise<string> {
-  try { return require("child_process").execSync(`strings /tmp/callingclaw-backend.log | tail -${lines}`).toString(); } catch { return ""; }
+  // Use cat with LC_ALL=C grep to handle binary+UTF-8 mixed log file
+  // `strings` drops Chinese characters which causes false accuracy misses
+  try {
+    return require("child_process").execSync(
+      `cat /tmp/callingclaw-backend.log | LC_ALL=C grep -a "" | tail -${lines}`,
+      { maxBuffer: 1024 * 1024 }
+    ).toString();
+  } catch { return ""; }
 }
 
 async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<TestResult> {
@@ -460,7 +467,7 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
     // Collect evidence
     const entries = await getTranscript(20);
     const newEntries = entries.filter(e => e.ts > transcriptBefore);
-    const log = await getBackendLog(200);
+    const log = await getBackendLog(500);
 
     // Check: did the expected tool get called?
     const toolCalls = newEntries
