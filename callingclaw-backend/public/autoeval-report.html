@@ -102,6 +102,55 @@
 
 <div class="container">
 
+<!-- Background -->
+<div class="card" style="border-left:3px solid var(--accent)">
+  <div class="card-title"><span class="icon">📋</span> Experiment Background</div>
+  <p style="font-size:14px;margin-bottom:12px">CallingClaw is a real-time voice AI that joins Google Meet as a participant, speaks, presents slides, and controls the computer. This report tracks the quality of its <strong>voice-driven presentation pipeline</strong> through automated experiments following the <a href="https://github.com/KellerJordan/modded-nanogpt" style="color:var(--accent)">autoresearch</a> pattern: each experiment has a clear goal, measurable metric, and keep-or-discard decision.</p>
+  <p style="font-size:14px;margin-bottom:12px"><strong>Core challenge:</strong> Coordinate three systems in real-time — OpenAI Realtime voice model (System 1), Claude Haiku intent classifier + action executor (System 2), and Playwright-controlled Chrome browser — to deliver coherent meeting presentations where AI speaks, scrolls, clicks, and responds to user questions without interrupting itself or losing context.</p>
+  <p style="font-size:14px"><strong>Methodology:</strong> Voice commands sent via <code>sendText</code> to simulate user speech. Each step verified across 3 layers: system health (Chrome alive, voice connected), tool accuracy (correct tool called), and content quality (specific info, no filler). Results persisted to <code>autoeval-results.tsv</code> for trend tracking.</p>
+</div>
+
+<!-- Test Suite Overview -->
+<div class="card">
+  <div class="card-title"><span class="icon">🎯</span> Test Suite: 3 Categories, 10 Voice Tests + 14 Supplementary Tests</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+    <div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--accent)">AutoEval Voice Tests (10 cases)</div>
+      <table style="font-size:12px">
+        <tr><td style="padding:4px 8px"><strong>A-01</strong></td><td>投屏官网 + 产品介绍</td></tr>
+        <tr><td style="padding:4px 8px"><strong>A-02</strong></td><td>向下滚动 + 功能模块介绍</td></tr>
+        <tr><td style="padding:4px 8px"><strong>A-03</strong></td><td>继续滚动 + 剩余功能</td></tr>
+        <tr><td style="padding:4px 8px"><strong>A-04</strong></td><td>点击 Features 页面</td></tr>
+        <tr><td style="padding:4px 8px"><strong>B-01</strong></td><td>上线视频计划 overview</td></tr>
+        <tr><td style="padding:4px 8px"><strong>B-02</strong></td><td>分镜脚本设计 (23帧?)</td></tr>
+        <tr><td style="padding:4px 8px"><strong>B-03</strong></td><td>竞品 Pika 差异化</td></tr>
+        <tr><td style="padding:4px 8px"><strong>C-01</strong></td><td>投屏 PRD 文档</td></tr>
+        <tr><td style="padding:4px 8px"><strong>C-02</strong></td><td>滚动到需求 + review 盲点</td></tr>
+        <tr><td style="padding:4px 8px"><strong>D-01</strong></td><td>退出会议</td></tr>
+      </table>
+    </div>
+    <div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--blue)">Text Simulation Tests (6 sections × 7 checks)</div>
+      <table style="font-size:12px">
+        <tr><td style="padding:4px 8px">Why score</td><td>Motivation + business context (0-2)</td></tr>
+        <tr><td style="padding:4px 8px">What score</td><td>Specific data points cited (0-2)</td></tr>
+        <tr><td style="padding:4px 8px">How score</td><td>Steps + mechanism described (0-2)</td></tr>
+        <tr><td style="padding:4px 8px">Originality</td><td>Not verbatim copy of narration</td></tr>
+        <tr><td style="padding:4px 8px">Chinese</td><td>Response in Chinese</td></tr>
+        <tr><td style="padding:4px 8px">No filler</td><td>No "需要我介绍吗" patterns</td></tr>
+        <tr><td style="padding:4px 8px">Natural flow</td><td>Has transitions (首先/接下来)</td></tr>
+      </table>
+      <div style="font-weight:600;font-size:13px;margin:12px 0 8px;color:var(--green)">Agent Pipeline Tests (8 intent scenarios)</div>
+      <table style="font-size:12px">
+        <tr><td style="padding:4px 8px">D-01~D-08</td><td>投屏 / 滚动 / 点击 / 搜索文件 / Google / 停止 / 忽略意见 / agent cue</td></tr>
+      </table>
+    </div>
+  </div>
+  <div style="margin-top:12px;padding:12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text2)">
+    <strong>Total coverage:</strong> 10 voice-driven E2E tests + 42 text simulation checks (6 sections × 7 metrics) + 8 intent classification scenarios = <strong>60 test points</strong> across 3 evaluation layers
+  </div>
+</div>
+
 <!-- Score Hero -->
 <div class="score-hero">
   <div>
