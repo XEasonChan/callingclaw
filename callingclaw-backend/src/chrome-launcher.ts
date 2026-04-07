@@ -1146,9 +1146,16 @@ export class ChromeLauncher {
 
       // Step 1: Open target URL in a "presenting" tab
       if (presentUrl) {
-        // Close previous presenting tab if any
+        // Close previous presenting tab if still alive
         if (this._presentingPage) {
-          try { await this._presentingPage.close(); } catch {}
+          try {
+            // Verify page is still alive before closing
+            await this._presentingPage.evaluate("1");
+            await this._presentingPage.close();
+          } catch {
+            // Page already dead, just clear the reference
+          }
+          this._presentingPage = null;
         }
         this._presentingPage = await this._context.newPage();
         await this._presentingPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
@@ -1229,11 +1236,15 @@ export class ChromeLauncher {
         if (btn) { btn.click(); return 'stopped'; }
         return 'no_button';
       })()`));
-      // Close presenting tab
+      // Close presenting tab and wait for Meet to settle
       this._isSharing = false;
       if (this._presentingPage) {
         try { await this._presentingPage.close(); } catch {}
         this._presentingPage = null;
+      }
+      // Wait for Meet to process the stop (dismiss "You stopped presenting" banner)
+      if (result === "stopped") {
+        await this._page.waitForTimeout(1500);
       }
       console.log(`[ShareScreen] Stop: ${result}`);
       return { success: result === "stopped" || result === "no_button" };
