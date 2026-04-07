@@ -947,15 +947,38 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             return `File not found: "${queryPath}". Try different keywords or check the file name.`;
           }
 
-          // Open the resolved file
-          const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
-          console.log(`[open_file] Opening: ${resolvedPath} in ${app}`);
+          // Open the resolved file — if presenting, load into presenting tab (not new tab/VSCode)
+          console.log(`[open_file] Opening: ${resolvedPath}`);
 
-          if (app === "browser" && deps.chromeLauncher) {
-            // Open in ChromeLauncher's presenting tab for potential screen share
-            const fileUrl = resolvedPath.startsWith("http") ? resolvedPath : `file://${resolvedPath}`;
-            await deps.chromeLauncher.shareScreen(fileUrl);
+          if (deps.chromeLauncher?.presentingPage) {
+            // Currently presenting → load file into presenting tab (visible in Meet)
+            let presentUrl: string;
+            if (/\.md$/i.test(resolvedPath)) {
+              // Markdown → use renderer for styled display
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            } else if (/\.html?$/i.test(resolvedPath)) {
+              // HTML → serve directly if in public/, otherwise render
+              const fileName = resolvedPath.split("/").pop() || "";
+              const publicPath = require("path").resolve(import.meta.dir, "../../public", fileName);
+              presentUrl = require("fs").existsSync(publicPath)
+                ? `http://localhost:${CONFIG.port}/${fileName}`
+                : `file://${resolvedPath}`;
+            } else {
+              // Other files → use renderer with raw content
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            }
+
+            // Navigate presenting tab (stays in Meet share)
+            try {
+              await deps.chromeLauncher.navigatePresentingPage(presentUrl);
+              console.log(`[open_file] Loaded into presenting tab: ${presentUrl}`);
+            } catch {
+              // Fallback: open in new tab via shareScreen
+              await deps.chromeLauncher.shareScreen(presentUrl);
+            }
           } else {
+            // Not presenting → open in default app
+            const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
             await meetJoiner.openFile(resolvedPath, app);
           }
 
