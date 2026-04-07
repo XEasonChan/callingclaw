@@ -661,9 +661,15 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (Google search)`);
             }
 
-            // 5. Last resort: guess domain
+            // 5. Last resort: if it looks like a URL path (has dots or slashes), prepend https://
             if (resolvedShareUrl === shareUrl) {
-              resolvedShareUrl = `https://www.${query.replace(/官网|网站|首页|homepage|文档|document|PRD/gi, "").trim().replace(/\s+/g, "")}.com`;
+              const cleaned = query.replace(/官网|网站|首页|homepage|文档|document|PRD/gi, "").trim();
+              if (cleaned.includes(".") || cleaned.includes("/")) {
+                // Already looks like a URL — just add https:// if missing
+                resolvedShareUrl = cleaned.startsWith("www.") ? `https://${cleaned}` : `https://www.${cleaned}`;
+              } else {
+                resolvedShareUrl = `https://www.${cleaned.replace(/\s+/g, "")}.com`;
+              }
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
             }
           }
