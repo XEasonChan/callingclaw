@@ -299,6 +299,12 @@ const vision = new VisionModule({
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
 
+    // Inject vision description into Realtime voice model (replaces stale one)
+    // Uses fixed ID so each vision update REPLACES the previous, keeping context compact.
+    if (voice.connected && description.length > 20) {
+      voice.replaceContext(`[VISION] What's currently on screen: ${description}`, "ctx_vision");
+    }
+
     // Append to live log file on disk (+ emit WS event for real-time frontend)
     if (meetingPrepSkill.liveLogPath) {
       appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`, eventBus, activeMeetingId || undefined);

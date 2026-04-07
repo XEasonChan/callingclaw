@@ -3461,7 +3461,9 @@ STEP-BY-STEP FLOW:
             console.log(`[API] Navigated presenting tab to ${shareUrl} (reused)`);
             // If Meet isn't sharing yet, start sharing
             if (!services.chromeLauncher.isSharing) {
+              console.log(`[API] Meet not sharing yet — calling shareScreen(${shareUrl?.slice(0, 50)})`);
               const startResult = await services.chromeLauncher.shareScreen(shareUrl);
+              console.log(`[API] shareScreen result: ${JSON.stringify(startResult)}`);
               return Response.json(startResult, { headers });
             }
             return Response.json({ success: true, message: `Presenting: ${shareUrl}` }, { headers });
