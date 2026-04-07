@@ -631,16 +631,36 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
                   ? `http://localhost:${CONFIG.port}${knownFile.path}` : knownFile.path;
               }
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep files)`);
-            } else if (/google/i.test(query)) {
-              // Google search: extract search terms
+            } else {
+              // 3. Search localhost public HTML files by fuzzy name match
+              try {
+                const fs = require("fs");
+                const publicDir = require("path").resolve(import.meta.dir, "../../public");
+                const htmlFiles = fs.readdirSync(publicDir).filter((f: string) => f.endsWith(".html") && !f.startsWith("stage-"));
+                const queryWords = query.split(/[\s\-_]+/).filter((w: string) => w.length > 2);
+                const matched = htmlFiles.find((f: string) => {
+                  const fLower = f.toLowerCase();
+                  return queryWords.filter((w: string) => fLower.includes(w.toLowerCase())).length >= Math.min(2, queryWords.length);
+                });
+                if (matched) {
+                  resolvedShareUrl = `http://localhost:${CONFIG.port}/${matched}`;
+                  console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from public/ files)`);
+                }
+              } catch {}
+            }
+
+            // 4. Google search pattern
+            if (resolvedShareUrl === shareUrl && /google/i.test(query)) {
               const searchTerms = query.replace(/google|搜索|搜一下|search/gi, "").trim();
               resolvedShareUrl = searchTerms
                 ? `https://www.google.com/search?q=${encodeURIComponent(searchTerms)}`
                 : "https://www.google.com";
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (Google search)`);
-            } else {
-              // Try as direct URL with https://
-              resolvedShareUrl = `https://www.${query.replace(/官网|网站|首页|homepage/gi, "").trim().replace(/\s+/g, "")}.com`;
+            }
+
+            // 5. Last resort: guess domain
+            if (resolvedShareUrl === shareUrl) {
+              resolvedShareUrl = `https://www.${query.replace(/官网|网站|首页|homepage|文档|document|PRD/gi, "").trim().replace(/\s+/g, "")}.com`;
               console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
             }
           }
@@ -687,7 +707,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
               if (pageCtx && deps.voice) {
                 deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
                 deps.voice.presentationMode = true;
-                return `Now presenting: ${resolvedShareUrl}. Describe what you see on the page.`;
+                return `Now presenting: ${resolvedShareUrl}. The page is now visible to all participants. Look at the [PAGE] context to see what's on screen and describe the actual content — headings, features, text you can see. Don't talk about the meeting agenda, describe what the page shows.`;
               }
               // DOM empty — page didn't load properly
               if (deps.voice) deps.voice.presentationMode = true;
