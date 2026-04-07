@@ -93,7 +93,8 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         const url = parts[1];
         if (!url) return { success: false, error: "Usage: /callingclaw join <meeting-url>" };
         const instructions = parts.slice(2).join(" ") || undefined;
-        const joinResult = await apiPost("/api/meeting/join", { url, instructions });
+        // Always pass provider explicitly (CONFIG.voiceProvider may not be set if backend started from different cwd)
+        const joinResult = await apiPost("/api/meeting/join", { url, instructions, provider: "openai" });
         // Handle auth-required response: try auto-applying OpenClaw's Google OAuth first
         if (!joinResult.success && joinResult.data?.needsAuth) {
           console.log("[CallingClaw Skill] Meeting join requires Google auth — attempting auto-setup from OpenClaw OAuth...");
