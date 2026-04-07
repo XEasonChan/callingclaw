@@ -3343,6 +3343,38 @@ STEP-BY-STEP FLOW:
       // ── Bridge / Google / Static ──
       // ══════════════════════════════════════════════════════════════
 
+      // GET /api/capabilities — Dynamic capability discovery for OpenClaw / external callers
+      // Ensures callers always get current config without hardcoding
+      if (url.pathname === "/api/capabilities" && req.method === "GET") {
+        return Response.json({
+          version: CONFIG.version,
+          voiceProvider: CONFIG.voiceProvider,
+          transcriptionLanguage: CONFIG.transcriptionLanguage,
+          features: {
+            meetingStage: true,           // Pre-generated Stage HTML with iframe
+            markdownRenderer: true,       // /render.html?file=... for any .md file
+            iframeScroll: true,           // Scroll iframe content via API
+            interactTool: true,           // Click/scroll/navigate on presenting page
+            readPrepTool: true,           // Zero-cost prep section queries
+            naturalUrlResolution: true,   // "官网" → resolved from prep brief
+            dualSystemPanels: true,       // System One (Voice) + System Two (Agent)
+          },
+          tools: [
+            "share_screen", "stop_sharing", "interact", "read_prep", "search_files",
+            "open_file", "leave_meeting", "recall_context", "take_screenshot",
+          ],
+          prepFiles: (() => {
+            try {
+              const fs = require("fs");
+              const home = require("os").homedir();
+              return fs.readdirSync(`${home}/.callingclaw/shared`)
+                .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_compiled.json"))
+                .map((f: string) => `${home}/.callingclaw/shared/${f}`);
+            } catch { return []; }
+          })(),
+        }, { headers });
+      }
+
       // GET /api/audio/status — Audio pipeline diagnostic
       if (url.pathname === "/api/audio/status" && req.method === "GET") {
         const log = (() => { try { return require("child_process").execSync("strings /tmp/callingclaw-backend.log | tail -100").toString(); } catch { return ""; } })();

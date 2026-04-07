@@ -93,8 +93,10 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         const url = parts[1];
         if (!url) return { success: false, error: "Usage: /callingclaw join <meeting-url>" };
         const instructions = parts.slice(2).join(" ") || undefined;
-        // Always pass provider explicitly (CONFIG.voiceProvider may not be set if backend started from different cwd)
-        const joinResult = await apiPost("/api/meeting/join", { url, instructions, provider: "openai" });
+        // Get current backend config dynamically (not hardcoded)
+        const caps = await apiGet("/api/capabilities").catch(() => ({ voiceProvider: "openai" }));
+        const provider = caps.voiceProvider || "openai";
+        const joinResult = await apiPost("/api/meeting/join", { url, instructions, provider });
         // Handle auth-required response: try auto-applying OpenClaw's Google OAuth first
         if (!joinResult.success && joinResult.data?.needsAuth) {
           console.log("[CallingClaw Skill] Meeting join requires Google auth — attempting auto-setup from OpenClaw OAuth...");
@@ -272,6 +274,10 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
         return await apiPost("/api/screen/share", { url: shareUrl });
       }
 
+      case "capabilities":
+      case "caps":
+        return await apiGet("/api/capabilities");
+
       case "notes":
         // Reads from ~/.callingclaw/shared/notes/ (+ legacy meeting_notes/)
         return await apiGet("/api/meeting/notes");
@@ -348,9 +354,10 @@ export async function executeCallingClawSkill(args: string): Promise<CallingClaw
               "/callingclaw recover sidecar      — Kill + restart Python sidecar",
               "/callingclaw recover voice        — Restart voice session",
               "/callingclaw recover all          — Reset all subsystems",
-              "/callingclaw share <url>          — Present a URL in the meeting (auto tab share)",
+              "/callingclaw share <url>          — Present a URL in Meeting Stage (iframe + dual panels)",
               "/callingclaw share stop           — Stop presenting",
-              "/callingclaw share                — Present entire screen",
+              "/callingclaw share                — Present Meeting Stage with prep content (auto-loads iframe)",
+              "/callingclaw capabilities         — Get current backend capabilities and config",
               "/callingclaw google-auth          — Setup Google OAuth (reuse OpenClaw's, or generate new)",
               "/callingclaw google-chrome-login   — Open Chrome to sign in with Google (for Meet)",
             ],
