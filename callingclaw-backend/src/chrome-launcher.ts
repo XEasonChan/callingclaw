@@ -116,7 +116,8 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   var outputCtx = cc.outputCtx;
   if (outputCtx.state === 'suspended') await outputCtx.resume();
 
-  var PB_CODE = 'class P extends AudioWorkletProcessor{constructor(){super();this._b=new Float32Array(24000*10);this._w=0;this._r=0;this.port.onmessage=e=>{if(e.data==="clear"){this._w=0;this._r=0;return}var s=e.data;for(var i=0;i<s.length;i++){this._b[this._w%this._b.length]=s[i];this._w++}}}process(i,o){var out=o[0][0];if(!out)return true;for(var i=0;i<out.length;i++){if(this._r<this._w){out[i]=this._b[this._r%this._b.length];this._r++}else out[i]=0}return true}}registerProcessor("playback-processor",P);';
+  // Playback ring buffer: 30 seconds (was 10s — long AI responses overflowed and caused audio glitches)
+  var PB_CODE = 'class P extends AudioWorkletProcessor{constructor(){super();this._b=new Float32Array(24000*30);this._w=0;this._r=0;this.port.onmessage=e=>{if(e.data==="clear"){this._w=0;this._r=0;return}var s=e.data;for(var i=0;i<s.length;i++){this._b[this._w%this._b.length]=s[i];this._w++}}}process(i,o){var out=o[0][0];if(!out)return true;for(var i=0;i<out.length;i++){if(this._r<this._w){out[i]=this._b[this._r%this._b.length];this._r++}else out[i]=0}return true}}registerProcessor("playback-processor",P);';
   var pbBlob = new Blob([PB_CODE], { type: 'application/javascript' });
   var pbUrl = URL.createObjectURL(pbBlob);
   await outputCtx.audioWorklet.addModule(pbUrl);

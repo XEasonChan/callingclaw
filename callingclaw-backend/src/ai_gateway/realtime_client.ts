@@ -848,14 +848,18 @@ export class RealtimeClient {
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
 
-    // Queue response.create if AI is currently speaking — don't cancel mid-sentence
+    // Guard response.create — the main source of audio truncation bugs
     if (type === "response.create") {
       const now = Date.now();
+      // Source tracking: log where this came from (helps debug truncation)
+      const stack = new Error().stack?.split("\n").slice(2, 4).map(l => l.trim().replace(/^at /, "")).join(" ← ") || "unknown";
+      console.log(`[Realtime] response.create from: ${stack}`);
       // Debounce: skip if <500ms since last
       if (now - this._lastResponseCreateTs < 500) {
+        console.log(`[Realtime] response.create debounced (${now - this._lastResponseCreateTs}ms)`);
         return true;
       }
-      // Queue if speaking (set by VoiceModule via setSpeaking)
+      // Queue if speaking
       if (this._isSpeaking) {
         this._pendingResponseCreate = data;
         console.log(`[Realtime] response.create queued (AI is speaking)`);

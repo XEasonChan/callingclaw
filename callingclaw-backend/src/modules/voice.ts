@@ -402,20 +402,12 @@ export class VoiceModule {
           // 1. Submit tool result WITHOUT triggering response (backgroundResult)
           this.client.submitToolResultBackground(call_id, "ok");
 
-          // 2. Let the model generate a natural filler phrase ("让我查一下..." / "One moment...")
-          if (this.client.providerName === "gemini") {
-            // Gemini auto-responds to context; response.create is a no-op
-            this.client.injectContext(`[SYSTEM] You just started the "${name}" tool. Briefly acknowledge you're working on it, one short sentence.`);
-          } else {
-            // OpenAI / Grok: filler response (queued automatically if speaking)
-            this.client.sendEvent("response.create", {
-              response: {
-                instructions: `You just called the "${name}" tool. Briefly and naturally acknowledge you're working on it. One short sentence. Match the conversation language.`,
-              },
-            });
-          }
+          // 2. Silent inject filler context — NO response.create (方向A: never interrupt speech)
+          // The model will see this on its next turn (after current speech finishes or user speaks)
+          this.injectContext(`[WORKING] Running "${name}"...`);
 
-          // 3. Execute async — inject result when ready, then trigger model to continue
+          // 3. Execute async — inject result silently, NO response.create
+          // Model picks up context on next natural turn (user speech or presentSlide)
           if (this.onToolCall) {
             this.onToolCall(name, args, call_id).then((result) => {
               this.injectContext(`[DONE] ${name}: ${result.slice(0, 200)}`);
@@ -424,11 +416,9 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
                 ts: Date.now(),
               });
-              // Auto-inject screenshot if this was a visual tool (perception-action loop)
               this._feedbackScreenshot(name).catch(() => {});
-              // Trigger model to process the result — queued if AI is speaking
-              this.client.sendEvent("response.create", {});
-              console.log(`[Voice] Slow tool ${name} completed async → response.create sent`);
+              // NO response.create — model will see [DONE] context on next turn
+              console.log(`[Voice] Slow tool ${name} completed async → context injected (no response.create)`);
             }).catch((e: any) => {
               this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
               this.context.addTranscript({
@@ -436,8 +426,6 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: Error: ${e.message}`,
                 ts: Date.now(),
               });
-              // Queued automatically if speaking
-              this.client.sendEvent("response.create", {});
               console.error(`[Voice] Slow tool ${name} failed:`, e.message);
             });
           }

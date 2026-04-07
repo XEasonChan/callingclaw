@@ -843,15 +843,10 @@ Respond with JSON only:
           }
         }
 
-        // 3. Trigger voice model to process result and continue
-        //    BUT only if it's not already speaking/thinking (prevents response.create spam → repetition)
-        const voiceState = this.voice.audioState;
-        if (voiceState === "listening" || voiceState === "idle") {
-          this.voice.sendEvent("response.create", {});
-          console.log(`[TranscriptAuditor] Triggered voice response after ${action} (was ${voiceState})`);
-        } else {
-          console.log(`[TranscriptAuditor] Skipped response.create — voice is ${voiceState}`);
-        }
+        // 3. Context already injected above (silent). NO response.create.
+        // Model sees [DONE] + [PAGE] on next natural turn (user speech or presenter advance).
+        // This prevents background actions from interrupting AI mid-sentence.
+        console.log(`[TranscriptAuditor] Action done → context injected silently (no response.create)`);
       }
 
       console.log(
