@@ -1688,10 +1688,11 @@ export function startConfigServer(services: Services) {
         let joinSummary = "";
         let joinMethod = "meetjoiner";
 
-        if (services.chromeLauncher && validated.platform === "google_meet") {
-          // Preferred: ChromeLauncher handles join + audio (no playwright-cli needed)
-          // Audio injection via addInitScript replaces BlackHole — keep default devices
-          console.log("[Meeting] Using ChromeLauncher join (Playwright library, no CLI conflict)...");
+        if (services.chromeLauncher && (validated.platform === "google_meet" || validated.platform === "zoom")) {
+          // Preferred: ChromeLauncher handles join + audio for Meet AND Zoom
+          // Both use WebRTC — audio injection via addInitScript works on any meeting platform
+          // Zoom: navigates to web client, clicks "Join from Your Browser"
+          console.log(`[Meeting] Using ChromeLauncher join for ${validated.platform} (Playwright library)...`);
           try {
             await services.chromeLauncher.launch();
             console.log("[Meeting] ✅ ChromeLauncher: audio injection init script installed");
@@ -1718,7 +1719,7 @@ export function startConfigServer(services: Services) {
               console.warn("[Meeting] Audio pipeline activation failed:", e.message);
             }
           }
-        } else if (services.playwrightCli && validated.platform === "google_meet") {
+        } else if (services.playwrightCli && (validated.platform === "google_meet" || validated.platform === "zoom")) {
           // Fallback: playwright-cli (legacy path)
           if (!services.playwrightCli.connected) {
             try { await services.playwrightCli.start(); } catch (e: any) {

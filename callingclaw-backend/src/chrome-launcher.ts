@@ -43,8 +43,9 @@ const DEFAULT_PORT = 0; // 0 = random free port
 
 const AUDIO_INIT_SCRIPT = `
 (function() {
-  // Skip non-Meet pages
-  if (!location.hostname.includes('meet.google.com') && location.hostname !== 'about:blank') return;
+  // Skip pages that aren't meeting platforms
+  var isMeeting = location.hostname.includes('meet.google.com') || location.hostname.includes('zoom.us') || location.hostname === 'about:blank';
+  if (!isMeeting) return;
 
   window.__cc = {
     gumCalls: 0,
@@ -642,6 +643,41 @@ export class ChromeLauncher {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
       await page.waitForTimeout(2000);
 
+      // Step 1b: Zoom — navigate directly to web client (skip landing page)
+      const isZoom = url.includes("zoom.us");
+      if (isZoom) {
+        log("Zoom detected — navigating to web client...");
+        // Extract meeting ID and password from URL, then go straight to web client
+        const zoomMatch = url.match(/\/j\/(\d+)/);
+        const pwdMatch = url.match(/pwd=([^&]+)/);
+        if (zoomMatch) {
+          const meetingId = zoomMatch[1];
+          const pwd = pwdMatch ? pwdMatch[1] : "";
+          const webClientUrl = `https://app.zoom.us/wc/join/${meetingId}${pwd ? `?pwd=${pwd}` : ""}`;
+          log(`Navigating to Zoom Web Client: ${webClientUrl}`);
+          await page.goto(webClientUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+          await page.waitForTimeout(5000); // Web client takes a while to load
+        } else {
+          // Can't parse URL — try the landing page approach
+          await page.waitForTimeout(3000);
+          const zoomLanding = await page.evaluate(`(() => {
+            var els = document.querySelectorAll('a, button, [role="button"]');
+            for (var i = 0; i < els.length; i++) {
+              var t = (els[i].textContent || '').trim().toLowerCase();
+              if (t.includes('join from your browser') || t.includes('join from browser')) {
+                els[i].click();
+                return 'clicked_browser_join';
+              }
+            }
+            return 'no_browser_join_found';
+          })()`);
+          log(`Zoom landing: ${zoomLanding}`);
+          if (String(zoomLanding).includes("clicked")) {
+            await page.waitForTimeout(5000);
+          }
+        }
+      }
+
       // Step 2: Dismiss + detect + configure
       log("Detecting + configuring...");
       const configResult = await page.evaluate(`(() => {
@@ -659,7 +695,7 @@ export class ChromeLauncher {
         var btns = Array.from(document.querySelectorAll('button'));
         var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
 
-        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
+        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"], [aria-label*="Leave"], [aria-label*="End"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]') || document.querySelector('.meeting-app')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -675,7 +711,7 @@ export class ChromeLauncher {
 
         // 4. Camera OFF
         ${muteCamera ? `
-        var camOff = document.querySelector('[aria-label="Turn off camera"], [aria-label="关闭摄像头"]');
+        var camOff = document.querySelector('[aria-label="Turn off camera"], [aria-label="关闭摄像头"], [aria-label*="Stop Video"], [aria-label*="stop video"]');
         if (camOff) { camOff.click(); R.config.push('cam:off'); }
         else R.config.push('cam:already_off');
         ` : `R.config.push('cam:skip');`}
@@ -698,7 +734,7 @@ export class ChromeLauncher {
         }
 
         // 7. Check if join button exists
-        var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
+        var joinTargets = ['Join now', 'Ask to join', 'Join', 'Join Meeting', 'Join Audio by Computer', '加入会议', '请求加入', '立即加入', '加入音频'];
         for (var i = 0; i < btns.length; i++) {
           if (joinTargets.indexOf(btns[i].textContent.trim()) !== -1) { R.hasJoinBtn = true; break; }
         }
@@ -728,13 +764,33 @@ export class ChromeLauncher {
         const retry = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
           for (var i = 0; i < btns.length; i++) {
-            if (['Join now','Ask to join','Join','加入会议','请求加入','立即加入'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
+            if (['Join now','Ask to join','Join','Join Meeting','Join Audio by Computer','加入会议','请求加入','立即加入','加入音频'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
           }
           return 'still_no_button';
         })()`);
         log(`Retry: ${retry}`);
         if (String(retry).includes("still_no_button")) {
-          return { success: false, summary: "Join button not found after retry", steps, state: "failed" };
+          // Agentic fallback: use DOM extraction to find ANY clickable join-like button
+          log("Hardcoded selectors failed — trying agentic DOM scan...");
+          const agenticResult = await page.evaluate(`(() => {
+            var btns = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+            var joinPatterns = /join|enter|start|connect|participate|加入|进入|开始/i;
+            var excludePatterns = /zoom.*app|workplace|download|install|open zoom/i;
+            for (var i = 0; i < btns.length; i++) {
+              var t = (btns[i].textContent || '').trim();
+              var label = btns[i].getAttribute('aria-label') || '';
+              if (excludePatterns.test(t)) continue; // Skip "Join from Zoom app" etc.
+              if (t.length > 1 && t.length < 40 && (joinPatterns.test(t) || joinPatterns.test(label))) {
+                btns[i].click();
+                return 'agentic_clicked:' + t;
+              }
+            }
+            return 'agentic_no_match';
+          })()`);
+          log(`Agentic: ${agenticResult}`);
+          if (String(agenticResult).includes("agentic_no_match")) {
+            return { success: false, summary: "Join button not found (hardcoded + agentic)", steps, state: "failed" };
+          }
         }
       }
 
@@ -743,7 +799,7 @@ export class ChromeLauncher {
         log("Clicking join...");
         const joinResult = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
-          var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
+          var joinTargets = ['Join now', 'Ask to join', 'Join', 'Join Meeting', 'Join Audio by Computer', '加入会议', '请求加入', '立即加入', '加入音频'];
           for (var i = 0; i < btns.length; i++) {
             var t = btns[i].textContent.trim();
             if (joinTargets.indexOf(t) !== -1) {
