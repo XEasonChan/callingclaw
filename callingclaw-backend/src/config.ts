@@ -152,8 +152,8 @@ export const CONFIG = {
 
   // Screen
   screen: {
-    width: parseInt(process.env.SCREEN_WIDTH || "1920"),
-    height: parseInt(process.env.SCREEN_HEIGHT || "1080"),
+    width: parseInt(process.env.SCREEN_WIDTH || "0"),
+    height: parseInt(process.env.SCREEN_HEIGHT || "0"),
     captureFps: 1,
     ssimThreshold: 0.95,
   },
@@ -195,6 +195,27 @@ export const CONFIG = {
   // User identity
   userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };
+
+// Auto-detect screen resolution if not set via env
+if (CONFIG.screen.width === 0 || CONFIG.screen.height === 0) {
+  try {
+    const out = require("child_process").execSync(
+      `system_profiler SPDisplaysDataType 2>/dev/null | grep -i resolution | head -1`
+    ).toString().trim();
+    // Parse "Resolution: 2560 x 1600 Retina" or "3840 x 2160"
+    const match = out.match(/(\d{3,5})\s*x\s*(\d{3,5})/);
+    if (match) {
+      CONFIG.screen.width = parseInt(match[1]!);
+      CONFIG.screen.height = parseInt(match[2]!);
+      console.log(`[Config] Auto-detected screen: ${CONFIG.screen.width}x${CONFIG.screen.height}`);
+    }
+  } catch {}
+  // Fallback
+  if (CONFIG.screen.width === 0) {
+    CONFIG.screen.width = 1920;
+    CONFIG.screen.height = 1080;
+  }
+}
 
 export type CallingClawConfig = typeof CONFIG;
 

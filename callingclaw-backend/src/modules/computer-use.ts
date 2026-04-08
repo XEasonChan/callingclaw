@@ -18,10 +18,30 @@ import { OpenClawBridge } from "../openclaw_bridge";
 
 // ── Screenshot dimensions for API ──
 // Full 1920x1080 PNG ~3-5MB base64 ~500k+ tokens per image.
-// Anthropic recommends max 1280x800 for computer use.
-// We use sips (macOS) to resize screenshots before sending to the API.
-const API_SCREEN_WIDTH = 1280;
-const API_SCREEN_HEIGHT = 800;
+// Anthropic recommends specific resolutions for computer use.
+// We pick the closest match to the actual display aspect ratio to avoid distortion.
+// (Inspired by Clicky's ElementLocationDetector approach)
+const ANTHROPIC_RESOLUTIONS: [number, number, number][] = [
+  [1024, 768,  1.333],   // 4:3 (legacy displays)
+  [1280, 800,  1.600],   // 16:10 (MacBook Air/Pro — most common)
+  [1366, 768,  1.779],   // ~16:9 (external monitors)
+];
+
+function pickApiResolution(): { width: number; height: number } {
+  const realAspect = CONFIG.screen.width / CONFIG.screen.height;
+  let best = ANTHROPIC_RESOLUTIONS[1]!; // default 1280x800
+  let bestDelta = Infinity;
+  for (const [w, h, aspect] of ANTHROPIC_RESOLUTIONS) {
+    const delta = Math.abs(realAspect - aspect);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = [w, h, aspect];
+    }
+  }
+  return { width: best[0], height: best[1] };
+}
+
+const { width: API_SCREEN_WIDTH, height: API_SCREEN_HEIGHT } = pickApiResolution();
 
 // ── Model → Tool Version mapping ──
 // Opus 4.6, Sonnet 4.6, Opus 4.5 → computer_20251124 + computer-use-2025-11-24
