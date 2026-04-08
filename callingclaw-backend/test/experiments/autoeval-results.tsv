@@ -27,3 +27,4 @@ timestamp	commit	score	breakdown	experiment	details
 2026-04-07T15:37:56	3eb6156	71	sys:15/15 tool:7/15 content:11/15 fluency:14/15 accuracy:2/15	scenario-eval: business presentation quality + action accuracy	A-01,A-02,B-01,B-02,B-03,C-01,C-02,F-01,F-03,E-02,D-01
 2026-04-07T15:49:14	2d333a0	91	sys:15/15 tool:14/15 content:12/15 fluency:14/15 accuracy:14/15	scenario-eval: business presentation quality + action accuracy	A-01,A-02,E-02,D-01
 2026-04-08T02:48:07	9dfe356	95	sys:15/15 tool:14/15 content:14/15 fluency:14/15 accuracy:14/15	scenario-eval: business presentation quality + action accuracy	B-02,D-01
+2026-04-08T03:39:23	166018f	95	sys:15/15 tool:14/15 content:14/15 fluency:14/15 accuracy:14/15	scenario-eval: business presentation quality + action accuracy	B-02,D-01
