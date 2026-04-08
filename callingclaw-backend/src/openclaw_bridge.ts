@@ -175,7 +175,7 @@ export class OpenClawBridge {
     return new Promise<string>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.chatResolve = null;
-        resolve("OpenClaw task timed out (5 minutes). OpenClaw may be busy or the research topic is too broad.");
+        resolve("OpenClaw task timed out (10 minutes). OpenClaw may be busy or the research topic is too broad.");
       }, TASK_TIMEOUT);
 
       this.chatResolve = (text: string) => {
