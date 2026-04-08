@@ -108,7 +108,22 @@ const AUDIO_INIT_SCRIPT = `
 
 const AUDIO_PIPELINE_SCRIPT = `(async function() {
   var cc = window.__cc;
-  if (!cc || !cc.outputDest) { console.log('[CC-Audio] No init state'); return 'no_init'; }
+  // If init script didn't intercept getUserMedia (e.g., Zoom doesn't call it),
+  // bootstrap __cc manually so the audio pipeline can still work.
+  if (!cc) {
+    cc = window.__cc = {
+      gumCalls: 0, pcs: [], outputDest: null, outputCtx: null, outputTrack: null,
+      captureActive: false, captureChunks: 0, captureMaxAmp: 0, triedReceiverIdx: 0,
+      captureSource: null, captureWorklet: null, isPlaying: false, echoSuppressed: 0,
+    };
+  }
+  if (!cc.outputDest) {
+    // Create output destination manually (Zoom path — getUserMedia was never intercepted)
+    cc.outputCtx = new AudioContext({ sampleRate: 24000 });
+    cc.outputDest = cc.outputCtx.createMediaStreamDestination();
+    cc.outputTrack = cc.outputDest.stream.getAudioTracks()[0];
+    console.log('[CC-Audio] Created output dest manually (platform did not call getUserMedia)');
+  }
 
   var BACKEND_WS = 'ws://localhost:4000/ws/voice-test';
   var SAMPLE_RATE = 24000;
@@ -421,6 +436,36 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     captureChunks: function() { return cc.captureChunks; },
     captureMaxAmp: function() { return cc.captureMaxAmp; },
   };
+
+  // ── Zoom fallback: inject audio into existing PeerConnection senders ──
+  // If getUserMedia wasn't intercepted (Zoom), find the active PC and replace its audio track
+  // with our virtual mic track so Zoom sends AI audio to other participants.
+  if (cc.gumCalls === 0 && cc.outputTrack) {
+    console.log('[CC-Audio] Zoom path: replacing sender tracks on existing PeerConnections...');
+    // Find all PeerConnections (wrapped by init script, or scan global)
+    var allPCs = cc.pcs.length > 0 ? cc.pcs : [];
+    if (allPCs.length === 0) {
+      // Init script didn't wrap PCs (Zoom loaded before script). Try finding them via global state.
+      // Zoom stores PCs internally, but we can find audio senders on any RTCPeerConnection
+      console.log('[CC-Audio] No wrapped PCs found — Zoom may have created them before init script');
+    }
+    var replaced = 0;
+    for (var i = 0; i < allPCs.length; i++) {
+      try {
+        var senders = allPCs[i].getSenders();
+        for (var j = 0; j < senders.length; j++) {
+          if (senders[j].track && senders[j].track.kind === 'audio') {
+            senders[j].replaceTrack(cc.outputTrack);
+            replaced++;
+            console.log('[CC-Audio] Replaced audio sender track on PC #' + i);
+          }
+        }
+      } catch(e) { console.warn('[CC-Audio] PC sender replace failed:', e); }
+    }
+    if (replaced === 0) {
+      console.log('[CC-Audio] No audio senders found to replace — AI audio may not reach Zoom participants');
+    }
+  }
 
   return 'pipeline_ready';
 })()`;
