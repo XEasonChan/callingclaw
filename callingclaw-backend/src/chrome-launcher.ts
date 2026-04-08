@@ -289,9 +289,10 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
           // ── Echo suppression: mark AI as speaking ──
           cc.isPlaying = true;
           if (cc._playingTimer) clearTimeout(cc._playingTimer);
-          // Tail guard: keep suppression for 500ms after last audio chunk
-          // to catch echo propagation delay through Meet's SFU
-          cc._playingTimer = setTimeout(function() { cc.isPlaying = false; }, 500);
+          // Tail guard: keep suppression after last audio chunk
+          // Meet SFU: ~300ms echo delay. Zoom SFU: ~1000-2000ms echo delay.
+          var tailMs = location.hostname.includes('zoom.us') ? 2500 : 500;
+          cc._playingTimer = setTimeout(function() { cc.isPlaying = false; }, tailMs);
 
           var raw = atob(data.audio);
           var bytes = new Uint8Array(raw.length);
@@ -738,7 +739,7 @@ export class ChromeLauncher {
           const webClientUrl = `https://app.zoom.us/wc/join/${meetingId}${pwd ? `?pwd=${pwd}` : ""}`;
           log(`Navigating to Zoom Web Client: ${webClientUrl}`);
           await page.goto(webClientUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-          await page.waitForTimeout(5000); // Web client takes a while to load
+          await page.waitForTimeout(8000); // Zoom web client loads slowly (JS bundle + WebRTC init)
         } else {
           // Can't parse URL — try the landing page approach
           await page.waitForTimeout(3000);
@@ -876,8 +877,8 @@ export class ChromeLauncher {
 
       // Retry if loading
       if (parsed.state === "loading" || parsed.state === "no_join_button") {
-        log("Page loading — retrying in 2s...");
-        await page.waitForTimeout(2000);
+        log("Page loading — retrying in 4s...");
+        await page.waitForTimeout(4000);
         const retry = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
           for (var i = 0; i < btns.length; i++) {
