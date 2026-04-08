@@ -312,7 +312,7 @@ export class MeetingModule {
 
     // Build markdown content — conversation only (no tool/system noise)
     const transcript = this.context.getConversationText(1000);
-    const md = `# ${summary.title}
+    const md = `# ${summary.title || this._topic || "Meeting"}
 
 **Date:** ${now.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
 **Duration:** ${summary.duration}

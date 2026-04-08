@@ -55,10 +55,11 @@ export const CONFIG = {
   // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
   voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "openai15" | "grok" | "gemini",
 
-  // Transcription language hint (ISO 639-1 code or "auto")
-  // "auto" = let gpt-4o-transcribe detect language automatically (default, supports 57+ languages)
-  // Set explicitly (e.g., "zh") only if auto-detection struggles in your environment
-  transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "auto") as string,
+  // Transcription language hint (ISO 639-1 code, comma-separated, or "auto")
+  // Default "zh,en" — hints Whisper to expect Chinese+English (prevents hallucinating random languages).
+  // The hint IMPROVES accuracy, it doesn't restrict detection. Whisper still handles other languages.
+  // BUG-021: "auto" (no hint) causes gpt-4o-transcribe to hallucinate Hebrew/German/Japanese on ambiguous audio.
+  transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "zh,en") as string,
 
   // OpenAI (Realtime GA — gpt-realtime-1.5, upgraded from legacy preview)
   // Uses GA API: no beta header, new event names, session.type required.

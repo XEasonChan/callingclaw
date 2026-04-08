@@ -77,7 +77,7 @@ export class TranscriptAuditor {
   private CONFIDENCE_AUTO = 0.85;     // Auto-execute threshold
   private CONFIDENCE_SUGGEST = 0.6;   // Suggest to Voice AI threshold
   private WINDOW_ENTRIES = 15;        // Transcript entries to analyze
-  private COOLDOWN_MS = 5000;         // Min gap between executions
+  private COOLDOWN_MS = 10000;        // Min gap between executions (BUG-028: extended from 5s to 10s to prevent double-execution)
 
   constructor(opts: {
     context: SharedContext;

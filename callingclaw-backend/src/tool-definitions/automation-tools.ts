@@ -437,7 +437,7 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                 } else {
                   // Text-based fallback: target="Download for Mac" (fuzzy match + W3C events)
                   const clickResult = await cl.evaluateOnPresentingPage(`(() => {
-                    var els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
+                    var els = document.querySelectorAll('a,button,input,textarea,[role="button"],[role="textbox"],[contenteditable="true"],[onclick]');
                     var target = null;
                     var targetText = ${JSON.stringify(target.toLowerCase())};
                     for (var el of els) {

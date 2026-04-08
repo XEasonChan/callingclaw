@@ -85,6 +85,12 @@ export class SharedContext {
   }
 
   addTranscript(entry: TranscriptEntry) {
+    // BUG-031: Dedup — skip if identical entry exists in recent history (same role+text within 500ms)
+    const recent = this._transcript.slice(-8);
+    if (recent.some(e => e.role === entry.role && e.text === entry.text && Math.abs(e.ts - entry.ts) < 500)) {
+      return; // Duplicate, skip
+    }
+
     this._transcript.push(entry);
     this.emit("transcript", entry);
 

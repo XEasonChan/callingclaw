@@ -662,15 +662,22 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
 
             // 5. Last resort: if it looks like a URL path (has dots or slashes), prepend https://
+            // BUG-029: MUST validate ASCII-only before constructing domain (no Chinese chars in URLs)
             if (resolvedShareUrl === shareUrl) {
               const cleaned = query.replace(/官网|网站|首页|homepage|文档|document|PRD/gi, "").trim();
-              if (cleaned.includes(".") || cleaned.includes("/")) {
-                // Already looks like a URL — just add https:// if missing
-                resolvedShareUrl = cleaned.startsWith("www.") ? `https://${cleaned}` : `https://www.${cleaned}`;
+              const asciiOnly = cleaned.replace(/[^\x20-\x7E]/g, "").trim(); // strip non-ASCII
+              if (!asciiOnly || asciiOnly.length < 3) {
+                // Not a valid domain candidate — skip URL guessing
+                console.log(`[share_screen] "${shareUrl}" has no valid ASCII domain, skipping guess`);
+              } else if (asciiOnly.includes(".") || asciiOnly.includes("/")) {
+                resolvedShareUrl = asciiOnly.startsWith("www.") ? `https://${asciiOnly}` : `https://www.${asciiOnly}`;
+                console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
+              } else if (/^[a-z0-9\-]+$/i.test(asciiOnly.replace(/\s+/g, ""))) {
+                resolvedShareUrl = `https://www.${asciiOnly.replace(/\s+/g, "")}.com`;
+                console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
               } else {
-                resolvedShareUrl = `https://www.${cleaned.replace(/\s+/g, "")}.com`;
+                console.log(`[share_screen] "${shareUrl}" not a valid domain candidate`);
               }
-              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
             }
           }
 

@@ -171,7 +171,7 @@ export function PAGE_CLICK_JS(index: number): string {
     var idx = 0;
     var target = null;
     var seen = new Set();
-    document.querySelectorAll('a[href],button,input,select,textarea,[role="button"],[role="tab"],[role="menuitem"],[onclick]')
+    document.querySelectorAll('a[href],button,input,select,textarea,[role="button"],[role="textbox"],[role="tab"],[role="menuitem"],[contenteditable="true"],[onclick]')
       .forEach(function(el) {
         if (target) return;
         if (el.offsetWidth === 0 || el.offsetHeight === 0) return;
