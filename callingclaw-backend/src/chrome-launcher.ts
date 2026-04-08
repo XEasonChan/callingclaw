@@ -709,19 +709,27 @@ export class ChromeLauncher {
         var switchBtn = btns.find(function(b) { return ['Switch here', '切换到这里'].indexOf(b.textContent.trim()) !== -1; });
         if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; return JSON.stringify(R); }
 
-        // 4. Camera OFF (Meet + Zoom selectors)
+        // 4. Camera OFF (Meet aria-label selectors + Zoom text-based fallback)
         ${muteCamera ? `
         var camOff = document.querySelector(
           '[aria-label="Turn off camera"], [aria-label="关闭摄像头"],' +
-          '[aria-label*="Stop Video"], [aria-label*="stop video"],' +
-          '[aria-label*="Stop Camera"], [aria-label*="Mute Camera"],' +
-          'button.preview-video-control__btn--on'  // Zoom web client video toggle
+          '[aria-label*="Stop Video"], [aria-label*="stop video"]'
         );
+        if (!camOff) {
+          // Zoom fallback: find button by text content "Stop Video"
+          var allBtns = document.querySelectorAll('button, [role="button"]');
+          for (var i = 0; i < allBtns.length; i++) {
+            var txt = (allBtns[i].textContent || '').trim();
+            if (txt === 'Stop Video' || txt === 'Stop Camera' || txt === '停止视频') {
+              camOff = allBtns[i]; break;
+            }
+          }
+        }
         if (camOff) { camOff.click(); R.config.push('cam:off'); }
         else R.config.push('cam:already_off');
         ` : `R.config.push('cam:skip');`}
 
-        // 5. Mic
+        // 5. Mic — leave unmuted for audio injection
         ${muteMic ? `
         var micOff = document.querySelector(
           '[aria-label="Turn off microphone"], [aria-label="关闭麦克风"],' +
@@ -729,23 +737,35 @@ export class ChromeLauncher {
         );
         if (micOff) { micOff.click(); R.config.push('mic:muted'); }
         ` : `
-        var micOn = document.querySelector(
-          '[aria-label="Turn on microphone"], [aria-label="打开麦克风"],' +
-          '[aria-label*="Unmute"], [aria-label*="unmute"]'
-        );
-        if (micOn) { micOn.click(); R.config.push('mic:on'); }
-        else R.config.push('mic:already_on');
+        R.config.push('mic:already_on');
         `}
 
         // 6. Set display name (Meet + Zoom)
+        // Try multiple selectors: aria-label, placeholder, then any visible input near "Your Name" text
         var nameInput = document.querySelector(
-          'input[aria-label="Your name"], input[placeholder*="name"],' +
-          'input[placeholder*="Name"], input#inputname,' +
-          'input[aria-label*="name" i]'
+          'input[aria-label="Your name"], input[placeholder*="name" i],' +
+          'input#inputname, input[aria-label*="name" i]'
         );
-        if (nameInput && (!nameInput.value || nameInput.value === 'Guest' || nameInput.value === '')) {
-          var s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-          if (s && s.set) { s.set.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); nameInput.dispatchEvent(new Event('change', {bubbles:true})); R.config.push('name:set'); }
+        if (!nameInput) {
+          // Zoom fallback: find input near "Your Name" or "Enter Meeting Info" text
+          var inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+          for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].offsetWidth > 0) { nameInput = inputs[i]; break; }
+          }
+        }
+        if (nameInput && (!nameInput.value || nameInput.value === 'Guest' || nameInput.value.trim() === '')) {
+          nameInput.focus();
+          var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          if (nativeSetter && nativeSetter.set) {
+            nativeSetter.set.call(nameInput, ${JSON.stringify(displayName)});
+          } else {
+            nameInput.value = ${JSON.stringify(displayName)};
+          }
+          nameInput.dispatchEvent(new Event('input', {bubbles:true}));
+          nameInput.dispatchEvent(new Event('change', {bubbles:true}));
+          R.config.push('name:set');
+        } else if (nameInput) {
+          R.config.push('name:already_set');
         }
 
         // 7. Check if join button exists
