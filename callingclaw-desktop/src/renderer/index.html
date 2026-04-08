@@ -711,10 +711,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <span class="titlebar-ver" id="app-ver"></span>
   </div>
   <div class="titlebar-right">
-    <button class="tb-btn" id="btn-overlay" title="会议浮窗">
+    <button class="tb-btn" id="btn-overlay" title="Meeting Overlay">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="8" y="21" width="8" height="0" rx="0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
     </button>
-    <button class="tb-btn" id="btn-settings" title="设置">
+    <button class="tb-btn" id="btn-settings" title="Settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
   </div>
@@ -731,8 +731,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
             <h1>Hey Andrew,<br>What's our next meeting topic?</h1>
           </div>
           <div class="hero-input-wrap">
-            <input class="hero-input" id="topic-input" placeholder="告诉 CallingClaw 你想讨论什么话题..." onkeydown="if(event.key==='Enter'&&!event.isComposing)submitTopic()">
-            <button class="btn btn-primary btn-hero" onclick="submitTopic()">准备会议</button>
+            <input class="hero-input" id="topic-input" placeholder="Tell CallingClaw what you'd like to discuss..." onkeydown="if(event.key==='Enter'&&!event.isComposing)submitTopic()">
+            <button class="btn btn-primary btn-hero" onclick="submitTopic()">Prepare Meeting</button>
           </div>
         </div>
         <div id="meeting-list"></div>
@@ -742,9 +742,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <div class="sp-header">
         <h3 id="sp-title">--</h3>
         <div style="display:flex;align-items:center;gap:6px;">
-          <span id="sp-voice-status" style="display:none;font-size:11px;color:var(--green);align-items:center;gap:4px;"><span id="sp-voice-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s ease-in-out infinite;"></span><span id="sp-voice-label">语音已连接</span></span>
+          <span id="sp-voice-status" style="display:none;font-size:11px;color:var(--green);align-items:center;gap:4px;"><span id="sp-voice-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s ease-in-out infinite;"></span><span id="sp-voice-label">Voice Connected</span></span>
           <div id="sp-mic-bar" style="display:none;width:48px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;"><div id="sp-mic-fill" style="height:100%;background:var(--green);border-radius:2px;width:0;transition:width 50ms;"></div></div>
-          <button class="btn btn-sm btn-danger" id="sp-stop-btn" style="display:none" onclick="stopLocalTalk()">停止</button>
+          <button class="btn btn-sm btn-danger" id="sp-stop-btn" style="display:none" onclick="stopLocalTalk()">Stop</button>
           <button class="sp-close" onclick="closePanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
@@ -755,63 +755,63 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   <div id="view-settings" class="view">
     <div class="set-head">
       <button class="set-back" id="btn-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
-      <h3>设置</h3>
+      <h3>Settings</h3>
     </div>
     <div class="set-tabs" id="set-tabs">
-      <button class="set-tab active" data-p="setup">系统检查</button>
-      <button class="set-tab" data-p="voice">语音测试</button>
-      <button class="set-tab" data-p="logs">引擎日志</button>
+      <button class="set-tab active" data-p="setup">System Check</button>
+      <button class="set-tab" data-p="voice">Voice Test</button>
+      <button class="set-tab" data-p="logs">Engine Logs</button>
     </div>
     <div class="set-body">
       <div class="set-panel active" id="panel-setup">
-        <div class="setup-group"><h4>运行环境</h4><div class="chk-list" id="chk-env"></div></div>
-        <div class="setup-group"><h4>系统权限</h4><div class="chk-list" id="chk-perm"></div></div>
-        <div class="setup-group"><h4>API 密钥</h4>
+        <div class="setup-group"><h4>Environment</h4><div class="chk-list" id="chk-env"></div></div>
+        <div class="setup-group"><h4>Permissions</h4><div class="chk-list" id="chk-perm"></div></div>
+        <div class="setup-group"><h4>API Keys</h4>
           <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
             <div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="key-openai" placeholder="sk-..."></div>
             <div class="input-group"><div class="input-label">Grok (xAI) API Key</div><input class="input-field" type="password" id="key-xai" placeholder="xai-..."></div>
             <div class="input-group"><div class="input-label">Gemini API Key</div><input class="input-field" type="password" id="key-gemini" placeholder="AIza..."></div>
-            <div class="input-group"><div class="input-label">OpenRouter API Key (可选)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
-            <button class="btn btn-sm btn-primary" onclick="saveKeys()">保存密钥</button>
+            <div class="input-group"><div class="input-label">OpenRouter API Key (optional)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
+            <button class="btn btn-sm btn-primary" onclick="saveKeys()">Save Keys</button>
           </div>
         </div>
-        <div class="setup-group"><h4>用户邮箱</h4>
+        <div class="setup-group"><h4>User Email</h4>
           <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
-            <div class="input-group"><div class="input-label">Your Email (自动加入会议邀请)</div><input class="input-field" type="email" id="user-email" placeholder="you@example.com"></div>
-            <button class="btn btn-sm btn-primary" onclick="saveUserEmail()">保存邮箱</button>
+            <div class="input-group"><div class="input-label">Your Email (auto-join meeting invites)</div><input class="input-field" type="email" id="user-email" placeholder="you@example.com"></div>
+            <button class="btn btn-sm btn-primary" onclick="saveUserEmail()">Save Email</button>
             <span id="user-email-status" style="font-size:11px;color:var(--green);margin-left:8px;"></span>
           </div>
         </div>
-        <div class="setup-group"><h4>连接状态</h4><div class="chk-list" id="chk-conn"></div></div>
-        <div class="setup-group"><h4>音频设备</h4><div class="chk-list" id="chk-audio"></div></div>
+        <div class="setup-group"><h4>Connection Status</h4><div class="chk-list" id="chk-conn"></div></div>
+        <div class="setup-group"><h4>Audio Devices</h4><div class="chk-list" id="chk-audio"></div></div>
         <div style="margin-top:12px;display:flex;gap:10px;">
-          <button class="btn btn-sm btn-secondary" onclick="runAllChecks()">重新检测</button>
-          <button class="btn btn-sm btn-ghost" onclick="obRestart()">重新运行 Onboarding</button>
+          <button class="btn btn-sm btn-secondary" onclick="runAllChecks()">Re-check</button>
+          <button class="btn btn-sm btn-ghost" onclick="obRestart()">Re-run Onboarding</button>
         </div>
       </div>
       <div class="set-panel" id="panel-voice">
         <div class="vt-grid">
           <div style="display:flex;flex-direction:column;gap:16px;">
-            <div class="vt-card"><label>语音</label><select class="vt-sel" id="vt-voice"><option>alloy</option><option>ash</option><option>ballad</option><option>coral</option><option>echo</option><option>fable</option><option>marin</option><option>nova</option><option>onyx</option><option selected>sage</option><option>shimmer</option><option>verse</option></select></div>
-            <div class="vt-card"><label>System Instructions</label><textarea class="vt-ta" id="vt-instr" rows="4">你是 CallingClaw 的语音助手。简洁、友好地回答问题。</textarea><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><button class="btn btn-sm btn-ghost" onclick="vtUpdateInstructions()">更新</button><span id="vt-instr-status" style="font-size:11px;color:var(--green);"></span></div></div>
-            <div class="vt-card"><label>麦克风电平</label><div class="mic-track"><div class="mic-fill" id="vt-mic-bar"></div></div><div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-sm btn-primary" id="vt-btn-start" onclick="vtStart()">开始语音</button><button class="btn btn-sm btn-danger" id="vt-btn-stop" style="display:none" onclick="vtStop()">停止</button></div><div style="font-size:11px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px;"><div class="st-dot" id="vt-status-dot"></div><span id="vt-ws-status">--</span></div></div>
-            <div class="vt-card"><label>能力层 <span id="vt-layer-count" style="font-size:11px;color:var(--text2);font-weight:400;">0/0 tools</span></label><div id="vt-layers"></div></div>
+            <div class="vt-card"><label>Voice</label><select class="vt-sel" id="vt-voice"><option>alloy</option><option>ash</option><option>ballad</option><option>coral</option><option>echo</option><option>fable</option><option>marin</option><option>nova</option><option>onyx</option><option selected>sage</option><option>shimmer</option><option>verse</option></select></div>
+            <div class="vt-card"><label>System Instructions</label><textarea class="vt-ta" id="vt-instr" rows="4">You are CallingClaw's voice assistant. Answer concisely and helpfully.</textarea><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;"><button class="btn btn-sm btn-ghost" onclick="vtUpdateInstructions()">Update</button><span id="vt-instr-status" style="font-size:11px;color:var(--green);"></span></div></div>
+            <div class="vt-card"><label>Mic Level</label><div class="mic-track"><div class="mic-fill" id="vt-mic-bar"></div></div><div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-sm btn-primary" id="vt-btn-start" onclick="vtStart()">Start Voice</button><button class="btn btn-sm btn-danger" id="vt-btn-stop" style="display:none" onclick="vtStop()">Stop</button></div><div style="font-size:11px;color:var(--text2);margin-top:8px;display:flex;align-items:center;gap:6px;"><div class="st-dot" id="vt-status-dot"></div><span id="vt-ws-status">--</span></div></div>
+            <div class="vt-card"><label>Capability Layers <span id="vt-layer-count" style="font-size:11px;color:var(--text2);font-weight:400;">0/0 tools</span></label><div id="vt-layers"></div></div>
           </div>
-          <div class="vt-transcript"><div class="vt-t-head"><div class="st-dot" id="vt-t-dot"></div> 对话记录</div><div class="vt-t-body" id="vt-transcript"><div style="text-align:center;color:var(--text3);padding:40px 0;">点击「开始语音」开始对话</div></div><div class="vt-t-foot"><input class="vt-input" id="vt-text-input" placeholder="输入文字发送..." onkeydown="if(event.key==='Enter')vtSendText()"><button class="btn btn-sm btn-primary" onclick="vtSendText()">发送</button></div></div>
+          <div class="vt-transcript"><div class="vt-t-head"><div class="st-dot" id="vt-t-dot"></div> Transcript</div><div class="vt-t-body" id="vt-transcript"><div style="text-align:center;color:var(--text3);padding:40px 0;">Click "Start Voice" to begin</div></div><div class="vt-t-foot"><input class="vt-input" id="vt-text-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')vtSendText()"><button class="btn btn-sm btn-primary" onclick="vtSendText()">Send</button></div></div>
         </div>
       </div>
       <div class="set-panel" id="panel-logs">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:600;">引擎日志</span><button class="btn btn-sm btn-ghost" onclick="clearLogs()">清空</button></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:600;">Engine Logs</span><button class="btn btn-sm btn-ghost" onclick="clearLogs()">Clear</button></div>
         <div class="log-console" id="log-console"></div>
       </div>
     </div>
   </div>
   <!-- ONBOARDING VIEW -->
   <div id="view-onboarding" class="view">
-    <div class="ob-step active" data-ob="0"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Welcome</div><div class="ob-title">Give a meeting room<br>to your OpenClaw</div><div class="ob-desc">OpenClaw 可以自己去开会、确认需求、带上统一的记忆，再自己执行 -- 像一个远程员工一样。<br><br>CallingClaw 就是 OpenClaw 的会议室。</div><div class="ob-actions"><button class="btn btn-primary" onclick="obNext()">开始设置</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div></div><div class="ob-right"><div class="anim-canvas anim-welcome"><div style="position:relative;"><div class="room-label">Meeting Room</div><div class="room-frame"><div class="room-door"></div><div class="room-lobster"><svg width="48" height="48" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#E63946"/><path d="M17 28C10 20 14 10 22 16C18 12 24 9 27 14" fill="#E63946"/><path d="M43 28C50 20 46 10 38 16C42 12 36 9 33 14" fill="#E63946"/><circle cx="25" cy="28" r="2.5" fill="white"/><circle cx="35" cy="28" r="2.5" fill="white"/><circle cx="25" cy="28" r="1.2" fill="#1C1C1E"/><circle cx="35" cy="28" r="1.2" fill="#1C1C1E"/><path d="M25 24C22 14 16 10 13 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M35 24C38 14 44 10 47 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg></div><div class="room-icons"><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div></div></div></div></div></div></div></div>
-    <div class="ob-step" data-ob="1"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 1 / 7</div><div class="ob-title">屏幕理解</div><div class="ob-desc">CallingClaw 需要看到屏幕来理解会议中讨论的内容。授权后 AI 可以实时分析屏幕并提取关键信息。</div><div class="ob-actions"><button class="btn btn-primary" id="ob-screen-btn" onclick="obGrantScreen()">授权屏幕录制</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-screen-status"></div></div><div class="ob-right"><div class="anim-canvas anim-screen"><div class="screen-frame"><div class="screen-el el-1"></div><div class="screen-el el-2"></div><div class="screen-el el-3"></div><div class="scan-line"></div><div class="screen-highlight hl-1"></div><div class="screen-highlight hl-2"></div><div class="screen-highlight hl-3"></div><div class="screen-tag tag-1">Slide</div><div class="screen-tag tag-2">Code</div><div class="screen-tag tag-3">Diagram</div></div></div></div></div></div>
-    <div class="ob-step" data-ob="2"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 2 / 7</div><div class="ob-title">语音对话</div><div class="ob-desc">CallingClaw 需要麦克风权限来实时听你说话。Talk Locally 和会议中的语音交互都依赖这个权限。</div><div class="ob-actions"><button class="btn btn-primary" id="ob-mic-btn" onclick="obGrantMic()">授权麦克风</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-mic-status"></div></div><div class="ob-right"><div class="anim-canvas" style="display:flex;align-items:center;justify-content:center;"><svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div></div></div></div>
-    <div class="ob-step" data-ob="3"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 3 / 7</div><div class="ob-title">智能操作</div><div class="ob-desc">CallingClaw 可以帮你打开文件、切换应用、在浏览器中导航。4 层自动化策略，总能找到最快的方式。</div><div class="ob-actions"><button class="btn btn-primary" id="ob-access-btn" onclick="obGrantAccess()">授权辅助功能</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-access-status"></div></div><div class="ob-right"><div class="anim-canvas anim-actions"><div style="position:relative;"><div class="actions-stage"><div class="action-target at-btn at-btn-press">Button</div><div class="action-target at-input at-typing"></div><div class="action-target at-window">Window</div><div class="action-cursor"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="#1C1C1E" stroke="white" stroke-width="1"/></svg></div></div><div class="layers-bar"><span class="layer-badge lb-1">L1</span><span class="layer-badge lb-2">L2</span><span class="layer-badge lb-3">L3</span><span class="layer-badge lb-4">L4</span></div></div></div></div></div></div>
+    <div class="ob-step active" data-ob="0"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Welcome</div><div class="ob-title">Give a meeting room<br>to your OpenClaw</div><div class="ob-desc">OpenClaw can attend meetings, confirm requirements, bring unified memory, and execute on its own -- like a remote employee.<br><br>CallingClaw is OpenClaw's meeting room.</div><div class="ob-actions"><button class="btn btn-primary" onclick="obNext()">Get Started</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div></div><div class="ob-right"><div class="anim-canvas anim-welcome"><div style="position:relative;"><div class="room-label">Meeting Room</div><div class="room-frame"><div class="room-door"></div><div class="room-lobster"><svg width="48" height="48" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#E63946"/><path d="M17 28C10 20 14 10 22 16C18 12 24 9 27 14" fill="#E63946"/><path d="M43 28C50 20 46 10 38 16C42 12 36 9 33 14" fill="#E63946"/><circle cx="25" cy="28" r="2.5" fill="white"/><circle cx="35" cy="28" r="2.5" fill="white"/><circle cx="25" cy="28" r="1.2" fill="#1C1C1E"/><circle cx="35" cy="28" r="1.2" fill="#1C1C1E"/><path d="M25 24C22 14 16 10 13 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M35 24C38 14 44 10 47 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg></div><div class="room-icons"><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div></div></div></div></div></div></div></div>
+    <div class="ob-step" data-ob="1"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 1 / 7</div><div class="ob-title">Screen Understanding</div><div class="ob-desc">CallingClaw needs to see the screen to understand what's being discussed in meetings. Once authorized, the AI can analyze the screen in real time and extract key information.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-screen-btn" onclick="obGrantScreen()">Grant Screen Recording</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-screen-status"></div></div><div class="ob-right"><div class="anim-canvas anim-screen"><div class="screen-frame"><div class="screen-el el-1"></div><div class="screen-el el-2"></div><div class="screen-el el-3"></div><div class="scan-line"></div><div class="screen-highlight hl-1"></div><div class="screen-highlight hl-2"></div><div class="screen-highlight hl-3"></div><div class="screen-tag tag-1">Slide</div><div class="screen-tag tag-2">Code</div><div class="screen-tag tag-3">Diagram</div></div></div></div></div></div>
+    <div class="ob-step" data-ob="2"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 2 / 7</div><div class="ob-title">Voice Conversation</div><div class="ob-desc">CallingClaw needs microphone access to listen in real time. Both Talk Locally and in-meeting voice interaction rely on this permission.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-mic-btn" onclick="obGrantMic()">Grant Microphone</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-mic-status"></div></div><div class="ob-right"><div class="anim-canvas" style="display:flex;align-items:center;justify-content:center;"><svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div></div></div></div>
+    <div class="ob-step" data-ob="3"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 3 / 7</div><div class="ob-title">Smart Actions</div><div class="ob-desc">CallingClaw can open files, switch apps, and navigate browsers. A 4-layer automation strategy always finds the fastest approach.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-access-btn" onclick="obGrantAccess()">Grant Accessibility</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-access-status"></div></div><div class="ob-right"><div class="anim-canvas anim-actions"><div style="position:relative;"><div class="actions-stage"><div class="action-target at-btn at-btn-press">Button</div><div class="action-target at-input at-typing"></div><div class="action-target at-window">Window</div><div class="action-cursor"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="#1C1C1E" stroke="white" stroke-width="1"/></svg></div></div><div class="layers-bar"><span class="layer-badge lb-1">L1</span><span class="layer-badge lb-2">L2</span><span class="layer-badge lb-3">L3</span><span class="layer-badge lb-4">L4</span></div></div></div></div></div></div>
     <div class="ob-step" data-ob="4"><div class="ob-body"><div class="ob-left">
       <!-- Phase 1: Sign in (shown when not logged in) -->
       <div id="ob-google-phase1">
@@ -859,17 +859,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         </div>
       </div>
     </div></div></div></div>
-    <div class="ob-step" data-ob="5"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 5 / 7</div><div class="ob-title">连接 AI 引擎</div><div class="ob-desc">OpenAI API Key 驱动会议中的实时语音对话。OpenClaw 提供深度推理和代码执行能力。</div><div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="ob-key-openai" placeholder="sk-..."></div><div class="input-group"><div class="input-label">OpenRouter API Key (可选)</div><input class="input-field" type="password" id="ob-key-openrouter" placeholder="sk-or-v1-..."></div><div class="ob-actions"><button class="btn btn-primary" onclick="obSaveKeys()">保存并继续</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div></div><div class="ob-right"><div class="anim-canvas anim-brain"><div class="brain-node fast"><div class="brain-core fast">语音</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">300ms 响应</div></div><div style="position:relative;width:60px;height:20px;"><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div></div><div class="brain-node deep"><div class="brain-core deep">推理</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">深度分析</div></div></div></div></div></div>
-    <div class="ob-step" data-ob="6"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 6 / 7</div><div class="ob-title">连接 OpenClaw</div><div class="ob-desc">OpenClaw 是 CallingClaw 的大脑 — 提供深度推理、记忆和会前准备。确保 OpenClaw 正在运行，然后安装技能让它可以调用会议功能。</div><div class="input-group"><div class="input-label">OpenClaw Gateway 地址</div><input class="input-field" type="text" id="ob-openclaw-url" placeholder="localhost:18789" value="localhost:18789"></div><div class="ob-actions"><button class="btn btn-secondary" id="ob-oc-test-btn" onclick="obTestOpenClaw()">测试连接</button><button class="btn btn-primary" id="ob-skill-btn" onclick="obInstallSkill()">安装 /callingclaw 技能</button><button class="btn btn-ghost" onclick="obNext()">下一步</button></div><div class="ob-status" id="ob-skill-status"></div></div><div class="ob-right"><div class="anim-canvas anim-connect"><div class="connect-logos"><div class="connect-logo cl-openclaw"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#8E8E93"/><path d="M17 28C10 20 14 10 22 16" fill="#8E8E93"/><path d="M43 28C50 20 46 10 38 16" fill="#8E8E93"/><circle cx="25" cy="28" r="2" fill="white"/><circle cx="35" cy="28" r="2" fill="white"/></svg></div><div class="connect-line"><div class="connect-line-bg"></div><div class="connect-line-fill"></div></div><div class="connect-logo cl-callingclaw"><svg viewBox="0 0 20 20" fill="none" width="24" height="24"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div></div><div class="connect-terminal"><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw status</span></div><div class="term-line"><span class="term-result">CallingClaw running on :4000</span></div><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw join meet.google.com/abc</span></div></div></div></div></div></div>
-    <div class="ob-step" data-ob="7"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Ready</div><div class="ob-title">一切就绪</div><div class="ob-desc" id="ob-summary">检查配置中...</div><div class="ob-actions"><button class="btn btn-primary" onclick="obFinish(true)">启动 CallingClaw</button><button class="btn btn-ghost" onclick="obFinish(false)">稍后启动</button></div><div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);line-height:1.6;">在 Claude Code 中输入：<br><code style="color:var(--accent);font-weight:600;">/callingclaw join &lt;meeting-url&gt;</code><br>开始你的第一个 AI 会议</div></div><div class="ob-right"><div class="anim-canvas anim-ready"><div class="converge-ring"><div class="converge-icon ci-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div class="converge-icon ci-1"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="var(--text2)"/></svg></div><div class="converge-icon ci-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="converge-icon ci-3"><svg width="18" height="18" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="11" ry="13" fill="var(--text2)"/></svg></div><div class="converge-icon ci-4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div><div class="converge-center"><svg viewBox="0 0 20 20" fill="none" width="28" height="28"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div><div class="converge-text">Ready to take meetings</div></div></div></div></div></div>
+    <div class="ob-step" data-ob="5"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 5 / 7</div><div class="ob-title">Connect AI Engine</div><div class="ob-desc">OpenAI API Key powers real-time voice conversation in meetings. OpenClaw provides deep reasoning and code execution capabilities.</div><div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="ob-key-openai" placeholder="sk-..."></div><div class="input-group"><div class="input-label">OpenRouter API Key (optional)</div><input class="input-field" type="password" id="ob-key-openrouter" placeholder="sk-or-v1-..."></div><div class="ob-actions"><button class="btn btn-primary" onclick="obSaveKeys()">Save & Continue</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div></div><div class="ob-right"><div class="anim-canvas anim-brain"><div class="brain-node fast"><div class="brain-core fast">Voice</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">300ms response</div></div><div style="position:relative;width:60px;height:20px;"><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div></div><div class="brain-node deep"><div class="brain-core deep">Reasoning</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">Deep analysis</div></div></div></div></div></div>
+    <div class="ob-step" data-ob="6"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 6 / 7</div><div class="ob-title">Connect OpenClaw</div><div class="ob-desc">OpenClaw is CallingClaw's brain -- providing deep reasoning, memory, and meeting prep. Make sure OpenClaw is running, then install the skill so it can call meeting functions.</div><div class="input-group"><div class="input-label">OpenClaw Gateway URL</div><input class="input-field" type="text" id="ob-openclaw-url" placeholder="localhost:18789" value="localhost:18789"></div><div class="ob-actions"><button class="btn btn-secondary" id="ob-oc-test-btn" onclick="obTestOpenClaw()">Test Connection</button><button class="btn btn-primary" id="ob-skill-btn" onclick="obInstallSkill()">Install /callingclaw Skill</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-skill-status"></div></div><div class="ob-right"><div class="anim-canvas anim-connect"><div class="connect-logos"><div class="connect-logo cl-openclaw"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#8E8E93"/><path d="M17 28C10 20 14 10 22 16" fill="#8E8E93"/><path d="M43 28C50 20 46 10 38 16" fill="#8E8E93"/><circle cx="25" cy="28" r="2" fill="white"/><circle cx="35" cy="28" r="2" fill="white"/></svg></div><div class="connect-line"><div class="connect-line-bg"></div><div class="connect-line-fill"></div></div><div class="connect-logo cl-callingclaw"><svg viewBox="0 0 20 20" fill="none" width="24" height="24"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div></div><div class="connect-terminal"><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw status</span></div><div class="term-line"><span class="term-result">CallingClaw running on :4000</span></div><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw join meet.google.com/abc</span></div></div></div></div></div></div>
+    <div class="ob-step" data-ob="7"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Ready</div><div class="ob-title">All Set</div><div class="ob-desc" id="ob-summary">Checking configuration...</div><div class="ob-actions"><button class="btn btn-primary" onclick="obFinish(true)">Start CallingClaw</button><button class="btn btn-ghost" onclick="obFinish(false)">Start Later</button></div><div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);line-height:1.6;">In Claude Code, type:<br><code style="color:var(--accent);font-weight:600;">/callingclaw join &lt;meeting-url&gt;</code><br>to start your first AI meeting</div></div><div class="ob-right"><div class="anim-canvas anim-ready"><div class="converge-ring"><div class="converge-icon ci-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div class="converge-icon ci-1"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="var(--text2)"/></svg></div><div class="converge-icon ci-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="converge-icon ci-3"><svg width="18" height="18" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="11" ry="13" fill="var(--text2)"/></svg></div><div class="converge-icon ci-4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div><div class="converge-center"><svg viewBox="0 0 20 20" fill="none" width="28" height="28"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div><div class="converge-text">Ready to take meetings</div></div></div></div></div></div>
     <div class="ob-progress" id="ob-progress"></div>
   </div>
 </div>
 <footer class="statusbar">
   <div class="st-items">
-    <div class="st-item" title="Bun 引擎状态"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">引擎</span></div>
-    <div class="st-item" title="实时语音连接"><div class="st-dot" id="st-voice-dot"></div><span>语音</span></div>
-    <div class="st-item" title="OpenClaw 网关"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
+    <div class="st-item" title="Bun Engine Status"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">Engine</span></div>
+    <div class="st-item" title="Realtime Voice Connection"><div class="st-dot" id="st-voice-dot"></div><span>Voice</span></div>
+    <div class="st-item" title="OpenClaw Gateway"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
   </div>
   <div class="st-right" style="display:flex;align-items:center;gap:8px;">
     <select id="st-provider" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;" onchange="onProviderChange(this.value)">
@@ -879,7 +879,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     </select>
     <select id="st-voice-select" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;">
     </select>
-    <button class="btn btn-sm btn-primary" id="st-eng-btn" style="display:none" onclick="toggleEngine()">启动引擎</button>
+    <button class="btn btn-sm btn-primary" id="st-eng-btn" style="display:none" onclick="toggleEngine()">Start Engine</button>
     <span id="st-ver"></span>
   </div>
 </footer>
@@ -906,11 +906,11 @@ function ccConfirm({ icon, title, body, confirmText, confirmClass }) {
     backdrop.innerHTML =
       '<div class="cc-modal">' +
         (icon ? '<div class="cc-modal-icon">' + icon + '</div>' : '') +
-        '<div class="cc-modal-title">' + (title || '确认') + '</div>' +
+        '<div class="cc-modal-title">' + (title || 'Confirm') + '</div>' +
         '<div class="cc-modal-body">' + (body || '') + '</div>' +
         '<div class="cc-modal-actions">' +
-          '<button class="btn btn-sm btn-ghost" data-action="cancel">取消</button>' +
-          '<button class="btn btn-sm ' + (confirmClass || 'btn-danger') + '" data-action="confirm">' + (confirmText || '确定') + '</button>' +
+          '<button class="btn btn-sm btn-ghost" data-action="cancel">Cancel</button>' +
+          '<button class="btn btn-sm ' + (confirmClass || 'btn-danger') + '" data-action="confirm">' + (confirmText || 'OK') + '</button>' +
         '</div>' +
       '</div>';
     root.appendChild(backdrop);
@@ -936,16 +936,16 @@ const IC = {
 };
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function fmtTime(d) { return new Date(d).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); }
+function fmtTime(d) { return new Date(d).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
 function relTime(dateStr) {
   const m = Math.round((new Date(dateStr) - Date.now()) / 60000);
-  if (m < -1440) return Math.round(-m / 1440) + ' 天前';
-  if (m < -60) return Math.round(-m / 60) + ' 小时前';
-  if (m < -1) return -m + ' 分钟前';
-  if (m <= 1) return '现在';
-  if (m < 60) return m + ' 分钟后';
-  if (m < 1440) return Math.round(m / 60) + ' 小时后';
-  return Math.round(m / 1440) + ' 天后';
+  if (m < -1440) return Math.round(-m / 1440) + 'd ago';
+  if (m < -60) return Math.round(-m / 60) + 'h ago';
+  if (m < -1) return -m + 'm ago';
+  if (m <= 1) return 'now';
+  if (m < 60) return 'in ' + m + 'm';
+  if (m < 1440) return 'in ' + Math.round(m / 60) + 'h';
+  return 'in ' + Math.round(m / 1440) + 'd';
 }
 function parseNoteFilename(f) {
   const m = f.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})_(.+)\.md$/);
@@ -1052,42 +1052,42 @@ function openMeetingPanel(meetingId, mode) {
   S.activeMeetingId = meetingId;
   S.meetingMode = mode; // 'local' or 'remote'
   var data = getMeetingData(meetingId);
-  var title = mode === 'local' ? '本地对话: ' + (data.topic || localTalkTopic) : (data.topic || '会议');
+  var title = mode === 'local' ? 'Local Talk: ' + (data.topic || localTalkTopic) : (data.topic || 'Meeting');
   document.getElementById('sp-title').textContent = title;
   document.getElementById('sp-stop-btn').style.display = '';
   // Build tabbed layout
   document.getElementById('sp-body').innerHTML = [
     // Tab bar
     '<div class="sp-tabs" id="sp-tabs">',
-    '  <button class="sp-tab active" data-tab="feed" onclick="switchPanelTab(\'feed\')">实时动态<span class="sp-tab-badge live" id="sp-tab-feed-badge"></span></button>',
-    '  <button class="sp-tab" data-tab="prep" onclick="switchPanelTab(\'prep\')">会前调研' + (data.prep.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
-    '  <button class="sp-tab" data-tab="script" onclick="switchPanelTab(\'script\')">演讲稿' + (data.presentation_script && data.presentation_script.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
-    '  <button class="sp-tab" data-tab="summary" onclick="switchPanelTab(\'summary\')">会议总结' + (data.summary.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '<span class="sp-tab-badge pending">…</span>') + '</button>',
+    '  <button class="sp-tab active" data-tab="feed" onclick="switchPanelTab(\'feed\')">Live Feed<span class="sp-tab-badge live" id="sp-tab-feed-badge"></span></button>',
+    '  <button class="sp-tab" data-tab="prep" onclick="switchPanelTab(\'prep\')">Meeting Prep' + (data.prep.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
+    '  <button class="sp-tab" data-tab="script" onclick="switchPanelTab(\'script\')">Script' + (data.presentation_script && data.presentation_script.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
+    '  <button class="sp-tab" data-tab="summary" onclick="switchPanelTab(\'summary\')">Summary' + (data.summary.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '<span class="sp-tab-badge pending">…</span>') + '</button>',
     '</div>',
     // Tab: Live Feed
     '<div class="sp-tab-content active" id="sp-tab-feed">',
     '  <div class="mp-activity">',
-    '    <div class="mp-section-header" onclick="toggleMpSection(\'activity\')"><span>AI 活动</span><span class="mp-chevron" id="mp-activity-chevron">▾</span></div>',
+    '    <div class="mp-section-header" onclick="toggleMpSection(\'activity\')"><span>AI Activity</span><span class="mp-chevron" id="mp-activity-chevron">▾</span></div>',
     '    <div class="mp-activity-body" id="mp-activity-body"></div>',
     '  </div>',
-    '  <div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>实时记录</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
+    '  <div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>Live Transcript</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
     '  <div class="mp-transcript" id="mp-transcript"></div>',
     mode === 'local' ? '  <div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
     '</div>',
     // Tab: Prep Doc
     '<div class="sp-tab-content" id="sp-tab-prep">',
-    '  <div style="padding:20px;" class="md" id="sp-prep-content">加载中...</div>',
+    '  <div style="padding:20px;" class="md" id="sp-prep-content">Loading...</div>',
     '</div>',
     // Tab: Presentation Script
     '<div class="sp-tab-content" id="sp-tab-script">',
     '  <div style="padding:20px;" class="md" id="sp-script-content">',
-    '    <div style="text-align:center;color:var(--text3);padding:40px 0;">尚未生成演讲稿</div>',
+    '    <div style="text-align:center;color:var(--text3);padding:40px 0;">No script generated yet</div>',
     '  </div>',
     '</div>',
     // Tab: Summary
     '<div class="sp-tab-content" id="sp-tab-summary">',
     '  <div style="padding:20px;" class="md" id="sp-summary-content">',
-    '    <div style="text-align:center;color:var(--text3);padding:40px 0;">会议进行中，总结将在结束后生成</div>',
+    '    <div style="text-align:center;color:var(--text3);padding:40px 0;">Meeting in progress. Summary will be generated after it ends.</div>',
     '  </div>',
     '</div>',
   ].join('\n');
@@ -1096,7 +1096,7 @@ function openMeetingPanel(meetingId, mode) {
   loadMeetingFile(meetingId, 'prep').then(function(content) {
     var el = document.getElementById('sp-prep-content');
     if (el && content) el.innerHTML = renderMd(content);
-    else if (el) el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px 0;">尚未生成会前调研</div>';
+    else if (el) el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px 0;">No meeting prep generated yet</div>';
   });
   // Load summary if already available
   if (data.summary.status === 'done' && data.summary.content) {
@@ -1145,11 +1145,11 @@ async function loadPrepBrief(meetingId) {
   // Update the Prep tab content if panel is open
   var el = document.getElementById('sp-prep-content');
   if (el && content) el.innerHTML = renderMd(content);
-  else if (el) el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px 0;">尚未生成会前调研</div>';
+  else if (el) el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px 0;">No meeting prep generated yet</div>';
   // Update prep tab badge
   var prepTab = document.querySelector('#sp-tabs .sp-tab[data-tab="prep"]');
   if (prepTab && content) {
-    prepTab.innerHTML = '会前调研<span class="sp-tab-badge ready">✓</span>';
+    prepTab.innerHTML = 'Meeting Prep<span class="sp-tab-badge ready">✓</span>';
   }
 }
 
@@ -1159,21 +1159,21 @@ async function loadPrepBrief(meetingId) {
 function handleMeetingEvent(event) {
   const type = event.type || event.event;
   const data = event.data || {};
-  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   // Track last event timestamp for reconnect replay
   if (event.timestamp) lastEventTs = Math.max(lastEventTs, event.timestamp);
 
   switch (type) {
     case 'meeting.started':
       if (data.meetingId && !S.activeMeetingId) S.activeMeetingId = data.meetingId;
-      addMpActivity('done', '已加入会议');
+      addMpActivity('done', 'Joined meeting');
       // Auto-start audio bridge when meeting starts (even if join was triggered externally)
       if (!_audioBridgeWs || _audioBridgeWs.readyState !== WebSocket.OPEN) {
         startAudioBridge('meet_bridge');
       }
       break;
     case 'meeting.ended':
-      addMpActivity('done', '会议已结束');
+      addMpActivity('done', 'Meeting ended');
       // Update data model
       if (S.activeMeetingId && S.meetingFiles[S.activeMeetingId]) {
         S.meetingFiles[S.activeMeetingId].status = 'ended';
@@ -1183,7 +1183,7 @@ function handleMeetingEvent(event) {
         loadMeetingFile(S.activeMeetingId, 'summary').then(function(content) {
           if (content) {
             var sumTab = document.querySelector('#sp-tabs .sp-tab[data-tab="summary"]');
-            if (sumTab) sumTab.innerHTML = '会议总结<span class="sp-tab-badge ready">✓</span>';
+            if (sumTab) sumTab.innerHTML = 'Summary<span class="sp-tab-badge ready">✓</span>';
             var sumEl = document.getElementById('sp-summary-content');
             if (sumEl) sumEl.innerHTML = renderMd(content);
             renderMeetings();
@@ -1205,23 +1205,23 @@ function handleMeetingEvent(event) {
       addMpActivity('tool', data.tool || 'tool call');
       break;
     case 'computer.task_done':
-      addMpTranscript('自动化', data.summary || data.instruction || '', 'action');
+      addMpTranscript('Automation', data.summary || data.instruction || '', 'action');
       addMpActivity('done', data.summary || data.instruction || 'task completed');
       break;
     case 'openclaw.delta':
       addMpActivity('delta', data.summary || data.text || '...');
       break;
     case 'openclaw.done':
-      addMpActivity('done', data.summary || '任务完成');
+      addMpActivity('done', data.summary || 'Task completed');
       break;
     case 'openclaw.error':
-      addMpActivity('error', data.summary || data.message || '错误');
+      addMpActivity('error', data.summary || data.message || 'Error');
       break;
     case 'meeting.action_item':
-      addMpTranscript('行动项', data.text || '', 'action');
+      addMpTranscript('Action Item', data.text || '', 'action');
       break;
     case 'transcript.entry':
-      addMpTranscript(data.speaker || '参与者', data.text || '');
+      addMpTranscript(data.speaker || 'Participant', data.text || '');
       break;
     case 'meeting.live_entry':
       addMpTranscript('', data.entry || '', 'log');
@@ -1232,7 +1232,7 @@ function handleMeetingEvent(event) {
     case 'meeting.prep_ready':
       if (data.meetingId) loadPrepBrief(data.meetingId);
       else if (S.activeMeetingId) loadPrepBrief(S.activeMeetingId);
-      addMpActivity('done', '调研完成');
+      addMpActivity('done', 'Research complete');
       break;
     case 'meeting.presentation_script_ready':
       var scriptMid = data.meetingId || S.activeMeetingId;
@@ -1257,46 +1257,46 @@ function handleMeetingEvent(event) {
             } catch(e) { scriptEl.innerHTML = renderMd(content); }
           }
           var scriptTab = document.querySelector('#sp-tabs .sp-tab[data-tab="script"]');
-          if (scriptTab) scriptTab.innerHTML = '演讲稿<span class="sp-tab-badge ready">✓</span>';
+          if (scriptTab) scriptTab.innerHTML = 'Script<span class="sp-tab-badge ready">✓</span>';
         });
       }
-      addMpActivity('done', '演讲稿已就绪');
+      addMpActivity('done', 'Script ready');
       break;
     case 'meeting.vision':
-      addMpActivity('delta', '[视觉] ' + (data.description || '').slice(0, 60));
+      addMpActivity('delta', '[Vision] ' + (data.description || '').slice(0, 60));
       break;
     case 'voice.started':
-      addMpActivity('done', '语音已连接 (' + (data.provider || 'openai') + ')');
+      addMpActivity('done', 'Voice connected (' + (data.provider || 'openai') + ')');
       break;
     case 'voice.stopped':
-      addMpActivity('done', '语音已断开');
+      addMpActivity('done', 'Voice disconnected');
       break;
     case 'voice.reconnect_failed':
-      addMpActivity('error', '语音重连失败');
+      addMpActivity('error', 'Voice reconnect failed');
       break;
     case 'auditor.activated':
-      addMpActivity('done', '会议审计器已启动');
+      addMpActivity('done', 'Meeting auditor started');
       break;
     case 'auditor.deactivated':
-      addMpActivity('done', '会议审计器已停止');
+      addMpActivity('done', 'Meeting auditor stopped');
       break;
     case 'retriever.activated':
-      addMpActivity('done', '上下文检索器已启动');
+      addMpActivity('done', 'Context retriever started');
       break;
     case 'retriever.deactivated':
-      addMpActivity('done', '上下文检索器已停止');
+      addMpActivity('done', 'Context retriever stopped');
       break;
     case 'retriever.searching':
-      addMpActivity('delta', '检索: ' + ((data.topic || '').slice(0, 40)));
+      addMpActivity('delta', 'Searching: ' + ((data.topic || '').slice(0, 40)));
       break;
     case 'retriever.found':
-      addMpActivity('done', '找到相关上下文');
+      addMpActivity('done', 'Relevant context found');
       break;
     case 'screen.updated':
-      addMpActivity('delta', '[屏幕] ' + ((data.title || data.description || '').slice(0, 50)));
+      addMpActivity('delta', '[Screen] ' + ((data.title || data.description || '').slice(0, 50)));
       break;
     case 'postmeeting.delivered':
-      addMpActivity('done', '会后总结已发送');
+      addMpActivity('done', 'Post-meeting summary sent');
       break;
   }
 }
@@ -1304,7 +1304,7 @@ function handleMeetingEvent(event) {
 function addMpActivity(kind, text) {
   const body = document.getElementById('mp-activity-body');
   if (!body) return;
-  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const div = document.createElement('div');
   div.className = 'mp-activity-entry';
   div.innerHTML = '<span class="mp-activity-badge ' + kind + '">' + kind + '</span><span class="mp-activity-text">' + esc(text) + '</span><span class="mp-activity-time">' + time + '</span>';
@@ -1316,7 +1316,7 @@ function addMpActivity(kind, text) {
 function addMpTranscript(speaker, text, type) {
   const el = document.getElementById('mp-transcript');
   if (!el) return;
-  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   const div = document.createElement('div');
   div.className = 'mp-transcript-entry';
   if (type === 'log') {
@@ -1439,7 +1439,7 @@ function renderEngineBanner() {
   const slot = document.getElementById('engine-banner-slot');
   const staticArea = document.getElementById('home-static');
   if (!S.daemon) {
-    slot.innerHTML = '<div class="engine-banner fade-in"><h3>CallingClaw 引擎未启动</h3><p>启动引擎以连接日历、准备会议和管理待办事项。</p><div style="display:flex;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="toggleEngine()">启动引擎</button><button class="btn btn-secondary" onclick="showView(\'settings\')">系统检查</button></div></div>';
+    slot.innerHTML = '<div class="engine-banner fade-in"><h3>CallingClaw Engine Not Started</h3><p>Start the engine to connect calendar, prepare meetings, and manage tasks.</p><div style="display:flex;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="toggleEngine()">Start Engine</button><button class="btn btn-secondary" onclick="showView(\'settings\')">System Check</button></div></div>';
     staticArea.style.display = 'none';
   } else {
     slot.innerHTML = '';
@@ -1450,9 +1450,9 @@ function renderEngineBanner() {
 function updateStatusBar() {
   const eng = document.getElementById('st-eng'), engT = document.getElementById('st-eng-t'), engBtn = document.getElementById('st-eng-btn');
   eng.className = 'st-dot ' + (S.daemon ? 'green' : 'red');
-  engT.textContent = S.daemon ? '运行中' : '已停止';
+  engT.textContent = S.daemon ? 'Running' : 'Stopped';
   engBtn.style.display = S.daemon ? 'none' : '';
-  engBtn.textContent = S.daemon ? '' : '启动引擎';
+  engBtn.textContent = S.daemon ? '' : 'Start Engine';
   if (S.status) {
     // API returns strings ("connected"/"disconnected") or objects ({connected: bool}) — handle both
     const isConn = v => v === 'connected' || v === true || v?.connected === true;
@@ -1467,7 +1467,7 @@ function updateStatusBar() {
 
 async function toggleEngine() {
   const btn = document.getElementById('st-eng-btn');
-  btn.textContent = S.daemon ? '停止中...' : '启动中...'; btn.disabled = true;
+  btn.textContent = S.daemon ? 'Stopping...' : 'Starting...'; btn.disabled = true;
   if (S.daemon) await window.callingclaw.daemon.stop(); else await window.callingclaw.daemon.start();
   btn.disabled = false;
   setTimeout(refreshAll, 1500);
@@ -1512,10 +1512,10 @@ function meetingStatus(event) {
   const now = Date.now(), start = new Date(event.start?.dateTime || event.start?.date).getTime();
   const end = new Date(event.end?.dateTime || event.end?.date).getTime();
   const active = S.status?.meeting?.active && S.status?.meeting?.url === event.hangoutLink;
-  if (active) return { label: '进行中', cls: 'badge-live' };
-  if (now > end) return { label: '已结束', cls: 'ended' };
-  if (S.prepBrief && S.prepBrief.topic === event.summary) return { label: '已就绪', cls: 'badge-preparing' };
-  if (start - now < 1800000 && start > now) return { label: '即将开始', cls: 'badge-preparing' };
+  if (active) return { label: 'Live', cls: 'badge-live' };
+  if (now > end) return { label: 'Ended', cls: 'ended' };
+  if (S.prepBrief && S.prepBrief.topic === event.summary) return { label: 'Ready', cls: 'badge-preparing' };
+  if (start - now < 1800000 && start > now) return { label: 'Starting soon', cls: 'badge-preparing' };
   return null;
 }
 
@@ -1562,10 +1562,10 @@ function buildMeetingListHTML() {
     html += '<div class="meet-section-title">Now</div><div class="meet-list">';
     html += '<div class="meet-row" style="background:var(--white);border-left:3px solid var(--accent);">';
     html += '<div class="meet-date"><div class="meet-date-num" style="color:var(--accent);">&#9679;</div></div>';
-    html += '<div class="meet-info"><div class="meet-title">' + esc(S.status.meeting.topic || '当前会议') + '</div><div class="meet-time">正在录制</div></div>';
-    html += '<span class="meet-badge badge-live">进行中</span>';
-    html += '<div class="meet-actions"><span class="meet-action local" onclick="window.callingclaw.overlay.show()">打开浮窗</span>';
-    html += '<span class="meet-action" style="color:#DC2626;" onclick="leaveMeeting()">离开</span></div>';
+    html += '<div class="meet-info"><div class="meet-title">' + esc(S.status.meeting.topic || 'Current Meeting') + '</div><div class="meet-time">Recording</div></div>';
+    html += '<span class="meet-badge badge-live">Live</span>';
+    html += '<div class="meet-actions"><span class="meet-action local" onclick="window.callingclaw.overlay.show()">Open Overlay</span>';
+    html += '<span class="meet-action" style="color:#DC2626;" onclick="leaveMeeting()">Leave</span></div>';
     html += '</div></div>';
   }
 
@@ -1622,7 +1622,7 @@ function buildMeetingListHTML() {
       var mfData = findMeetingDataForEvent(e);
       html += '<div class="meet-row clickable" onclick="openCalendarMeetingPanel(\'' + esc(e.summary||'') + '\', \'' + esc(e.hangoutLink||'') + '\', \'' + esc(e._prepBrief||'') + '\')" data-eid="' + eid + '">';
       html += '<div class="meet-date"><div class="meet-date-num">' + dp.day + '</div><div class="meet-date-sub">' + dp.month + ' ' + dp.weekday + '</div></div>';
-      html += '<div class="meet-info"><div class="meet-title">' + esc(e.summary || '无标题') + '</div>';
+      html += '<div class="meet-info"><div class="meet-title">' + esc(e.summary || 'Untitled') + '</div>';
       html += '<div class="meet-time">' + fmtTime(start) + (end ? ' - ' + fmtTime(end) : '') + '</div>';
       // File attachments — always visible
       html += renderMeetingFileAttachments(mfData, e.summary, e.hangoutLink);
@@ -1698,7 +1698,7 @@ function renderMeetingFileAttachments(mfData, topic, meetUrl) {
 function openMeetingFileInPanel(meetingId, type) {
   var data = S.meetingFiles[meetingId];
   if (!data) return;
-  var titles = { prep: '📋 会前调研', notes: '📄 会议记录', summary: '📝 会议总结' };
+  var titles = { prep: '📋 Meeting Prep', notes: '📄 Meeting Notes', summary: '📝 Meeting Summary' };
   var title = (titles[type] || type) + ': ' + (data.topic || '');
   var fileObj = type === 'notes' ? (data._notes || (data._notes = { status: 'none', content: null })) :
                 type === 'prep' ? data.prep : data.summary;
@@ -1711,10 +1711,10 @@ function openMeetingFileInPanel(meetingId, type) {
     openPanel(title, fileObj.content);
   } else {
     // Load then show
-    openPanel(title, '加载中...');
+    openPanel(title, 'Loading...');
     loadMeetingFile(meetingId, type).then(function(content) {
       if (content) openPanel(title, content);
-      else openPanel(title, '暂无内容');
+      else openPanel(title, 'No content available.');
     });
   }
 }
@@ -1832,14 +1832,14 @@ function renderPastMeetingsHTML() {
     } else {
       html += '<div class="meet-date"><div class="meet-date-num" style="color:var(--text3)">—</div></div>';
     }
-    html += '<div class="meet-info"><div class="meet-title">' + esc(item.topic || '会议') + '</div>';
+    html += '<div class="meet-info"><div class="meet-title">' + esc(item.topic || 'Meeting') + '</div>';
     if (item.date) html += '<div class="meet-time">' + fmtTime(item.date) + '</div>';
     // File attachments for past meetings
     html += renderMeetingFileAttachments(mfData, item.topic, item.meetUrl);
     html += '</div>';
     html += '<div class="meet-actions" onclick="event.stopPropagation()" style="display:flex;gap:4px;align-items:center;">';
-    html += '<span class="meet-badge" style="background:var(--surface);color:var(--text3);">已结束</span>';
-    html += '<button class="btn btn-sm btn-ghost" onclick="deleteMeeting(\'' + esc(mid) + '\')" style="font-size:11px;color:var(--text3);padding:2px 6px;line-height:1;display:flex;align-items:center;justify-content:center;" title="删除">✕</button>';
+    html += '<span class="meet-badge" style="background:var(--surface);color:var(--text3);">Ended</span>';
+    html += '<button class="btn btn-sm btn-ghost" onclick="deleteMeeting(\'' + esc(mid) + '\')" style="font-size:11px;color:var(--text3);padding:2px 6px;line-height:1;display:flex;align-items:center;justify-content:center;" title="Delete">✕</button>';
     html += '</div></div>';
   }
   html += '</div>';
@@ -1850,7 +1850,7 @@ function renderPastMeetingsHTML() {
 async function openPastMeetingPanel(meetingId) {
   if (!meetingId) return;
   var data = getMeetingData(meetingId);
-  var title = data.topic || '会议';
+  var title = data.topic || 'Meeting';
   // Load both files
   var prepContent = await loadMeetingFile(meetingId, 'prep');
   var summaryContent = await loadMeetingFile(meetingId, 'summary');
@@ -1861,10 +1861,10 @@ async function openPastMeetingPanel(meetingId) {
     md += prepContent + '\n\n';
   }
   if (summaryContent) {
-    md += '---\n\n## 📝 会议总结\n\n' + summaryContent + '\n\n';
+    md += '---\n\n## 📝 Meeting Summary\n\n' + summaryContent + '\n\n';
   }
   if (!prepContent && !summaryContent) {
-    md += '> 暂无会议文件。\n';
+    md += '> No meeting files available.\n';
   }
   openPanel(title, md);
   // Re-render cards to show updated file badges
@@ -1883,13 +1883,13 @@ async function submitTopic() {
   mfData.topic = topic;
   mfData.status = 'preparing';
   mfData.prep.status = 'loading';
-  mfData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 已提交话题，等待 OpenClaw 处理...');
+  mfData.agentFeed.push('[' + new Date().toLocaleTimeString('en-US') + '] Topic submitted, waiting for OpenClaw...');
   // Show card immediately
   var cardHtml = '<div class="meet-list" id="' + tempId + '-wrap">'
     + '<div class="meet-row clickable" id="' + tempId + '" onclick="openPrepPanel(\'' + tempId + '\')">'
     + '<div class="meet-date"><div class="meet-date-num" style="color:var(--text3)">--</div><div class="meet-date-sub"></div></div>'
     + '<div class="meet-info"><div class="meet-title">' + esc(topic) + '</div>'
-    + '<div class="meet-time" style="color:var(--text3)">正在创建日历和会议链接...</div>'
+    + '<div class="meet-time" style="color:var(--text3)">Creating calendar event and meeting link...</div>'
     + '<div class="meet-files" onclick="event.stopPropagation()">'
     + '<span class="meet-file loading" id="' + tempId + '-prep"><span class="meet-file-icon">📋</span> Meeting Prep...</span>'
     + '</div>'
@@ -1905,11 +1905,11 @@ async function submitTopic() {
     var r = await fetch(API + '/api/meeting/delegate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: topic }) });
     var data = await r.json();
     if (data.error) {
-      mfData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] OpenClaw 不可用，使用直接创建...');
+      mfData.agentFeed.push('[' + new Date().toLocaleTimeString('en-US') + '] OpenClaw unavailable, using direct creation...');
       r = await fetch(API + '/api/meeting/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: topic }) });
       data = await r.json();
     }
-    mfData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw 已接管，自主处理中...' : '后端直接处理中...'));
+    mfData.agentFeed.push('[' + new Date().toLocaleTimeString('en-US') + '] ' + (data.delegatedTo === 'openclaw' ? 'OpenClaw took over, processing autonomously...' : 'Backend processing directly...'));
     if (data.meetingId) {
       // Migrate temp entry to real meetingId
       var realId = data.meetingId;
@@ -1935,7 +1935,7 @@ async function submitTopic() {
 // Open prep panel showing agent feed + brief (or loading state)
 function openPrepPanel(meetingId) {
   var data = S.meetingFiles[meetingId];
-  if (!data) { openPanel('会前调研', '暂无准备资料。'); return; }
+  if (!data) { openPanel('Meeting Prep', 'No prep materials available.'); return; }
   // If prep is done and content is available, render it directly
   if (data.prep.status === 'done' && data.prep.content) {
     openPanel('📋 ' + (data.topic || ''), data.prep.content);
@@ -1943,17 +1943,17 @@ function openPrepPanel(meetingId) {
   }
   // Show agent activity feed while researching
   var md = '# ' + esc(data.topic || '') + '\n\n';
-  md += '> OpenClaw 正在深度调研中...\n\n';
+  md += '> OpenClaw is conducting deep research...\n\n';
   md += '## Agent Activity\n\n';
   md += data.agentFeed.map(function(f) { return '- ' + f; }).join('\n');
-  md += '\n\n*调研完成后将自动更新*';
+  md += '\n\n*Will auto-update when research completes*';
   openPanel('📋 ' + (data.topic || ''), md);
 }
 
 function submitTopicFor(topic) { document.getElementById('topic-input').value = topic; submitTopic(); }
 
 async function openCalendarMeetingPanel(topic, meetUrl, prepBriefFile) {
-  openPanel(topic || '会议详情', '正在加载会议信息...');
+  openPanel(topic || 'Meeting Details', 'Loading meeting info...');
   // Extract meetingId from _prepBrief filename (e.g. "cc_xxx_prep.md" → "cc_xxx")
   var meetingId = null;
   if (prepBriefFile && prepBriefFile.endsWith('_prep.md')) {
@@ -1987,7 +1987,7 @@ async function openCalendarMeetingPanel(topic, meetUrl, prepBriefFile) {
     var summaryContent = await loadMeetingFile(meetingId, 'summary');
     // Build markdown: link at top, then prep, then summary
     var md = '';
-    if (meetUrl) md += '**会议链接:** ' + meetUrl + '\n\n---\n\n';
+    if (meetUrl) md += '**Meeting Link:** ' + meetUrl + '\n\n---\n\n';
     if (prepContent) {
       md += prepContent + '\n\n';
     }
@@ -1995,18 +1995,18 @@ async function openCalendarMeetingPanel(topic, meetUrl, prepBriefFile) {
       md += notesContent + '\n\n';
     }
     if (summaryContent) {
-      md += '---\n## 📝 会议总结\n\n' + summaryContent + '\n\n';
+      md += '---\n## 📝 Meeting Summary\n\n' + summaryContent + '\n\n';
     }
     if (!prepContent && !notesContent && !summaryContent) {
-      md += '> 尚未生成会前调研。使用顶部输入框或点击「准备会议」开始。\n';
+      md += '> No meeting prep yet. Use the input above or click "Prepare Meeting" to start.\n';
     }
-    openPanel(topic || '会议详情', md);
+    openPanel(topic || 'Meeting Details', md);
     renderMeetings();
   } else {
     var md2 = '';
-    if (meetUrl) md2 += '**会议链接:** ' + meetUrl + '\n\n---\n\n';
-    md2 += '> 尚未生成会前调研。使用顶部输入框或点击「准备会议」开始。\n';
-    openPanel(topic || '会议详情', md2);
+    if (meetUrl) md2 += '**Meeting Link:** ' + meetUrl + '\n\n---\n\n';
+    md2 += '> No meeting prep yet. Use the input above or click "Prepare Meeting" to start.\n';
+    openPanel(topic || 'Meeting Details', md2);
   }
 }
 
@@ -2041,9 +2041,9 @@ async function deleteMeeting(meetingId) {
   var data = S.meetingFiles[meetingId];
   var topic = data ? data.topic : meetingId;
   var confirmed = await ccConfirm({
-    title: '删除会议',
-    body: '确定删除 "<strong>' + esc(topic) + '</strong>"？<br><span style="color:var(--text3);font-size:12px;">此操作将从列表中移除，不影响已生成的文件。</span>',
-    confirmText: '删除',
+    title: 'Delete Meeting',
+    body: 'Delete "<strong>' + esc(topic) + '</strong>"?<br><span style="color:var(--text3);font-size:12px;">This will remove it from the list but won\'t affect generated files.</span>',
+    confirmText: 'Delete',
   });
   if (!confirmed) return;
   try {
@@ -2074,18 +2074,18 @@ async function preflightAudioCheck(mode) {
         var result = await window.callingclaw.permissions.request('microphone');
         if (!result.granted) {
           await ccConfirm({
-            icon: '🎤', title: '需要麦克风权限',
-            body: 'CallingClaw 需要麦克风权限才能进行语音交互。<br><br>请前往 <b>系统设置 → 隐私与安全性 → 麦克风</b>，找到 CallingClaw 并开启。',
-            confirmText: '打开设置', confirmClass: 'btn-primary',
+            icon: '🎤', title: 'Microphone Permission Required',
+            body: 'CallingClaw needs microphone access for voice interaction.<br><br>Go to <b>System Settings > Privacy & Security > Microphone</b>, find CallingClaw and enable it.',
+            confirmText: 'Open Settings', confirmClass: 'btn-primary',
           });
           window.callingclaw.permissions.openSettings('microphone');
           return { ok: false, reason: 'mic_denied' };
         }
       } else {
         await ccConfirm({
-          icon: '🎤', title: '麦克风权限被拒绝',
-          body: '麦克风权限之前被拒绝，macOS 不允许再次弹窗。<br><br>请前往 <b>系统设置 → 隐私与安全性 → 麦克风</b>，找到 CallingClaw 并开启。<br><br><span style="font-size:12px;color:var(--text3);">提示：开发模式和正式版的权限是分开的（不同 Bundle ID），请确认授权的是正确的应用。</span>',
-          confirmText: '打开设置', confirmClass: 'btn-primary',
+          icon: '🎤', title: 'Microphone Permission Denied',
+          body: 'Microphone permission was previously denied. macOS won\'t prompt again.<br><br>Go to <b>System Settings > Privacy & Security > Microphone</b>, find CallingClaw and enable it.<br><br><span style="font-size:12px;color:var(--text3);">Note: Dev and production builds have separate permissions (different Bundle IDs). Make sure you authorized the correct app.</span>',
+          confirmText: 'Open Settings', confirmClass: 'btn-primary',
         });
         window.callingclaw.permissions.openSettings('microphone');
         return { ok: false, reason: 'mic_denied' };
@@ -2124,7 +2124,7 @@ async function startLocalTalk(topic) {
   var voiceLabel = document.getElementById('sp-voice-label');
   var voiceDot = document.getElementById('sp-voice-dot');
   if (voiceStatus) { voiceStatus.style.display = 'flex'; }
-  if (voiceLabel) { voiceLabel.textContent = '启动中...'; }
+  if (voiceLabel) { voiceLabel.textContent = 'Connecting...'; }
   if (voiceDot) { voiceDot.style.background = 'var(--yellow)'; }
   addMpActivity('done', 'Talk locally panel opened');
 
@@ -2185,13 +2185,13 @@ async function startLocalTalk(topic) {
     addMpActivity('done', 'Voice session ready (' + (session.provider || 'openai') + ', ' + (session.transport || 'direct') + ')');
 
     // Update voice status to connected (green)
-    if (voiceLabel) voiceLabel.textContent = '语音已连接';
+    if (voiceLabel) voiceLabel.textContent = 'Voice Connected';
     if (voiceDot) voiceDot.style.background = 'var(--green)';
 
   } catch (e) {
     console.warn('[TalkLocally] Parallel startup failed:', e);
     addMpActivity('error', 'Startup failed: ' + e.message);
-    if (voiceLabel) voiceLabel.textContent = '连接失败';
+    if (voiceLabel) voiceLabel.textContent = 'Connection Failed';
     if (voiceDot) voiceDot.style.background = 'var(--accent)';
     try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
     localTalkStarting = false;
@@ -2247,7 +2247,7 @@ function startAudioBridge(mode) {
     window.callingclaw.audio.getDefaultOutput().then(function(out) {
       if (out && out.isBlackHole) {
         console.warn('[AudioBridge] System default output is ' + out.name + ' — AI audio may not be heard');
-        addMpActivity('warn', '⚠ 系统扬声器是 ' + out.name + '，AI 声音可能听不到');
+        addMpActivity('warn', '⚠ System speaker is ' + out.name + ', AI audio may not be heard');
       }
     }).catch(function() {});
   }
@@ -2320,7 +2320,7 @@ async function stopLocalTalk() {
     var r = await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' });
     var data = await r.json();
     if (data && data.filepath) {
-      addMpActivity('done', '会议记录已保存: ' + data.filepath);
+      addMpActivity('done', 'Meeting notes saved: ' + data.filepath);
     }
   } catch (e) {}
 
@@ -2338,7 +2338,7 @@ async function stopLocalTalk() {
 }
 
 async function openPrepBrief(topic) {
-  openPanel('会前调研: ' + topic, '加载中...');
+  openPanel('Meeting Prep: ' + topic, 'Loading...');
   // Find meetingId from manifest
   var manifest = await fetchManifestCached();
   var meetingId = null;
@@ -2348,21 +2348,21 @@ async function openPrepBrief(topic) {
   }
   if (meetingId) {
     var content = await loadMeetingFile(meetingId, 'prep');
-    if (content) { openPanel('会前调研: ' + topic, content); return; }
+    if (content) { openPanel('Meeting Prep: ' + topic, content); return; }
   }
-  openPanel('会前调研: ' + topic, '暂无准备资料。请先使用「准备会议」功能。');
+  openPanel('Meeting Prep: ' + topic, 'No prep materials available. Use "Prepare Meeting" to get started.');
 }
 
 async function openNoteFor(topic) {
   const match = S.notes.find(f => { const name = typeof f === 'string' ? f : f.name || ''; return name.includes(topic.replace(/\s+/g, '_').slice(0, 20)); });
   if (match) { openNote(typeof match === 'string' ? match : match.name || match.filename || ''); return; }
-  openPanel('会后总结: ' + topic, '暂无会后总结。会议结束后会自动生成。');
+  openPanel('Post-meeting Summary: ' + topic, 'No summary yet. It will be generated after the meeting ends.');
 }
 
 async function openNote(filename) {
-  openPanel(parseNoteFilename(filename).title, '加载中...');
+  openPanel(parseNoteFilename(filename).title, 'Loading...');
   const data = await fetchJSON(API + '/api/meeting/notes/' + encodeURIComponent(filename));
-  openPanel(parseNoteFilename(filename).title, data?.content || data?.text || '无法加载笔记内容');
+  openPanel(parseNoteFilename(filename).title, data?.content || data?.text || 'Unable to load note content');
 }
 
 // WebSocket event stream (with exponential backoff + history replay)
@@ -2494,7 +2494,7 @@ function routeWsEvent(msg) {
     for (var pi2 = 0; pi2 < targets.length; pi2++) {
       var pData = targets[pi2];
       var message = msg.data.message || msg.data.step || '';
-      pData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + message);
+      pData.agentFeed.push('[' + new Date().toLocaleTimeString('en-US') + '] ' + message);
       var card = document.getElementById(pData.meetingId);
       if (card) {
         if (msg.data.title) { var t = card.querySelector('.meet-title'); if (t) t.textContent = msg.data.title; pData.topic = msg.data.title; }
@@ -2502,11 +2502,11 @@ function routeWsEvent(msg) {
           pData.startTime = msg.data.startTime;
           var sd = new Date(msg.data.startTime);
           var mt = card.querySelector('.meet-time');
-          if (mt) mt.textContent = sd.toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + (msg.data.endTime ? ' - ' + new Date(msg.data.endTime).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : '') + ' · ' + message;
+          if (mt) mt.textContent = sd.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) + (msg.data.endTime ? ' - ' + new Date(msg.data.endTime).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : '') + ' · ' + message;
           var dn = card.querySelector('.meet-date-num');
           if (dn) { dn.textContent = sd.getDate(); dn.style.color = ''; }
           var ds = card.querySelector('.meet-date-sub');
-          if (ds) ds.textContent = sd.toLocaleDateString('zh-CN', {month:'short'}) + ' · ' + ['日','一','二','三','四','五','六'][sd.getDay()];
+          if (ds) ds.textContent = sd.toLocaleDateString('en-US', {month:'short'}) + ' · ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][sd.getDay()];
         }
         if (msg.data.meetUrl) {
           pData.meetUrl = msg.data.meetUrl;
@@ -2546,7 +2546,7 @@ function routeWsEvent(msg) {
       var ocData = S.meetingFiles[ocId];
       if (ocData.prep.status !== 'done' && ocData.agentFeed) {
         var ocText = msg.data?.text || msg.data?.delta || '';
-        if (ocText) ocData.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] ' + (ocText.length > 60 ? ocText.slice(0,60) + '...' : ocText));
+        if (ocText) ocData.agentFeed.push('[' + new Date().toLocaleTimeString('en-US') + '] ' + (ocText.length > 60 ? ocText.slice(0,60) + '...' : ocText));
         if (document.getElementById('side-panel')?.classList.contains('open') && !S.meetingMode) {
           openPrepPanel(ocId);
         } else if (S.meetingMode && document.getElementById('mp-activity-body')) {
@@ -2580,7 +2580,7 @@ function routeWsEvent(msg) {
         delete S.meetingFiles[prTarget.meetingId];
         prTarget.meetingId = prMeetingId;
       }
-      prTarget.agentFeed.push('[' + new Date().toLocaleTimeString('zh-CN') + '] 调研完成');
+      prTarget.agentFeed.push('[' + new Date().toLocaleTimeString('en-US') + '] Research complete');
       // Update file badge in-place (NOT removing the card!)
       var prepBadge = document.getElementById(prTarget.meetingId + '-prep');
       if (prepBadge) {
@@ -2593,7 +2593,7 @@ function routeWsEvent(msg) {
       if (prMdContent) openPanel('📋 ' + (prTarget.topic || prTopic), prMdContent);
       // Update prep tab badge if tabbed panel is open
       var prTab = document.querySelector('#sp-tabs .sp-tab[data-tab="prep"]');
-      if (prTab) prTab.innerHTML = '会前调研<span class="sp-tab-badge ready">✓</span>';
+      if (prTab) prTab.innerHTML = 'Meeting Prep<span class="sp-tab-badge ready">✓</span>';
       var prContent = document.getElementById('sp-prep-content');
       if (prContent && prMdContent) prContent.innerHTML = renderMd(prMdContent);
     } else {
@@ -2612,7 +2612,7 @@ function routeWsEvent(msg) {
       smData.summary.content = smContent;
       // Update summary tab if panel is open
       var smTab = document.querySelector('#sp-tabs .sp-tab[data-tab="summary"]');
-      if (smTab) smTab.innerHTML = '会议总结<span class="sp-tab-badge ready">✓</span>';
+      if (smTab) smTab.innerHTML = 'Summary<span class="sp-tab-badge ready">✓</span>';
       var smEl = document.getElementById('sp-summary-content');
       if (smEl && smContent) smEl.innerHTML = renderMd(smContent);
       // Re-render meeting cards to show summary badge
@@ -2629,27 +2629,27 @@ async function runAllChecks() {
   document.getElementById('chk-env').innerHTML = [
     { ok: envChecks.bun?.ok, label: 'Bun Runtime', val: envChecks.bun?.version || envChecks.bun?.error || '--' },
     { ok: envChecks.python?.ok, label: 'Python 3', val: envChecks.python?.version || envChecks.python?.error || '--' },
-    { ok: envChecks.daemonDir?.ok, label: 'CallingClaw Daemon', val: envChecks.daemonDir?.ok ? '已找到' : '未找到' },
-    { ok: envChecks.envFile?.ok, label: '.env 配置文件', val: envChecks.envFile?.ok ? '已存在' : '未找到' },
+    { ok: envChecks.daemonDir?.ok, label: 'CallingClaw Daemon', val: envChecks.daemonDir?.ok ? 'Found' : 'Not found' },
+    { ok: envChecks.envFile?.ok, label: '.env Config', val: envChecks.envFile?.ok ? 'Found' : 'Not found' },
   ].map(i => `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}</span></div>`).join('');
   document.getElementById('chk-perm').innerHTML = [
-    { key: 'microphone', label: '麦克风', p: permChecks.microphone },
-    { key: 'screenRecording', label: '屏幕录制', p: permChecks.screenRecording },
-    { key: 'accessibility', label: '辅助功能', p: permChecks.accessibility },
+    { key: 'microphone', label: 'Microphone', p: permChecks.microphone },
+    { key: 'screenRecording', label: 'Screen Recording', p: permChecks.screenRecording },
+    { key: 'accessibility', label: 'Accessibility', p: permChecks.accessibility },
   ].map(i => {
     const p = i.p || {};
     let action = '';
-    if (!p.granted && p.canRequest) action = `<button class="btn btn-sm btn-primary" onclick="reqPerm('${i.key}')">授权</button>`;
-    else if (!p.granted) action = `<button class="btn btn-sm btn-ghost" onclick="openPerm('${i.key}')">去设置</button>`;
+    if (!p.granted && p.canRequest) action = `<button class="btn btn-sm btn-primary" onclick="reqPerm('${i.key}')">Grant</button>`;
+    else if (!p.granted) action = `<button class="btn btn-sm btn-ghost" onclick="openPerm('${i.key}')">Open Settings</button>`;
     return `<div class="chk"><span class="chk-icon">${p.granted ? '&#10003;' : '&#9888;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${p.status || ''}</span>${action}</div>`;
   }).join('');
   let ocOk = false;
   try { await fetch('http://localhost:18789', { signal: AbortSignal.timeout(2000) }); ocOk = true; } catch {}
   document.getElementById('chk-conn').innerHTML = [
-    { ok: ocOk, label: 'OpenClaw Gateway', val: ocOk ? '已连接' : '未连接' },
-    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? '已配置' : '未配置', action: !envChecks.googleCredentials?.ok ? 'scanGoogle' : null },
+    { ok: ocOk, label: 'OpenClaw Gateway', val: ocOk ? 'Connected' : 'Not connected' },
+    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? 'Configured' : 'Not configured', action: !envChecks.googleCredentials?.ok ? 'scanGoogle' : null },
   ].map(i => {
-    var act = i.action === 'scanGoogle' ? ' <button class="btn btn-sm btn-ghost" onclick="scanGoogleCreds()" style="margin-left:8px;font-size:11px;">扫描凭证</button>' : '';
+    var act = i.action === 'scanGoogle' ? ' <button class="btn btn-sm btn-ghost" onclick="scanGoogleCreds()" style="margin-left:8px;font-size:11px;">Scan Credentials</button>' : '';
     return `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}${act}</span></div>`;
   }).join('');
   document.getElementById('chk-audio').innerHTML = '<div class="chk"><span class="chk-icon">&#10003;</span><span class="chk-label">Audio Injection</span><span class="chk-val">Playwright (no driver needed)</span></div>';
@@ -2663,10 +2663,10 @@ async function scanGoogleCreds() {
       await fetch(API + '/api/google/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) });
       setTimeout(runAllChecks, 1000);
     } else {
-      alert('未找到 Google OAuth 凭证。请确保 ~/.openclaw/workspace/ 或 ~/.callingclaw/ 下有 google-credentials.json 和 google-token.json');
+      alert('Google OAuth credentials not found. Make sure google-credentials.json and google-token.json exist in ~/.openclaw/workspace/ or ~/.callingclaw/');
     }
   } catch (e) {
-    alert('扫描失败: ' + (e.message || e));
+    alert('Scan failed: ' + (e.message || e));
   }
 }
 async function reqPerm(name) { await window.callingclaw.permissions.request(name); setTimeout(runAllChecks, 1000); }
@@ -2676,16 +2676,16 @@ async function saveKeys() {
   if (!o && !x && !g && !r) return;
   const body = {}; if (o) body.OPENAI_API_KEY = o; if (x) body.XAI_API_KEY = x; if (g) body.GEMINI_API_KEY = g; if (r) body.OPENROUTER_API_KEY = r;
   const btn = document.querySelector('button[onclick*="saveKeys"]');
-  if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
   try {
     const resp = await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (resp.ok) {
-      if (btn) { btn.textContent = '✓ 已保存'; setTimeout(() => { btn.textContent = '保存'; btn.disabled = false; }, 2000); }
+      if (btn) { btn.textContent = '✓ Saved'; setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; }, 2000); }
     } else {
-      if (btn) { btn.textContent = '保存失败'; btn.disabled = false; }
+      if (btn) { btn.textContent = 'Save Failed'; btn.disabled = false; }
     }
   } catch {
-    if (btn) { btn.textContent = '连接失败'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Connection Failed'; btn.disabled = false; }
   }
 }
 
@@ -2701,8 +2701,8 @@ async function saveUserEmail() {
   const status = document.getElementById('user-email-status');
   try {
     await fetch(API + '/api/config/user-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-    status.textContent = '已保存'; setTimeout(() => { status.textContent = ''; }, 2000);
-  } catch { status.textContent = '保存失败'; status.style.color = 'var(--accent)'; }
+    status.textContent = 'Saved'; setTimeout(() => { status.textContent = ''; }, 2000);
+  } catch { status.textContent = 'Save failed'; status.style.color = 'var(--accent)'; }
 }
 
 // Logs
@@ -2736,7 +2736,7 @@ function vtUpdateInstructions() {
 }
 async function vtStart() {
   const btnS = document.getElementById('vt-btn-start'), btnE = document.getElementById('vt-btn-stop');
-  btnS.disabled = true; btnS.textContent = '连接中...';
+  btnS.disabled = true; btnS.textContent = 'Connecting...';
   try {
     vtMicStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
     vtAudioCtx = new AudioContext({ sampleRate: 24000 });
@@ -2762,7 +2762,7 @@ async function vtStart() {
     vtPlaybackNode.connect(vtAudioCtx.destination);
     vtWs = new WebSocket('ws://localhost:4000/ws/voice-test');
     vtWs.onopen = () => {
-      document.getElementById('vt-ws-status').textContent = '已连接';
+      document.getElementById('vt-ws-status').textContent = 'Connected';
       vtWs.send(JSON.stringify({ type: 'get_layers' }));
       fetch(API + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_voice: document.getElementById('vt-voice').value }) }).catch(() => {});
       vtWs.send(JSON.stringify({ type: 'start', instructions: document.getElementById('vt-instr').value.trim() || undefined }));
@@ -2811,7 +2811,7 @@ function vtAddTranscript(role, text, ts) {
   const area = document.getElementById('vt-transcript'), ph = area.querySelector('div[style*="text-align"]');
   if (ph) ph.remove();
   const entry = document.createElement('div'); entry.style.cssText = 'margin-bottom:10px;';
-  const time = ts ? new Date(ts).toLocaleTimeString('zh-CN') : new Date().toLocaleTimeString('zh-CN');
+  const time = ts ? new Date(ts).toLocaleTimeString('en-US') : new Date().toLocaleTimeString('en-US');
   const colors = { user: 'var(--blue)', assistant: 'var(--green)', system: 'var(--yellow)' };
   const names = { user: 'You', assistant: 'AI', system: 'System' };
   entry.innerHTML = `<div style="font-size:11px;font-weight:600;color:${colors[role]||'var(--text2)'};margin-bottom:2px;">${names[role]||role}</div><div style="font-size:13px;line-height:1.5;">${esc(text)}</div><div style="font-size:10px;color:var(--text3);margin-top:1px;">${time}</div>`;
@@ -2824,12 +2824,12 @@ function vtStartMicLevel() {
 }
 function vtResetUI() {
   const btnS = document.getElementById('vt-btn-start'), btnE = document.getElementById('vt-btn-stop');
-  btnS.style.display = ''; btnS.disabled = false; btnS.textContent = '开始语音'; btnE.style.display = 'none';
+  btnS.style.display = ''; btnS.disabled = false; btnS.textContent = 'Start Voice'; btnE.style.display = 'none';
   if (vtMicRAF) { cancelAnimationFrame(vtMicRAF); vtMicRAF = null; }
   document.getElementById('vt-mic-bar').style.width = '0%';
 }
 const LI = { memory: '&#128218;', calendar: '&#128197;', meeting: '&#128222;', automation: '&#9881;', zoom: '&#127909;' };
-const LD = { memory: '记忆检索', calendar: '日程安排', meeting: '加入/离开会议', automation: '屏幕/浏览器/文件', zoom: 'Zoom 控制' };
+const LD = { memory: 'Memory retrieval', calendar: 'Scheduling', meeting: 'Join/leave meetings', automation: 'Screen/browser/files', zoom: 'Zoom control' };
 function vtRenderLayers(info) {
   vtLayerInfo = info; const c = document.getElementById('vt-layers'); c.innerHTML = '';
   for (const [k, v] of Object.entries(info)) {
@@ -2911,29 +2911,29 @@ async function obFinish(startEngine) {
 
 async function obGrantScreen() {
   try { await window.callingclaw.permissions.request('screenRecording'); } catch {}
-  obPollPermission('screenRecording', 'ob-screen-status', 'ob-screen-btn', '屏幕录制');
+  obPollPermission('screenRecording', 'ob-screen-status', 'ob-screen-btn', 'Screen Recording');
 }
 
 async function obGrantMic() {
   // Request microphone via Electron main process (triggers macOS TCC dialog)
   var btn = document.getElementById('ob-mic-btn');
   var el = document.getElementById('ob-mic-status');
-  if (btn) { btn.textContent = '请求中...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'Requesting...'; btn.disabled = true; }
   try {
     var result = await window.callingclaw.permissions.request('microphone');
     if (result && result.granted) {
-      if (el) el.innerHTML = '<span style="color:var(--green);">✓ 麦克风已授权</span>';
-      if (btn) { btn.textContent = '✓ 已授权'; btn.className = 'btn btn-secondary'; }
+      if (el) el.innerHTML = '<span style="color:var(--green);">✓ Microphone granted</span>';
+      if (btn) { btn.textContent = '✓ Granted'; btn.className = 'btn btn-secondary'; }
       // Show live volume meter to confirm mic is working
       startMicMeter('ob-mic-status');
       setTimeout(function() { obNext(); }, 2000);
     } else {
-      if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ 权限被拒绝 — 请在系统设置中允许</span> <button class="btn btn-sm btn-ghost" onclick="openPerm(\'microphone\')" style="margin-left:8px;font-size:11px;">打开设置</button>';
-      if (btn) { btn.textContent = '重试'; btn.disabled = false; }
+      if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ Permission denied — please allow in System Settings</span> <button class="btn btn-sm btn-ghost" onclick="openPerm(\'microphone\')" style="margin-left:8px;font-size:11px;">Open Settings</button>';
+      if (btn) { btn.textContent = 'Retry'; btn.disabled = false; }
     }
   } catch (e) {
-    if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ 请求失败: ' + (e.message || e) + '</span>';
-    if (btn) { btn.textContent = '重试'; btn.disabled = false; }
+    if (el) el.innerHTML = '<span style="color:var(--accent);">⚠ Request failed: ' + (e.message || e) + '</span>';
+    if (btn) { btn.textContent = 'Retry'; btn.disabled = false; }
   }
 }
 
@@ -2942,7 +2942,7 @@ function startMicMeter(containerId) {
   var container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">'
-    + '<span style="color:var(--green);font-size:12px;">✓ 已授权</span>'
+    + '<span style="color:var(--green);font-size:12px;">✓ Granted</span>'
     + '<div id="mic-meter-bar" style="flex:1;max-width:160px;height:6px;background:var(--surface);border-radius:3px;overflow:hidden;">'
     + '<div id="mic-meter-fill" style="height:100%;width:0%;background:var(--green);border-radius:3px;transition:width 0.1s;"></div>'
     + '</div>'
@@ -2982,7 +2982,7 @@ function startMicMeter(containerId) {
 
 async function obGrantAccess() {
   try { await window.callingclaw.permissions.request('accessibility'); } catch {}
-  obPollPermission('accessibility', 'ob-access-status', 'ob-access-btn', '辅助功能');
+  obPollPermission('accessibility', 'ob-access-status', 'ob-access-btn', 'Accessibility');
 }
 
 // Switch to Phase 2 (post-login) with email display
@@ -3052,15 +3052,15 @@ async function obSaveEmailAndContinue() {
 
 function obPollPermission(permName, statusId, btnId, label) {
   const el = document.getElementById(statusId);
-  el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;animation:pulse 1s infinite;"></div> 等待授权...请在系统设置中允许';
+  el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;animation:pulse 1s infinite;"></div> Waiting for authorization... please allow in System Settings';
   _obPollTimer = setInterval(async () => {
     try {
       const perms = await window.callingclaw.permissions.check();
       if (perms[permName]?.granted) {
         clearInterval(_obPollTimer); _obPollTimer = null;
-        el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权';
+        el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> Granted';
         const btn = document.getElementById(btnId);
-        if (btn) { btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; }
+        if (btn) { btn.textContent = 'Granted'; btn.className = 'btn btn-secondary'; btn.disabled = true; }
       }
     } catch {}
   }, 2000);
@@ -3071,17 +3071,17 @@ async function obSaveKeys() {
   const openrouterKey = document.getElementById('ob-key-openrouter')?.value?.trim();
   const btn = document.querySelector('[data-ob="5"] .btn-primary, [data-ob="5"] button[onclick*="obSaveKeys"]');
   if (!openaiKey) { obNext(); return; }
-  if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
   try {
     const r = await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_api_key: openaiKey, openrouter_api_key: openrouterKey || undefined }) });
     if (r.ok) {
-      if (btn) { btn.textContent = '✓ 已保存'; btn.className = 'btn btn-secondary'; }
+      if (btn) { btn.textContent = '✓ Saved'; btn.className = 'btn btn-secondary'; }
       setTimeout(() => obNext(), 800);
     } else {
-      if (btn) { btn.textContent = '保存失败 — 重试'; btn.disabled = false; }
+      if (btn) { btn.textContent = 'Save failed — retry'; btn.disabled = false; }
     }
   } catch (e) {
-    if (btn) { btn.textContent = '连接失败 — daemon 未启动?'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Connection failed — daemon not running?'; btn.disabled = false; }
   }
 }
 
@@ -3091,34 +3091,34 @@ async function obTestOpenClaw() {
   var urlInput = document.getElementById('ob-openclaw-url');
   var gatewayUrl = (urlInput?.value || 'localhost:18789').trim();
   if (!gatewayUrl.startsWith('http')) gatewayUrl = 'http://' + gatewayUrl;
-  btn.textContent = '测试中...'; btn.disabled = true;
+  btn.textContent = 'Testing...'; btn.disabled = true;
   try {
     var r = await fetch(gatewayUrl, { signal: AbortSignal.timeout(3000) });
     if (r.ok || r.status < 500) {
-      el.innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> OpenClaw Gateway 已连接 (' + esc(gatewayUrl) + ')</div>' + (el.innerHTML.includes('技能') ? '<br>' + el.innerHTML.split('<br>').pop() : '');
-      btn.textContent = '已连接'; btn.className = 'btn btn-secondary';
+      el.innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> OpenClaw Gateway connected (' + esc(gatewayUrl) + ')</div>' + (el.innerHTML.includes('skill') ? '<br>' + el.innerHTML.split('<br>').pop() : '');
+      btn.textContent = 'Connected'; btn.className = 'btn btn-secondary';
       // Save gateway URL to backend config
       try { await fetch(API + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openclaw_gateway: gatewayUrl }) }); } catch {}
     } else {
-      el.innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent);width:8px;height:8px;"></div> OpenClaw 响应异常 (HTTP ' + r.status + ')</div>';
-      btn.textContent = '重试'; btn.disabled = false; btn.className = 'btn btn-secondary';
+      el.innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent);width:8px;height:8px;"></div> OpenClaw response error (HTTP ' + r.status + ')</div>';
+      btn.textContent = 'Retry'; btn.disabled = false; btn.className = 'btn btn-secondary';
     }
   } catch (e) {
-    el.innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent);width:8px;height:8px;"></div> 无法连接 — 请确认 OpenClaw 正在运行</div>';
-    btn.textContent = '重试'; btn.disabled = false; btn.className = 'btn btn-secondary';
+    el.innerHTML = '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--accent);width:8px;height:8px;"></div> Cannot connect — make sure OpenClaw is running</div>';
+    btn.textContent = 'Retry'; btn.disabled = false; btn.className = 'btn btn-secondary';
   }
 }
 
 async function obInstallSkill() {
   const btn = document.getElementById('ob-skill-btn');
-  if (btn) { btn.textContent = '安装中...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'Installing...'; btn.disabled = true; }
   try {
     await window.callingclaw.skill.install();
     const el = document.getElementById('ob-skill-status');
-    if (el) el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装';
-    if (btn) { btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; }
+    if (el) el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw skill installed';
+    if (btn) { btn.textContent = 'Installed'; btn.className = 'btn btn-secondary'; }
   } catch (e) {
-    if (btn) { btn.textContent = '安装失败，重试'; btn.disabled = false; btn.className = 'btn btn-primary'; }
+    if (btn) { btn.textContent = 'Install failed, retry'; btn.disabled = false; btn.className = 'btn btn-primary'; }
   }
 }
 
@@ -3139,17 +3139,17 @@ async function obCheckStep() {
   obStopPolling();
   try {
     // Step 1: Screen Recording
-    if (obStep === 1) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-screen-status'), btn = document.getElementById('ob-screen-btn'); if (perms.screenRecording.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权屏幕录制'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantScreen; } }
+    if (obStep === 1) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-screen-status'), btn = document.getElementById('ob-screen-btn'); if (perms.screenRecording.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> Granted'; btn.textContent = 'Granted'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> Authorization needed in System Settings'; btn.textContent = 'Grant Screen Recording'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantScreen; } }
     // Step 2: Microphone
-    if (obStep === 2) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-mic-status'), btn = document.getElementById('ob-mic-btn'); if (perms.microphone && perms.microphone.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要授权'; btn.textContent = '授权麦克风'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantMic; } }
+    if (obStep === 2) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-mic-status'), btn = document.getElementById('ob-mic-btn'); if (perms.microphone && perms.microphone.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> Granted'; btn.textContent = 'Granted'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> Authorization needed'; btn.textContent = 'Grant Microphone'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantMic; } }
     // Step 3: Accessibility
-    if (obStep === 3) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-access-status'), btn = document.getElementById('ob-access-btn'); if (perms.accessibility.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> 已授权'; btn.textContent = '已授权'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> 需要在系统设置中授权'; btn.textContent = '授权辅助功能'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantAccess; } }
+    if (obStep === 3) { const perms = await window.callingclaw.permissions.check(); const el = document.getElementById('ob-access-status'), btn = document.getElementById('ob-access-btn'); if (perms.accessibility.granted) { el.innerHTML = '<div class="st-dot green" style="width:8px;height:8px;"></div> Granted'; btn.textContent = 'Granted'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { el.innerHTML = '<div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> Authorization needed in System Settings'; btn.textContent = 'Grant Accessibility'; btn.disabled = false; btn.className = 'btn btn-primary'; btn.onclick = obGrantAccess; } }
     // Step 4: Google Account — auto-detect login and switch to Phase 2 if already signed in
     if (obStep === 4) { try { var resp = await fetch(API + '/api/google/auth-status'); var auth = await resp.json(); if (auth.chrome && auth.chrome.loggedIn) { obGoogleShowPhase2(auth.chrome.email); } else { document.getElementById('ob-google-phase1').style.display = 'block'; document.getElementById('ob-google-phase2').style.display = 'none'; } } catch(e) { document.getElementById('ob-google-status').innerHTML = '<div class="st-dot" style="background:var(--text3);width:8px;height:8px;"></div> Backend not running'; } }
     // Step 6: OpenClaw
-    if (obStep === 6) { const info = await window.callingclaw.skill.check(); const el = document.getElementById('ob-skill-status'), btn = document.getElementById('ob-skill-btn'); let html = ''; if (info.openclawConnected) html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> OpenClaw Gateway 已连接</div>'; else html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> OpenClaw Gateway 未运行 — 请先启动 OpenClaw</div>'; if (info.skillInstalled) { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw 技能已安装</div>'; btn.textContent = '已安装'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot" style="background:var(--text3);width:8px;height:8px;"></div> /callingclaw 技能未安装</div>'; } el.innerHTML = html; }
+    if (obStep === 6) { const info = await window.callingclaw.skill.check(); const el = document.getElementById('ob-skill-status'), btn = document.getElementById('ob-skill-btn'); let html = ''; if (info.openclawConnected) html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot green" style="width:8px;height:8px;"></div> OpenClaw Gateway connected</div>'; else html += '<div style="display:flex;align-items:center;gap:5px;"><div class="st-dot" style="background:var(--yellow);width:8px;height:8px;"></div> OpenClaw Gateway not running — please start OpenClaw first</div>'; if (info.skillInstalled) { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot green" style="width:8px;height:8px;"></div> /callingclaw skill installed</div>'; btn.textContent = 'Installed'; btn.className = 'btn btn-secondary'; btn.disabled = true; } else { html += '<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="st-dot" style="background:var(--text3);width:8px;height:8px;"></div> /callingclaw skill not installed</div>'; } el.innerHTML = html; }
     // Step 7: Summary
-    if (obStep === 7) { const [perms, skill, env] = await Promise.all([window.callingclaw.permissions.check(), window.callingclaw.skill.check(), window.callingclaw.env.check()]); var googleOk = false; try { var gResp = await fetch('http://localhost:4000/api/google/auth-status'); var gAuth = await gResp.json(); googleOk = gAuth.chrome && gAuth.chrome.loggedIn; } catch {} document.getElementById('ob-summary').innerHTML = [{ ok: perms.screenRecording.granted, label: '屏幕录制' }, { ok: perms.microphone?.granted, label: '麦克风' }, { ok: perms.accessibility.granted, label: '辅助功能' }, { ok: googleOk, label: 'Google 帐户' }, { ok: env.envFile?.ok, label: 'AI 引擎 (API Keys)' }, { ok: skill.openclawConnected, label: 'OpenClaw Gateway' }, { ok: skill.skillInstalled, label: '/callingclaw 技能', optional: true }].map(i => `<div style="margin-bottom:8px;font-size:15px;display:flex;align-items:center;gap:8px;"><span style="color:${i.ok ? 'var(--green)' : (i.optional ? 'var(--text3)' : 'var(--accent)')};font-weight:600;width:16px;text-align:center;">${i.ok ? '&#10003;' : (i.optional ? '-' : '&#10007;')}</span> ${i.label}</div>`).join(''); }
+    if (obStep === 7) { const [perms, skill, env] = await Promise.all([window.callingclaw.permissions.check(), window.callingclaw.skill.check(), window.callingclaw.env.check()]); var googleOk = false; try { var gResp = await fetch('http://localhost:4000/api/google/auth-status'); var gAuth = await gResp.json(); googleOk = gAuth.chrome && gAuth.chrome.loggedIn; } catch {} document.getElementById('ob-summary').innerHTML = [{ ok: perms.screenRecording.granted, label: 'Screen Recording' }, { ok: perms.microphone?.granted, label: 'Microphone' }, { ok: perms.accessibility.granted, label: 'Accessibility' }, { ok: googleOk, label: 'Google Account' }, { ok: env.envFile?.ok, label: 'AI Engine (API Keys)' }, { ok: skill.openclawConnected, label: 'OpenClaw Gateway' }, { ok: skill.skillInstalled, label: '/callingclaw Skill', optional: true }].map(i => `<div style="margin-bottom:8px;font-size:15px;display:flex;align-items:center;gap:8px;"><span style="color:${i.ok ? 'var(--green)' : (i.optional ? 'var(--text3)' : 'var(--accent)')};font-weight:600;width:16px;text-align:center;">${i.ok ? '&#10003;' : (i.optional ? '-' : '&#10007;')}</span> ${i.label}</div>`).join(''); }
   } catch {}
 }
 

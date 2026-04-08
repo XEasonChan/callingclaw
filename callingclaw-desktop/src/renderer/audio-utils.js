@@ -137,9 +137,9 @@ class BrowserAudio {
       this.active = true;
     } catch (e) {
       this.stop();
-      const msg = e.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在系统设置中允许' :
-                  e.name === 'NotFoundError' ? '未找到麦克风设备' :
-                  '音频启动失败: ' + e.message;
+      const msg = e.name === 'NotAllowedError' ? 'Microphone permission denied. Allow it in System Settings.' :
+                  e.name === 'NotFoundError' ? 'No microphone device found.' :
+                  'Audio startup failed: ' + e.message;
       opts.onError?.(msg);
       throw e;
     } finally {
@@ -151,7 +151,7 @@ class BrowserAudio {
   _connectWS(wsUrl, opts) {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('WebSocket 连接超时'));
+        reject(new Error('WebSocket connection timeout'));
       }, 8000);
 
       this.ws = new WebSocket(wsUrl);
@@ -189,7 +189,7 @@ class BrowserAudio {
 
       this.ws.onerror = () => {
         clearTimeout(timeout);
-        reject(new Error('WebSocket 连接失败'));
+        reject(new Error('WebSocket connection failed'));
       };
 
       this.ws.onclose = () => {

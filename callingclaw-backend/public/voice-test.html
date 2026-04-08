@@ -894,7 +894,7 @@
               if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                   type: 'inject_context',
-                  text: '[会议准备资料]\n\n' + selectedMeetingBrief.slice(0, 4000),
+                  text: '[Meeting Prep Brief]\n\n' + selectedMeetingBrief.slice(0, 4000),
                 }));
                 addTranscript('system', 'Meeting prep injected (' + selectedMeetingBrief.length + ' chars)');
               }

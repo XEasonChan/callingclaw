@@ -371,8 +371,8 @@ kill $(lsof -t -i :4000)
 3. Check that mic is ON in Meet (audio injection requires mic permission)
 4. If AI repeats itself: echo cancellation should suppress self-hearing. Restart the meeting if issue persists
 
-### Desktop app shows "引擎未启动"
-- Click "启动引擎" or restart the app
+### Desktop app shows "Engine Not Started"
+- Click "Start Engine" or restart the app
 - Check that `callingclaw-backend/.env` has valid API keys
 - Check Console (Cmd+Opt+I) for errors
 
