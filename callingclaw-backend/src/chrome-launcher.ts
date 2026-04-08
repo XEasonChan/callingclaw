@@ -85,7 +85,7 @@ const AUDIO_INIT_SCRIPT = `
     return origGUM(constraints);
   };
 
-  // ── Wrap RTCPeerConnection ──
+  // ── Wrap RTCPeerConnection constructor ──
   window.RTCPeerConnection = function() {
     var pc = new (Function.prototype.bind.apply(OrigPC, [null].concat(Array.prototype.slice.call(arguments))))();
     window.__cc.pcs.push(pc);
@@ -99,6 +99,43 @@ const AUDIO_INIT_SCRIPT = `
   });
   if (window.webkitRTCPeerConnection) {
     window.webkitRTCPeerConnection = window.RTCPeerConnection;
+  }
+
+  // ── Patch addTrack on prototype (catches PCs created BEFORE our constructor wrap) ──
+  // When Zoom/other platforms add an audio track to a PC, swap it with our virtual mic.
+  var origAddTrack = OrigPC.prototype.addTrack;
+  OrigPC.prototype.addTrack = function(track) {
+    var cc = window.__cc;
+    // Track this PC if not already tracked
+    if (cc.pcs.indexOf(this) === -1) cc.pcs.push(this);
+    // Swap audio track with virtual mic (if available)
+    if (track && track.kind === 'audio' && cc.outputTrack) {
+      console.log('[CC-Init] Swapped audio sender track with virtual mic');
+      return origAddTrack.apply(this, [cc.outputTrack].concat(Array.prototype.slice.call(arguments, 1)));
+    }
+    return origAddTrack.apply(this, arguments);
+  };
+
+  // ── Patch ontrack to capture remote audio from ANY PC ──
+  var origOnTrackDesc = Object.getOwnPropertyDescriptor(OrigPC.prototype, 'ontrack');
+  if (origOnTrackDesc && origOnTrackDesc.set) {
+    var origOnTrackSet = origOnTrackDesc.set;
+    Object.defineProperty(OrigPC.prototype, 'ontrack', {
+      set: function(handler) {
+        var cc = window.__cc;
+        if (cc.pcs.indexOf(this) === -1) cc.pcs.push(this);
+        var wrappedHandler = function(event) {
+          // Auto-capture audio tracks from remote participants
+          if (event.track && event.track.kind === 'audio' && !cc.captureActive) {
+            console.log('[CC-Init] Remote audio track detected via ontrack');
+          }
+          if (handler) handler.call(this, event);
+        };
+        origOnTrackSet.call(this, wrappedHandler);
+      },
+      get: origOnTrackDesc.get,
+      configurable: true,
+    });
   }
 })();
 `;
