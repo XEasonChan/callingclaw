@@ -628,12 +628,34 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
-   * Send audio chunk from Python sidecar
+   * Send audio chunk from capture pipeline (Chrome WebSocket or Python sidecar).
+   * Server-side echo gate: drop audio when AI is speaking or just finished speaking.
+   * This prevents Zoom/Meet SFU echo from reaching the Realtime API's VAD,
+   * which would otherwise fire speech_started and cancel the AI response.
    */
+  private _echoGateDropped = 0;
   sendAudio(base64Pcm: string) {
-    if (this.client.connected) {
-      this.client.sendAudio(base64Pcm);
+    if (!this.client.connected) return;
+
+    // Echo gate: suppress audio input while AI is producing audio output.
+    // The SFU echoes AI audio back with 300-2000ms delay depending on platform.
+    // By gating at the backend, we prevent echo from ever reaching the Realtime API.
+    const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
+    const echoWindowMs = 3000; // 3s covers even slow Zoom SFU echo
+    if (this._audioState === "speaking" || (this._lastAudioOutputTs > 0 && msSinceLastOutput < echoWindowMs)) {
+      this._echoGateDropped++;
+      if (this._echoGateDropped === 1 || this._echoGateDropped % 500 === 0) {
+        console.log(`[Voice] Echo gate: dropped ${this._echoGateDropped} audio chunks (state=${this._audioState}, ${msSinceLastOutput}ms since output)`);
+      }
+      return;
     }
+
+    // Gate cleared — reset counter and send audio
+    if (this._echoGateDropped > 0) {
+      console.log(`[Voice] Echo gate cleared after ${this._echoGateDropped} dropped chunks`);
+      this._echoGateDropped = 0;
+    }
+    this.client.sendAudio(base64Pcm);
   }
 
   /**

@@ -325,6 +325,8 @@ export function startConfigServer(services: Services) {
               if (++globalThis._vtAudioCount % 50 === 1) {
                 console.log(`[VoiceTest] Mic audio chunk #${globalThis._vtAudioCount} (${data.audio.length} b64 chars)`);
               }
+              // Route through VoiceModule.sendAudio() which has a server-side echo gate.
+              // Drops audio when AI is speaking, preventing SFU echo from triggering VAD.
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "caption") {
               // Meet captions DOM scrape — reliable transcript from Google's speech recognition.
