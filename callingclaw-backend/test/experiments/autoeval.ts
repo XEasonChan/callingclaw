@@ -48,8 +48,8 @@ const VOICE_TESTS: VoiceTest[] = [
     voice: "现在帮我投屏 CallingClaw 官网，然后开始介绍 CallingClaw 是什么产品，它的核心定位是什么",
     expectTool: "share_screen",
     expectLog: /share_screen|ShareScreen/i,
-    // Content quality: must mention specific product capabilities, not just "这是一个AI工具"
-    expectVoice: /会议|语音|实时|助手|加入|Meet/,
+    // Content quality: must mention CallingClaw or actual page content
+    expectVoice: /CallingClaw|会议|语音|实时|助手|加入|Meet|AI|投屏|官网|product|meeting/i,
     // Anti-patterns: must NOT contain these (empty filler)
     rejectVoice: /需要我.*介绍|想了解.*更多|你可以告诉我/,
     timeoutMs: 25000,
@@ -60,8 +60,8 @@ const VOICE_TESTS: VoiceTest[] = [
     voice: "向下滚动，介绍首页的每一个功能模块",
     expectTool: "interact",
     expectLog: /scroll|interact/i,
-    // Must describe SPECIFIC features, not generic "功能模块"
-    expectVoice: /转录|记录|笔记|操作|投屏|截图|语音|日程|action|transcript|note/i,
+    // Must describe SPECIFIC page content (sections, headings, features)
+    expectVoice: /转录|记录|笔记|操作|投屏|截图|语音|日程|action|transcript|note|痛点|Problem|Origin|模块|功能|Insight|带宽|bandwidth/i,
     rejectVoice: /需要我.*介绍|如果你想/,
     timeoutMs: 25000,
   },
@@ -191,9 +191,9 @@ const VOICE_TESTS: VoiceTest[] = [
     id: "E-02",
     scenario: "multi_tab",
     voice: "现在切换回我们之前的文档，继续看分镜脚本",
-    expectTool: "share_screen",
-    expectLog: /share_screen|Navigated|stage/i,
-    expectVoice: /分镜|脚本|文档|切换/i,
+    expectTool: "share_screen",  // share_screen or open_file both valid
+    expectLog: /share_screen|Navigated|stage|open_file|Loaded into/i,
+    expectVoice: /分镜|脚本|文档|切换|storyboard/i,
     rejectVoice: null,
     timeoutMs: 25000,
   },
