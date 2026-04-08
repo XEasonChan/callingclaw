@@ -73,6 +73,25 @@ export class VisionModule {
       this.visionClient = new OpenAI({ apiKey: "dummy" });
       this.visionModel = CONFIG.vision.model;
     }
+
+    // TLS warmup: pre-establish connection to vision API endpoint
+    // First real call carries ~200KB image payload; cold TLS handshake adds 200-500ms.
+    // HEAD request caches the TLS session ticket so the first vision call is fast.
+    this._warmupTLS();
+  }
+
+  private _warmupTLS() {
+    const endpoints = [
+      CONFIG.openrouter.apiKey ? `${CONFIG.openrouter.baseUrl}/models` : null,
+      CONFIG.openai.apiKey ? "https://api.openai.com/v1/models" : null,
+    ].filter(Boolean) as string[];
+
+    for (const url of endpoints) {
+      fetch(url, { method: "HEAD" }).catch(() => {});
+    }
+    if (endpoints.length > 0) {
+      console.log(`[Vision] TLS warmup: ${endpoints.length} endpoint(s)`);
+    }
   }
 
   // ── Public API ──────────────────────────────────────────────
