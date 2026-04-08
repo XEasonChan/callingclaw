@@ -1798,12 +1798,10 @@ export function startConfigServer(services: Services) {
             setTimeout(async () => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              // Auto-detect language from meeting title (Chinese title → Chinese intro, English → English)
-              const meetingLang = CONFIG.voiceLanguage === "auto"
-                ? detectLanguage(meetTopic || "")
-                : CONFIG.voiceLanguage;
+              // Auto-detect language from meeting title
+              const meetingLang = detectLanguage(meetTopic || "");
               const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, meetingLang);
-              console.log(`[Meeting] Language: ${meetingLang} (from ${CONFIG.voiceLanguage === "auto" ? "topic" : "config"})`);
+              console.log(`[Meeting] Language: ${meetingLang} (from title)`);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
 

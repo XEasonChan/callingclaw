@@ -60,9 +60,9 @@ export const CONFIG = {
   // Used by OpenAI Realtime transcription + SenseVoice
   transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "zh,en") as string,
 
-  // Voice output language — controls meeting intro, prompt defaults, etc.
-  // "auto" = detect from meeting title (default), "zh" = Chinese, "en" = English
-  voiceLanguage: (process.env.VOICE_LANGUAGE || "auto") as "zh" | "en" | "auto",
+  // Voice output language — always auto-detect from meeting title + adapt to user speech.
+  // No manual override needed — the model handles any language natively.
+  voiceLanguage: "auto" as const,
 
   // OpenAI (Realtime GA — gpt-realtime-1.5, upgraded from legacy preview)
   // Uses GA API: no beta header, new event names, session.type required.

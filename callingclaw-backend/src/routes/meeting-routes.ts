@@ -367,9 +367,7 @@ export function meetingRoutes(services: Services): RouteHandler {
             setTimeout(() => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              const meetingLang = CONFIG.voiceLanguage === "auto"
-                ? detectLanguage(meetTopic || "")
-                : CONFIG.voiceLanguage;
+              const meetingLang = detectLanguage(meetTopic || "");
               const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, meetingLang);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent (Small Talk mode)");

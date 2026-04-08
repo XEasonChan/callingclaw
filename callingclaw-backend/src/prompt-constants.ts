@@ -10,25 +10,36 @@
  * Language handling rule — used in ALL prompts that generate user-facing text.
  * Single source of truth. Do NOT copy-paste this rule; import it.
  */
-import { CONFIG } from "./config";
-
-export const LANGUAGE_RULE = CONFIG.voiceLanguage === "en"
-  ? "Speak in English. Use natural conversational English. Technical terms stay as-is."
-  : CONFIG.voiceLanguage === "zh"
-    ? "Match the user's language. Chinese conversation → Chinese response. Technical terms stay in English."
-    : "Match the user's language. If they speak Chinese, respond in Chinese. If English, respond in English. Technical terms stay as-is.";
+export const LANGUAGE_RULE =
+  "Match the user's language automatically. Respond in whatever language they speak. " +
+  "If the meeting title is in Chinese, start in Chinese. If in English, start in English. " +
+  "If the user switches language mid-conversation, switch with them. Technical terms stay as-is.";
 
 /**
- * Detect the likely conversation language from recent transcript text.
- * Returns "zh" if >30% of characters are CJK, otherwise "en".
+ * Detect the likely language from text (meeting title, transcript, etc.)
+ * Supports: Chinese, Japanese, Korean, and defaults to English for Latin scripts.
+ * Returns an ISO 639-1 code.
  */
-export function detectLanguage(text: string): "zh" | "en" {
+export function detectLanguage(text: string): string {
   if (!text) return "en";
-  const cjkChars = text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g);
-  const ratio = (cjkChars?.length || 0) / Math.max(text.length, 1);
-  // 12% threshold — realistic for bilingual tech conversations where
-  // Chinese speakers heavily mix English terms (e.g., "Sidecar crash 的 pattern 是什么？")
-  return ratio > 0.12 ? "zh" : "en";
+  const chars = [...text];
+  const len = Math.max(chars.length, 1);
+
+  // CJK Unified (Chinese)
+  const zhChars = chars.filter(c => /[\u4e00-\u9fff\u3400-\u4dbf]/.test(c)).length;
+  // Japanese Hiragana + Katakana
+  const jaChars = chars.filter(c => /[\u3040-\u309f\u30a0-\u30ff]/.test(c)).length;
+  // Korean Hangul
+  const koChars = chars.filter(c => /[\uac00-\ud7af\u1100-\u11ff]/.test(c)).length;
+
+  // Japanese check first (CJK kanji + kana mix)
+  if (jaChars / len > 0.05) return "ja";
+  // Korean
+  if (koChars / len > 0.05) return "ko";
+  // Chinese (12% threshold for bilingual tech titles like "Sidecar crash 的 pattern")
+  if (zhChars / len > 0.12) return "zh";
+  // Default: English (covers all Latin-script languages — model adapts naturally)
+  return "en";
 }
 
 /**

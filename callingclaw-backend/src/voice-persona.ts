@@ -352,25 +352,39 @@ export function buildMeetingIntro(
   ownerName: string,
   topic: string,
   attendees?: Array<{ displayName?: string; email?: string; self?: boolean }>,
-  lang?: "zh" | "en" | "auto",
+  lang?: string,
 ): string {
-  const useEnglish = lang === "en";
+  // Use detected language for the intro. For zh/ja/ko we have native templates.
+  // For everything else, use English — the model will adapt during conversation.
   const parts: string[] = [];
 
-  if (useEnglish) {
-    parts.push(ownerName
-      ? `Hi everyone, I'm CallingClaw, ${ownerName}'s AI meeting assistant.`
-      : `Hi everyone, I'm CallingClaw, an AI meeting assistant.`);
-    if (topic) parts.push(`Today's topic is "${topic}".`);
-    parts.push("I'll take notes, track action items, and review relevant context from memory.");
-    parts.push("Go ahead and start, I'll speak up when I have something to add.");
-  } else {
+  if (lang === "zh") {
     parts.push(ownerName
       ? `大家好，我是 CallingClaw，${ownerName} 的 AI 会议助手。`
       : "大家好，我是 CallingClaw，AI 会议助手。");
     if (topic) parts.push(`今天的会议主题是「${topic}」。`);
     parts.push("除了记录要点和跟踪待办，我也会结合团队当前的问题和记忆进行相关审核。");
     parts.push("你们可以先继续开会，中间有问题的话我会申请发言。");
+  } else if (lang === "ja") {
+    parts.push(ownerName
+      ? `皆さん、こんにちは。${ownerName}のAIミーティングアシスタント、CallingClawです。`
+      : "皆さん、こんにちは。AIミーティングアシスタントのCallingClawです。");
+    if (topic) parts.push(`本日の議題は「${topic}」です。`);
+    parts.push("議事録の作成とアクションアイテムの追跡を行います。何かあればお声がけください。");
+  } else if (lang === "ko") {
+    parts.push(ownerName
+      ? `안녕하세요, ${ownerName}의 AI 미팅 어시스턴트 CallingClaw입니다.`
+      : "안녕하세요, AI 미팅 어시스턴트 CallingClaw입니다.");
+    if (topic) parts.push(`오늘 주제는 "${topic}"입니다.`);
+    parts.push("회의록 작성과 액션 아이템 추적을 도와드리겠습니다.");
+  } else {
+    // English (default for all Latin-script languages)
+    parts.push(ownerName
+      ? `Hi everyone, I'm CallingClaw, ${ownerName}'s AI meeting assistant.`
+      : `Hi everyone, I'm CallingClaw, an AI meeting assistant.`);
+    if (topic) parts.push(`Today's topic is "${topic}".`);
+    parts.push("I'll take notes, track action items, and review relevant context from memory.");
+    parts.push("Go ahead and start. I'll speak up when I have something to add.");
   }
 
   return parts.join("");
