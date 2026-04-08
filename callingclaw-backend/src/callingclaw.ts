@@ -797,6 +797,7 @@ const transcriptAuditor = new TranscriptAuditor({
   meetingPrepSkill,
   meetJoiner,
   chromeLauncher,
+  agentAdapter,
 });
 
 // ── 2e. ContextRetriever (Event-Driven Knowledge Gap Fill) ──────

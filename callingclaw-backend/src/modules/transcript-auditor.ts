@@ -59,6 +59,7 @@ export class TranscriptAuditor {
   private meetJoiner: MeetJoiner;
   private chromeLauncher: any = null; // ChromeLauncher instance for presenting tab operations
   private voice: VoiceModule | null = null;
+  private agentAdapter: any = null; // AgentAdapter for research_task delegation
 
   private _active = false;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -84,6 +85,7 @@ export class TranscriptAuditor {
     meetingPrepSkill: MeetingPrepSkill;
     meetJoiner: MeetJoiner;
     chromeLauncher?: any;
+    agentAdapter?: any;
   }) {
     this.context = opts.context;
     this.eventBus = opts.eventBus;
@@ -92,6 +94,7 @@ export class TranscriptAuditor {
     this.meetingPrepSkill = opts.meetingPrepSkill;
     this.meetJoiner = opts.meetJoiner;
     this.chromeLauncher = opts.chromeLauncher || null;
+    this.agentAdapter = opts.agentAdapter || null;
   }
 
   get active() {
@@ -365,6 +368,9 @@ export class TranscriptAuditor {
 - **share_screen**: Start sharing (no URL = entire screen). Params: {}
 - **meet_mute**: Toggle mute. Params: {}
 - **meet_camera**: Toggle camera. Params: {}
+
+### Research Tools (background, 10-30s)
+- **research_task**: Delegate web/deep research to the background agent. Use when someone says "search X for Y", "look up Z on Twitter", "find out what people think about Q", "research competitors". NOT for simple file lookups or memory queries. Params: { "query": "what to research" }
 
 ## Known Files & URLs (from meeting prep)
 ${
@@ -706,6 +712,57 @@ Respond with JSON only:
           } else {
             executionResult = "No active meeting page";
           }
+          break;
+        }
+
+        // ── Research delegation (background, async) ──
+        case "research_task": {
+          const query = params.query || "";
+          if (!query) { executionResult = "No research query provided"; break; }
+          if (!this.agentAdapter?.connected) { executionResult = "No agent available for research"; break; }
+
+          instruction = `research: ${query}`;
+          const taskId = `research_${Date.now()}`;
+
+          // 1. Emit started → S2 panel shows task card
+          this.eventBus.emit("research.started", { taskId, query });
+
+          // 2. Tell voice AI (non-blocking)
+          if (this.voice?.connected) {
+            this.voice.injectContext(`[RESEARCH_STARTED] Searching: ${query}`);
+          }
+
+          // 3. Delegate to slow brain (fire-and-forget, don't block the auditor)
+          this.agentAdapter.executeTask(
+            `Search the web for: "${query}". Find relevant posts, articles, or discussions. ` +
+            `Summarize the top 3-5 findings with key opinions and sources. Be concise.`
+          ).then(async (result: string) => {
+            // 4. Save as Working Document
+            const filePath = `${process.env.HOME}/.callingclaw/shared/research-${Date.now()}.md`;
+            await Bun.write(filePath, `# Research: ${query}\n\n${result}`);
+            this.context.addStageDocument(filePath, "new");
+
+            // 5. Inject result → voice AI speaks it
+            if (this.voice?.connected) {
+              this.voice.injectContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`);
+              this.voice.client.sendEvent("response.create", {});
+            }
+
+            // 6. Emit completed → S2 shows ✅
+            this.eventBus.emit("research.completed", {
+              taskId, query, filePath,
+              resultPreview: result.slice(0, 200),
+            });
+            console.log(`[Auditor] Research completed: "${query}" → ${filePath}`);
+          }).catch((err: any) => {
+            if (this.voice?.connected) {
+              this.voice.injectContext(`[RESEARCH] Search for "${query}" failed: ${err.message}`);
+            }
+            this.eventBus.emit("research.completed", { taskId, query, error: err.message });
+            console.error(`[Auditor] Research failed: "${query}"`, err.message);
+          });
+
+          executionResult = `Research task delegated: "${query}"`;
           break;
         }
 

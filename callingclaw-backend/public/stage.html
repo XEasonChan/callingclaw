@@ -613,7 +613,23 @@
       flex-shrink: 0;
     }
 
-    .doc-row .badge.new { background: var(--green-light); color: var(--green); }
+    .doc-row .badge.new {
+      background: var(--accent-light); color: var(--accent);
+      position: relative;
+    }
+    .doc-row .badge.new::after {
+      content: "";
+      position: absolute;
+      top: -2px; right: -2px;
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: doc-pulse 1.5s ease-in-out 4;
+    }
+    @keyframes doc-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.5); }
+    }
     .doc-row .badge.modified { background: var(--yellow-light); color: var(--yellow); }
 
     /* ── Responsive — stack vertically on narrow screens ── */
@@ -750,7 +766,7 @@
     function isSystem2(type) {
       return type === 'auditor.intent' || type === 'auditor.executing' ||
              type === 'auditor.fast_lane' || type === 'auditor.suggest' ||
-             type.startsWith('retriever.') ||
+             type.startsWith('retriever.') || type.startsWith('research.') ||
              type === 'computer.task_started' || type === 'computer.task_done' ||
              type === 'meeting.prep_ready';
     }
@@ -785,6 +801,10 @@
       if (type === 'computer.task_started') return '🖥️ <span class="hl">' + esc(trunc(data.instruction || data.task || '', 50)) + '</span>';
       if (type === 'computer.task_done') return '✅ Done: ' + esc(trunc(data.summary || '', 50));
       if (type === 'meeting.prep_ready') return '📋 Prep materials ready';
+      // Research task events (3-layer model delegation)
+      if (type === 'research.started') return '🔍 <span class="hl">Research:</span> ' + esc(trunc(data.query || '', 50)) + ' <span style="color:var(--yellow)">⏳ running</span>';
+      if (type === 'research.progress') return '🔍 ' + esc(trunc(data.step || '', 60));
+      if (type === 'research.completed') return data.error ? '🔍 ❌ ' + esc(trunc(data.error, 50)) : '🔍 ✅ <span class="hl">Research complete</span> — ' + esc(trunc(data.resultPreview || '', 40));
 
       // Fallback for other events
       if (type === 'meeting.started') return '<span class="hl">joined</span>';
