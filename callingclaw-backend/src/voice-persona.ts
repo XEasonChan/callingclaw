@@ -352,25 +352,26 @@ export function buildMeetingIntro(
   ownerName: string,
   topic: string,
   attendees?: Array<{ displayName?: string; email?: string; self?: boolean }>,
+  lang?: "zh" | "en" | "auto",
 ): string {
-  // Count non-self attendees for context
-  const otherCount = attendees?.filter(a => !a.self).length || 0;
-
+  const useEnglish = lang === "en";
   const parts: string[] = [];
 
-  // Core intro — always present
-  if (ownerName) {
-    parts.push(`大家好，我是 CallingClaw，${ownerName} 的 AI 会议助手。`);
+  if (useEnglish) {
+    parts.push(ownerName
+      ? `Hi everyone, I'm CallingClaw, ${ownerName}'s AI meeting assistant.`
+      : `Hi everyone, I'm CallingClaw, an AI meeting assistant.`);
+    if (topic) parts.push(`Today's topic is "${topic}".`);
+    parts.push("I'll take notes, track action items, and review relevant context from memory.");
+    parts.push("Go ahead and start, I'll speak up when I have something to add.");
   } else {
-    parts.push("大家好，我是 CallingClaw，AI 会议助手。");
+    parts.push(ownerName
+      ? `大家好，我是 CallingClaw，${ownerName} 的 AI 会议助手。`
+      : "大家好，我是 CallingClaw，AI 会议助手。");
+    if (topic) parts.push(`今天的会议主题是「${topic}」。`);
+    parts.push("除了记录要点和跟踪待办，我也会结合团队当前的问题和记忆进行相关审核。");
+    parts.push("你们可以先继续开会，中间有问题的话我会申请发言。");
   }
-
-  // What it will do
-  if (topic) {
-    parts.push(`今天的会议主题是「${topic}」。`);
-  }
-  parts.push("除了记录要点和跟踪待办，我也会结合团队当前的问题和记忆进行相关审核。");
-  parts.push("你们可以先继续开会，中间有问题的话我会申请发言。");
 
   return parts.join("");
 }

@@ -10,8 +10,13 @@
  * Language handling rule — used in ALL prompts that generate user-facing text.
  * Single source of truth. Do NOT copy-paste this rule; import it.
  */
-export const LANGUAGE_RULE =
-  "Match the user's language. Chinese conversation → Chinese response. Technical terms stay in English.";
+import { CONFIG } from "./config";
+
+export const LANGUAGE_RULE = CONFIG.voiceLanguage === "en"
+  ? "Speak in English. Use natural conversational English. Technical terms stay as-is."
+  : CONFIG.voiceLanguage === "zh"
+    ? "Match the user's language. Chinese conversation → Chinese response. Technical terms stay in English."
+    : "Match the user's language. If they speak Chinese, respond in Chinese. If English, respond in English. Technical terms stay as-is.";
 
 /**
  * Detect the likely conversation language from recent transcript text.

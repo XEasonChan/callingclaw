@@ -1797,7 +1797,7 @@ export function startConfigServer(services: Services) {
             setTimeout(async () => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
+              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, CONFIG.voiceLanguage);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
 
