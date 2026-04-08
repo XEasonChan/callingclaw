@@ -3,6 +3,7 @@
 // + EventBus WebSocket + TaskStore + Workspace Context
 
 import { CONFIG, USER_CONFIG_PATH } from "./config";
+import { detectLanguage } from "./prompt-constants";
 import { readFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { homedir } from "os";
@@ -1797,7 +1798,12 @@ export function startConfigServer(services: Services) {
             setTimeout(async () => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, CONFIG.voiceLanguage);
+              // Auto-detect language from meeting title (Chinese title → Chinese intro, English → English)
+              const meetingLang = CONFIG.voiceLanguage === "auto"
+                ? detectLanguage(meetTopic || "")
+                : CONFIG.voiceLanguage;
+              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, meetingLang);
+              console.log(`[Meeting] Language: ${meetingLang} (from ${CONFIG.voiceLanguage === "auto" ? "topic" : "config"})`);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
 

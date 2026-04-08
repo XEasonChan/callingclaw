@@ -5,6 +5,7 @@
 // /api/meeting/join-browser, /api/meeting/join-browser/abort, /api/meeting/validate
 
 import { CONFIG } from "../config";
+import { detectLanguage } from "../prompt-constants";
 import { validateMeetingUrl } from "../meet_joiner";
 import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
@@ -366,7 +367,10 @@ export function meetingRoutes(services: Services): RouteHandler {
             setTimeout(() => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, CONFIG.voiceLanguage);
+              const meetingLang = CONFIG.voiceLanguage === "auto"
+                ? detectLanguage(meetTopic || "")
+                : CONFIG.voiceLanguage;
+              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, meetingLang);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent (Small Talk mode)");
 
