@@ -354,12 +354,12 @@ export class TranscriptAuditor {
 ## Your Tools (choose the RIGHT one)
 
 ### File & URL Tools
-- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone says "打开那个XX文件" / "show me the XX" / "open the XX page" but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
+- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone asks to open/show/find a file but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
 - **open_url**: Open an exact URL. Use when a full URL is mentioned. Params: { "url": "https://..." }
 - **open_file**: Open a file by exact path. Only use if you know the full path. Params: { "path": "/abs/path", "app": "browser"|"vscode" }
 
 ### Screen Sharing Tools
-- **share_url**: Open a URL and present it in the meeting (投屏). Params: { "url": "https://..." }
+- **share_url**: Open a URL and present it in the meeting (screen share). Params: { "url": "https://..." }
 - **share_file**: Search for a file and present it in the meeting. Params: { "query": "keywords" }
 - **stop_sharing**: Stop presenting. Params: {}
 
@@ -429,11 +429,11 @@ ${(() => {
 ${transcriptText}
 
 ## When to Act
-1. Someone says "打开/open/show/展示/投屏/看看/找到" + a thing → ACT (search_and_open, share_file, open_url)
+1. Someone asks to open, show, display, share screen, or find something → ACT (search_and_open, share_file, open_url)
 2. Someone says "点击/click/登录/login/下一步/next" → ACT (click on presenting tab)
 3. Someone says "往下/scroll down/翻页" → ACT (scroll)
 4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
-5. Discussion/opinion ("我觉得.../this should be.../下次需要...") → DO NOT ACT, confidence=0
+5. Discussion/opinion (expressing views, suggestions for future) → DO NOT ACT, confidence=0
 6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
 7. **ALREADY HANDLED**: If you see [Tool Call] or [Tool Result] in the transcript for the same action → DO NOT ACT, confidence=0. The voice AI already executed it.
 

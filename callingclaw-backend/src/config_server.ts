@@ -3,7 +3,6 @@
 // + EventBus WebSocket + TaskStore + Workspace Context
 
 import { CONFIG, USER_CONFIG_PATH } from "./config";
-import { detectLanguage } from "./prompt-constants";
 import { readFileSync, mkdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { homedir } from "os";
@@ -1798,10 +1797,7 @@ export function startConfigServer(services: Services) {
             setTimeout(async () => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              // Auto-detect language from meeting title
-              const meetingLang = detectLanguage(meetTopic || "");
-              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees, meetingLang);
-              console.log(`[Meeting] Language: ${meetingLang} (from title)`);
+              const intro = buildMeetingIntro(ownerName, topicSnippet);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
 
@@ -1810,7 +1806,7 @@ export function startConfigServer(services: Services) {
               if (brief?.speakingPlan && brief.scenes?.length > 0) {
                 // Primer message (EXP-7C finding: eliminates hallucination in first turns)
                 services.realtime.injectContext(
-                  `[PRESENTATION] 你即将进行一个 ${brief.speakingPlan.length} 部分的汇报，主题是"${brief.topic}"。每次收到 [PRESENT NOW] 内容块时，只讲那个部分的内容。引用具体数字和数据，不要编造。用自然的语气，像资深 PM 给老板做汇报。`
+                  `[PRESENTATION] You are delivering a ${brief.speakingPlan.length}-part briefing on "${brief.topic}". When you receive [PRESENT NOW] content blocks, present only that section. Quote specific numbers and data, never fabricate. Sound like a senior PM giving a concise briefing.`
                 );
 
                 // Inject playbook context so voice knows the presentation plan

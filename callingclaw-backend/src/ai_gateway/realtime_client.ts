@@ -116,7 +116,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             turn_detection: { type: "semantic_vad" },
-            transcription: { model: "gpt-4o-transcribe", language: CONFIG.transcriptionLanguage.split(",")[0] || "zh" },
+            transcription: { model: "gpt-4o-transcribe", ...(CONFIG.transcriptionLanguage !== "auto" ? { language: CONFIG.transcriptionLanguage.split(",")[0] } : {}) },
           },
           output: {
             format: { type: "audio/pcm", rate: 24000 },
@@ -186,7 +186,7 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             turn_detection: { type: "semantic_vad" },
-            transcription: { model: "gpt-4o-transcribe", language: CONFIG.transcriptionLanguage.split(",")[0] || "zh" },
+            transcription: { model: "gpt-4o-transcribe", ...(CONFIG.transcriptionLanguage !== "auto" ? { language: CONFIG.transcriptionLanguage.split(",")[0] } : {}) },
           },
           output: {
             format: { type: "audio/pcm", rate: 24000 },

@@ -348,46 +348,15 @@ export function getPostMeetingSummary(prepSkill: MeetingPrepSkill): {
  * The message is sent as text to the Voice AI, which speaks it aloud.
  * Keep it concise — ~15 seconds of speech max.
  */
-export function buildMeetingIntro(
-  ownerName: string,
-  topic: string,
-  attendees?: Array<{ displayName?: string; email?: string; self?: boolean }>,
-  lang?: string,
-): string {
-  // Use detected language for the intro. For zh/ja/ko we have native templates.
-  // For everything else, use English — the model will adapt during conversation.
-  const parts: string[] = [];
-
-  if (lang === "zh") {
-    parts.push(ownerName
-      ? `大家好，我是 CallingClaw，${ownerName} 的 AI 会议助手。`
-      : "大家好，我是 CallingClaw，AI 会议助手。");
-    if (topic) parts.push(`今天的会议主题是「${topic}」。`);
-    parts.push("除了记录要点和跟踪待办，我也会结合团队当前的问题和记忆进行相关审核。");
-    parts.push("你们可以先继续开会，中间有问题的话我会申请发言。");
-  } else if (lang === "ja") {
-    parts.push(ownerName
-      ? `皆さん、こんにちは。${ownerName}のAIミーティングアシスタント、CallingClawです。`
-      : "皆さん、こんにちは。AIミーティングアシスタントのCallingClawです。");
-    if (topic) parts.push(`本日の議題は「${topic}」です。`);
-    parts.push("議事録の作成とアクションアイテムの追跡を行います。何かあればお声がけください。");
-  } else if (lang === "ko") {
-    parts.push(ownerName
-      ? `안녕하세요, ${ownerName}의 AI 미팅 어시스턴트 CallingClaw입니다.`
-      : "안녕하세요, AI 미팅 어시스턴트 CallingClaw입니다.");
-    if (topic) parts.push(`오늘 주제는 "${topic}"입니다.`);
-    parts.push("회의록 작성과 액션 아이템 추적을 도와드리겠습니다.");
-  } else {
-    // English (default for all Latin-script languages)
-    parts.push(ownerName
-      ? `Hi everyone, I'm CallingClaw, ${ownerName}'s AI meeting assistant.`
-      : `Hi everyone, I'm CallingClaw, an AI meeting assistant.`);
-    if (topic) parts.push(`Today's topic is "${topic}".`);
-    parts.push("I'll take notes, track action items, and review relevant context from memory.");
-    parts.push("Go ahead and start. I'll speak up when I have something to add.");
-  }
-
-  return parts.join("");
+export function buildMeetingIntro(ownerName: string, topic: string): string {
+  // No hardcoded language templates. The voice model speaks whatever language
+  // the meeting title implies (57+ languages on OpenAI, 97+ on Gemini).
+  return [
+    `Introduce yourself briefly as CallingClaw${ownerName ? `, ${ownerName}'s AI meeting assistant` : ", an AI meeting assistant"}.`,
+    topic ? `Today's topic: "${topic}".` : "",
+    `You take notes, track action items, and review context from memory.`,
+    `Keep it to 2-3 natural sentences. Match the language of the meeting title.`,
+  ].filter(Boolean).join(" ");
 }
 
 // ── Standalone Presentation Context (test mode, no meeting brief) ────
@@ -451,11 +420,9 @@ export function buildPresentationReadyContext(scenes: Array<{ url: string; talki
     `[PRESENTATION READY] You have ${scenes.length} prepared slides for this meeting.\n` +
     `First slide: ${scenes[0]?.url || "unknown"}\n` +
     `DO NOT present yet — start with small talk. Greet participants, confirm the agenda, ` +
-    `ask if everyone is ready. When they express intent to start (e.g. "let's start" / ` +
-    `"开始吧" / "show me" / "dive in" / "开始演示" / "请开始"), call share_screen with ` +
-    `the first scene URL.\n` +
-    `If nobody has real conversation for ~30 seconds, proactively ask: ` +
-    `"I have a presentation ready — shall I start sharing my screen?"`
+    `ask if everyone is ready. When they express intent to start (e.g. "let's start", ` +
+    `"show me", "go ahead", "dive in"), call share_screen with the first scene URL.\n` +
+    `If nobody has real conversation for ~30 seconds, proactively offer to start presenting.`
   );
 }
 
@@ -466,7 +433,6 @@ export function buildPresentationReadyContext(scenes: Array<{ url: string; talki
 export function buildIdleNudgeContext(): string {
   return (
     `[IDLE NUDGE] The meeting has been quiet for a while. Proactively offer to start ` +
-    `presenting. Say something natural like "I have some materials prepared — would you ` +
-    `like me to share my screen and walk you through them?" or "要不我开始演示？我准备了一些材料。"`
+    `presenting. Say something natural like "I have some materials prepared, shall I share my screen?"`
   );
 }

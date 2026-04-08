@@ -55,14 +55,10 @@ export const CONFIG = {
   // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
   voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "openai15" | "grok" | "gemini",
 
-  // Transcription language hints (ISO 639-1 codes, comma-separated)
-  // "auto" = detect from transcript; "zh,en" = Chinese + English bilingual
-  // Used by OpenAI Realtime transcription + SenseVoice
-  transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "zh,en") as string,
-
-  // Voice output language — always auto-detect from meeting title + adapt to user speech.
-  // No manual override needed — the model handles any language natively.
-  voiceLanguage: "auto" as const,
+  // Transcription language hint (ISO 639-1 code or "auto")
+  // "auto" = let gpt-4o-transcribe detect language automatically (default, supports 57+ languages)
+  // Set explicitly (e.g., "zh") only if auto-detection struggles in your environment
+  transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "auto") as string,
 
   // OpenAI (Realtime GA — gpt-realtime-1.5, upgraded from legacy preview)
   // Uses GA API: no beta header, new event names, session.type required.
