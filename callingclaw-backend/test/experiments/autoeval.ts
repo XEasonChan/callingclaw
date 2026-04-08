@@ -19,7 +19,7 @@ import { resolve } from "path";
 import { existsSync } from "fs";
 
 const BASE = "http://localhost:4000";
-const MEET_URL = process.argv[2] || "https://meet.google.com/ijv-arfc-fnd";
+const MEET_URL = process.argv.find(a => a.startsWith("https://")) || "https://meet.google.com/ijv-arfc-fnd";
 const RESULTS_FILE = resolve(import.meta.dir, "autoeval-results.tsv");
 const LOG_DIR = resolve(import.meta.dir, "autoeval-logs");
 
@@ -198,14 +198,224 @@ const VOICE_TESTS: VoiceTest[] = [
     timeoutMs: 25000,
   },
 
-  // ── Scenario D: 退出 ──
+  // ── Scenario G: Launch Page Decision Review (方案 A — 上线前最后决策) ──
+  {
+    id: "G-01",
+    scenario: "launch_review",
+    voice: "帮我打开 CallingClaw 的 landing page，我们来做上线前的最后 review，有哪些需要改的地方",
+    expectTool: "share_screen",
+    expectLog: /share_screen|ShareScreen|callingclaw/i,
+    expectVoice: /landing|page|hero|CTA|上线|review|改/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+  {
+    id: "G-02",
+    scenario: "launch_review",
+    voice: "Hero 部分要更强调 memory 能力，不是只说加入会议，要让用户知道 agent 是带着记忆来的",
+    expectTool: "interact",
+    expectLog: /interact|scroll|click/i,
+    // Should acknowledge the decision and suggest how to change it
+    expectVoice: /memory|记忆|hero|改|更新|调整/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+  {
+    id: "G-03",
+    scenario: "launch_review",
+    voice: "好，这个改动你记下来，会后帮我改掉。接下来 CTA 的按钮文案用 Join the waitlist 还是 Request access 好？你觉得呢",
+    expectTool: "recall_context",
+    expectLog: /recall_context|prep|context|research/i,
+    // Should give an opinion with reasoning, not just ask back
+    expectVoice: /waitlist|access|建议|推荐|更好|转化|用户/i,
+    rejectVoice: /你觉得呢|你来决定|都可以/,
+    timeoutMs: 25000,
+  },
+
+  // ── Scenario H: 深度文件检索 + 跨文档对比 ──
+  {
+    id: "H-01",
+    scenario: "deep_retrieval",
+    voice: "帮我找一下我们之前做的 CallingClaw 和竞品的对比分析，应该在某个文档里有价格对比的数据",
+    expectTool: "recall_context",
+    expectLog: /recall_context|search|prep|context|Pika|竞品/i,
+    // Must return specific data (pricing, features), not generic "I'll look for it"
+    expectVoice: /\$|价格|对比|Pika|竞品|差异|月|买断|cloud|local/i,
+    rejectVoice: /找不到|没有找到|你能告诉我/,
+    timeoutMs: 30000,
+  },
+  {
+    id: "H-02",
+    scenario: "deep_retrieval",
+    voice: "把那个分镜脚本打开，帮我找到第三幕的内容，就是展示 CallingClaw 核心功能的部分",
+    expectTool: "open_file",
+    expectLog: /open_file|search_files|Loaded|storyboard|分镜/i,
+    expectVoice: /第三幕|功能|展示|核心|CallingClaw|分镜/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+  {
+    id: "H-03",
+    scenario: "deep_retrieval",
+    voice: "现在帮我切到 PRD 文档，对比一下 PRD 里面的功能需求和我们官网上展示的 feature 有没有差距",
+    expectTool: "share_screen",
+    expectLog: /share_screen|open_file|prd|PRD/i,
+    // Should attempt cross-document comparison
+    expectVoice: /PRD|需求|feature|功能|差距|对比|缺少|覆盖/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+
+  // ── Scenario I: 任务创建 + 执行追踪 (Agency 能力) ──
+  {
+    id: "I-01",
+    scenario: "task_execution",
+    voice: "这次 review 有三个改动点：第一，Hero 文案改成强调 memory；第二，CTA 改成 Join the waitlist；第三，修复底部的 layout bug。你帮我记下来，会后执行",
+    expectTool: "recall_context",
+    expectLog: /recall_context|task|action|记录|待办/i,
+    // Should confirm all 3 items, not just acknowledge generically
+    expectVoice: /hero|memory|CTA|waitlist|layout|bug|三|3|记/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+  {
+    id: "I-02",
+    scenario: "task_execution",
+    voice: "另外帮我搜一下 Twitter 上最近有没有人在讨论 AI meeting assistant 这个方向的产品",
+    expectTool: "recall_context",
+    expectLog: /research|search|twitter|recall_context/i,
+    // Should trigger a research task or acknowledge it will search
+    expectVoice: /搜索|查找|research|twitter|讨论|产品|方向/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+
+  // ── Scenario J: 页面交互 + 实时反馈 (Live Review 能力) ──
+  {
+    id: "J-01",
+    scenario: "live_interaction",
+    voice: "滚动到页面底部，找到那个 layout 有问题的部分，给我描述一下具体什么问题",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    // Should describe what it actually sees, not generic "scrolled down"
+    expectVoice: /底部|layout|问题|看到|显示|部分|section/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+  {
+    id: "J-02",
+    scenario: "live_interaction",
+    voice: "点击那个 Get CallingClaw 的按钮，看看跳转到哪里，链接是不是正确的",
+    expectTool: "interact",
+    expectLog: /click|interact/i,
+    // Should report what happened after clicking
+    expectVoice: /点击|跳转|链接|页面|下载|CallingClaw|button/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+  {
+    id: "J-03",
+    scenario: "live_interaction",
+    voice: "切回首页，然后帮我截一张图，我需要发给设计师看一下当前的效果",
+    expectTool: "interact",
+    expectLog: /interact|navigate|screenshot|截图/i,
+    expectVoice: /首页|截图|截|screenshot|图/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // ENGLISH VERSIONS — same scenarios, English voice commands
+  // ══════════════════════════════════════════════════════════════
+
+  // ── Scenario A-EN: Product Presentation (English) ──
+  {
+    id: "A-EN-01",
+    scenario: "product_presentation_en",
+    voice: "Share screen with the CallingClaw website and introduce what CallingClaw is and its core positioning",
+    expectTool: "share_screen",
+    expectLog: /share_screen|ShareScreen/i,
+    expectVoice: /CallingClaw|meeting|AI|voice|agent|product/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+  {
+    id: "A-EN-02",
+    scenario: "product_presentation_en",
+    voice: "Scroll down and walk me through each feature section on the homepage",
+    expectTool: "interact",
+    expectLog: /scroll|interact/i,
+    expectVoice: /feature|section|module|problem|insight|bandwidth|voice|vision/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
+  // ── Scenario G-EN: Launch Review (English) ──
+  {
+    id: "G-EN-01",
+    scenario: "launch_review_en",
+    voice: "Open our landing page, let's do a final review before publishing. What needs to be changed?",
+    expectTool: "share_screen",
+    expectLog: /share_screen|ShareScreen|callingclaw/i,
+    expectVoice: /page|review|change|hero|CTA|launch|publish/i,
+    rejectVoice: null,
+    timeoutMs: 30000,
+  },
+  {
+    id: "G-EN-02",
+    scenario: "launch_review_en",
+    voice: "The hero section should emphasize the memory capability more. The agent comes to the meeting prepared, not blank",
+    expectTool: "interact",
+    expectLog: /interact|scroll|click/i,
+    expectVoice: /memory|hero|prepared|agent|update|change/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
+  // ── Scenario H-EN: Deep Retrieval (English) ──
+  {
+    id: "H-EN-01",
+    scenario: "deep_retrieval_en",
+    voice: "Find the competitive analysis document where we compared CallingClaw pricing against Pika and other competitors",
+    expectTool: "recall_context",
+    expectLog: /recall_context|search|prep|context|Pika/i,
+    expectVoice: /pricing|\$|Pika|competitor|comparison|local|cloud/i,
+    rejectVoice: /can't find|not found|tell me/i,
+    timeoutMs: 30000,
+  },
+
+  // ── Scenario I-EN: Task Creation (English) ──
+  {
+    id: "I-EN-01",
+    scenario: "task_execution_en",
+    voice: "Note down three action items from this review: one, update the hero copy to emphasize memory; two, change the CTA to join the waitlist; three, fix the footer layout bug. Execute these after the meeting",
+    expectTool: "recall_context",
+    expectLog: /recall_context|task|action|记录/i,
+    expectVoice: /hero|memory|CTA|waitlist|footer|layout|bug|three|3|noted|action/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
+  // ── Scenario J-EN: Live Interaction (English) ──
+  {
+    id: "J-EN-01",
+    scenario: "live_interaction_en",
+    voice: "Click the Get CallingClaw button and tell me where it goes. Is the download link working?",
+    expectTool: "interact",
+    expectLog: /click|interact/i,
+    expectVoice: /click|button|link|download|page|CallingClaw/i,
+    rejectVoice: null,
+    timeoutMs: 25000,
+  },
+
+  // ── Scenario D: 退出 / Exit ──
   {
     id: "D-01",
     scenario: "exit",
     voice: "好的今天就到这里，退出会议吧",
     expectTool: "leave_meeting",
     expectLog: /leave|Left/i,
-    expectVoice: /再见|谢谢|总结|下次/,
+    expectVoice: /再见|谢谢|总结|下次|笔记|保存|bye|summary|saved/,
     rejectVoice: null,
     timeoutMs: 15000,
   },
@@ -543,10 +753,36 @@ async function runVoiceTest(test: VoiceTest, transcriptBefore: number): Promise<
 // MAIN
 // ══════════════════════════════════════════════════════════════
 
+// ── Scenario filtering ──
+// --quick: core scenarios only (A, C, E, D) ~8 tests
+// --advanced: new scenarios only (G, H, I, J) ~10 tests
+// --en: English scenarios only (A-EN, G-EN, etc.) ~7 tests
+// --scenario=X: specific scenario (e.g. --scenario=launch_review)
+// default: ALL tests
+function filterTests(): VoiceTest[] {
+  const args = process.argv.slice(2);
+  if (args.includes("--quick")) {
+    return VOICE_TESTS.filter(t => ["product_presentation", "prd_review", "multi_tab", "exit"].includes(t.scenario));
+  }
+  if (args.includes("--advanced")) {
+    return VOICE_TESTS.filter(t => ["launch_review", "deep_retrieval", "task_execution", "live_interaction"].includes(t.scenario));
+  }
+  if (args.includes("--en")) {
+    return VOICE_TESTS.filter(t => t.scenario.endsWith("_en") || t.scenario === "exit");
+  }
+  const scenarioArg = args.find(a => a.startsWith("--scenario="));
+  if (scenarioArg) {
+    const target = scenarioArg.split("=")[1]!;
+    return VOICE_TESTS.filter(t => t.scenario.includes(target));
+  }
+  return VOICE_TESTS;
+}
+
 async function main() {
   // --results flag: just print history and exit
   if (process.argv.includes("--results")) { printHistory(); return; }
 
+  const testsToRun = filterTests();
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║  CallingClaw AutoEval — Voice-Driven E2E Test              ║
@@ -555,7 +791,7 @@ async function main() {
 
 Experiment: ${EXPERIMENT}
 Meet URL:   ${MEET_URL}
-Tests:      ${VOICE_TESTS.length}
+Tests:      ${testsToRun.length} / ${VOICE_TESTS.length} (${testsToRun.length === VOICE_TESTS.length ? "all" : process.argv.slice(2).join(" ")})
 `);
 
   // Pre-check
@@ -584,7 +820,7 @@ Tests:      ${VOICE_TESTS.length}
   const results: TestResult[] = [];
   const allStart = Date.now();
 
-  for (const test of VOICE_TESTS) {
+  for (const test of testsToRun) {
     const transcriptTs = Date.now();
     console.log(`[${now()}] 🎤 ${test.id}: "${test.voice}"`);
 
@@ -625,9 +861,9 @@ Tests:      ${VOICE_TESTS.length}
   console.log(`═══════════════════════════════════════════\n`);
 
   // Per-scenario breakdown
-  const scenarios = [...new Set(VOICE_TESTS.map(t => t.scenario))];
+  const scenarios = [...new Set(testsToRun.map(t => t.scenario))];
   for (const sc of scenarios) {
-    const scResults = results.filter((r, i) => VOICE_TESTS[i]?.scenario === sc);
+    const scResults = results.filter((r, i) => testsToRun[i]?.scenario === sc);
     const scScore = scoreResults(scResults);
     console.log(`  ${sc}: ${scScore.total}%`);
     for (const r of scResults) {
