@@ -709,28 +709,43 @@ export class ChromeLauncher {
         var switchBtn = btns.find(function(b) { return ['Switch here', '切换到这里'].indexOf(b.textContent.trim()) !== -1; });
         if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; return JSON.stringify(R); }
 
-        // 4. Camera OFF
+        // 4. Camera OFF (Meet + Zoom selectors)
         ${muteCamera ? `
-        var camOff = document.querySelector('[aria-label="Turn off camera"], [aria-label="关闭摄像头"], [aria-label*="Stop Video"], [aria-label*="stop video"]');
+        var camOff = document.querySelector(
+          '[aria-label="Turn off camera"], [aria-label="关闭摄像头"],' +
+          '[aria-label*="Stop Video"], [aria-label*="stop video"],' +
+          '[aria-label*="Stop Camera"], [aria-label*="Mute Camera"],' +
+          'button.preview-video-control__btn--on'  // Zoom web client video toggle
+        );
         if (camOff) { camOff.click(); R.config.push('cam:off'); }
         else R.config.push('cam:already_off');
         ` : `R.config.push('cam:skip');`}
 
         // 5. Mic
         ${muteMic ? `
-        var micOff = document.querySelector('[aria-label="Turn off microphone"], [aria-label="关闭麦克风"]');
+        var micOff = document.querySelector(
+          '[aria-label="Turn off microphone"], [aria-label="关闭麦克风"],' +
+          '[aria-label*="Mute"], [aria-label*="mute my audio"]'
+        );
         if (micOff) { micOff.click(); R.config.push('mic:muted'); }
         ` : `
-        var micOn = document.querySelector('[aria-label="Turn on microphone"], [aria-label="打开麦克风"]');
+        var micOn = document.querySelector(
+          '[aria-label="Turn on microphone"], [aria-label="打开麦克风"],' +
+          '[aria-label*="Unmute"], [aria-label*="unmute"]'
+        );
         if (micOn) { micOn.click(); R.config.push('mic:on'); }
         else R.config.push('mic:already_on');
         `}
 
-        // 6. Set display name
-        var nameInput = document.querySelector('input[aria-label="Your name"], input[placeholder*="name"]');
-        if (nameInput && (!nameInput.value || nameInput.value === 'Guest')) {
+        // 6. Set display name (Meet + Zoom)
+        var nameInput = document.querySelector(
+          'input[aria-label="Your name"], input[placeholder*="name"],' +
+          'input[placeholder*="Name"], input#inputname,' +
+          'input[aria-label*="name" i]'
+        );
+        if (nameInput && (!nameInput.value || nameInput.value === 'Guest' || nameInput.value === '')) {
           var s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-          if (s && s.set) { s.set.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); R.config.push('name:set'); }
+          if (s && s.set) { s.set.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); nameInput.dispatchEvent(new Event('change', {bubbles:true})); R.config.push('name:set'); }
         }
 
         // 7. Check if join button exists
@@ -822,13 +837,15 @@ export class ChromeLauncher {
 
       for (let attempt = 0; attempt < 6; attempt++) {
         const state = await page.evaluate(`(() => {
-          // Language-agnostic: check for call_end icon (Material icon), any leave button, or control bar
-          var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"]');
+          // Language-agnostic: check for leave button or control bar (Meet + Zoom)
+          var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"],[aria-label*="End Meeting"],[aria-label*="End"]');
           var callEnd = document.querySelector('[aria-label*="call_end"],[aria-label*="Call controls"],[aria-label*="通话控件"]');
-          // Also check: does the page have a bottom control bar with mic/camera buttons?
-          var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"]');
-          var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"]');
-          var hasControls = micBtn && camBtn;
+          // Zoom web client: footer toolbar with meeting controls
+          var zoomToolbar = document.querySelector('.meeting-info-container,.footer__inner,.meeting-client');
+          // Generic: does the page have mic+camera buttons?
+          var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"],[aria-label*="Mute"],[aria-label*="mute"]');
+          var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"],[aria-label*="Start Video"],[aria-label*="Stop Video"]');
+          var hasControls = (micBtn && camBtn) || zoomToolbar;
           if (leaveBtn || callEnd || hasControls) return 'in_meeting';
           var t = document.body.innerText;
           if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
