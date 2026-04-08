@@ -634,7 +634,11 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    * which would otherwise fire speech_started and cancel the AI response.
    */
   private _echoGateDropped = 0;
+  private _sendAudioLogCount = 0;
   sendAudio(base64Pcm: string) {
+    if (++this._sendAudioLogCount % 200 === 1) {
+      console.log(`[Voice] sendAudio called #${this._sendAudioLogCount} (state=${this._audioState}, connected=${this.client.connected})`);
+    }
     if (!this.client.connected) return;
 
     // Echo gate: suppress audio input while AI is producing audio output.
