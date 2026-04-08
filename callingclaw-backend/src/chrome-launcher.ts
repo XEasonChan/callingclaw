@@ -1137,7 +1137,7 @@ export class ChromeLauncher {
   private async _checkMeetingEndedLib(): Promise<boolean> {
     if (!this._page) return false;
     const result = await this._page.evaluate(`(() => {
-      if (!location.hostname.includes('meet.google.com')) return 'ended';
+      if (!location.hostname.includes('meet.google.com') && !location.hostname.includes('zoom.us')) return 'ended';
       var leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
       var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var text = document.body.innerText || '';
@@ -1153,6 +1153,15 @@ export class ChromeLauncher {
       var hasEndedText = endedSignals.some(function(s) { return text.includes(s); });
       if (hasEndedText) return 'ended';
       var videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
+      // Zoom: check for meeting-end indicators
+      if (location.hostname.includes('zoom.us')) {
+        var zoomText = document.body.innerText || '';
+        if (zoomText.includes('This meeting has been ended') || zoomText.includes('The host has ended this meeting')) return 'ended';
+        // Zoom is active if the meeting client container exists
+        var zoomActive = document.querySelector('.meeting-client, .meeting-app, [class*="meeting"]');
+        if (zoomActive) return 'active';
+        return 'active'; // Default to active for Zoom (avoid false positives)
+      }
       if (!leaveBtn && !callControls && !videoGrid) return 'ended';
       return 'active';
     })()`);

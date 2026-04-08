@@ -173,12 +173,13 @@ export class VoiceModule {
 
     // ── Audio State + Interruption: User starts speaking ──
     this.client.on("input_audio_buffer.speech_started", () => {
-      // Echo debounce: if AI was speaking and speech_started fires very soon after
-      // last audio output, this is likely echo (AI's own voice looping back via Meet).
-      // In presentation mode, use a longer debounce to avoid self-interruption.
+      // Echo debounce: if AI was recently speaking, speech_started is likely echo
+      // (AI's own voice looping back via Meet/Zoom SFU).
+      // Guard both DURING speaking AND for a window AFTER speaking ends,
+      // because Zoom's SFU adds 500-2000ms echo delay.
       const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
-      const echoThresholdMs = this._presentationMode ? 2000 : 800;
-      if (this._audioState === "speaking" && msSinceLastOutput < echoThresholdMs) {
+      const echoThresholdMs = this._presentationMode ? 3000 : 1500;
+      if (msSinceLastOutput < echoThresholdMs) {
         console.log(`[Voice] Echo debounce: speech_started ${msSinceLastOutput}ms after last audio output (threshold: ${echoThresholdMs}ms) — ignoring`);
         return; // Skip this interruption — likely echo
       }
