@@ -471,12 +471,23 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                     target.focus({ preventScroll: true });
                     ct.dispatchEvent(new PointerEvent('pointerup', po));
                     ct.dispatchEvent(new MouseEvent('mouseup', mo));
+                    // Prevent navigation-away on external links (would kill the presenting tab)
+                    var href = target.tagName === 'A' ? target.getAttribute('href') : null;
+                    var isExternal = href && (href.startsWith('http') && !href.includes(location.hostname));
+                    var isDownload = href && (href.includes('.dmg') || href.includes('.zip') || href.includes('.exe') || target.hasAttribute('download'));
+                    if (isExternal || isDownload) {
+                      return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60), link: href, external: true });
+                    }
                     ct.click();
                     return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60) });
                   })()`);
                   try {
                     const r = JSON.parse(String(clickResult));
-                    actionResult = r.ok ? `Clicked "${r.text}".` : `"${target}" not found on page.`;
+                    if (r.ok && r.external) {
+                      actionResult = `"${r.text}" links to ${r.link}. Did NOT navigate (would leave the current page). The link is: ${r.link}`;
+                    } else {
+                      actionResult = r.ok ? `Clicked "${r.text}".` : `"${target}" not found on page.`;
+                    }
                   } catch {
                     actionResult = `Clicked "${target}".`;
                   }

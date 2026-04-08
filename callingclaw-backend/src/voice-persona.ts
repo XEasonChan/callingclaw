@@ -351,11 +351,12 @@ export function getPostMeetingSummary(prepSkill: MeetingPrepSkill): {
 export function buildMeetingIntro(ownerName: string, topic: string): string {
   // No hardcoded language templates. The voice model speaks whatever language
   // the meeting title implies (57+ languages on OpenAI, 97+ on Gemini).
+  // If participants speak a different language, switch to match them.
   return [
     `Introduce yourself briefly as CallingClaw${ownerName ? `, ${ownerName}'s AI meeting assistant` : ", an AI meeting assistant"}.`,
     topic ? `Today's topic: "${topic}".` : "",
     `You take notes, track action items, and review context from memory.`,
-    `Keep it to 2-3 natural sentences. Match the language of the meeting title.`,
+    `Keep it to 2-3 natural sentences. Start in the language of the meeting title, but always switch to match whatever language the participants actually speak.`,
   ].filter(Boolean).join(" ");
 }
 

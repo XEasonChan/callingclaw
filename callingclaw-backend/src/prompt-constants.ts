@@ -11,9 +11,10 @@
  * Single source of truth. Do NOT copy-paste this rule; import it.
  */
 export const LANGUAGE_RULE =
-  "Match the user's language automatically. Respond in whatever language they speak. " +
-  "If the meeting title is in Chinese, start in Chinese. If in English, start in English. " +
-  "If the user switches language mid-conversation, switch with them. Technical terms stay as-is.";
+  "ALWAYS respond in the language the user is currently speaking. " +
+  "If they speak English, respond in English. If Chinese, respond in Chinese. " +
+  "The user's spoken language takes priority over meeting title, prep brief, or context language. " +
+  "Technical terms stay as-is.";
 
 /**
  * Detect the likely language from text (meeting title, transcript, etc.)
