@@ -268,7 +268,10 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       Promise.race([
         new Response(proc.stdout).text(),
         new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error(`claude -p timeout (${timeout}ms)`)), timeout)
+          setTimeout(() => {
+            try { proc.kill(); } catch {} // #16: Kill orphan subprocess on timeout
+            reject(new Error(`claude -p timeout (${timeout}ms)`));
+          }, timeout)
         ),
       ]),
       new Response(proc.stderr).text(),

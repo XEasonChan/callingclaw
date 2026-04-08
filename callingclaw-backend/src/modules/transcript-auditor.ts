@@ -68,6 +68,8 @@ export class TranscriptAuditor {
   private _recentActions: string[] = []; // dedup ring buffer (last 5)
   private _lastExecutionTs = 0;
   private _fastLaneProcessing = false; // prevent concurrent fast lane executions
+  private _researchGeneration = 0; // incremented on deactivate() to cancel stale research callbacks
+  private _activeResearch = new Map<string, number>(); // in-flight research: normalized query → taskId timestamp
 
   // ── Tuning knobs ──
   private DEBOUNCE_MS = 1200;         // Wait 1.2s after last user utterance (was 2.5s, reduced for meeting responsiveness)
@@ -172,8 +174,10 @@ export class TranscriptAuditor {
     // Unsubscribe listener to prevent leaking handlers across meetings
     this.context.off("transcript", this._onTranscript);
     this.automationRouter.fileIndex.clear();
+    this._researchGeneration++; // Cancel any in-flight research callbacks from this meeting
+    this._activeResearch.clear();
     this.voice = null;
-    console.log("[TranscriptAuditor] Deactivated");
+    console.log("[TranscriptAuditor] Deactivated (research gen: ${this._researchGeneration})");
     this.eventBus.emit("auditor.deactivated", {});
   }
 
@@ -370,7 +374,16 @@ export class TranscriptAuditor {
 - **meet_camera**: Toggle camera. Params: {}
 
 ### Research Tools (background, 10-30s)
-- **research_task**: Delegate web/deep research to the background agent. Use when someone says "search X for Y", "look up Z on Twitter", "find out what people think about Q", "research competitors". NOT for simple file lookups or memory queries. Params: { "query": "what to research" }
+- **research_task**: Delegate web/deep research to the background agent. Params: { "query": "what to research" }
+  USE research_task for:
+    - "search X/Twitter for Y" (external web search)
+    - "what are people saying about Z" (public opinion)
+    - "research competitors of W" (market research)
+    - "find recent news about Q" (current events)
+  DO NOT use research_task for:
+    - "what did we discuss about X" → this is recall_context (internal memory)
+    - "look up in our files" → this is search_and_open (local files)
+    - "what was the decision on Y" → this is recall_context (meeting history)
 
 ## Known Files & URLs (from meeting prep)
 ${
@@ -716,13 +729,34 @@ Respond with JSON only:
         }
 
         // ── Research delegation (background, async) ──
+        // Codex findings #1-16: full production-safe implementation
         case "research_task": {
           const query = params.query || "";
           if (!query) { executionResult = "No research query provided"; break; }
-          if (!this.agentAdapter?.connected) { executionResult = "No agent available for research"; break; }
 
-          instruction = `research: ${query}`;
           const taskId = `research_${Date.now()}`;
+          const normalizedQuery = query.toLowerCase().split(/\s+/).slice(0, 5).join(" ");
+
+          // #6: Agent disconnected → emit proper research events, not generic done
+          if (!this.agentAdapter?.connected) {
+            this.eventBus.emit("research.started", { taskId, query });
+            this.eventBus.emit("research.completed", { taskId, query, error: "No agent connected" });
+            executionResult = "No agent available for research";
+            // #12: Don't push to dedup ring on failure
+            return; // #1: Early return — skip generic post-switch done path
+          }
+
+          // #11: In-flight guard — prevent duplicate research
+          for (const [existingQuery, ts] of this._activeResearch) {
+            if (existingQuery === normalizedQuery && Date.now() - ts < 120000) {
+              executionResult = `Research already running: "${query}"`;
+              return; // Skip generic done path
+            }
+          }
+          this._activeResearch.set(normalizedQuery, Date.now());
+
+          // Capture generation for stale callback detection (#4)
+          const gen = this._researchGeneration;
 
           // 1. Emit started → S2 panel shows task card
           this.eventBus.emit("research.started", { taskId, query });
@@ -737,15 +771,40 @@ Respond with JSON only:
             `Search the web for: "${query}". Find relevant posts, articles, or discussions. ` +
             `Summarize the top 3-5 findings with key opinions and sources. Be concise.`
           ).then(async (result: string) => {
+            // #4: Check generation — if meeting changed, discard stale result
+            if (gen !== this._researchGeneration) {
+              console.log(`[Auditor] Research result discarded (stale, gen ${gen} vs ${this._researchGeneration})`);
+              return;
+            }
+            this._activeResearch.delete(normalizedQuery);
+
+            // #5: Check for error/timeout patterns in result string
+            const ERROR_PATTERNS = /timed out|no external agent|failed|error:|unavailable|billing error/i;
+            if (ERROR_PATTERNS.test(result) && result.length < 200) {
+              if (this.voice?.connected) {
+                this.voice.injectContext(`[RESEARCH] Search for "${query}" returned an error: ${result.slice(0, 200)}`);
+              }
+              this.eventBus.emit("research.completed", { taskId, query, error: result.slice(0, 200) });
+              console.warn(`[Auditor] Research error detected: "${query}" → ${result.slice(0, 100)}`);
+              return;
+            }
+
             // 4. Save as Working Document
             const filePath = `${process.env.HOME}/.callingclaw/shared/research-${Date.now()}.md`;
             await Bun.write(filePath, `# Research: ${query}\n\n${result}`);
             this.context.addStageDocument(filePath, "new");
+            // #7: Emit EventBus event so Stage WS listener picks up the new doc
+            this.eventBus.emit("stage.documents_updated", { filePath, badge: "new" });
 
-            // 5. Inject result → voice AI speaks it
+            // #15: Use replaceContext with fixed ID — don't accumulate in FIFO
             if (this.voice?.connected) {
-              this.voice.injectContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`);
-              this.voice.client.sendEvent("response.create", {});
+              this.voice.replaceContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`, "ctx_research_result");
+              // #2/#3: Don't force response.create — queue it, only flush when voice is idle
+              if (this.voice.audioState === "listening") {
+                this.voice.client.sendEvent("response.create", {});
+              } else {
+                this.voice.client.queuePendingResponse();
+              }
             }
 
             // 6. Emit completed → S2 shows ✅
@@ -755,6 +814,8 @@ Respond with JSON only:
             });
             console.log(`[Auditor] Research completed: "${query}" → ${filePath}`);
           }).catch((err: any) => {
+            if (gen !== this._researchGeneration) return; // #4: Stale
+            this._activeResearch.delete(normalizedQuery);
             if (this.voice?.connected) {
               this.voice.injectContext(`[RESEARCH] Search for "${query}" failed: ${err.message}`);
             }
@@ -762,8 +823,8 @@ Respond with JSON only:
             console.error(`[Auditor] Research failed: "${query}"`, err.message);
           });
 
-          executionResult = `Research task delegated: "${query}"`;
-          break;
+          // #1: Return early — do NOT fall through to generic post-switch done path
+          return;
         }
 
         case "click": {

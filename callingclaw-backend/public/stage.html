@@ -921,12 +921,25 @@
         setModelStatus('s2', 'Done', 'active');
         setTimeout(function() { setModelStatus('s2', 'Idle', ''); }, 3000);
       }
+      // #10: Research task status in S2 panel
+      if (type === 'research.started') {
+        setModelStatus('s2', 'Researching...', 'thinking');
+        setGlow('thinking');
+      } else if (type === 'research.progress') {
+        setModelStatus('s2', data.step || 'Researching...', 'thinking');
+      } else if (type === 'research.completed') {
+        setModelStatus('s2', data.error ? 'Research failed' : 'Research done', data.error ? '' : 'active');
+        setTimeout(function() { setModelStatus('s2', 'Idle', ''); setGlow('active'); }, 5000);
+      }
 
       // Track documents
       var docPath = null, badge = null;
       if (type === 'meeting.prep_ready' && data.filepath) { docPath = data.filepath; badge = 'new'; }
       else if (type === 'meeting.summary_ready' && data.filepath) { docPath = data.filepath; badge = 'new'; }
       else if (type === 'workspace.updated' && data.file) { docPath = data.file; badge = 'modified'; }
+      // #7/#9: Research result + stage.documents_updated → live update Working Documents
+      else if (type === 'stage.documents_updated' && data.filePath) { docPath = data.filePath; badge = data.badge || 'new'; }
+      else if (type === 'research.completed' && data.filePath && !data.error) { docPath = data.filePath; badge = 'new'; }
       if (docPath) {
         var name = docPath.split('/').pop() || docPath;
         documents.set(docPath, { name: name, badge: badge, ts: Date.now() });

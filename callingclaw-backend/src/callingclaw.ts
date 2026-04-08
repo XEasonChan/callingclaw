@@ -937,6 +937,10 @@ eventBus.on("workspace.updated", (data: any) => {
   if (data?.file) { context.addStageDocument(data.file, "modified"); updateStageDocsContext(); }
 });
 eventBus.on("voice.started", () => { updateStageDocsContext(); });
+// #8: Refresh voice doc context when research adds a Working Document
+eventBus.on("research.completed", (data: any) => {
+  if (data?.filePath && !data?.error) { updateStageDocsContext(); }
+});
 
 // Forward meeting action items to EventBus
 context.on("note", (note) => {
