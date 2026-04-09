@@ -1036,6 +1036,224 @@ Respond naturally, matching the user's bilingual style. Keep technical terms in 
 //  Export all test cases
 // ═══════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════
+//  File Search — 10 tests (FS-01 to FS-10)
+//  Fuzzy voice queries → must find the right file from CallingClaw's file tree
+//  Simulates STT misrecognition + vague references
+// ═══════════════════════════════════════════════════════════════════
+
+const FS_TESTS: TestCase[] = [
+  {
+    id: "FS-01",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "帮我打开那个视频分镜脚本的文件",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["storyboard", "demo-video"],
+    },
+  },
+  {
+    id: "FS-02",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "打开我们的 PRD，就是 phase one 那个",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["prd", "phase"],
+    },
+  },
+  {
+    id: "FS-03",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "找一下那个竞品分析的文档，就是 Pika 那个",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["competitive", "pika"],
+    },
+  },
+  {
+    id: "FS-04",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "open the launch video brief",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["launch", "video", "brief"],
+    },
+  },
+  {
+    id: "FS-05",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "帮我打开 go to market 的那个文档",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["go to market", "GTM"],
+    },
+  },
+  {
+    id: "FS-06",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "把那个 landing page 的 redesign 给我看看",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["redesign", "homepage"],
+    },
+  },
+  {
+    id: "FS-07",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "show me the architecture decisions document",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["architecture", "decision"],
+    },
+  },
+  {
+    id: "FS-08",
+    category: "file_search" as any,
+    input: {
+      systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+      // STT misrecognition: "calling claw" might become "coin car" or "calling call"
+      userMessage: "打开 calling call 的那个 features page",
+    },
+    expected: {
+      action: "share_url",
+      confidence: 0.7,
+      mustMention: ["callingclaw", "features"],
+    },
+  },
+  {
+    id: "FS-09",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "帮我找到团队内部介绍的那个 HTML",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["团队", "介绍"],
+    },
+  },
+  {
+    id: "FS-10",
+    category: "file_search" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "那个视频计划 overview 的文件在哪里",
+    expected: {
+      action: "search_and_open",
+      confidence: 0.85,
+      mustMention: ["video", "plan", "overview"],
+    },
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+//  Browser Interaction — 8 tests (BI-01 to BI-08)
+//  Navigate to external sites + interact with UI elements
+// ═══════════════════════════════════════════════════════════════════
+
+const BI_TESTS: TestCase[] = [
+  {
+    id: "BI-01",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "帮我打开 ChatGPT 然后搜一下 AI meeting assistant 的最新趋势",
+    expected: {
+      action: "open_url",
+      confidence: 0.85,
+      mustMention: ["chatgpt", "chat.openai.com"],
+    },
+  },
+  {
+    id: "BI-02",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "go to X and search for Pika's latest promotion video",
+    expected: {
+      action: "open_url",
+      confidence: 0.85,
+      mustMention: ["x.com", "twitter", "pika"],
+    },
+  },
+  {
+    id: "BI-03",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "打开 GitHub 看看我们 CallingClaw 的 repo",
+    expected: {
+      action: "open_url",
+      confidence: 0.85,
+      mustMention: ["github"],
+    },
+  },
+  {
+    id: "BI-04",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "帮我在当前页面点击 Download for Mac 那个按钮",
+    expected: {
+      action: "click",
+      confidence: 0.85,
+      mustMention: ["download", "mac"],
+    },
+  },
+  {
+    id: "BI-05",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "scroll down to the pricing section",
+    expected: {
+      action: "scroll",
+      confidence: 0.85,
+      mustMention: ["scroll", "pricing"],
+    },
+  },
+  {
+    id: "BI-06",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "点击页面上第三个链接",
+    expected: {
+      action: "click",
+      confidence: 0.85,
+      mustMention: ["click", "third", "3"],
+    },
+  },
+  {
+    id: "BI-07",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "在 ChatGPT 的输入框里面输入 what is CallingClaw",
+    expected: {
+      action: "click",
+      confidence: 0.85,
+      mustMention: ["type", "input", "callingclaw"],
+    },
+  },
+  {
+    id: "BI-08",
+    category: "browser_interaction" as any,
+    systemPrompt: buildIntentClassificationPrompt({ briefBlock: buildBriefBlock(), meetingContext: buildMeetingContext(), transcriptText: "" }),
+    userMessage: "navigate back to the previous page",
+    expected: {
+      action: "navigate",
+      confidence: 0.8,
+      mustMention: ["back", "previous", "navigate"],
+    },
+  },
+];
+
 export const ALL_TESTS: TestCase[] = [
   ...IC_TESTS,
   ...VD_TESTS,
@@ -1043,6 +1261,8 @@ export const ALL_TESTS: TestCase[] = [
   ...CU_TESTS,
   ...DS_TESTS,
   ...CL_TESTS,
+  ...FS_TESTS,
+  ...BI_TESTS,
 ];
 
 /** Get tests by category */

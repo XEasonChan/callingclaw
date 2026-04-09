@@ -138,10 +138,11 @@ export const CONFIG = {
     model: process.env.MEETING_AUTOMATION_MODEL || "anthropic/claude-haiku-4-5",
   },
 
-  // Vision analysis (screen/meeting screenshots → Gemini Flash via OpenRouter)
+  // Vision analysis (screen/meeting screenshots via OpenRouter)
+  // A/B eval showed Haiku 4.5 matches Sonnet quality (96% vs 100%) at 6x less cost.
+  // Haiku also has native vision — no need for a separate Gemini Flash model.
   vision: {
-    model: process.env.VISION_MODEL || "google/gemini-3-flash-preview",
-    // Falls back to OpenRouter config for API key/base URL
+    model: process.env.VISION_MODEL || "anthropic/claude-haiku-4-5",
   },
 
   // Google OAuth (Calendar + Meet)
