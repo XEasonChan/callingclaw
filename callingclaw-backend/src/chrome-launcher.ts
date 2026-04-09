@@ -85,6 +85,36 @@ const AUDIO_INIT_SCRIPT = `
     return origGUM(constraints);
   };
 
+  // ── Wrap AudioContext to capture Zoom's remote audio output ──
+  // Zoom uses WASM + AudioContext for speaker output (not RTC receivers).
+  // We patch AudioContext.prototype.destination to intercept ALL audio going to speakers.
+  var OrigAudioContext = window.AudioContext || window.webkitAudioContext;
+  if (OrigAudioContext) {
+    var origCreateMediaStreamDest = OrigAudioContext.prototype.createMediaStreamDestination;
+
+    // Patch connect() on AudioNode prototype to tap audio going to destination
+    var origConnect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function(dest) {
+      var cc = window.__cc;
+      // When ANY node connects to an AudioDestinationNode (speakers), also route to our capture
+      if (dest instanceof AudioDestinationNode && cc && !cc._destTapped) {
+        try {
+          // Create a capture tap: source → splitter → destination + our capture stream
+          var ctx = this.context;
+          var captureDest = ctx.createMediaStreamDestination();
+          origConnect.call(this, captureDest); // parallel tap
+          cc._zoomCaptureStream = captureDest.stream;
+          cc._zoomCaptureCtx = ctx;
+          cc._destTapped = true;
+          console.log('[CC-Init] Tapped AudioContext.destination for remote audio capture (' + ctx.sampleRate + 'Hz)');
+        } catch(e) {
+          console.warn('[CC-Init] Destination tap failed:', e.message);
+        }
+      }
+      return origConnect.apply(this, arguments);
+    };
+  }
+
   // ── Wrap RTCPeerConnection constructor ──
   window.RTCPeerConnection = function() {
     var pc = new (Function.prototype.bind.apply(OrigPC, [null].concat(Array.prototype.slice.call(arguments))))();
@@ -327,6 +357,39 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       }
     }
   }, 2000);
+
+  // ── Pipeline C: Zoom fallback — capture from AudioContext.destination tap ──
+  // Zoom uses WASM+DataChannels, not RTC receivers. The init script patches
+  // AudioNode.connect to tap audio going to destination (speakers).
+  // If RTC capture doesn't activate within 5s, try the Zoom tap.
+  setTimeout(function() {
+    if (cc.captureActive) return; // RTC capture already working
+    if (!cc._zoomCaptureStream) {
+      console.log('[CC-Audio] Pipeline C: no Zoom destination tap available');
+      return;
+    }
+    console.log('[CC-Audio] Pipeline C: using Zoom AudioContext.destination tap for capture');
+    try {
+      var zoomStream = cc._zoomCaptureStream;
+      var zoomSrc = captureCtx.createMediaStreamSource(zoomStream);
+      var zoomWorklet = new AudioWorkletNode(captureCtx, 'pcm-processor');
+      zoomSrc.connect(zoomWorklet);
+      zoomWorklet.port.onmessage = function(e) {
+        cc.captureChunks++;
+        var d = e.data;
+        for (var i = 0; i < d.length; i++) {
+          var amp = Math.abs(d[i]);
+          if (amp > cc.captureMaxAmp) cc.captureMaxAmp = amp;
+        }
+        sendAudioChunk(d);
+      };
+      cc.captureActive = true;
+      cc.captureSource = 'zoom_destination_tap';
+      console.log('[CC-Audio] Pipeline C active — capturing Zoom remote audio from destination tap');
+    } catch(e) {
+      console.log('[CC-Audio] Pipeline C failed: ' + e.message);
+    }
+  }, 5000);
 
   // ── Pipeline B: ontrack event listener (dual-capture redundancy) ──
   // Catches new audio tracks as they appear — covers cases where
