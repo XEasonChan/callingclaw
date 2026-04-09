@@ -378,17 +378,16 @@
       will-change: transform;
     }
 
-    /* Demo Panel Overlay */
+    /* Demo Panel Overlay — matches hero image original width */
     .hero-demo-panel {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 60%;
-      max-width: 700px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(12px);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.97);
+      backdrop-filter: blur(16px);
+      border-radius: 12px 12px 0 0;
+      box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.12);
       overflow: hidden;
       z-index: 10;
       will-change: transform, opacity;
@@ -2524,11 +2523,10 @@
       const scaleY = window.innerHeight / imageRect.height;
       const targetScale = Math.max(scaleX, scaleY) * 1.02; // Slight overscale to avoid gaps
 
-      // Ensure demo panel starts hidden
+      // Ensure demo panel starts hidden below the image
       gsap.set(heroDemoPanel, {
         yPercent: 100,
         opacity: 0,
-        xPercent: -50
       });
 
       // Create timeline for the hero animation
@@ -2557,12 +2555,14 @@
         ease: 'none'
       }, 0);
 
-      // Phase 2: Slide demo panel up and fade in (20% - 80% of scroll)
-      // Counter-scale the panel so it stays readable when the image scales up
+      // Phase 2: Slide demo panel up from bottom (20% - 80% of scroll)
+      // Panel is full-width of the image. Counter-scale keeps it at original image width
+      // while the parent container scales up to fill the viewport.
       heroTl.to(heroDemoPanel, {
-        yPercent: -50,
+        yPercent: 0,     // slide to bottom edge of image
         opacity: 1,
-        scale: 1 / targetScale,
+        scale: 1 / targetScale,  // stays at original image width, not viewport width
+        transformOrigin: 'bottom center',
         duration: 0.6,
         ease: 'none'
       }, 0.2);
