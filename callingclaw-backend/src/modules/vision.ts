@@ -264,6 +264,10 @@ export class VisionModule {
         ? `Previous screen state: ${this._lastDescription.slice(0, 200)}`
         : "No previous screen state.";
 
+      // Context enrichment: extract meeting topic from recent transcript if visible
+      const topicMatch = recentTranscript.match(/主题[是为]「(.+?)」|topic.*?[":]\s*"?(.+?)[".\n]/i);
+      const topicLine = topicMatch ? `Meeting topic: ${topicMatch[1] || topicMatch[2]}` : "";
+
       const systemPrompt = meetingMode
         ? `You are analyzing a meeting screen capture. Focus on NEW and CHANGED content only.
 
@@ -274,6 +278,7 @@ Rules:
 - If just meeting grid (faces), say "Meeting grid view, no shared content"
 - 1-3 sentences maximum. Focus on WHAT'S DIFFERENT from previous state.
 - ${LANGUAGE_RULE}
+${topicLine ? `\n${topicLine}` : ""}
 
 ${prevDescription}
 

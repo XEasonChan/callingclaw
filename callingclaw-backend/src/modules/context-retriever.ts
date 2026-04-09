@@ -384,11 +384,15 @@ export class ContextRetriever {
     const screenLine = screen.description
       ? `[screen] ${screen.description}${screen.url ? ` (${screen.url})` : ""}`
       : "";
+    // Context enrichment: add prep topic so retriever knows the meeting's purpose
+    const prepTopic = this.meetingPrepSkill?.currentBrief?.topic || "";
+    const prepLine = prepTopic ? `[meeting prep: ${prepTopic}]` : "";
 
     const prompt = `What specific topic is being discussed RIGHT NOW in this meeting conversation?
 
 ${transcriptText}
 ${screenLine}
+${prepLine}
 
 Previous topic: "${this._currentTopic || "none"}"
 

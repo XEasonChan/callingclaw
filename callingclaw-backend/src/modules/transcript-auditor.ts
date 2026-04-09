@@ -349,6 +349,19 @@ export class TranscriptAuditor {
       )
       .join("\n");
 
+    // Context enrichment: give Haiku full picture (screen + prep + recent actions)
+    const screenDesc = this.context?.screen?.description || "";
+    const pageUrl = this.context?.screen?.url || "";
+    const recentActions = this._dedupRing?.slice(-3).map((d: string) => d.split(":")[0]).join(", ") || "";
+    const prepTopic = brief?.topic || "";
+    const enrichment = [
+      screenDesc ? `[Current screen: ${screenDesc.slice(0, 120)}]` : "",
+      pageUrl ? `[Page URL: ${pageUrl}]` : "",
+      recentActions ? `[Recent actions: ${recentActions}]` : "",
+      prepTopic ? `[Meeting topic: ${prepTopic}]` : "",
+    ].filter(Boolean).join("\n");
+    const enrichedTranscript = enrichment ? `${enrichment}\n\n${transcriptText}` : transcriptText;
+
     const prompt = `You are CallingClaw's meeting agent — a fast background assistant. You monitor the conversation and execute actions when the voice AI or participants request something.
 
 ## Your Tools (choose the RIGHT one)
@@ -425,8 +438,8 @@ ${(() => {
   return bc ? `Active page: ${bc.title} (${bc.url})` : "";
 })()}
 
-## Transcript (most recent at bottom)
-${transcriptText}
+## Transcript (most recent at bottom, with current screen + action context)
+${enrichedTranscript}
 
 ## When to Act
 1. Someone asks to open, show, display, share screen, or find something → ACT (search_and_open, share_file, open_url)
