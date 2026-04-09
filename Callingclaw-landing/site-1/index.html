@@ -2753,18 +2753,22 @@
       }
     }
 
-    // Start presentation when demo panel becomes visible (not on page load)
+    // Start presentation when scroll animation completes (demo panel fully visible)
+    // Uses scroll position check instead of IntersectionObserver (which fails on pinned elements)
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       let presentationStarted = false;
-      const demoPanelObs = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && !presentationStarted) {
+      window.addEventListener('scroll', function checkDemoVisible() {
+        if (presentationStarted) return;
+        const panel = document.querySelector('.hero-demo-panel');
+        if (!panel) return;
+        // Check if panel has opacity > 0.8 (animation nearly complete)
+        const opacity = parseFloat(window.getComputedStyle(panel).opacity);
+        if (opacity > 0.8) {
           presentationStarted = true;
-          demoPanelObs.disconnect();
-          setTimeout(runPresentation, 500);
+          window.removeEventListener('scroll', checkDemoVisible);
+          setTimeout(runPresentation, 300);
         }
-      }, { threshold: 0.3 });
-      const demoPanel = document.querySelector('.hero-demo-panel');
-      if (demoPanel) demoPanelObs.observe(demoPanel);
+      }, { passive: true });
     }
   </script>
 
