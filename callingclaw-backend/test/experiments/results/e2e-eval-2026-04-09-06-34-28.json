@@ -1,0 +1,395 @@
+{
+  "model": "2.9.1",
+  "results": [
+    {
+      "id": "FS-E2E-01",
+      "category": "file_search",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": false,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 15167,
+      "toolsCalled": [
+        "search_files"
+      ],
+      "aiResponse": "",
+      "log": "║  Memory:  OpenClaw Bridge ✓  recall_context ✓        ║\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {"
+    },
+    {
+      "id": "FS-E2E-02",
+      "category": "file_search",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 15124,
+      "toolsCalled": [
+        "search_files"
+      ],
+      "aiResponse": "我找到了几份与 PRD phase 1 相关的文件，你需要的是哪一份？比如 CallingClaw 2.0 文件夹下的 prd-phase1.html，还是其他目录下的 Tanka Link 相关 PRD？如果是 CallingClaw 的 phase 1， 我可以直接打开那份 prd-phase1.html。请告诉我。 我没有找到“视频分镜脚本”的文件，可能需要更具体的文件名或路径。如果你能提供更具体的信息，我可以再试试。\n\n至于 PRD phase one 文件，有几份匹配的文件。比如在 CallingClaw 2.0 文件夹下有 prd-phase1.html，还有一些 Tanka Link 相关的 PRD 文档。你想打开哪一份呢？",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {"
+    },
+    {
+      "id": "FS-E2E-03",
+      "category": "file_search",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 15123,
+      "toolsCalled": [
+        "search_files"
+      ],
+      "aiResponse": "",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {"
+    },
+    {
+      "id": "FS-E2E-04",
+      "category": "file_search",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 16185,
+      "toolsCalled": [
+        "search_files",
+        "open_file"
+      ],
+      "aiResponse": "",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "FS-E2E-05",
+      "category": "file_search",
+      "score": 88,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 50
+      },
+      "latencyMs": 15197,
+      "toolsCalled": [
+        "search_files"
+      ],
+      "aiResponse": "我正在搜索“go to market”的文档，这需要一点时间。稍等一下，我会尽快给你结果。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: search_files {"
+    },
+    {
+      "id": "FS-E2E-06",
+      "category": "file_search",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 15129,
+      "toolsCalled": [
+        "search_files",
+        "open_file"
+      ],
+      "aiResponse": "",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "BN-E2E-01",
+      "category": "browser_nav",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": false,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 15123,
+      "toolsCalled": [
+        "share_screen",
+        "search_files"
+      ],
+      "aiResponse": "看起来我还没有开始会议中的投屏，所以无法直接分享页面。你可以先发起或加入一个 Google Meet 会议，然后我就能帮你投屏 CallingClaw 官网。另外，关于 “go to market” 的文档搜索没有找到匹配的文件，你可以试着告诉我更具体的文件名或内容，我再帮你找找看。",
+      "log": "[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → http://localhost:4000/callingclaw-panel.html (from public/ files)\n[Voice] Slow tool share_screen completed async → context injected (no response.create)"
+    },
+    {
+      "id": "BN-E2E-02",
+      "category": "browser_nav",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 15112,
+      "toolsCalled": [
+        "open_file"
+      ],
+      "aiResponse": "",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → http://localhost:4000/callingclaw-panel.html (from public/ files)\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com/features\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "BN-E2E-03",
+      "category": "browser_nav",
+      "score": 100,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 15106,
+      "toolsCalled": [],
+      "aiResponse": "要进行投屏，我们需要先在 Google Meet 会议中。如果你已经有会议链接，请告诉我；或者需要我帮你创建一个新会议。等到会议开始后，我就能帮你投屏 Tanka Action Card PRD 文档。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → http://localhost:4000/callingclaw-panel.html (from public/ files)\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com/features\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-01",
+      "category": "context_recall",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15101,
+      "toolsCalled": [],
+      "aiResponse": "这个视频的分镜脚本一共是23帧。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → http://localhost:4000/callingclaw-panel.html (from public/ files)\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com/features\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-02",
+      "category": "context_recall",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15113,
+      "toolsCalled": [],
+      "aiResponse": "Pika的定价是每月19.99美元，采用云端订阅模式，主要提供视频生成服务。而我们CallingClaw是一次性19.99美元购买的本地Mac应用，专注于实时会议智能助手。两者不仅在收费模式上不同，也在运行方式和服务内容上存在差异。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → http://localhost:4000/callingclaw-panel.html (from public/ files)\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com/features\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-03",
+      "category": "context_recall",
+      "score": 63,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 50
+      },
+      "latencyMs": 15129,
+      "toolsCalled": [],
+      "aiResponse": "CallingClaw 的核心定位是在本地运行的 Mac 应用，为用户提供实时会议智能助手功能，帮助你更高效地记录、整理和跟进会议内容，同时强调一次性购买带来的隐私安全和流畅体验。",
+      "log": "[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → http://localhost:4000/callingclaw-panel.html (from public/ files)\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com/features\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "PR-E2E-01",
+      "category": "presentation",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 25106,
+      "toolsCalled": [],
+      "aiResponse": "要投屏 CallingClaw 官网，我们需要先在 Google Meet 会议中。如果你已经有会议链接，告诉我就可以加入；如果还没有，我也可以帮你创建新的会议。等会议开始后，我就能帮你投屏。\n\n至于 CallingClaw，它是一款本地运行的 Mac 应用，专注于实时会议智能助手，帮助用户高效记录、整理和跟进会议内容，并强调一次性购买带来的隐私安全与流畅体验。",
+      "log": "[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com/features\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "PR-E2E-02",
+      "category": "presentation",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 20120,
+      "toolsCalled": [],
+      "aiResponse": "我们还没有进入 Google Meet 会议，所以无法直接投屏。如果你有会议链接，告诉我，我可以加入并开始投屏。或者需要我帮你创建会议也行。\n\n不过我可以先介绍首页的功能模块。CallingClaw 首页通常会展示几个核心部分：  \n1. 产品主要功能介绍，比如实时会议记录、自动化整理、任务跟进等。  \n2. 使用场景和用户案例，帮助访客了解实际应用价值。  \n3. 价格和购买方式，强调一次性购买。  \n4. 呼吁行动的部分，比如“加入等候名单”或“请求访问”。\n\n等我们在会议中投屏后，我也可以带你实际浏览这些模块。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-01",
+      "category": "multi_step",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": false,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 20104,
+      "toolsCalled": [
+        "browser_action"
+      ],
+      "aiResponse": "我可以帮你打开 Pika 的官网，但需要说明，我目前无法识别或确认最新的信息准确性。我会先在浏览器打开他们的官网，然后看看能找到什么。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-02",
+      "category": "multi_step",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 20099,
+      "toolsCalled": [],
+      "aiResponse": "目前浏览器自动操作不可用，我无法直接打开网页并滚动。不过你可以自己访问 https://www.pika.com 查看最新的产品功能和定价方案，我也可以根据你提供的信息帮助解读。如果你需要进一步的竞争分析或其他帮助，随时告诉我。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-03",
+      "category": "multi_step",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": false,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 25111,
+      "toolsCalled": [],
+      "aiResponse": "目前我无法直接访问 X 平台进行搜索。如果你能提供 HeyGen Avatar V5 推广的相关信息，我可以帮你分析或解读。另外，如果你有其他问题或者需要我协助的任务，也可以告诉我。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-04",
+      "category": "multi_step",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 20096,
+      "toolsCalled": [],
+      "aiResponse": "很抱歉，我现在无法直接访问 X 平台或查看搜索结果。如果你可以提供具体内容或链接，我可以帮你解读或整理。要不你告诉我你需要了解的具体信息，我尽力为你提供帮助。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-05",
+      "category": "multi_step",
+      "score": 25,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": false,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 20120,
+      "toolsCalled": [],
+      "aiResponse": "好的，不过目前浏览器自动控制功能暂时不可用。我无法直接切换页面。如果你需要查看我们的 landing page，你可以自行打开页面，我很乐意根据你看到的内容为你解读和讨论。如果你有其他需要帮助的地方，请随时告诉我。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-06",
+      "category": "multi_step",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 20117,
+      "toolsCalled": [],
+      "aiResponse": "我无法直接在外部网络搜索或访问页面。如果你能提供更具体的文件名或存放位置，我可以在本地文件中搜索。你也可以告诉我更多关于 pneuma landing page 相关的细节，这样我可以更好地帮你找到所需内容。",
+      "log": ""
+    },
+    {
+      "id": "MS-E2E-07",
+      "category": "multi_step",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": false,
+        "contextQuality": 100,
+        "responseQuality": 100
+      },
+      "latencyMs": 20113,
+      "toolsCalled": [
+        "search_files"
+      ],
+      "aiResponse": "我没有找到与 2026 年 4 月 4 日 video discussion prep 完全匹配的文件。可能文件名或者内容有些不同。你能提供更多细节，比如文件的大致名称或者内容描述，这样我可以更准确地帮你找到它。",
+      "log": "[Voice] Tool call: search_files {"
+    },
+    {
+      "id": "MS-E2E-08",
+      "category": "multi_step",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 20264,
+      "toolsCalled": [
+        "search_files",
+        "open_file"
+      ],
+      "aiResponse": "",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "MS-E2E-09",
+      "category": "multi_step",
+      "score": 97,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 86
+      },
+      "latencyMs": 20104,
+      "toolsCalled": [],
+      "aiResponse": "好的，我会把这三个点作为记录：1. Hero 部分强调 memory；2. CTA 使用“Join the waitlist”；3. 底部布局 bug 先上线，后续修复。如果还有其他需要记录的事项，随时告诉我。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "MS-E2E-10",
+      "category": "multi_step",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 100,
+        "responseQuality": 0
+      },
+      "latencyMs": 25115,
+      "toolsCalled": [
+        "open_file"
+      ],
+      "aiResponse": "",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    }
+  ],
+  "avgScore": 67,
+  "duration": 439
+}
