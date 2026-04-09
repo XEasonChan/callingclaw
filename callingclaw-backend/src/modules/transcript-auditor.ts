@@ -77,7 +77,7 @@ export class TranscriptAuditor {
   private CONFIDENCE_AUTO = 0.85;     // Auto-execute threshold
   private CONFIDENCE_SUGGEST = 0.6;   // Suggest to Voice AI threshold
   private WINDOW_ENTRIES = 15;        // Transcript entries to analyze
-  private COOLDOWN_MS = 10000;        // Min gap between executions (BUG-028: extended from 5s to 10s to prevent double-execution)
+  private COOLDOWN_MS = 3000;          // Short cooldown (3s) to batch rapid speech. Dedup relies on ring buffer, not this timer.
 
   constructor(opts: {
     context: SharedContext;
@@ -128,8 +128,9 @@ export class TranscriptAuditor {
         this._recentActions.push(key);
         if (this._recentActions.length > 5) this._recentActions.shift();
       }
-      this._lastExecutionTs = Date.now();
-      console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool}, suppressing auditor for ${this.COOLDOWN_MS}ms`);
+      // Don't set global cooldown here — ring buffer handles dedup for same actions.
+      // Global cooldown would block DIFFERENT actions (e.g., "open PRD" → "open Pika")
+      console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool} — added to ring buffer`);
     });
 
     // Build file alias index with prep context so AutomationRouter can instantly
