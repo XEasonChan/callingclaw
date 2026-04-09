@@ -436,6 +436,7 @@ ${transcriptText}
 5. Discussion/opinion (expressing views, suggestions for future) → DO NOT ACT, confidence=0
 6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
 7. **ALREADY HANDLED**: If you see [Tool Call] or [Tool Result] in the transcript for the same action → DO NOT ACT, confidence=0. The voice AI already executed it.
+8. **When in doubt, don't act.** A bad action (clicking the wrong thing, opening the wrong file) is worse than a missed action. Only act when you're confident the user wants something done.
 
 ## STT Name Aliases (speech-to-text often mangles these)
 The transcription is from live STT, which frequently misspells proper nouns. Treat these as equivalent:
