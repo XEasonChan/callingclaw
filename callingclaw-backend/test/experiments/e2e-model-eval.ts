@@ -373,6 +373,24 @@ async function main() {
   if (status.callingclaw !== "running") { console.error("Backend not running"); process.exit(1); }
   if (status.realtime !== "connected") { console.error("Realtime not connected — start a voice session first"); process.exit(1); }
 
+  // Inject prep context so read_prep tool has data (mimics meeting join flow)
+  // This ensures context recall tests have access to prep materials
+  try {
+    await api("POST", "/api/voice/inject", {
+      text: `═══ MEETING CONTEXT ═══
+Topic: CallingClaw Demo 视频分镜脚本 Review
+Key facts from prep:
+- Personal video: 23 frames, 74 seconds total (58s main + 16s easter egg)
+- 5-act structure: Aha Moment → Pain Points → Solution → Post-meeting → Easter Egg
+- Pika competitor: cloud-based, $19.99/month subscription, focuses on video generation
+- CallingClaw: local Mac app, $19.99 one-time purchase, real-time meeting AI
+- CTA options: "Join the waitlist" vs "Request access"
+USE read_prep(section) for detailed data: decisions, questions, history, all_points, scenes
+═══ END MEETING CONTEXT ═══`
+    });
+    console.log("  ✅ Prep context injected into voice session");
+  } catch { console.log("  ⚠️ Could not inject prep context (no /api/voice/inject endpoint)"); }
+
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║  CallingClaw E2E Model Eval — Real Backend Pipeline           ║
