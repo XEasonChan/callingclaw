@@ -399,4 +399,4 @@ kill $(lsof -t -i :4000)
 
 ## License
 
-Private — © 2026 Andrew Chan
+Apache License 2.0 — see [LICENSE](LICENSE)
