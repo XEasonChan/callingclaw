@@ -1,0 +1,52 @@
+{
+  "model": "2.9.1",
+  "results": [
+    {
+      "id": "CR-E2E-01",
+      "category": "context_recall",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15098,
+      "toolsCalled": [],
+      "aiResponse": "个人视频的分镜一共有 23 帧。",
+      "log": "[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → https://www.callingclaw.com (from prep URLs)\n[share_screen] Navigated presenting tab to https://www.callingclaw.com (reused tab)\n[share_screen] Meet not sharing yet — clicking Share in Meet\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Post-tool screenshot injected (share_screen)\n║  Memory:  OpenClaw Bridge ✓  recall_context ✓        ║"
+    },
+    {
+      "id": "CR-E2E-02",
+      "category": "context_recall",
+      "score": 75,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15097,
+      "toolsCalled": [],
+      "aiResponse": "Pika 的定价是每月 19.99 美元订阅制，而我们的 CallingClaw 是一次性购买，价格也是 19.99 美元。除此之外，Pika 是云端服务，专注于视频生成，而 CallingClaw 是本地 Mac 应用，提供实时的会议辅助和 AI 功能。",
+      "log": "[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → https://www.callingclaw.com (from prep URLs)\n[share_screen] Navigated presenting tab to https://www.callingclaw.com (reused tab)\n[share_screen] Meet not sharing yet — clicking Share in Meet\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Post-tool screenshot injected (share_screen)\n║  Memory:  OpenClaw Bridge ✓  recall_context ✓        ║"
+    },
+    {
+      "id": "CR-E2E-03",
+      "category": "context_recall",
+      "score": 63,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 50
+      },
+      "latencyMs": 15095,
+      "toolsCalled": [],
+      "aiResponse": "CallingClaw 的核心定位是作为本地 Mac 应用，提供实时会议智能助手功能，帮助用户在会议中高效记录、整理和跟进，强调一次性购买、隐私安全以及流畅的本地体验。",
+      "log": "[Voice] Tool call: share_screen {\n[share_screen] Resolved \"CallingClaw 官网\" → https://www.callingclaw.com (from prep URLs)\n[share_screen] Navigated presenting tab to https://www.callingclaw.com (reused tab)\n[share_screen] Meet not sharing yet — clicking Share in Meet\n[Voice] Slow tool share_screen completed async → context injected (no response.create)\n[Voice] Post-tool screenshot injected (share_screen)\n║  Memory:  OpenClaw Bridge ✓  recall_context ✓        ║"
+    }
+  ],
+  "avgScore": 71,
+  "duration": 45
+}

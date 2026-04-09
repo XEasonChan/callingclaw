@@ -29,7 +29,7 @@ const WAIT_MS = 15000; // wait for full pipeline (auditor + retriever + tool + r
 
 interface E2ETestCase {
   id: string;
-  category: "file_search" | "browser_nav" | "context_recall" | "presentation";
+  category: "file_search" | "browser_nav" | "context_recall" | "presentation" | "multi_step";
   voice: string; // text sent via /api/voice/text (post-STT)
   expect: {
     toolCalled?: string | string[];  // expected tool name(s) in transcript
@@ -191,6 +191,118 @@ const TESTS: E2ETestCase[] = [
       aiResponseContains: ["功能", "模块"],
     },
     timeoutMs: 20000,
+  },
+
+  // ── Multi-step: Browser navigation chains (open → scroll → switch → click → switch back) ──
+  {
+    id: "MS-E2E-01",
+    category: "multi_step",
+    voice: "帮我打开 Pika 的官网看看他们最新的产品功能",
+    expect: {
+      toolCalled: ["share_screen", "open_url"],
+      urlNavigated: "pika.art",
+      aiResponseContains: ["Pika"],
+    },
+    timeoutMs: 20000,
+  },
+  {
+    id: "MS-E2E-02",
+    category: "multi_step",
+    voice: "滚动到下面看看他们的定价方案",
+    expect: {
+      toolCalled: ["interact"],
+      aiResponseContains: ["pricing", "价格"],
+    },
+    timeoutMs: 20000,
+  },
+  {
+    id: "MS-E2E-03",
+    category: "multi_step",
+    voice: "现在切到 X 搜一下 HeyGen Avatar V5 最近的推广",
+    expect: {
+      toolCalled: ["share_screen", "open_url"],
+      urlNavigated: "x.com",
+      aiResponseContains: ["HeyGen", "Avatar"],
+    },
+    timeoutMs: 25000,
+  },
+  {
+    id: "MS-E2E-04",
+    category: "multi_step",
+    voice: "点击第一条搜索结果看看详情",
+    expect: {
+      toolCalled: ["interact", "click"],
+      aiResponseContains: ["click", "打开"],
+    },
+    timeoutMs: 20000,
+  },
+  {
+    id: "MS-E2E-05",
+    category: "multi_step",
+    voice: "切回我们的 landing page 看看 hero 部分",
+    expect: {
+      toolCalled: ["share_screen"],
+      urlNavigated: "callingclaw.com",
+      aiResponseContains: ["hero", "CallingClaw"],
+    },
+    timeoutMs: 20000,
+  },
+
+  // ── Multi-step: Complex file queries (STT fuzzy matching) ──
+  {
+    id: "MS-E2E-06",
+    category: "multi_step",
+    voice: "帮我找那个 pneuma 相关的 landing page",
+    expect: {
+      toolCalled: ["search_files", "open_file"],
+      fileOpened: ["pneuma"],
+      aiResponseContains: ["pneuma"],
+    },
+    timeoutMs: 20000,
+  },
+  {
+    id: "MS-E2E-07",
+    category: "multi_step",
+    voice: "打开那个 video discussion prep 的文件，就是四月四号那个",
+    expect: {
+      toolCalled: ["search_files", "open_file"],
+      fileOpened: ["video-discussion-prep-0404"],
+      aiResponseContains: ["video", "prep"],
+    },
+    timeoutMs: 20000,
+  },
+  {
+    id: "MS-E2E-08",
+    category: "multi_step",
+    voice: "show me the meeting summary from March 26",
+    expect: {
+      toolCalled: ["search_files", "open_file"],
+      fileOpened: ["meeting-summary-20260326"],
+      aiResponseContains: ["meeting", "summary"],
+    },
+    timeoutMs: 20000,
+  },
+
+  // ── Multi-step: Multi-round decision making (from video demo script) ──
+  {
+    id: "MS-E2E-09",
+    category: "multi_step",
+    voice: "我们上线之前需要确认三个点：第一 Hero 要强调 memory，第二 CTA 用 Join the waitlist，第三底部 layout bug 先上线后修。帮我记下来",
+    expect: {
+      aiResponseContains: ["hero", "memory", "CTA", "waitlist", "layout", "bug", "记"],
+    },
+    timeoutMs: 20000,
+  },
+  {
+    id: "MS-E2E-10",
+    category: "multi_step",
+    voice: "现在帮我打开官网，我们逐个看看需要改的地方",
+    expect: {
+      toolCalled: ["share_screen"],
+      urlNavigated: "callingclaw.com",
+      aiResponseContains: ["CallingClaw"],
+    },
+    timeoutMs: 25000,
   },
 ];
 
