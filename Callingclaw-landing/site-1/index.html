@@ -2535,8 +2535,8 @@
       const heroTl = gsap.timeline({
         scrollTrigger: {
           trigger: heroPinSpacer,
-          start: 'top top',
-          end: '+=120%',
+          start: 'bottom bottom',  // starts when image bottom reaches viewport bottom (image fully visible)
+          end: '+=100%',
           pin: true,
           scrub: 0.5,
           anticipatePin: 1,
@@ -2557,15 +2557,15 @@
         ease: 'none'
       }, 0);
 
-      // Phase 2: Slide demo panel up and fade in (40% - 100% of scroll)
+      // Phase 2: Slide demo panel up and fade in (20% - 80% of scroll)
       // Counter-scale the panel so it stays readable when the image scales up
       heroTl.to(heroDemoPanel, {
         yPercent: -50,
         opacity: 1,
-        scale: 1 / targetScale,  // counter the parent's scale-up
+        scale: 1 / targetScale,
         duration: 0.6,
         ease: 'none'
-      }, 0.4);
+      }, 0.2);
     }
 
     // Observe bandwidth image
