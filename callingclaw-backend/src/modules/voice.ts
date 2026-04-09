@@ -642,11 +642,12 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
     if (!this.client.connected) return;
 
     // Echo gate: suppress audio input while AI is producing audio output.
-    // The SFU echoes AI audio back with 300-2000ms delay depending on platform.
-    // By gating at the backend, we prevent echo from ever reaching the Realtime API.
+    // Google Meet has built-in echo cancellation → short gate (300ms).
+    // Zoom SFU echoes with 1-2s delay → needs longer gate.
+    // Gate ONLY during speaking state + brief tail. NOT during listening
+    // (that blocks real user speech and causes "no response" bug).
     const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
-    const echoWindowMs = 3000; // 3s covers even slow Zoom SFU echo
-    if (this._audioState === "speaking" || (this._lastAudioOutputTs > 0 && msSinceLastOutput < echoWindowMs)) {
+    if (this._audioState === "speaking" && msSinceLastOutput < 500) {
       this._echoGateDropped++;
       if (this._echoGateDropped === 1 || this._echoGateDropped % 500 === 0) {
         console.log(`[Voice] Echo gate: dropped ${this._echoGateDropped} audio chunks (state=${this._audioState}, ${msSinceLastOutput}ms since output)`);
