@@ -102,17 +102,17 @@ export const CONFIG = {
     voice: "Kore",  // options: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr
   },
 
-  // Anthropic Computer Use (direct API — optional)
+  // Anthropic Computer Use (direct API — optional, falls back to OpenRouter Haiku)
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
-    model: "claude-sonnet-4-6-20250627",
+    model: "claude-haiku-4-5-20251001",
   },
 
-  // OpenRouter (alternative gateway for Claude — no Anthropic key needed)
+  // OpenRouter (unified gateway — one key for all models)
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     baseUrl: "https://openrouter.ai/api/v1",
-    model: "anthropic/claude-sonnet-4.6",
+    model: "anthropic/claude-haiku-4-5",
   },
 
   // Meeting intelligence — fast models for gap detection + semantic search
