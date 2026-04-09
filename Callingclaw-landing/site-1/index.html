@@ -375,16 +375,17 @@
       border-radius: inherit;
     }
 
-    /* Demo Panel Overlay — matches hero image original width */
+    /* Demo Panel Overlay — centered, container width, vertically centered when done */
     .hero-demo-panel {
       position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, 100%);
+      width: min(calc(100vw - 3rem), 1200px);
       background: rgba(255, 255, 255, 0.97);
       backdrop-filter: blur(16px);
-      border-radius: 12px 12px 0 0;
-      box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.12);
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
       overflow: hidden;
       z-index: 10;
       will-change: transform, opacity;
@@ -2512,9 +2513,10 @@
       // Register ScrollTrigger plugin
       gsap.registerPlugin(ScrollTrigger);
 
-      // Ensure demo panel starts hidden below the image
+      // Ensure demo panel starts hidden below center
       gsap.set(heroDemoPanel, {
-        yPercent: 100,
+        xPercent: -50,
+        y: '100%',
         opacity: 0,
       });
 
@@ -2530,23 +2532,23 @@
         }
       });
 
-      // Phase 1: Expand image width to full viewport (0% - 50% of scroll)
-      // Keep border-radius throughout — no edge-to-edge flush
+      // Both phases run in parallel and finish together at 100% scroll:
+      // Image expands to full viewport width
       heroTl.to(heroImageContainer, {
         width: '100vw',
         borderRadius: '16px',
-        duration: 0.5,
+        duration: 1,
         ease: 'none'
       }, 0);
 
-      // Phase 2: Slide demo panel up immediately (10% - 60% of scroll)
-      // Panel appears early — user barely starts scrolling and it slides in
+      // Demo panel slides from below to vertical center, fading in
+      // Starts at 0% and finishes at 100% — synced with image expansion
       heroTl.to(heroDemoPanel, {
-        yPercent: 0,
+        y: '-50%',       // vertically centered (top:50% + y:-50%)
         opacity: 1,
-        duration: 0.5,
+        duration: 1,
         ease: 'none'
-      }, 0.1);
+      }, 0);
     }
 
     // Observe bandwidth image
