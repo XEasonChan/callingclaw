@@ -109,7 +109,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       },
       {
         name: "leave_meeting",
-        description: "Leave the current Google Meet meeting. Automatically saves meeting notes and creates tasks from action items.",
+        description: "Leave the current meeting. ONLY call this when the user EXPLICITLY says goodbye, ends the meeting, or says words like '退出会议/结束/bye/let's wrap up'. NEVER call this for 'start/begin/开始/继续'. When in doubt, do NOT leave.",
         parameters: { type: "object", properties: {} },
       },
       {
@@ -472,6 +472,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             : `Failed: ${session.error}`;
         }
         case "leave_meeting": {
+          // Guard: prevent accidental leave within first 30s of meeting
+          const meetingAge = Date.now() - (meeting.startedAt || 0);
+          if (meetingAge < 30000) {
+            return "Meeting just started. I won't leave yet. If you want to end the meeting, please say so clearly.";
+          }
           // Stop meeting-end watcher + admission monitor
           playwrightCli.clearMeetingEndCallback();
           const _waitingRoomAbort = getWaitingRoomAbort();
