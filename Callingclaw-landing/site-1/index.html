@@ -343,9 +343,7 @@
     /* Hero Image with GSAP ScrollTrigger Animation */
     .hero-image-wrapper {
       position: relative;
-      max-width: var(--container-width, 1200px);
-      margin-inline: auto;
-      padding-inline: 1.5rem;
+      width: 100%;
       overflow: visible;
     }
 
@@ -356,16 +354,17 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .hero-image-container {
       position: relative;
-      width: 100%;
-      overflow: visible;
+      width: min(100% - 3rem, 1200px);
+      margin-inline: auto;
+      overflow: hidden;
       border-radius: 16px;
-      will-change: transform;
-      transform-origin: center center;
+      will-change: width, border-radius;
+      transition: width 0s, border-radius 0s;
     }
 
     .hero-image {
@@ -373,9 +372,7 @@
       height: auto;
       display: block;
       object-fit: cover;
-      border-radius: 16px;
-      transform-origin: center center;
-      will-change: transform;
+      border-radius: inherit;
     }
 
     /* Demo Panel Overlay — matches hero image original width */
@@ -2515,14 +2512,6 @@
       // Register ScrollTrigger plugin
       gsap.registerPlugin(ScrollTrigger);
 
-      // Get initial dimensions
-      const imageRect = heroImageContainer.getBoundingClientRect();
-
-      // Calculate scale needed to fill viewport
-      const scaleX = window.innerWidth / imageRect.width;
-      const scaleY = window.innerHeight / imageRect.height;
-      const targetScale = Math.max(scaleX, scaleY) * 1.02; // Slight overscale to avoid gaps
-
       // Ensure demo panel starts hidden below the image
       gsap.set(heroDemoPanel, {
         yPercent: 100,
@@ -2533,7 +2522,7 @@
       const heroTl = gsap.timeline({
         scrollTrigger: {
           trigger: heroPinSpacer,
-          start: 'bottom bottom',  // starts when image bottom reaches viewport bottom (image fully visible)
+          start: 'bottom bottom',
           end: '+=100%',
           pin: true,
           scrub: 0.5,
@@ -2541,31 +2530,23 @@
         }
       });
 
-      // Phase 1: Expand image to fullscreen (0% - 60% of scroll)
+      // Phase 1: Expand image width to full viewport (0% - 50% of scroll)
+      // Keep border-radius throughout — no edge-to-edge flush
       heroTl.to(heroImageContainer, {
-        scale: targetScale,
-        borderRadius: 0,
-        duration: 0.6,
+        width: '100vw',
+        borderRadius: '16px',
+        duration: 0.5,
         ease: 'none'
       }, 0);
 
-      heroTl.to(heroImage, {
-        borderRadius: 0,
-        duration: 0.6,
-        ease: 'none'
-      }, 0);
-
-      // Phase 2: Slide demo panel up from bottom (20% - 80% of scroll)
-      // Panel is full-width of the image. Counter-scale keeps it at original image width
-      // while the parent container scales up to fill the viewport.
+      // Phase 2: Slide demo panel up immediately (10% - 60% of scroll)
+      // Panel appears early — user barely starts scrolling and it slides in
       heroTl.to(heroDemoPanel, {
-        yPercent: 0,     // slide to bottom edge of image
+        yPercent: 0,
         opacity: 1,
-        scale: 1 / targetScale,  // stays at original image width, not viewport width
-        transformOrigin: 'bottom center',
-        duration: 0.6,
+        duration: 0.5,
         ease: 'none'
-      }, 0.2);
+      }, 0.1);
     }
 
     // Observe bandwidth image
