@@ -2535,10 +2535,10 @@
       const heroTl = gsap.timeline({
         scrollTrigger: {
           trigger: heroPinSpacer,
-          start: 'top 30%',
-          end: '+=80%',
+          start: 'top top',
+          end: '+=120%',
           pin: true,
-          scrub: 0.3,
+          scrub: 0.5,
           anticipatePin: 1,
         }
       });
@@ -2558,9 +2558,11 @@
       }, 0);
 
       // Phase 2: Slide demo panel up and fade in (40% - 100% of scroll)
+      // Counter-scale the panel so it stays readable when the image scales up
       heroTl.to(heroDemoPanel, {
         yPercent: -50,
         opacity: 1,
+        scale: 1 / targetScale,  // counter the parent's scale-up
         duration: 0.6,
         ease: 'none'
       }, 0.4);
@@ -2673,10 +2675,14 @@
     }
 
     async function runPresentation() {
-      if (!screenContent || !cursor) return;
+      if (!screenContent || !cursor) { console.warn('No screenContent or cursor'); return; }
 
+      // Wait for demo panel to be fully visible and have non-zero dimensions
+      await new Promise(r => setTimeout(r, 1000));
       const rect = screenContent.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) { console.warn('screenContent too small:', rect); return; }
       const screenRect = { width: rect.width, height: rect.height };
+      cursor.style.display = 'block';
 
       // Initialize cursor position
       cursor.style.left = (screenRect.width * 0.5) + 'px';
