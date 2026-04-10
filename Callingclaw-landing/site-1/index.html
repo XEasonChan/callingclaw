@@ -2162,8 +2162,8 @@
   <section class="how-it-works" id="how-it-works">
     <div class="container">
       <div class="hiw-header">
-        <h2>How It Works</h2>
-        <p>From setup to execution in four steps</p>
+        <h2>How to Setup the Agentware</h2>
+        <p>From download to autonomous execution in four steps</p>
       </div>
 
       <!-- Timeline -->
@@ -2184,44 +2184,41 @@
       <!-- Cards -->
       <div class="hiw-cards" id="hiwCards">
 
-        <!-- Step 1: Download & Configure -->
+        <!-- Step 1: GUI for Setting Up -->
         <div class="hiw-card" data-hiw-card="0">
           <span class="hiw-card-step">Step 1</span>
-          <h3>Download &amp; Configure</h3>
-          <p class="hiw-card-desc">Download the desktop app and follow the guided permission setup. One click, and your agent has a seat in every meeting.</p>
+          <h3>GUI for Setting Up</h3>
+          <p class="hiw-card-desc">Download the desktop app and grant permissions. Connect to your OpenClaw agent with one click.</p>
           <div class="hiw-visual">
             <div class="hiw-setup-card">
               <svg class="hiw-setup-icon" viewBox="0 0 60 60" fill="none">
-                <ellipse cx="30" cy="34" rx="13" ry="16" fill="#E63946"/>
-                <path d="M17 28C10 20 14 10 22 16C18 12 24 9 27 14" fill="#E63946"/>
-                <path d="M43 28C50 20 46 10 38 16C42 12 36 9 33 14" fill="#E63946"/>
-                <circle cx="25" cy="28" r="2.5" fill="white"/>
-                <circle cx="35" cy="28" r="2.5" fill="white"/>
-                <circle cx="25" cy="28" r="1.2" fill="#1C1C1E"/>
-                <circle cx="35" cy="28" r="1.2" fill="#1C1C1E"/>
+                <rect x="8" y="12" width="44" height="32" rx="4" fill="var(--surface-elevated)" stroke="var(--border)" stroke-width="1.5"/>
+                <rect x="14" y="18" width="32" height="20" rx="2" fill="var(--bg-subtle)"/>
+                <circle cx="30" cy="48" r="2" fill="var(--text-tertiary)"/>
+                <rect x="22" y="50" width="16" height="2" rx="1" fill="var(--text-tertiary)"/>
               </svg>
-              <div class="hiw-setup-title">Give a meeting room to your OpenClaw</div>
+              <div class="hiw-setup-title">Download desktop app and setup permissions</div>
               <ul class="hiw-checklist">
                 <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Screen Recording</li>
                 <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Microphone</li>
                 <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Accessibility</li>
-                <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Connect OpenClaw</li>
+                <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Connect to OpenClaw</li>
               </ul>
               <div class="hiw-setup-btn">Get Started</div>
             </div>
           </div>
         </div>
 
-        <!-- Step 2: Book with Your Agent -->
+        <!-- Step 2: CLI & Agent Messaging -->
         <div class="hiw-card" data-hiw-card="1">
           <span class="hiw-card-step">Step 2</span>
-          <h3>Book with Your Agent</h3>
-          <p class="hiw-card-desc">Schedule meetings naturally through Telegram or the CLI. Your agent prepares context from recent work automatically.</p>
+          <h3>CLI &amp; Agent Messaging</h3>
+          <p class="hiw-card-desc">Book a time with your agent through CLI or messaging. Your agent will prepare context from recent work in advance.</p>
           <div class="hiw-visual">
             <div class="hiw-chat-visual">
               <div class="hiw-chat-messages">
-                <div class="hiw-chat-bubble user">Lets review the landing page tomorrow at 3pm</div>
-                <div class="hiw-chat-bubble agent">Got it! I'll prepare the meeting with context from our recent work. Meeting scheduled &#10003;</div>
+                <div class="hiw-chat-bubble user">Let's review the landing page tomorrow at 3pm</div>
+                <div class="hiw-chat-bubble agent">Scheduled! I'll prepare context from your recent PRD, design files, and last meeting's decisions before we start. &#10003;</div>
               </div>
               <div class="hiw-mini-calendar">
                 <div class="hiw-cal-header">Tomorrow</div>
@@ -2237,32 +2234,32 @@
           </div>
         </div>
 
-        <!-- Step 3: Join & Collaborate -->
+        <!-- Step 3: Join Meeting & Discuss -->
         <div class="hiw-card" data-hiw-card="2">
           <span class="hiw-card-step">Step 3</span>
-          <h3>Join &amp; Collaborate</h3>
-          <p class="hiw-card-desc">Your agent joins with full memory of your work — ready to discuss, present documents, and control the screen in real time.</p>
+          <h3>Join Meeting &amp; Discuss</h3>
+          <p class="hiw-card-desc">Your agent presents, discusses, and collects goals and requirements. It shares screen, navigates pages, and responds to your questions in real time.</p>
           <div class="hiw-visual hiw-meeting-visual">
             <div class="hiw-meeting-chrome">
               <div class="hiw-meeting-title">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                Sprint Planning — CallingClaw
+                Landing Page Review — CallingClaw
               </div>
               <span class="hiw-live-badge">Live</span>
             </div>
             <table class="hiw-sprint-table">
               <thead>
-                <tr><th>Task</th><th>Status</th></tr>
+                <tr><th>Decision Point</th><th>Status</th></tr>
               </thead>
               <tbody>
-                <tr><td>Voice routing</td><td><span class="hiw-status done">Done</span></td></tr>
-                <tr><td>Screen share API</td><td><span class="hiw-status progress">In Progress</span></td></tr>
-                <tr><td>Calendar integration</td><td><span class="hiw-status todo">To Do</span></td></tr>
+                <tr><td>Hero copy emphasizes memory</td><td><span class="hiw-status done">Decided</span></td></tr>
+                <tr><td>CTA: "Join the waitlist"</td><td><span class="hiw-status done">Decided</span></td></tr>
+                <tr><td>Footer layout bug</td><td><span class="hiw-status progress">Fix after launch</span></td></tr>
               </tbody>
             </table>
             <div class="hiw-meeting-caption">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-              CallingClaw: Here's our current sprint status
+              CallingClaw: Three decisions confirmed. I'll update the page after we wrap up.
             </div>
             <div class="hiw-meeting-participants">
               <span class="hiw-participant"><span class="hiw-participant-dot speaking"></span> CallingClaw</span>
@@ -2271,42 +2268,43 @@
           </div>
         </div>
 
-        <!-- Step 4: Get Results & Keep Going -->
+        <!-- Step 4: Get Results & Keep Working -->
         <div class="hiw-card" data-hiw-card="3">
           <span class="hiw-card-step">Step 4</span>
-          <h3>Get Results &amp; Keep Going</h3>
-          <p class="hiw-card-desc">After the meeting, receive a structured summary with action items, key decisions, and referenced files. Your agent starts executing autonomously.</p>
+          <h3>Get Results &amp; Keep Working</h3>
+          <p class="hiw-card-desc">After the meeting, your agent delivers a structured summary with action items, then keeps working on them autonomously.</p>
           <div class="hiw-visual">
             <div class="hiw-summary-card">
               <div class="hiw-summary-header">
                 <div class="hiw-summary-title">Meeting Summary — Landing Page Review</div>
-                <div class="hiw-summary-meta">32 min &bull; 2 participants</div>
+                <div class="hiw-summary-meta">12 min &bull; 3 decisions &bull; 3 action items</div>
               </div>
               <div class="hiw-summary-section">
                 <div class="hiw-summary-section-title">&#x1F4CB; Action Items</div>
                 <ul class="hiw-summary-list">
-                  <li><input type="checkbox" disabled> Update hero copy to emphasize local-first</li>
-                  <li><input type="checkbox" disabled> Add comparison table vs. cloud alternatives</li>
-                  <li><input type="checkbox" disabled> Record a 60-second demo video</li>
+                  <li><input type="checkbox" checked disabled> Update hero copy to emphasize memory</li>
+                  <li><input type="checkbox" checked disabled> Change CTA to "Join the waitlist"</li>
+                  <li><input type="checkbox" disabled> Fix footer layout bug</li>
                 </ul>
               </div>
               <div class="hiw-summary-section">
                 <div class="hiw-summary-section-title">&#x1F4A1; Key Decisions</div>
                 <ul class="hiw-summary-list">
-                  <li>&bull; Keep single-page layout, no multi-page navigation</li>
-                  <li>&bull; Prioritize speed over animations for first launch</li>
+                  <li>&bull; Hero emphasizes agent comes with memory, not blank</li>
+                  <li>&bull; Ship layout bug fix after copy update</li>
+                  <li>&bull; Deploy preview to Vercel for final sign-off</li>
                 </ul>
               </div>
               <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title">&#x1F4CE; Files Referenced</div>
+                <div class="hiw-summary-section-title">&#x1F4CE; Files Updated</div>
                 <div class="hiw-summary-files">
                   <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> site-1/index.html</span>
-                  <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> design/brand-guide.md</span>
+                  <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Vercel preview deployed</span>
                 </div>
               </div>
               <div class="hiw-summary-status">
                 <span class="hiw-spinner"></span>
-                Agent is working on action items...
+                Agent is executing action items...
               </div>
             </div>
           </div>
