@@ -121,7 +121,7 @@ const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
   fetch("http://localhost:4000/api/meeting/join", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: job.payload.meetUrl }),
+    body: JSON.stringify({ url: job.payload.meetUrl, topic: job.payload.summary }),
   }).then(r => {
     if (r.ok) console.log(`[JobScheduler] Join request sent for "${job.payload.summary}"`);
     else console.error(`[JobScheduler] Join failed: ${r.status}`);
@@ -535,6 +535,12 @@ eventBus.on("voice.stopped", () => {
 });
 
 eventBus.on("meeting.ended", async () => {
+  // Safety net: ensure recording is stopped even if autoLeaveMeeting() failed mid-way
+  if (meeting.getNotes().isRecording) {
+    console.warn("[Init] meeting.ended fired but recording still active — forcing stopRecording()");
+    meeting.stopRecording();
+  }
+
   // Finalize multimodal timeline before clearing meeting state
   const meetTopic = meetingPrepSkill.currentBrief?.topic || "Meeting";
   if (keyFrameStore.active) {
@@ -1044,7 +1050,16 @@ startConfigServer({
   sessionManager,
 });
 
-// ── 8. Python Sidecar REMOVED — NativeBridge handles all input actions ──
+// ── 8. Startup Cleanup ────────────────────────────────────────
+// Remove orphan test/eval files and stale sessions to prevent data contamination
+import { cleanupSharedDirectory } from "./modules/shared-documents";
+cleanupSharedDirectory().then(({ removedOrphans, purgedSessions }) => {
+  if (removedOrphans > 0 || purgedSessions > 0) {
+    console.log(`[Init] Cleanup: ${removedOrphans} orphan files removed, ${purgedSessions} stale sessions purged`);
+  }
+}).catch(() => {});
+
+// NativeBridge active (no Python sidecar)
 // Audio: Electron AudioWorklet + SwitchAudioSource
 // Input: osascript + cliclick (via NativeBridge)
 // Screenshots: screencapture CLI + Chrome CDP

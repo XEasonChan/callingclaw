@@ -38,3 +38,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.local
 meeting_notes/
 .playwright-cli/
+
+# Generated per-meeting stage HTML files (runtime artifacts, not source)
+public/stage-cc_*.html

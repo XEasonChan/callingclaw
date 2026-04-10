@@ -1545,12 +1545,30 @@ export function startConfigServer(services: Services) {
           }
         }
 
+        // Look up calendar event FIRST — we need the topic for session creation
+        let meetAttendees: any[] = [];
+        let calEvent: any = null;
+        if (services.calendar?.connected) {
+          try {
+            calEvent = await services.calendar.findEventByMeetUrl(validated.url);
+            if (calEvent?.attendees) meetAttendees = calEvent.attendees;
+          } catch {}
+        }
+
+        // Resolve topic: body.topic > calendar summary > instructions > workspace > default
+        const meetTopic = body.topic || calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
+
         // Reuse existing session for the same Meet URL, or create new one
         const session = services.sessionManager!.findOrCreate({
-          topic: body.topic || body.instructions?.slice(0, 200) || "Meeting",
+          topic: meetTopic,
           meetUrl: validated.url,
         });
         const meetingId = session.meetingId;
+
+        // Update session topic if calendar gave us a better one
+        if (calEvent?.summary && session.topic !== calEvent.summary) {
+          services.sessionManager!.update(meetingId, { topic: calEvent.summary });
+        }
 
         // Guard: reject concurrent join for the same meeting URL
         // This prevents duplicate cron jobs from all trying to join simultaneously
@@ -1593,19 +1611,6 @@ export function startConfigServer(services: Services) {
         } else if (services.realtime.connected) {
           voiceStarted = true;
         }
-
-        // Look up calendar event to get attendees
-        let meetAttendees: any[] = [];
-        let calEvent: any = null;
-        if (services.calendar?.connected) {
-          try {
-            calEvent = await services.calendar.findEventByMeetUrl(validated.url);
-            if (calEvent?.attendees) meetAttendees = calEvent.attendees;
-          } catch {}
-        }
-
-        // Generate meeting prep brief via OpenClaw — BACKGROUND, NEVER blocks join
-        const meetTopic = body.topic || calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
         let prepBrief: any = null;
 
         // Check for local presentation script (prep JSON with speakingPlan + scenes)
@@ -1684,7 +1689,12 @@ export function startConfigServer(services: Services) {
           }
         }
 
-        if (!prepBrief && services.meetingPrepSkill && services.openclawBridge?.connected) {
+        // Generate prep brief in background — use agentAdapter (works with any platform),
+        // fall back to openclawBridge for backward compat
+        const canGeneratePrep = services.meetingPrepSkill && (
+          services.agentAdapter?.connected || services.openclawBridge?.connected
+        );
+        if (!prepBrief && canGeneratePrep) {
           // Fire-and-forget: prep runs in background, injects when ready
           (async () => {
             try {
@@ -1698,7 +1708,9 @@ export function startConfigServer(services: Services) {
               console.warn("[Meeting] Prep brief failed (non-blocking):", e.message);
             }
           })();
-          console.log("[Meeting] Prep brief started in background — join continues immediately");
+          console.log(`[Meeting] Prep brief started in background via ${services.agentAdapter?.name || "openclaw"} — join continues immediately`);
+        } else if (!prepBrief) {
+          console.warn(`[Meeting] ⚠️ Skipping prep: meetingPrepSkill=${!!services.meetingPrepSkill}, adapter=${services.agentAdapter?.connected ?? false}, openclaw=${services.openclawBridge?.connected ?? false}`);
         }
 
         // Step 2: Configure audio + screen capture mode BEFORE joining
@@ -2837,7 +2849,10 @@ STEP-BY-STEP FLOW:
 
         // Step 2: Generate meeting prep brief (best-effort)
         let prepBrief: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        const canPrep = services.meetingPrepSkill && (
+          services.agentAdapter?.connected || services.openclawBridge?.connected
+        );
+        if (canPrep) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, topic, undefined, undefined, meetingId);
             prepBrief = prepResult.brief;
@@ -2855,7 +2870,7 @@ STEP-BY-STEP FLOW:
             console.warn("[TalkLocally] ❌ Prep brief failed (continuing without):", e.message);
           }
         } else {
-          console.warn(`[TalkLocally] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, openClaw=${services.openclawBridge?.connected ?? false}`);
+          console.warn(`[TalkLocally] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, adapter=${services.agentAdapter?.connected ?? false}, openClaw=${services.openclawBridge?.connected ?? false}`);
         }
 
         // Step 3: Start meeting recording (transcript)
