@@ -321,9 +321,10 @@
       top: 0;
       left: 0;
       width: 100%;
-      height: 380px; /* covers nav + tagline + subtitle + buttons */
+      height: 100%; /* covers entire hero section, no visible boundary */
       z-index: 0;
       pointer-events: none;
+      opacity: 0.6; /* slightly transparent so hero image shows through */
     }
 
     .hero .container,
@@ -2807,24 +2808,29 @@
               wave2: { h: 15,  s: 55, l: 35 }, // warm brick
               wave3: { h: 25,  s: 40, l: 28 }, // muted amber
               wave4: { h: 350, s: 50, l: 32 }, // dark rose
-              grainAlpha: 0.018 }
+              grainAlpha: 0.035 }
           : { bg: [250, 249, 249],    // #faf9f9
               wave1: { h: 8,   s: 68, l: 62 }, // coral red #dc4a3a tint
               wave2: { h: 18,  s: 55, l: 72 }, // peach / cream-coral
               wave3: { h: 30,  s: 45, l: 78 }, // warm cream
               wave4: { h: 355, s: 50, l: 68 }, // soft rose
-              grainAlpha: 0.012 };
+              grainAlpha: 0.025 };
       }
 
       // ── Film Grain Generator ────────────────────────
+      // Film grain at 1/3 resolution for larger, more visible grain particles
+      const GRAIN_SCALE = 3; // each grain pixel = 3x3 screen pixels
       class FilmGrain {
         constructor(w, h) {
-          this.w = w; this.h = h;
+          this.fullW = w; this.fullH = h;
+          this.w = Math.ceil(w / GRAIN_SCALE);
+          this.h = Math.ceil(h / GRAIN_SCALE);
           this.offCanvas = document.createElement('canvas');
-          this.offCanvas.width = w; this.offCanvas.height = h;
+          this.offCanvas.width = this.w; this.offCanvas.height = this.h;
           this.offCtx = this.offCanvas.getContext('2d');
+          this.offCtx.imageSmoothingEnabled = false;
           this.frame = 0;
-          this.imageData = this.offCtx.createImageData(w, h);
+          this.imageData = this.offCtx.createImageData(this.w, this.h);
           this._generate();
         }
         _generate() {
@@ -2837,15 +2843,15 @@
         }
         update() {
           this.frame++;
-          if (this.frame % 3 === 0) { // refresh every 3 frames for perf
+          if (this.frame % 3 === 0) {
             const d = this.imageData.data;
             const t = this.frame * 0.01;
             for (let i = 0; i < d.length; i += 4) {
               const grain = Math.random();
               const x = (i >> 2) % this.w;
               const y = ((i >> 2) / this.w) | 0;
-              const pattern = Math.sin(x * 0.01 + t) * Math.cos(y * 0.01 - t);
-              const v = (grain * 0.85 + pattern * 0.15) * 255;
+              const pattern = Math.sin(x * 0.02 + t) * Math.cos(y * 0.02 - t);
+              const v = (grain * 0.8 + pattern * 0.2) * 255;
               d[i] = d[i+1] = d[i+2] = v;
             }
             this.offCtx.putImageData(this.imageData, 0, 0);
@@ -2853,21 +2859,24 @@
         }
         apply(ctx, alpha, hue) {
           ctx.save();
-          // Soft overlay grain — single pass, light touch
+          ctx.imageSmoothingEnabled = false; // keep grain pixelated when scaled up
+          // Soft overlay grain — scaled up for larger particles
           ctx.globalCompositeOperation = 'overlay';
           ctx.globalAlpha = alpha;
-          ctx.drawImage(this.offCanvas, 0, 0);
+          ctx.drawImage(this.offCanvas, 0, 0, this.w, this.h, 0, 0, this.fullW, this.fullH);
           // Subtle color tint
           ctx.globalCompositeOperation = 'overlay';
           ctx.globalAlpha = alpha * 0.3;
           ctx.fillStyle = `hsla(${hue}, 45%, 55%, 1)`;
-          ctx.fillRect(0, 0, this.w, this.h);
+          ctx.fillRect(0, 0, this.fullW, this.fullH);
           ctx.restore();
         }
         resize(w, h) {
-          this.w = w; this.h = h;
-          this.offCanvas.width = w; this.offCanvas.height = h;
-          this.imageData = this.offCtx.createImageData(w, h);
+          this.fullW = w; this.fullH = h;
+          this.w = Math.ceil(w / GRAIN_SCALE);
+          this.h = Math.ceil(h / GRAIN_SCALE);
+          this.offCanvas.width = this.w; this.offCanvas.height = this.h;
+          this.imageData = this.offCtx.createImageData(this.w, this.h);
           this._generate();
         }
       }
