@@ -1621,20 +1621,30 @@ export function startConfigServer(services: Services) {
 
           if (!(services.meetingPrepSkill.currentBrief?.speakingPlan?.length > 0)) {
             const { homedir } = require("os");
-            const { existsSync, readdirSync } = require("fs");
             const sharedDir = `${homedir()}/.callingclaw/shared`;
             try {
-              // Filter by current meetingId first, fall back to any matching file
-              const allJsonFiles = readdirSync(sharedDir)
-                .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"));
-              const matchingFiles = allJsonFiles.filter((f: string) => f.startsWith(meetingId));
-              const jsonFiles = matchingFiles.length > 0 ? matchingFiles : allJsonFiles;
-              if (matchingFiles.length === 0 && allJsonFiles.length > 0) {
-                console.warn(`[Meeting] No prep file for meetingId=${meetingId}, falling back to ${allJsonFiles.length} available files`);
+              // STRICT: Only load prep files that match this meeting's ID or session's meetUrl
+              // NEVER fall back to random files — that causes test data contamination (P0 bug 2026-04-10)
+              const candidates = [
+                `${meetingId}_prep.json`,
+                `${meetingId}_presentation.json`,
+              ];
+
+              // Also check if SessionManager has a registered prep file for this session
+              const sessionWithPrep = services.sessionManager?.get(meetingId);
+              if (sessionWithPrep?.files?.prep && sessionWithPrep.files.prep.endsWith(".json")) {
+                candidates.push(sessionWithPrep.files.prep);
               }
-              for (const fname of jsonFiles) {
+              if (sessionWithPrep?.files?.presentation) {
+                candidates.push(sessionWithPrep.files.presentation);
+              }
+
+              let loaded = false;
+              for (const fname of candidates) {
                 const jsonPath = `${sharedDir}/${fname}`;
-                const prepData = JSON.parse(await Bun.file(jsonPath).text());
+                const file = Bun.file(jsonPath);
+                if (!(await file.exists())) continue;
+                const prepData = JSON.parse(await file.text());
                 if (prepData.speakingPlan && prepData.scenes) {
                   prepBrief = {
                     topic: prepData.topic || meetTopic,
@@ -1654,17 +1664,19 @@ export function startConfigServer(services: Services) {
                     decisionPoints: prepData.decisionPoints || [],
                   };
                   services.meetingPrepSkill.setBrief(prepBrief);
-                  // Register prep files as Working Documents on Stage
                   for (const f of (prepData.filePaths || [])) {
-                    const name = f.path.split("/").pop() || f.path;
                     services.context.addStageDocument(f.path, "new");
                   }
                   for (const u of (prepData.browserUrls || [])) {
                     services.context.addStageDocument(u.url, "new");
                   }
-                  console.log(`[Meeting] ✅ Loaded presentation script from ${fname} (meetingId match: ${matchingFiles.length > 0}): ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes, ${(prepData.filePaths?.length || 0) + (prepData.browserUrls?.length || 0)} documents`);
+                  console.log(`[Meeting] ✅ Loaded presentation script from ${fname}: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes`);
+                  loaded = true;
                   break;
                 }
+              }
+              if (!loaded) {
+                console.log(`[Meeting] No prep JSON for meetingId=${meetingId} — will wait for OpenClaw background prep`);
               }
             } catch (e: any) {
               console.warn(`[Meeting] Prep JSON scan failed: ${e.message}`);
