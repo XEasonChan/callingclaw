@@ -579,6 +579,8 @@ export class ChromeLauncher {
   private _context: any = null;
   private _page: any = null;
   private _googleLoginCache: { loggedIn: boolean; email: string | null; checkedAt: number } | null = null;
+  /** Mutex: if a launch is in progress, subsequent callers await the same promise */
+  private _launchPromise: Promise<{ port: number }> | null = null;
 
   constructor(opts?: { profileDir?: string }) {
     this.profileDir = opts?.profileDir || DEFAULT_PROFILE;
@@ -593,6 +595,12 @@ export class ChromeLauncher {
    * (it will reconnect to the existing Chrome via the port)
    */
   async launch(): Promise<{ port: number }> {
+    // Mutex: if another launch is already in progress, wait for it instead of racing
+    if (this._launchPromise) {
+      console.log("[ChromeLauncher] Launch already in progress, waiting for existing launch...");
+      return this._launchPromise;
+    }
+
     // If already launched, verify browser is still alive before reusing
     if (this._context && this._page) {
       try {
@@ -605,6 +613,17 @@ export class ChromeLauncher {
         this._page = null;
       }
     }
+
+    // Set the mutex — all concurrent callers will await this same promise
+    this._launchPromise = this._launchInternal();
+    try {
+      return await this._launchPromise;
+    } finally {
+      this._launchPromise = null;
+    }
+  }
+
+  private async _launchInternal(): Promise<{ port: number }> {
 
     // Dynamic import to avoid loading playwright-core at module level
     const { chromium } = await import("playwright-core");

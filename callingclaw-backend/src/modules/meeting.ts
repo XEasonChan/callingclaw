@@ -49,6 +49,17 @@ export class MeetingModule {
    * Periodically extracts action items from the transcript.
    */
   startRecording() {
+    // Defensive cleanup: clear any residual state from a previous meeting
+    // (happens if previous join failed and stopRecording was never called)
+    if (this._extractionTimer) {
+      clearInterval(this._extractionTimer);
+      this._extractionTimer = null;
+    }
+    if (this._transcriptHandler) {
+      this.context.off("transcript", this._transcriptHandler);
+      this._transcriptHandler = null;
+    }
+
     this._meetingStartTime = Date.now();
     this._summaryCount = 0;
     this._lastSummaryHash = "";

@@ -1551,6 +1551,20 @@ export function startConfigServer(services: Services) {
           meetUrl: validated.url,
         });
         const meetingId = session.meetingId;
+
+        // Guard: reject concurrent join for the same meeting URL
+        // This prevents duplicate cron jobs from all trying to join simultaneously
+        if (session.status === "active" && voiceSessionState.active && voiceSessionState.mode === "meeting") {
+          console.log(`[Meeting] Rejecting duplicate join — already in meeting (${meetingId})`);
+          return Response.json({
+            meetingId,
+            status: "already_joined",
+            success: true,
+            message: "Already in this meeting",
+            voice: "connected",
+          }, { headers });
+        }
+
         services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
 
         // Step 1: Start voice session (if not already running)
@@ -1596,49 +1610,65 @@ export function startConfigServer(services: Services) {
 
         // Check for local presentation script (prep JSON with speakingPlan + scenes)
         // This enables PRESENTER mode without waiting for OpenClaw
-        if (services.meetingPrepSkill && !(services.meetingPrepSkill.currentBrief?.speakingPlan?.length > 0)) {
-          const { homedir } = require("os");
-          const { existsSync, readdirSync } = require("fs");
-          const sharedDir = `${homedir()}/.callingclaw/shared`;
-          try {
-            const jsonFiles = readdirSync(sharedDir)
-              .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"));
-            for (const fname of jsonFiles) {
-              const jsonPath = `${sharedDir}/${fname}`;
-              const prepData = JSON.parse(await Bun.file(jsonPath).text());
-              if (prepData.speakingPlan && prepData.scenes) {
-                prepBrief = {
-                  topic: prepData.topic || meetTopic,
-                  goal: prepData.goal || "",
-                  generatedAt: Date.now(),
-                  summary: prepData.summary || "",
-                  keyPoints: prepData.keyPoints || [],
-                  architectureDecisions: [],
-                  expectedQuestions: [],
-                  filePaths: prepData.filePaths || [],
-                  browserUrls: prepData.browserUrls || [],
-                  folderPaths: [],
-                  attendees: meetAttendees || [],
-                  liveNotes: [],
-                  speakingPlan: prepData.speakingPlan,
-                  scenes: prepData.scenes,
-                  decisionPoints: prepData.decisionPoints || [],
-                };
-                services.meetingPrepSkill.setBrief(prepBrief);
-                // Register prep files as Working Documents on Stage
-                for (const f of (prepData.filePaths || [])) {
-                  const name = f.path.split("/").pop() || f.path;
-                  services.context.addStageDocument(f.path, "new");
-                }
-                for (const u of (prepData.browserUrls || [])) {
-                  services.context.addStageDocument(u.url, "new");
-                }
-                console.log(`[Meeting] ✅ Loaded presentation script from ${fname}: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes, ${(prepData.filePaths?.length || 0) + (prepData.browserUrls?.length || 0)} documents`);
-                break;
+        // IMPORTANT: Clear stale brief from previous meeting first, then match by meetingId
+        if (services.meetingPrepSkill) {
+          // Clear previous meeting's brief to ensure we never use stale data
+          const prevBrief = services.meetingPrepSkill.currentBrief;
+          if (prevBrief && prevBrief.topic !== meetTopic) {
+            services.meetingPrepSkill.setBrief(null as any);
+            console.log(`[Meeting] Cleared stale prep brief (was: "${prevBrief.topic}", now: "${meetTopic}")`);
+          }
+
+          if (!(services.meetingPrepSkill.currentBrief?.speakingPlan?.length > 0)) {
+            const { homedir } = require("os");
+            const { existsSync, readdirSync } = require("fs");
+            const sharedDir = `${homedir()}/.callingclaw/shared`;
+            try {
+              // Filter by current meetingId first, fall back to any matching file
+              const allJsonFiles = readdirSync(sharedDir)
+                .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"));
+              const matchingFiles = allJsonFiles.filter((f: string) => f.startsWith(meetingId));
+              const jsonFiles = matchingFiles.length > 0 ? matchingFiles : allJsonFiles;
+              if (matchingFiles.length === 0 && allJsonFiles.length > 0) {
+                console.warn(`[Meeting] No prep file for meetingId=${meetingId}, falling back to ${allJsonFiles.length} available files`);
               }
+              for (const fname of jsonFiles) {
+                const jsonPath = `${sharedDir}/${fname}`;
+                const prepData = JSON.parse(await Bun.file(jsonPath).text());
+                if (prepData.speakingPlan && prepData.scenes) {
+                  prepBrief = {
+                    topic: prepData.topic || meetTopic,
+                    goal: prepData.goal || "",
+                    generatedAt: Date.now(),
+                    summary: prepData.summary || "",
+                    keyPoints: prepData.keyPoints || [],
+                    architectureDecisions: [],
+                    expectedQuestions: [],
+                    filePaths: prepData.filePaths || [],
+                    browserUrls: prepData.browserUrls || [],
+                    folderPaths: [],
+                    attendees: meetAttendees || [],
+                    liveNotes: [],
+                    speakingPlan: prepData.speakingPlan,
+                    scenes: prepData.scenes,
+                    decisionPoints: prepData.decisionPoints || [],
+                  };
+                  services.meetingPrepSkill.setBrief(prepBrief);
+                  // Register prep files as Working Documents on Stage
+                  for (const f of (prepData.filePaths || [])) {
+                    const name = f.path.split("/").pop() || f.path;
+                    services.context.addStageDocument(f.path, "new");
+                  }
+                  for (const u of (prepData.browserUrls || [])) {
+                    services.context.addStageDocument(u.url, "new");
+                  }
+                  console.log(`[Meeting] ✅ Loaded presentation script from ${fname} (meetingId match: ${matchingFiles.length > 0}): ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes, ${(prepData.filePaths?.length || 0) + (prepData.browserUrls?.length || 0)} documents`);
+                  break;
+                }
+              }
+            } catch (e: any) {
+              console.warn(`[Meeting] Prep JSON scan failed: ${e.message}`);
             }
-          } catch (e: any) {
-            console.warn(`[Meeting] Prep JSON scan failed: ${e.message}`);
           }
         }
 
@@ -1792,6 +1822,17 @@ export function startConfigServer(services: Services) {
             meetingId,
             title: meetTopic,
           });
+
+          // Mark voice session active so /api/voice/session/status returns correct state
+          if (voiceStarted || services.realtime.connected) {
+            markVoiceSession({
+              mode: "meeting",
+              transport: "meet_bridge",
+              topic: meetTopic,
+              provider: services.realtime.provider,
+            });
+          }
+
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
 
@@ -1973,11 +2014,12 @@ export function startConfigServer(services: Services) {
                 }).catch((e: any) => console.error("[Meeting] Auto-leave delivery failed:", e.message));
               }
 
-              // Stop voice session
+              // Stop voice session + clear state
               if (services.realtime.connected) {
                 services.realtime.stop();
                 services.eventBus.emit("voice.stopped", {});
               }
+              clearVoiceSession();
 
               console.log("[Meeting] Auto-leave complete — summary + delivery triggered");
             } catch (e: any) {

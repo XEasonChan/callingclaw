@@ -176,13 +176,19 @@ export class MeetingScheduler {
           // Skip if already scheduled
           if (this.scheduled.has(eventId) || this._everScheduled.has(eventId)) continue;
 
-          // Skip if SessionManager already has a session for this meetUrl
+          // Skip if SessionManager already has a session for this meetUrl (any non-ended status)
           if (this.sessionManager) {
             const existingSessions = this.sessionManager.list();
             const hasMeetUrlSession = existingSessions.some(s =>
-              s.meetUrl === event.meetLink && (s.status === "active" || s.status === "pending")
+              s.meetUrl === event.meetLink && s.status !== "ended"
             );
-            if (hasMeetUrlSession) {
+            // Also check recently-ended sessions (within last 30 min) to prevent
+            // re-scheduling a meeting that just finished
+            const hasRecentlyEnded = existingSessions.some(s =>
+              s.meetUrl === event.meetLink && s.status === "ended" &&
+              s.updatedAt && (Date.now() - new Date(s.updatedAt).getTime()) < 30 * 60 * 1000
+            );
+            if (hasMeetUrlSession || hasRecentlyEnded) {
               this._everScheduled.add(eventId);
               continue;
             }
