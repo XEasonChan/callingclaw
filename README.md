@@ -1,426 +1,233 @@
-# CallingClaw — AI That Joins Your Meetings
+# CallingClaw
+
+Your AI agent is smart but it can't join your meetings. CallingClaw fixes that. It joins Google Meet as a real participant with voice, vision, and hands. It listens to the conversation, speaks when spoken to, shares its screen to present documents, scrolls through pages, clicks buttons, and captures action items. After the meeting, it sends a branded summary to Telegram.
+
+> **~5 minutes to your first AI meeting.** Your agent does the setup. Backend starts in 3 seconds (Bun, no Docker). Dependencies install on first launch. You just paste API keys.
+>
+> **Runs locally on your Mac.** No cloud servers, no data leaving your machine. Bring your own API keys. macOS 13+ required.
 
 <p align="center">
-  <img src="callingclaw-desktop/assets/icon.png" alt="CallingClaw" width="120" style="border-radius: 24px;">
+  <img src="callingclaw-desktop/assets/icon.png" alt="CallingClaw" width="100" style="border-radius: 24px;">
 </p>
 
-> An AI agent that joins Google Meet as a real participant — with memory, vision, and hands. It listens, speaks, presents, scrolls, clicks, and takes action.
+<img width="1492" height="1169" alt="CallingClaw Desktop" src="https://github.com/user-attachments/assets/5a7fea43-307b-4759-a3a4-baa7689db9d6" />
 
-<img width="1492" height="1169" alt="ScreenShot_2026-04-13_000729_137" src="https://github.com/user-attachments/assets/5a7fea43-307b-4759-a3a4-baa7689db9d6" />
-
-
-**v2.9.2** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md) · [Team Intro Deck](https://callingclaw-team-intro.vercel.app/)
-
-Multi-provider voice AI (OpenAI Realtime 1.5, Gemini 3.1 Live, Grok) with a dual-brain architecture: fast voice model for real-time conversation + slow reasoning model for deep research. Page Agent DOM extraction for screen understanding. Claude Code Channels for Telegram dispatch.
+**v2.9.2** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md)
 
 ---
 
-## Quick Start with Claude Code
+## Start here: paste this into Claude Code
 
-The fastest way to get CallingClaw running. Paste this into [Claude Code](https://claude.ai/code):
-
-```
-Clone https://github.com/XEasonChan/callingclaw.git into my current directory.
-Read the CLAUDE.md, then help me set up CallingClaw step by step:
-1. Install dependencies (Bun for backend, npm for desktop)
-2. Create .env from .env.example and help me fill in my API keys
-3. Start the backend and verify it's healthy
-4. Launch the desktop app
-```
-
-Claude Code will read `CLAUDE.md` (the full technical guide), install everything, and walk you through configuration interactively. It handles the `.env` setup, Google OAuth token generation, and macOS permission checks.
-
-**Already have the repo?** Just tell Claude Code:
+Copy this block into [Claude Code](https://claude.ai/code). The agent will clone the repo, install everything, walk you through API key setup, and verify the system is healthy. Do not skip steps.
 
 ```
-Read CLAUDE.md then start CallingClaw. Help me configure any missing API keys.
+GOAL: Set up CallingClaw — an AI meeting assistant that joins Google
+Meet with voice, vision, and screen control. Get me to a working
+system where I can join my next meeting. Do not skip steps. Verify
+each step before proceeding.
+
+CallingClaw is a Bun backend + Electron desktop app. It needs API
+keys for voice (Gemini or OpenAI) and optionally Google OAuth for
+calendar auto-join. Read CLAUDE.md for the full architecture.
+
+STEP 1 — CLONE & INSTALL
+  git clone https://github.com/XEasonChan/callingclaw.git
+  cd callingclaw/callingclaw-backend && bun install
+  cd ../callingclaw-desktop && npm install
+  Verify: both install without errors
+
+STEP 2 — API KEYS
+  cp callingclaw-backend/.env.example callingclaw-backend/.env
+  Ask me for each key. At minimum I need ONE voice key:
+    GEMINI_API_KEY    — recommended (free tier, 10x cheaper)
+    OPENAI_API_KEY    — alternative (best tool calling)
+    XAI_API_KEY       — alternative (cheapest)
+  Optional but recommended:
+    OPENROUTER_API_KEY — for vision, analysis, computer use
+  Verify: keys are non-empty in .env
+
+STEP 3 — START BACKEND
+  cd callingclaw-backend && bun run src/callingclaw.ts
+  Verify: curl http://localhost:4000/api/status returns
+  {"callingclaw":"running","version":"2.9.2",...}
+
+STEP 4 — GOOGLE ACCOUNT (optional, for calendar + Meet join)
+  Open http://localhost:4000 in a browser. Click "Sign in with Google"
+  in the onboarding flow. This opens Chrome where you sign into your
+  Google account. CallingClaw imports the cookies for Meet access.
+  For calendar: add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and
+  GOOGLE_REFRESH_TOKEN to .env (run scripts/refresh-google-token.ts
+  to generate the refresh token).
+  Verify: curl http://localhost:4000/api/status shows calendar: "connected"
+
+STEP 5 — DESKTOP APP
+  cd callingclaw-desktop && npm start
+  Grant macOS permissions when prompted: Microphone, Screen Recording,
+  Accessibility. The app auto-starts the backend daemon.
+  Verify: tray icon appears, main window shows "Engine Running"
+
+STEP 6 — TEST
+  Join a test meeting: /callingclaw join <your-meet-url>
+  Or use Talk Locally: click any meeting card in the Desktop app
+  Verify: AI speaks, transcript appears, action items captured
+
+DONE. Tell me: "CallingClaw is running. Voice provider: [provider].
+Calendar: [connected/not configured]. Ready to join meetings."
 ```
 
-> **For AI agents:** `CLAUDE.md` contains the complete architecture, module wiring, context model, and known gotchas. It is the single source of truth for programmatic understanding of this codebase.
-
----
-
-## What CallingClaw Does
-
-| Capability | Description | Required Key |
-|-----------|-------------|-------------|
-| **Real-time Voice** | Bidirectional voice at ~300ms. 4 providers: OpenAI Realtime 1.5 (default), Gemini 3.1 Live, Grok, OpenAI legacy | Voice API Key |
-| **Meeting Join** | Joins Google Meet via Playwright audio injection (no virtual drivers) | Google OAuth |
-| **Screen Sharing** | Shares CallingClaw's screen in Meet, presents pages with scroll/click | Google OAuth |
-| **Page Understanding** | DOM extraction (Page Agent style) + Gemini Flash vision. Reads pages as text, not screenshots | OpenRouter API Key |
-| **Computer Control** | 4-layer automation: shortcuts → OpenCLI → Playwright → Computer Use. W3C synthetic click events | OpenRouter API Key |
-| **Meeting Prep** | Auto-generates prep brief with speaking plan + scenes for presentations | OpenClaw or Claude Code |
-| **Meeting Notes** | Real-time transcript, auto-extracted action items, branded HTML summary | OpenAI API Key |
-| **Calendar** | View schedule, create meetings, auto-join 2min before start | Google OAuth |
-| **Meeting Stage** | Transparent dual-panel workspace: S1 voice feed + S2 agent actions + presentation iframe | — |
-| **Telegram Dispatch** | Claude Code Channels integration: receive commands, send summaries via Telegram | Claude subscription |
-
----
-
-## Architecture
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│  Telegram / Claude Code Channels (optional dispatch layer)     │
-│  User sends message → Claude Code → /callingclaw skill → REST │
-└────────────────────────────┬───────────────────────────────────┘
-                             │
-┌────────────────────────────┼───────────────────────────────────┐
-│                    CallingClaw Backend (Bun :4000)              │
-│                                                                │
-│  ┌─ System 1 (Fast Brain) ─────────────────────────────────┐   │
-│  │ VoiceModule         → OpenAI Realtime 1.5 / Gemini Live │   │
-│  │ TranscriptAuditor   → Haiku intent classification       │   │
-│  │ ContextRetriever    → Haiku gap detection + file search  │   │
-│  │ VisionModule        → Gemini Flash (screenshot analysis) │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                │
-│  ┌─ Automation Router (4 layers) ──────────────────────────┐   │
-│  │ L1: Shortcuts (keyboard, app launch)        <100ms      │   │
-│  │ L2: OpenCLI (66+ web adapters, Haiku)       1-2s        │   │
-│  │ L3: Playwright (DOM snapshot + Haiku)        2-5s       │   │
-│  │ L4: Computer Use (vision fallback)           5-10s      │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                │
-│  ┌─ System 2 (Slow Brain) ─────────────────────────────────┐   │
-│  │ AgentAdapter        → OpenClaw / Claude Code / Standalone│   │
-│  │ MeetingPrepSkill    → Deep research + speaking plan      │   │
-│  │ PostMeetingDelivery → Summary + action items to Telegram │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                │
-│  Meeting Stage (/stage) — S1 voice + S2 agent dual panels      │
-│  EventBus → /ws/events → Claude Code Channel plugin            │
-│  5-Layer Context: Identity → Tools → Mission → Live → Conv     │
-└────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Prerequisites
-
-### Required
-
-| Software | Version | Install |
-|----------|---------|---------|
-| **macOS** | 13+ (Ventura) | — |
-| **Bun** | 1.3+ | `curl -fsSL https://bun.sh/install \| bash` |
-| **Node.js** | 18+ | `brew install node` (for Electron) |
-
-### For Meeting Audio (Google Meet / Zoom)
-
-No virtual audio drivers needed (BlackHole was removed in v2.7.12). Audio injection happens at the browser level via Playwright's `addInitScript`.
+### Without Claude Code
 
 ```bash
-# Optional: SwitchAudioSource for audio device management
-brew install switchaudio-osx
-```
+# Download the DMG (easiest)
+# Get CallingClaw-2.9.2-arm64.dmg from Releases:
+open https://github.com/XEasonChan/callingclaw/releases/latest
 
-### API Keys
-
-| Key | Required For | Get It |
-|-----|-------------|--------|
-| `GEMINI_API_KEY` | Voice (Gemini 3.1 Live, default, 10× cheaper) | [aistudio.google.com](https://aistudio.google.com/apikey) |
-| `OPENAI_API_KEY` | Voice (OpenAI Realtime) | [platform.openai.com](https://platform.openai.com/api-keys) |
-| `XAI_API_KEY` | Voice (Grok, 6× cheaper) | [console.x.ai](https://console.x.ai) |
-| `OPENROUTER_API_KEY` | Computer Use, Vision, Analysis | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `GOOGLE_CLIENT_ID` | Calendar + Meet | Google Cloud Console (OAuth 2.0) |
-| `GOOGLE_CLIENT_SECRET` | Calendar + Meet | Same as above |
-| `GOOGLE_REFRESH_TOKEN` | Calendar + Meet | OAuth flow or `scripts/refresh-google-token.ts` |
-
-At minimum you need **one voice key** (Gemini, Grok, or OpenAI) to use CallingClaw. Gemini is recommended (free tier available, best quality-to-cost ratio).
-
----
-
-## Installation
-
-### 1. Clone
-
-```bash
+# Or from source:
 git clone https://github.com/XEasonChan/callingclaw.git
-cd callingclaw
-```
-
-### 2. Backend Setup
-
-```bash
-cd callingclaw-backend
-bun install
-
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env — fill in your API keys (see table above)
-```
-
-### 3. Desktop App
-
-```bash
-cd callingclaw-desktop
-npm install
-```
-
-### 4. Verify Installation
-
-```bash
-# Start backend
-cd callingclaw-backend
+cd callingclaw && cd callingclaw-backend && bun install
+cp .env.example .env   # add your API keys
 bun run src/callingclaw.ts
+# Open http://localhost:4000 in your browser
+```
 
-# In another terminal — check health
-curl http://localhost:4000/api/status
-# Should return: {"callingclaw":"running","version":"2.9.2",...}
+> **For AI agents:** [`CLAUDE.md`](CLAUDE.md) contains the complete architecture, module wiring, 5-layer context model, and known gotchas. It is the single source of truth for programmatic understanding of this codebase.
+
+---
+
+## What happens when you join a meeting
+
+```
+You say: "/callingclaw join https://meet.google.com/abc-defg-hij"
+
+  CallingClaw opens Chrome (Playwright, no virtual audio drivers)
+  → Injects audio bridge via addInitScript (intercepts getUserMedia)
+  → Joins the meeting, announces itself as AI
+  → Starts real-time voice conversation (~300ms latency)
+  → Captures screenshots every 40s for visual context
+  → Detects action items in real-time from the conversation
+  → Can share screen, present docs, scroll, click on voice command
+  → On leave: generates summary, creates todos, sends to Telegram
+```
+
+Before the meeting even starts, CallingClaw runs a **prep pipeline**: reads your calendar, researches participants, pulls relevant docs from memory, reviews past meeting decisions, and generates a structured brief with talking points. The AI arrives to the meeting better prepared than most humans.
+
+---
+
+## The dual-brain meeting architecture
+
+Most meeting AI is a tape recorder. CallingClaw is a participant.
+
+| | Tape Recorders | CallingClaw |
+|---|---|---|
+| **During meeting** | Silent recording | Real-time voice conversation |
+| **Screen** | Can't see | Perceives shared screens, shares its own |
+| **Context** | None | Prep brief + past decisions + live search |
+| **Action items** | Post-meeting extraction | Captured as they happen |
+| **Computer control** | None | Opens files, navigates pages, clicks buttons |
+| **Output** | Transcript + summary | Summary + action items + follow-up execution |
+
+Two models work in parallel. System 1 (fast) handles the live conversation. System 2 (deep) handles research, prep, and post-meeting delivery.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                CallingClaw Backend (Bun :4000)                │
+│                                                              │
+│  System 1 (Fast, ~300ms)          System 2 (Deep, ~15s)      │
+│  ┌──────────────────────┐         ┌────────────────────────┐ │
+│  │ Voice    → Realtime   │         │ Prep    → OpenClaw     │ │
+│  │ Auditor  → Haiku      │         │ Search  → Claude Code  │ │
+│  │ Vision   → Gemini     │         │ Summary → Telegram     │ │
+│  │ Retrieve → Haiku      │         │ Tasks   → Action items │ │
+│  └──────────────────────┘         └────────────────────────┘ │
+│                                                              │
+│  Chrome (Playwright)              Meeting Stage (/stage)     │
+│  ┌──────────────────────┐         ┌────────────────────────┐ │
+│  │ Tab 1: Google Meet    │         │ Left: Presentation     │ │
+│  │ Tab 2: Presenting     │         │ Right: S1 + S2 feed    │ │
+│  │ Audio injection       │         │ Working documents      │ │
+│  │ Page Agent DOM extract│         │ EventBus → WebSocket   │ │
+│  └──────────────────────┘         └────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Quick Start
+## Voice providers
 
-### Option A: Download DMG (easiest)
+Set `VOICE_PROVIDER` in `.env` or switch at runtime via the Desktop UI.
 
-Download `CallingClaw-2.9.2-arm64.dmg` from [Releases](https://github.com/XEasonChan/callingclaw/releases/latest), drag to Applications, and open. The app:
-- Bundles the backend + Bun runtime (auto-installs dependencies on first launch)
-- Walks you through onboarding: permissions, Google account, API keys
-- Auto-starts the backend daemon on every launch
+| Provider | Cost | Latency | Session | Best For |
+|----------|------|---------|---------|----------|
+| **Gemini 3.1 Live** | ~$0.02/min | ~400ms | 15 min (auto-resume) | Daily use, free tier available |
+| OpenAI Realtime 1.5 | ~$0.30/min | ~300ms | 120 min | Tool calling, long meetings |
+| Grok (xAI) | ~$0.05/min | ~350ms | 30 min | Web search, X integration |
 
-### Option B: Desktop App (from source)
-
-```bash
-cd callingclaw-desktop
-npm start
-```
-
-The Desktop app:
-- Auto-starts the backend daemon
-- Shows tray icon + main window
-- Provider/voice selector in status bar (Gemini, Grok, or OpenAI)
-- Click "Talk Locally" on any meeting card to start a voice conversation
-
-### Option C: Backend Only + Browser
-
-```bash
-cd callingclaw-backend
-bun run src/callingclaw.ts
-```
-
-Then open:
-- **Voice Test:** http://localhost:4000/voice-test.html (browser-based voice with mic/speaker)
-- **Control Panel:** http://localhost:4000/ (full dashboard)
-
-### Option D: Development Mode
-
-```bash
-# Backend with hot reload
-cd callingclaw-backend
-bun --hot run src/callingclaw.ts
-
-# Desktop with DevTools
-cd callingclaw-desktop
-npm start -- --dev
-```
+At minimum you need **one voice key**. Gemini is recommended to start (free tier, best cost-to-quality ratio).
 
 ---
 
-## Configuration
+## API keys
 
-### Voice Provider
-
-Set in `.env`:
-```bash
-VOICE_PROVIDER=gemini   # or "grok" or "openai"
-```
-
-Or switch at runtime via the Desktop status bar dropdown or voice-test.html.
-
-| Provider | Cost | Session Limit | Notes |
-|----------|------|---------------|-------|
-| **OpenAI Realtime 1.5** (default) | ~$0.30/min | 120 min | GA API, semantic VAD, image input, best tool calling |
-| Gemini 3.1 Live | ~$0.02/min | 15 min (auto-resume) | 10x cheaper, session resumption, native tools |
-| Grok (xAI) | ~$0.05/min | 30 min | Built-in web_search + x_search |
-
-### Audio
-
-CallingClaw uses 24kHz PCM16 mono for all audio paths. This is configured in `callingclaw-backend/src/config.ts` and should not be changed.
-
-**Talk Locally (direct mode):**
-- Uses your real microphone and speakers
-- Select mic device in Desktop UI or voice-test.html dropdown
-- Avoid selecting "BlackHole" as your mic — it's a virtual device with no input
-
-**Meet Bridge mode (v2.7.13):**
-- Audio injection via Playwright `addInitScript` — no virtual audio drivers needed
-- AI audio → Ring buffer worklet → `getUserMedia` interception → Meet broadcasts to participants
-- Remote meeting audio → `RTCPeerConnection` receivers → AudioWorklet → Backend → AI
-- Echo cancellation suppresses mic capture during AI playback
-
-### Google Calendar
-
-**Option 1: Auto-discover from OpenClaw workspace**
-```bash
-# If you have OpenClaw installed, CallingClaw auto-finds Google OAuth tokens from:
-~/.openclaw/workspace/
-```
-
-**Option 2: Manual configuration**
-Add to `.env`:
-```bash
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-xxx
-GOOGLE_REFRESH_TOKEN=1//xxx
-```
-
-Generate a refresh token:
-```bash
-cd callingclaw-backend
-bun run scripts/refresh-google-token.ts
-```
+| Key | What For | Get It |
+|-----|----------|--------|
+| `GEMINI_API_KEY` | Voice (default), vision | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| `OPENAI_API_KEY` | Voice (alternative) | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `OPENROUTER_API_KEY` | Computer use, analysis, intent classification | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `GOOGLE_CLIENT_ID` + `SECRET` + `REFRESH_TOKEN` | Calendar auto-join, Meet access | Google Cloud Console OAuth 2.0 |
 
 ---
 
-## macOS Permissions
+## macOS permissions
 
-CallingClaw needs these macOS permissions (prompted automatically):
+Prompted automatically on first launch:
 
-| Permission | Why | Where to Grant |
-|-----------|-----|---------------|
-| **Microphone** | Voice capture | System Settings → Privacy → Microphone → CallingClaw / your browser |
-| **Screen Recording** | Screen analysis during meetings | System Settings → Privacy → Screen Recording |
-| **Accessibility** | Computer control (click, type) | System Settings → Privacy → Accessibility |
-
----
-
-## Building the DMG
-
-```bash
-cd callingclaw-desktop
-
-# Strip iCloud extended attributes (prevents codesign issues)
-xattr -cr .
-
-# Build
-npm run build
-
-# Output: dist/CallingClaw-{version}-arm64.dmg
-```
+| Permission | Why |
+|-----------|-----|
+| **Microphone** | Voice capture for local conversations |
+| **Screen Recording** | Screenshot analysis during meetings |
+| **Accessibility** | Computer control (click, type, scroll) |
 
 ---
 
-## Project Structure
+## How CallingClaw fits with Claude Code
+
+CallingClaw is the meeting layer. Claude Code is the reasoning layer.
+
+When you run CallingClaw inside Claude Code (via the `/callingclaw` skill or the Telegram Channel plugin), Claude Code becomes System 2: it receives meeting events, runs deep research, generates prep briefs, and delivers post-meeting summaries. CallingClaw's System 1 handles the real-time voice conversation independently.
+
+They're complementary:
+- **CallingClaw** = ears, mouth, eyes, hands (real-time meeting participation)
+- **Claude Code** = brain (deep reasoning, memory, file access, task execution)
+
+The [`plugins/callingclaw-events`](plugins/) bridge connects them via EventBus → MCP Channel. Your Telegram becomes the control plane.
+
+---
+
+## Project structure
 
 ```
 callingclaw/
-├── callingclaw-backend/          # Bun backend
-│   ├── src/
-│   │   ├── callingclaw.ts        # Main entry, module wiring
-│   │   ├── ai_gateway/           # Realtime client, voice events
-│   │   ├── modules/              # Voice, meeting, context, vision, ...
-│   │   ├── routes/               # HTTP API routes
-│   │   ├── tool-definitions/     # AI tool schemas + handlers
-│   │   ├── skills/               # Meeting prep, OpenClaw, Zoom
-│   │   └── config.ts             # Central configuration
-│   ├── public/                   # Static web UI (voice-test, panel)
-│   ├── test/                     # Unit + integration tests
-│   ├── docs/                     # Architecture, deployment, protocol
-│   └── .env                      # API keys (not committed)
-├── callingclaw-desktop/          # Electron desktop app
-│   ├── src/main/                 # Main process (window, tray, IPC)
-│   ├── src/renderer/             # Renderer (HTML, JS, audio-bridge)
-│   ├── src/preload/              # Context bridge
-│   └── assets/                   # Icons
-├── callingclaw-landing/          # Landing page (Vercel)
-├── docs/                         # PRD, architecture decisions
-├── CLAUDE.md                     # Project guide for AI agents
-├── CHANGELOG.md                  # Release history
-├── ROADMAP.md                    # Future plans
-├── TODOS.md                      # Tracked work items
-├── plugins/                      # Claude Code Channel plugin (EventBus bridge)
-└── VERSION                       # Current version (2.9.2)
+├── callingclaw-backend/     # Bun backend (AI orchestration, voice, meeting lifecycle)
+├── callingclaw-desktop/     # Electron app (UI, audio bridge, tray, onboarding)
+├── plugins/                 # Claude Code Channel plugin (EventBus → Telegram)
+├── CLAUDE.md                # Agent guide — architecture, rules, gotchas
+├── CHANGELOG.md             # Release history
+└── VERSION                  # 2.9.2
 ```
-
----
-
-## API Reference
-
-Backend runs on `http://localhost:4000`. Key endpoints:
-
-### Voice
-
-| Endpoint | Method | Body | Description |
-|----------|--------|------|-------------|
-| `/api/voice/session/start` | POST | `{provider, voice, mode, transport}` | Start voice session |
-| `/api/voice/session/stop` | POST | — | Stop voice session |
-| `/api/voice/session/status` | GET | — | Current session state |
-| `/api/voice/text` | POST | `{text}` | Send text to voice AI |
-
-### Meeting
-
-| Endpoint | Method | Body | Description |
-|----------|--------|------|-------------|
-| `/api/meeting/talk-locally` | POST | `{topic}` | Start local conversation |
-| `/api/meeting/talk-locally/stop` | POST | — | Stop + generate summary |
-| `/api/meeting/join` | POST | `{url, instructions?}` | Join Google Meet/Zoom |
-| `/api/meeting/leave` | POST | — | Leave + generate summary |
-
-### Calendar & Tasks
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/calendar/events` | GET | Upcoming events |
-| `/api/tasks` | GET | Pending action items |
-| `/api/status` | GET | System health |
-
-### WebSocket
-
-| Endpoint | Description |
-|----------|-------------|
-| `/ws/events` | Real-time EventBus stream |
-| `/ws/audio-bridge` | Electron audio transport |
-| `/ws/voice-test` | Browser voice test transport |
 
 ---
 
 ## Troubleshooting
 
-### Backend won't start
-```bash
-# Check if port is in use
-lsof -i :4000
-# Kill stale process
-kill $(lsof -t -i :4000)
-```
+**Backend won't start:** `lsof -i :4000` → `kill` the stale process.
 
-### No voice audio
-1. Check API key: `curl http://localhost:4000/api/status` → verify voice provider connected
-2. Check mic device: System Settings → Sound → Input → should NOT be BlackHole
-3. Check browser permissions: `Microphone: Allowed` in site settings
+**No voice audio:** Check API key in `curl http://localhost:4000/api/status`. Verify mic is not set to BlackHole.
 
-### Meet audio not working
-1. Check backend status: `curl http://localhost:4000/api/status` — verify voice provider connected
-2. Ensure Chrome is using your Google account (CallingClaw uses your main Chrome profile)
-3. Check that mic is ON in Meet (audio injection requires mic permission)
-4. If AI repeats itself: echo cancellation should suppress self-hearing. Restart the meeting if issue persists
+**Meet audio not working:** Ensure Chrome is logged into Google. Mic must be ON in Meet (audio injection requires mic permission).
 
-### Desktop app shows "Engine Not Started"
-- Click "Start Engine" or restart the app
-- Check that `callingclaw-backend/.env` has valid API keys
-- Check Console (Cmd+Opt+I) for errors
+**Desktop shows "Engine Not Started":** Click "Start Engine" or restart the app. Check `.env` has valid API keys.
 
----
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|-----------|
-| Backend Runtime | Bun 1.3+ |
-| Desktop | Electron 35+ |
-| Voice AI | OpenAI Realtime 1.5 (default) / Gemini 3.1 Live / Grok |
-| Intent Classification | Claude Haiku (TranscriptAuditor + ContextRetriever) |
-| Vision | Gemini Flash (screenshot) + Page Agent DOM extraction (text) |
-| Deep Reasoning | Claude Opus / Sonnet (via OpenClaw or Claude Code) |
-| Page Interaction | W3C synthetic Pointer Events, index-based click from DOM tree |
-| Audio | AudioWorklet PCM16 24kHz, Playwright addInitScript injection |
-| Browser Automation | Playwright Library (ChromeLauncher) + CLI + 4-layer router |
-| Telegram Dispatch | Claude Code Channels (MCP plugin over stdio) |
-| Database | SQLite (bun:sqlite) |
-| Calendar | Google Calendar REST API |
+**Calendar not connecting:** Run `bun run scripts/refresh-google-token.ts` to regenerate the OAuth refresh token.
 
 ---
 
