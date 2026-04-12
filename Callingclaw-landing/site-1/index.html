@@ -388,9 +388,14 @@
     /* ── Hero Section ─────────────────────────────────── */
     .hero {
       text-align: center;
-      padding-block: clamp(4rem, 10vw, 8rem) 0;
+      padding-top: clamp(5rem, 12vw, 8rem);
+      padding-bottom: 2rem;
       overflow: visible;
       position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     /* ── Hero Etheral Shadow Background ─────────────── */
@@ -2267,7 +2272,9 @@
 
       /* Hero: smaller type on mobile to reduce line breaks */
       .hero {
-        padding-block: clamp(3rem, 8vw, 5rem) 0;
+        padding-top: 5rem;
+        padding-bottom: 1rem;
+        min-height: 100vh;
       }
       .hero h1 {
         font-size: 2rem;
@@ -3196,20 +3203,21 @@
       const gridBaseWrap = document.getElementById('flickeringGridBaseWrap');
       const gridGlowWrap = document.getElementById('flickeringGridGlowWrap');
 
-      // Demo panel starts hidden below center
+      // Demo panel starts hidden below the image
       gsap.set(heroDemoPanel, {
         xPercent: -50,
         y: '100%',
         opacity: 0,
       });
 
-      // Mobile: shorter scroll distance (image already nearly full-width)
+      // Pin the ENTIRE hero section — tagline + image all stay fixed
+      const heroSection = document.querySelector('.hero');
       const isMobile = window.innerWidth < 768;
       const heroTl = gsap.timeline({
         scrollTrigger: {
-          trigger: heroPinSpacer,
-          start: isMobile ? 'top 20%' : 'center center',
-          end: isMobile ? '+=30%' : '+=60%',
+          trigger: heroSection,
+          start: 'top top',
+          end: '+=50%',
           pin: true,
           scrub: 0.3,
           anticipatePin: 1,
