@@ -361,16 +361,17 @@
     }
 
     .btn-primary {
-      background: var(--bg);
-      color: var(--accent);
-      border: 1px solid rgba(20, 20, 19, 0.08);
-      box-shadow: var(--shadow-sm);
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      box-shadow: 0 2px 12px rgba(220, 74, 58, 0.25);
     }
 
     .btn-primary:hover {
-      color: var(--accent);
+      background: var(--accent-hover);
+      color: #ffffff;
       transform: scale(1.02);
-      box-shadow: var(--shadow-md);
+      box-shadow: 0 4px 20px rgba(220, 74, 58, 0.35);
     }
 
     .btn-secondary {
@@ -481,6 +482,10 @@
       justify-content: center;
       flex-wrap: wrap;
       margin-bottom: 3rem;
+    }
+
+    .hero-actions .btn {
+      min-width: 220px;
     }
 
     /* Hero Image with GSAP ScrollTrigger Animation */
@@ -3157,8 +3162,7 @@
   <script>
     // ── Theme Toggle ──────────────────────────────────────
     const html = document.documentElement;
-    const savedTheme = localStorage.getItem('theme') ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const savedTheme = localStorage.getItem('theme') || 'light';
     html.setAttribute('data-theme', savedTheme);
 
     // Theme toggle button
