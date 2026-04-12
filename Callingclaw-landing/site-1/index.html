@@ -1140,7 +1140,13 @@
     .hiw-ob-btn { display: inline-block; padding: 0.4rem 0.75rem; border-radius: 8px; font-size: 0.6875rem; font-weight: 600; cursor: default; }
     .hiw-ob-btn.primary { background: var(--accent); color: white; }
     .hiw-ob-btn.ghost { background: transparent; color: var(--text-tertiary); }
-    .hiw-ob-screen-frame { width: 100%; aspect-ratio: 16/10; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden; }
+    .hiw-ob-screen-frame { width: 100%; aspect-ratio: 16/10; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+    .hiw-ob-titlebar { display: flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .hiw-ob-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .hiw-ob-dot.red { background: #ff5f57; }
+    .hiw-ob-dot.yellow { background: #ffbd2e; }
+    .hiw-ob-dot.green { background: #27c93f; }
+    .hiw-ob-screen-body { position: relative; flex: 1; }
     .hiw-ob-scan-line { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); box-shadow: 0 0 8px var(--accent); z-index: 2; animation: obScan 2.5s ease-in-out infinite; }
     @keyframes obScan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
     /* Red bounding boxes — match desktop onboarding UI */
@@ -2165,7 +2171,7 @@
   <section class="hero">
     <div class="container" id="heroTagline">
       <h1>Your Agent Needs <span class="gradient">a Seat,</span><br>Not a Notepad <span class="gradient">in meetings</span></h1>
-      <p class="hero-subtitle">CallingClaw joins video calls with full memory of your work — ready to discuss, present, and act.</p>
+      <p class="hero-subtitle">Open-source agentware that joins video calls with full memory of your work — ready to discuss, present, and act. Local-first.</p>
       <div class="hero-actions">
         <a href="https://github.com/XEasonChan/callingclaw/releases/latest" class="btn btn-primary">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
@@ -2218,7 +2224,7 @@
           Claude Code
         </span>
       </div>
-      <p class="meeting-harness-subtitle">CallingClaw doesn't replace your agent — it gives your agent a meeting room, a calendar, and a voice. Your agent's own capabilities come along naturally.</p>
+      <p class="meeting-harness-subtitle">CallingClaw is agentware — it doesn't replace your agent, it gives your agent a meeting room, a calendar, and a voice. Your agent's capabilities come along naturally.</p>
       <div class="capability-row">
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg></span> Memory</span>
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span> Files</span>
@@ -2226,7 +2232,7 @@
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span> Browser & Cookies</span>
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Calendar</span>
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span> Voice</span>
-        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span> Skills</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span> Meeting Prep</span>
       </div>
     </div>
   </section>
@@ -2246,7 +2252,7 @@
           <div class="speed-card">
             <div class="speed-card-label">Keyboard</div>
             <div class="speed-card-value">45 wpm</div>
-            <div class="speed-card-text">the homepage tagline needs to be changed, and also fix the...</div>
+            <div class="speed-card-text">The homepage tagline needs updating, and also fix the...</div>
           </div>
           <div class="speed-card voice">
             <div class="speed-card-label">CallingClaw</div>
@@ -2313,7 +2319,7 @@
     <div class="container" style="position:relative;z-index:1;">
       <div class="hiw-header">
         <div class="hiw-label">How It Works</div>
-        <h2>Four steps to a working agent.</h2>
+        <h2>Four steps to an agent that joins meetings.</h2>
         <p>GUI for onboarding, invisible for daily use.</p>
       </div>
 
@@ -2366,19 +2372,24 @@
               <!-- Right: visual -->
               <div class="hiw-onboard-right">
                 <div class="hiw-ob-screen-frame">
-                  <div class="hiw-ob-scan-line"></div>
-                  <!-- Red bounding boxes — fill the virtual screen like desktop onboarding -->
-                  <div class="hiw-ob-box b1"></div>
-                  <div class="hiw-ob-box b2"></div>
-                  <div class="hiw-ob-box b3"></div>
-                  <div class="hiw-ob-box b4"></div>
-                  <div class="hiw-ob-box b5"></div>
-                  <!-- Labels -->
-                  <div class="hiw-ob-label l1">Slide</div>
-                  <div class="hiw-ob-label l2">Code</div>
-                  <div class="hiw-ob-label l3">Footer</div>
-                  <div class="hiw-ob-label l4">Diagram</div>
-                  <div class="hiw-ob-label l5">Nav</div>
+                  <div class="hiw-ob-titlebar">
+                    <span class="hiw-ob-dot red"></span>
+                    <span class="hiw-ob-dot yellow"></span>
+                    <span class="hiw-ob-dot green"></span>
+                  </div>
+                  <div class="hiw-ob-screen-body">
+                    <div class="hiw-ob-scan-line"></div>
+                    <div class="hiw-ob-box b1"></div>
+                    <div class="hiw-ob-box b2"></div>
+                    <div class="hiw-ob-box b3"></div>
+                    <div class="hiw-ob-box b4"></div>
+                    <div class="hiw-ob-box b5"></div>
+                    <div class="hiw-ob-label l1">Slide</div>
+                    <div class="hiw-ob-label l2">Code</div>
+                    <div class="hiw-ob-label l3">Footer</div>
+                    <div class="hiw-ob-label l4">Diagram</div>
+                    <div class="hiw-ob-label l5">Nav</div>
+                  </div>
                 </div>
                 <!-- Progress dots -->
                 <div class="hiw-ob-dots">
@@ -2449,7 +2460,7 @@
               <!-- Right: Calendly-style slots -->
               <div class="hiw-cal-panel">
                 <div class="hiw-cal-panel-header">
-                  <div style="font-weight:600;font-size:0.8125rem;">Tomorrow, Apr 13</div>
+                  <div style="font-weight:600;font-size:0.8125rem;">Tomorrow, Tue</div>
                   <div style="font-size:0.6875rem;color:var(--text-tertiary);">3 slots available</div>
                 </div>
                 <div class="hiw-cal-slots">
@@ -2485,7 +2496,7 @@
           <div class="hiw-visual" style="padding:0;">
             <!-- Meeting frame chrome -->
             <div class="hiw-mf-header">
-              <div class="hiw-mf-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> OpenClaw is sharing screen</div>
+              <div class="hiw-mf-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> CallingClaw is sharing screen</div>
               <div class="hiw-mf-live"><span class="hiw-mf-live-dot"></span> LIVE</div>
             </div>
             <!-- Browser chrome with tabs -->
@@ -2569,7 +2580,7 @@
         <div class="hiw-card" data-hiw-card="3">
           <span class="hiw-card-step">After Meeting</span>
           <h3>Results &amp; Autonomous Action</h3>
-          <p class="hiw-card-desc">Every requirement has a paired screenshot and timestamp. No more manual screenshotting and describing — your agent already knows what was discussed at each moment, so alignment is immediate.</p>
+          <p class="hiw-card-desc">Every action item is paired with a screenshot and timestamp. Your agent already knows what was discussed — alignment is immediate.</p>
           <div class="hiw-visual">
             <div class="hiw-summary-card">
               <div class="hiw-summary-header">
@@ -2631,7 +2642,7 @@
     <div class="container">
       <div class="comparison-header">
         <h2>Comparison</h2>
-        <p class="section-subtitle" style="margin-top:0.75rem;">Traditional meeting AI records and transcribes. Pika talks and acts in the cloud. CallingClaw runs locally — with full access to your machine.</p>
+        <p class="section-subtitle" style="margin-top:0.75rem;">Traditional meeting AI records and transcribes. CallingClaw joins, speaks, and acts — locally, with full access to your machine.</p>
       </div>
 
       <table class="comparison-table">
@@ -2703,7 +2714,7 @@
     <div class="container">
       <div style="text-align:center;margin-bottom:2.5rem;">
         <h2>Architecture</h2>
-        <p class="section-subtitle" style="margin-top:0.5rem;">Like the human brain in <em>Thinking, Fast and Slow</em> — a fast voice system for real-time dialogue, a slow reasoning system for deep execution, connected through shared memory.</p>
+        <p class="section-subtitle" style="margin-top:0.5rem;">Like <em>Thinking, Fast and Slow</em> — fast voice for real-time dialogue, slow reasoning for deep execution, connected through shared memory.</p>
       </div>
 
       <!-- Dual-brain diagram -->
@@ -2809,7 +2820,7 @@
     <div class="container">
       <div class="cta-content">
         <h2>Video Call Your Agent Now</h2>
-        <p style="color:rgba(255,255,255,0.7); margin-top:0.5rem; margin-bottom:1.5rem;">Download desktop as agentware to setup: GUI for human and authorization, CLI for agent running.</p>
+        <p style="color:rgba(255,255,255,0.7); margin-top:0.5rem; margin-bottom:1.5rem;">Download the desktop agentware. GUI walks you through setup and authorization, then your agent runs via CLI in the background.</p>
         <div class="cta-actions">
           <a href="https://github.com/XEasonChan/callingclaw/releases/latest" class="btn btn-primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
@@ -2827,7 +2838,7 @@
   <!-- Footer -->
   <footer>
     <div class="container">
-      <p>© 2025 CallingClaw. Open source under Apache 2.0 License.</p>
+      <p>© 2026 CallingClaw. Open source under Apache 2.0 License.</p>
     </div>
   </footer>
 
