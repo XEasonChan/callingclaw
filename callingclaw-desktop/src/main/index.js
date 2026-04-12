@@ -562,10 +562,11 @@ app.whenReady().then(async () => {
   }
 
   // Resolve the CallingClaw daemon directory
-  // Priority: 1) sibling to source (dev mode), 2) well-known iCloud path, 3) home directory
+  // Priority: 1) bundled in app Resources (DMG install), 2) sibling (dev mode), 3) iCloud, 4) home
   const fs = require('fs');
   const candidates = [
-    path.resolve(__dirname, '..', '..', '..', 'callingclaw-backend'),  // dev: sibling
+    path.join(process.resourcesPath || '', 'callingclaw-backend'),    // DMG: bundled in .app/Contents/Resources/
+    path.resolve(__dirname, '..', '..', '..', 'callingclaw-backend'),  // dev: sibling to source
     path.join(require('os').homedir(), 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'CallingClaw 2.0', 'callingclaw-backend'),  // iCloud
     path.join(require('os').homedir(), 'callingclaw-backend'),  // home fallback
   ];

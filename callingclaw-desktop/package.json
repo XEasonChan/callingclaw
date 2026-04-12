@@ -40,6 +40,20 @@
         {
           "from": "resources/bin",
           "to": "bin"
+        },
+        {
+          "from": "../callingclaw-backend",
+          "to": "callingclaw-backend",
+          "filter": [
+            "**/*",
+            "!test/**",
+            "!eval/**",
+            "!.env",
+            "!.env.local",
+            "!*.log",
+            "!data/tasks.json.bak",
+            "!public/stage-cc_*.html"
+          ]
         }
       ]
     },
