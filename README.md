@@ -97,7 +97,9 @@ bun run src/callingclaw.ts
 ## The full meeting lifecycle
 
 CallingClaw doesn't start when you join a meeting. It starts when you have an idea.
-<img width="3140" height="412" alt="image" src="https://github.com/user-attachments/assets/07515d66-e6e2-40f1-ae1f-44c315c37e1a" />
+
+<img width="2129" height="474" alt="image" src="https://github.com/user-attachments/assets/20228317-dd99-448f-ab77-d1ad6a94abf5" />
+
 
 
 ```
