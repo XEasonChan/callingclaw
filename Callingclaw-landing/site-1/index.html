@@ -17,7 +17,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Hedvig+Letters+Serif:opsz@12..24&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!-- GSAP + ScrollTrigger + Lenis for smooth scroll animations -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -25,31 +25,34 @@
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
 
   <style>
-    /* ── Design Tokens — Whisperflow Palette ────────────── */
+    /* ── Design Tokens — Warm Parchment Palette (synced with React DESIGN.md) ── */
     :root {
-      --bg: #FDFDF6;
-      --bg-subtle: #FAF9F4;
+      --bg: #f5f4ed;
+      --bg-subtle: #faf9f5;
       --surface: #ffffff;
       --surface-elevated: #ffffff;
-      --moss: #0E2923;
-      --text: #0A0A0A;
-      --text-secondary: #6b7280;
-      --text-tertiary: #9ca3af;
+      --moss: #141413;
+      --text: #141413;
+      --text-secondary: #5e5d59;
+      --text-tertiary: #87867f;
       --accent: #DC4A3A;
       --accent-hover: #c43d2e;
       --accent-light: rgba(220, 74, 58, 0.08);
-      --accent-glow: rgba(220, 74, 58, 0.1);
+      --accent-glow: rgba(220, 74, 58, 0.12);
       --accent-pale: #FFD6D1;
+      --coral: #e85d4c;
       --success: #4aa682;
       --success-light: #e6f4ee;
-      --danger: #dc4a3a;
-      --border: #e5e7eb;
-      --border-light: #f3f4f6;
-      --suited-black: #0A0A0A;
+      --danger: #b53333;
+      --border: #f0eee6;
+      --border-light: #e8e6dc;
+      --suited-black: #141413;
+      --warm-sand: #e8e6dc;
+      --charcoal: #4d4c48;
 
-      --font-display: "Fraunces", "Hedvig Letters Serif", Georgia, serif;
-      --font-body: "Inter", "Hedvig Letters Serif", Georgia, serif;
-      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --font-display: "Fraunces", Georgia, serif;
+      --font-body: "Inter", -apple-system, system-ui, sans-serif;
+      --font-mono: "Geist Mono", ui-monospace, monospace;
 
       --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
       --ease-expo: cubic-bezier(0.19, 1, 0.22, 1);
@@ -57,35 +60,38 @@
       --duration-slow: 500ms;
 
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
-      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.05);
       --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
-      --shadow-accent: 0 2px 12px rgba(220, 74, 58, 0.15);
+      --shadow-accent: 0 2px 12px rgba(201, 100, 66, 0.15);
     }
 
     /* ── Dark Theme ──────────────────────────────────── */
     [data-theme="dark"] {
-      --bg: #0A0F0E;
-      --bg-subtle: #111916;
-      --surface: #162220;
-      --surface-elevated: #1D2B28;
-      --moss: #0E2923;
-      --text: #e4e4e7;
-      --text-secondary: #a1a1aa;
-      --text-tertiary: #71717a;
+      --bg: #141413;
+      --bg-subtle: #1c1c1a;
+      --surface: #242422;
+      --surface-elevated: #30302e;
+      --moss: #141413;
+      --text: #e8e6dc;
+      --text-secondary: #b0aea5;
+      --text-tertiary: #87867f;
       --accent: #e85d4c;
       --accent-hover: #f07a6b;
       --accent-light: rgba(232, 93, 76, 0.12);
       --accent-glow: rgba(232, 93, 76, 0.15);
       --accent-pale: #3d2220;
+      --coral: #f07a6b;
       --success: #6bb39a;
       --success-light: rgba(107, 179, 154, 0.12);
-      --danger: #e85d4c;
-      --border: #1D2B28;
-      --border-light: #162220;
-      --suited-black: #0A0A0A;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
-      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
-      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
+      --danger: #d94444;
+      --border: #30302e;
+      --border-light: #242422;
+      --suited-black: #141413;
+      --warm-sand: #3d3d3a;
+      --charcoal: #b0aea5;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
     }
 
     /* ── Reset ──────────────────────────────────────────── */
@@ -142,7 +148,15 @@
     h3 { font-size: clamp(1.125rem, 2vw, 1.375rem); }
     h4 { font-size: 1rem; font-weight: 600; }
 
-    p { color: var(--text-secondary); max-width: 65ch; }
+    p { color: var(--text-secondary); max-width: 60ch; }
+
+    /* Section subtitle — same max-width as container content (1004px) */
+    .section-subtitle {
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 640px;
+      margin-inline: auto;
+    }
 
     a {
       color: var(--accent);
@@ -177,12 +191,12 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(20, 20, 19, 0.92);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-radius: 100px;
-      border: 1px solid rgba(14, 41, 35, 0.08);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
       padding: 0.375rem 0.375rem 0.375rem 1rem;
       max-width: 720px;
       width: 100%;
@@ -190,8 +204,39 @@
     }
 
     [data-theme="dark"] nav .container {
-      background: rgba(22, 34, 32, 0.9);
-      border-color: rgba(255, 255, 255, 0.08);
+      background: rgba(245, 244, 237, 0.92);
+      border-color: rgba(20, 20, 19, 0.06);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] .logo {
+      color: #141413;
+    }
+
+    [data-theme="dark"] .nav-links a {
+      color: rgba(20, 20, 19, 0.5);
+    }
+
+    [data-theme="dark"] .nav-links a:hover {
+      color: #141413;
+      background: rgba(20, 20, 19, 0.04);
+    }
+
+    [data-theme="dark"] .theme-toggle {
+      background: rgba(20, 20, 19, 0.05);
+      border-color: rgba(20, 20, 19, 0.1);
+    }
+
+    [data-theme="dark"] .theme-toggle:hover {
+      background: rgba(20, 20, 19, 0.1);
+    }
+
+    [data-theme="dark"] .theme-toggle svg {
+      color: rgba(20, 20, 19, 0.5);
+    }
+
+    [data-theme="dark"] .theme-toggle:hover svg {
+      color: #141413;
     }
 
     .logo {
@@ -199,14 +244,14 @@
       font-weight: 700;
       font-size: 1rem;
       letter-spacing: -0.02em;
-      color: var(--moss);
+      color: #faf9f5;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
     [data-theme="dark"] .logo {
-      color: var(--text);
+      color: #faf9f5;
     }
 
     .logo-mark {
@@ -248,19 +293,18 @@
       font-size: 0.8125rem;
       font-weight: 500;
       font-family: var(--font-body);
-      color: rgba(10, 10, 10, 0.6);
+      color: rgba(255, 255, 255, 0.55);
       padding: 0.375rem 0.75rem;
       border-radius: 100px;
       transition: all var(--duration) var(--ease-out);
     }
 
     .nav-links a:hover {
-      color: var(--text);
-      background: rgba(14, 41, 35, 0.05);
+      color: #faf9f5;
+      background: rgba(255, 255, 255, 0.08);
     }
 
-    [data-theme="dark"] .nav-links a { color: rgba(255,255,255,0.5); }
-    [data-theme="dark"] .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+    /* dark mode nav link overrides are in the dark nav block above */
 
     /* ── Theme Toggle ────────────────────────────────── */
     .theme-toggle {
@@ -270,27 +314,27 @@
       width: 36px;
       height: 36px;
       padding: 0;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 8px;
       cursor: pointer;
       transition: all var(--duration) var(--ease-out);
     }
 
     .theme-toggle:hover {
-      background: var(--surface);
-      border-color: var(--text-tertiary);
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .theme-toggle svg {
       width: 18px;
       height: 18px;
-      color: var(--text-secondary);
+      color: rgba(255, 255, 255, 0.6);
       transition: color var(--duration) var(--ease-out);
     }
 
     .theme-toggle:hover svg {
-      color: var(--text);
+      color: #faf9f5;
     }
 
     /* Show sun in dark mode, moon in light mode */
@@ -319,7 +363,7 @@
     .btn-primary {
       background: var(--bg);
       color: var(--accent);
-      border: 1px solid rgba(14, 41, 35, 0.1);
+      border: 1px solid rgba(20, 20, 19, 0.08);
       box-shadow: var(--shadow-sm);
     }
 
@@ -331,13 +375,13 @@
 
     .btn-secondary {
       background: var(--suited-black);
-      color: #BABABA;
+      color: #b0aea5;
       border: none;
     }
 
     .btn-secondary:hover {
       background: var(--suited-black);
-      color: #d4d4d4;
+      color: #e8e6dc;
       transform: scale(1.02);
     }
 
@@ -345,7 +389,7 @@
     .hero {
       text-align: center;
       padding-block: clamp(4rem, 10vw, 8rem) 0;
-      overflow: hidden;
+      overflow: visible;
       position: relative;
     }
 
@@ -418,9 +462,9 @@
     }
 
     .hero-subtitle {
-      font-size: clamp(1.1rem, 1.5vw, 1.35rem);
+      font-size: clamp(1.05rem, 1.5vw, 1.25rem);
       line-height: 1.6;
-      max-width: 50ch;
+      max-width: 640px;
       margin-inline: auto;
       margin-bottom: 2.5rem;
       color: var(--text-secondary);
@@ -453,7 +497,7 @@
 
     .hero-image-container {
       position: relative;
-      width: min(100% - 4rem, 900px);
+      width: min(100% - 2rem, 960px);
       margin-inline: auto;
       overflow: hidden;
       border-radius: 16px;
@@ -538,7 +582,7 @@
       display: flex;
       gap: 1px;
       padding: 0.5rem 0.5rem 0;
-      background: #dee1e6;
+      background: #e8e6dc;
     }
 
     [data-theme="dark"] .demo-panel-tabs {
@@ -550,24 +594,24 @@
       align-items: center;
       gap: 0.25rem;
       padding: 0.375rem 0.625rem;
-      background: #c8ccd3;
+      background: #d1cfc5;
       border: none;
       border-radius: 6px 6px 0 0;
       font-family: var(--font-body);
       font-size: 0.625rem;
       font-weight: 500;
-      color: #5f6368;
+      color: #5e5d59;
       cursor: pointer;
     }
 
     [data-theme="dark"] .demo-panel-tab {
       background: #252525;
-      color: #9ca3af;
+      color: #87867f;
     }
 
     .demo-panel-tab.active {
-      background: #f7f6f3;
-      color: #37352f;
+      background: #faf9f5;
+      color: #141413;
     }
 
     [data-theme="dark"] .demo-panel-tab.active {
@@ -583,7 +627,7 @@
     /* Demo Panel Content */
     .demo-panel-content {
       padding: 0.75rem;
-      background: #f7f6f3;
+      background: #faf9f5;
       min-height: 180px;
     }
 
@@ -607,7 +651,7 @@
     .demo-panel-table-title {
       font-size: 0.875rem;
       font-weight: 600;
-      color: #37352f;
+      color: #141413;
     }
 
     [data-theme="dark"] .demo-panel-table-title {
@@ -629,7 +673,7 @@
       justify-content: center;
       font-size: 0.625rem;
       font-weight: 600;
-      background: #e5e7eb;
+      background: var(--warm-sand);
       color: var(--text-secondary);
     }
 
@@ -643,7 +687,7 @@
     .demo-mini-table {
       background: white;
       border-radius: 4px;
-      border: 1px solid #e9e9e7;
+      border: 1px solid #f0eee6;
       overflow: hidden;
       font-size: 0.6875rem;
     }
@@ -656,7 +700,7 @@
     .demo-mini-row {
       display: grid;
       grid-template-columns: 1.5fr 0.8fr 0.5fr 1fr;
-      border-bottom: 1px solid #e9e9e7;
+      border-bottom: 1px solid #f0eee6;
     }
 
     [data-theme="dark"] .demo-mini-row {
@@ -668,9 +712,9 @@
     }
 
     .demo-mini-row.header {
-      background: #f7f6f3;
+      background: #faf9f5;
       font-weight: 500;
-      color: #9b9a97;
+      color: #87867f;
     }
 
     [data-theme="dark"] .demo-mini-row.header {
@@ -679,8 +723,8 @@
 
     .demo-mini-cell {
       padding: 0.375rem 0.5rem;
-      color: #37352f;
-      border-right: 1px solid #e9e9e7;
+      color: #141413;
+      border-right: 1px solid #f0eee6;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -777,6 +821,8 @@
     .meeting-harness {
       text-align: center;
       background: var(--bg-subtle);
+      position: relative;
+      z-index: 2; /* Above hero image overflow */
     }
 
     .meeting-harness h2 {
@@ -791,7 +837,11 @@
 
     .meeting-harness-subtitle {
       font-size: 1rem;
-      margin-bottom: 1.5rem;
+      line-height: 1.6;
+      max-width: 640px;
+      margin-inline: auto;
+      margin-bottom: 1.75rem;
+      color: var(--text-secondary);
     }
 
     .badge-row {
@@ -799,7 +849,8 @@
       gap: 0.75rem;
       justify-content: center;
       flex-wrap: wrap;
-      margin-bottom: 1.25rem;
+      margin-top: 0.75rem;
+      margin-bottom: 0.75rem;
     }
 
     .badge {
@@ -864,7 +915,9 @@
     /* ── Bandwidth Section ────────────────────────────── */
     .bandwidth {
       padding-block: clamp(3rem, 8vw, 5rem);
-      background: var(--bg-subtle);
+      background: var(--bg);
+      position: relative;
+      z-index: 2;
     }
 
     .bandwidth-header {
@@ -886,8 +939,8 @@
 
     .bandwidth-header p {
       font-size: 1rem;
-      line-height: 1.7;
-      max-width: 60ch;
+      line-height: 1.6;
+      max-width: 640px;
       margin-inline: auto;
       color: var(--text-secondary);
     }
@@ -1113,135 +1166,185 @@
 
     /* ── How It Works Section ─────────────────────────── */
     .how-it-works {
-      background: #f5f5f7;
+      background: #0E2923;
+      position: relative;
+      z-index: 2;
+      color: #e8e6dc;
+      padding-block: clamp(4rem, 10vw, 6rem);
     }
 
-    [data-theme="dark"] .how-it-works {
-      background: #1a1a1e;
+    .how-it-works { position: relative; overflow: hidden; }
+    .hiw-grid-base, .hiw-grid-glow { position: absolute; inset: 0; pointer-events: none; }
+    .hiw-grid-base canvas, .hiw-grid-glow canvas { display: block; width: 100%; height: 100%; }
+    .hiw-grid-base { -webkit-mask-image: radial-gradient(800px circle at center, white, transparent); mask-image: radial-gradient(800px circle at center, white, transparent); }
+    .hiw-grid-glow { opacity: 0; transition: opacity 0.3s ease; }
+    .hiw-grid-glow.active { opacity: 1; }
+
+    .how-it-works h2, .how-it-works h3, .how-it-works h4 {
+      color: #faf9f5;
+    }
+
+    .how-it-works p {
+      color: rgba(250, 249, 245, 0.6);
     }
 
     .hiw-header {
-      text-align: center;
+      text-align: left;
       margin-bottom: 2.5rem;
     }
 
-    .hiw-header h2 {
+    .hiw-header .hiw-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
       margin-bottom: 0.5rem;
+    }
+
+    .hiw-header h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      margin-bottom: 0.5rem;
+      color: #faf9f5;
     }
 
     .hiw-header p {
       font-size: 1rem;
-      margin-inline: auto;
+      max-width: 40ch;
     }
 
-    /* Timeline */
-    .hiw-timeline {
+    /* ── Apple-style Progress Tabs ── */
+    .hiw-tabs {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0;
+      gap: 0.75rem;
       margin-bottom: 2rem;
-      position: relative;
-      padding: 0 1rem;
-    }
-
-    .hiw-timeline-track {
-      display: flex;
-      align-items: center;
-      position: relative;
-      width: 100%;
-      max-width: 480px;
-    }
-
-    .hiw-timeline-line {
-      position: absolute;
-      top: 50%;
-      left: 20px;
-      right: 20px;
-      height: 2px;
-      background: var(--border);
-      transform: translateY(-50%);
-    }
-
-    .hiw-timeline-progress {
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      background: var(--accent);
-      transition: width 0.4s var(--ease-out);
-      width: 0%;
-    }
-
-    .hiw-timeline-dots {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      position: relative;
-      z-index: 1;
-    }
-
-    .hiw-dot {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: var(--surface);
-      border: 2px solid var(--border);
-      display: flex;
-      align-items: center;
       justify-content: center;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--text-tertiary);
+    }
+
+    .hiw-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0;
+      background: none;
+      border: none;
       cursor: pointer;
-      transition: all 0.3s var(--ease-out);
-      position: relative;
+      width: 140px;
+      text-align: left;
     }
 
-    .hiw-dot.active {
+    .hiw-tab-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgba(250, 249, 245, 0.35);
+      transition: color 0.3s ease;
+      white-space: nowrap;
+    }
+
+    .hiw-tab.active .hiw-tab-label {
+      color: #faf9f5;
+    }
+
+    .hiw-tab-bar {
+      width: 100%;
+      height: 3px;
+      background: rgba(250, 249, 245, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .hiw-tab-fill {
+      height: 100%;
+      width: 0%;
       background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-      box-shadow: 0 0 0 4px var(--accent-glow);
+      border-radius: 2px;
+      transition: none;
     }
 
-    .hiw-dot.visited {
-      background: var(--accent-light);
-      border-color: var(--accent);
-      color: var(--accent);
+    .hiw-tab.visited .hiw-tab-fill {
+      width: 100%;
+      background: rgba(250, 249, 245, 0.3);
     }
 
-    /* Cards Container */
+    /* ── Carousel Track (Apple peek-through style) ── */
+    .hiw-carousel {
+      position: relative;
+      overflow: visible;
+      margin-inline: -1.5rem;
+    }
+
+    .hiw-carousel-clip {
+      overflow: hidden;
+      padding-inline: 1.5rem;
+    }
+
     .hiw-cards {
       display: flex;
-      gap: 1.5rem;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      scroll-behavior: smooth;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 0.5rem;
-      scrollbar-width: none;
+      gap: 1.25rem;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform;
     }
 
-    .hiw-cards::-webkit-scrollbar {
-      display: none;
-    }
-
+    /* Outer card — dark green glass */
     .hiw-card {
-      min-width: 320px;
-      flex: 0 0 calc(100% - 2rem);
-      max-width: 520px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      scroll-snap-align: center;
-      box-shadow: var(--shadow-md);
-      transition: box-shadow 0.3s var(--ease-out);
+      flex: 0 0 75%;
+      min-width: 0;
+      background: rgba(250, 249, 245, 0.06);
+      border: 1px solid rgba(250, 249, 245, 0.08);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      opacity: 0.35;
+      transform: scale(0.96);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      display: flex;
+      flex-direction: column;
     }
 
-    .hiw-card:hover {
-      box-shadow: var(--shadow-lg);
+    .hiw-card.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Step number */
+    .hiw-card-step {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 0.375rem;
+    }
+
+    .hiw-card h3 {
+      margin-bottom: 0.375rem;
+      font-size: 1.125rem;
+    }
+
+    .hiw-card-desc {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+      color: rgba(250, 249, 245, 0.5);
+    }
+
+    /* Inner prototype card — light surface */
+    .hiw-visual {
+      background: #faf9f5;
+      border: 1px solid rgba(14, 20, 19, 0.06);
+      border-radius: 14px;
+      overflow: hidden;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .hiw-visual h3, .hiw-visual h4, .hiw-visual strong {
+      color: #141413;
+    }
+
+    .hiw-visual p, .hiw-visual td, .hiw-visual span {
+      color: #5e5d59;
     }
 
     .hiw-card-step {
@@ -1271,6 +1374,108 @@
       border-radius: 12px;
       overflow: hidden;
     }
+
+    /* ── Step 1: Onboarding Split ── */
+    .hiw-onboard-split { display: flex; gap: 1.5rem; padding: 1.5rem; min-height: 280px; }
+    .hiw-onboard-left { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+    .hiw-onboard-right { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); border-radius: 10px; position: relative; overflow: hidden; }
+    .hiw-ob-tag { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 0.25rem; }
+    .hiw-ob-title { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem; }
+    .hiw-ob-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.75rem; }
+    .hiw-ob-status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-secondary); padding: 0.2rem 0; }
+    .hiw-ob-status.granted { color: var(--success); }
+    .hiw-ob-status.pending { color: #FF9F0A; }
+    .hiw-ob-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .hiw-ob-dot.green { background: var(--success); }
+    .hiw-ob-dot.yellow { background: #FF9F0A; animation: obPulse 1.2s infinite; }
+    .hiw-ob-dot.grey { background: var(--border-light); }
+    @keyframes obPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .hiw-ob-btn { display: inline-block; padding: 0.4rem 0.75rem; border-radius: 8px; font-size: 0.6875rem; font-weight: 600; cursor: default; }
+    .hiw-ob-btn.primary { background: var(--accent); color: white; }
+    .hiw-ob-btn.ghost { background: transparent; color: var(--text-tertiary); }
+    .hiw-ob-screen-frame { width: 80%; aspect-ratio: 4/3; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden; margin-bottom: 0.75rem; }
+    .hiw-ob-scan-line { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: obScan 2.5s ease-in-out infinite; }
+    @keyframes obScan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+    .hiw-ob-highlight { position: absolute; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.5625rem; font-weight: 600; background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent); animation: obHighlight 2.5s ease-in-out infinite; }
+    @keyframes obHighlight { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+    .hiw-ob-dots { display: flex; gap: 6px; }
+    .hiw-ob-pip { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; }
+    .hiw-ob-pip.done { background: var(--success); border-color: var(--success); }
+    .hiw-ob-pip.active { width: 20px; border-radius: 4px; background: var(--accent); border-color: var(--accent); }
+
+    /* ── Step 2: Telegram + Calendar ── */
+    .hiw-daily-split { display: flex; gap: 1rem; padding: 1rem; min-height: 280px; }
+    .hiw-tg-chat { flex: 1; background: var(--surface); border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .hiw-tg-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); background: var(--bg); }
+    .hiw-tg-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+    .hiw-tg-body { flex: 1; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; }
+    .hiw-tg-msg { max-width: 85%; padding: 0.5rem 0.625rem; border-radius: 10px; font-size: 0.75rem; line-height: 1.5; color: var(--text); }
+    .hiw-tg-msg.out { align-self: flex-end; background: #d4f5d0; border-bottom-right-radius: 3px; }
+    .hiw-tg-msg.in { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+    .hiw-tg-check { font-size: 0.625rem; color: var(--success); text-align: right; margin-top: 0.15rem; }
+    .hiw-tg-attachment { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.5rem; background: var(--bg-subtle); border-radius: 6px; font-size: 0.6875rem; color: var(--accent); font-weight: 500; margin-top: 0.25rem; }
+    .hiw-tg-link-card { display: flex; gap: 0.5rem; margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-subtle); border-radius: 8px; border-left: 3px solid #4aa682; }
+    .hiw-tg-link-left { flex: 1; min-width: 0; }
+    .hiw-tg-link-icon { flex-shrink: 0; width: 36px; height: 36px; background: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .hiw-cal-panel { flex: 0 0 40%; background: var(--surface); border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .hiw-cal-panel-header { padding: 0.75rem; border-bottom: 1px solid var(--border); }
+    .hiw-cal-slots { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.375rem; flex: 1; }
+    .hiw-cal-slot-btn { padding: 0.5rem 0.625rem; border-radius: 8px; font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); border: 1px solid var(--border); cursor: default; transition: background 0.2s; }
+    .hiw-cal-slot-btn.booked { border-color: var(--accent); background: var(--accent-light); }
+    .hiw-cal-event-card { margin-top: 0.5rem; padding: 0.5rem; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
+    .hiw-cal-prep-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.625rem; font-weight: 500; color: var(--accent); padding: 0.2rem 0.4rem; background: var(--accent-light); border-radius: 4px; }
+
+    /* ── Step 4: Review Table ── */
+    .hiw-review-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
+    .hiw-review-table th { padding: 0.5rem; text-align: left; font-weight: 600; font-size: 0.6875rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); }
+    .hiw-review-table td { padding: 0.5rem; vertical-align: top; border-bottom: 1px solid var(--border); }
+    .hiw-review-frame { width: 120px; }
+    .hiw-review-thumb { width: 100%; }
+    .hiw-review-content { }
+    .hiw-review-time { font-family: var(--font-mono); font-size: 0.625rem; color: var(--text-tertiary); background: var(--bg-subtle); padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .hiw-review-priority { display: inline-block; font-size: 0.5625rem; font-weight: 600; padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.35rem; }
+    .hiw-review-priority.p1 { background: #fef2f1; color: var(--accent); }
+    .hiw-review-priority.p3 { background: var(--bg-subtle); color: var(--text-tertiary); }
+
+    /* ── Step 3: Meeting Frame ── */
+    .hiw-mf-header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #f5f4ed; border-bottom: 1px solid #e8e6dc; font-size: 0.75rem; }
+    .hiw-mf-title { display: flex; align-items: center; gap: 0.4rem; color: #5e5d59; font-family: var(--font-mono); font-size: 0.6875rem; }
+    .hiw-mf-live { display: flex; align-items: center; gap: 0.3rem; font-size: 0.625rem; font-weight: 700; color: #4aa682; text-transform: uppercase; letter-spacing: 0.05em; }
+    .hiw-mf-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #4aa682; animation: obPulse 1.5s infinite; }
+    .hiw-mf-browser { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; background: #e8e6dc; border-bottom: 1px solid #d1cfc5; }
+    .hiw-mf-dots { display: flex; gap: 4px; }
+    .hiw-mf-dots span { width: 8px; height: 8px; border-radius: 50%; }
+    .hiw-mf-tabs { display: flex; gap: 2px; margin-left: 0.5rem; }
+    .hiw-mf-tab { padding: 0.25rem 0.5rem; border-radius: 5px 5px 0 0; font-size: 0.625rem; font-weight: 500; background: #d1cfc5; color: #5e5d59; cursor: default; }
+    .hiw-mf-tab.active { background: #faf9f5; color: #141413; }
+    .hiw-mf-body { display: flex; min-height: 220px; }
+    .hiw-mf-screen { flex: 1; padding: 0.75rem; padding-bottom: 3rem; position: relative; background: #faf9f5; }
+    .hiw-mf-sidebar { flex: 0 0 180px; background: #f0eee6; border-left: 1px solid #e8e6dc; padding: 0.625rem; display: flex; flex-direction: column; gap: 0.625rem; overflow-y: auto; font-size: 0.625rem; }
+    .hiw-mf-side-section { }
+    .hiw-mf-side-label { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #87867f; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.3rem; }
+    .hiw-mf-feed { display: flex; flex-direction: column; gap: 0.25rem; }
+    .hiw-mf-feed-item { font-size: 0.5625rem; line-height: 1.4; color: #5e5d59; padding: 0.2rem 0.35rem; background: rgba(255,255,255,0.6); border-radius: 4px; }
+    .hiw-mf-docs { display: flex; flex-direction: column; gap: 0.2rem; }
+    .hiw-mf-doc { display: flex; align-items: center; gap: 0.25rem; font-size: 0.5625rem; color: #5e5d59; padding: 0.2rem 0.35rem; background: rgba(255,255,255,0.6); border-radius: 4px; }
+    .hiw-mf-cursor { position: absolute; top: 20%; left: 30%; z-index: 5; transition: left 0.8s cubic-bezier(0.25,0.1,0.25,1), top 0.8s cubic-bezier(0.25,0.1,0.25,1); }
+    .hiw-mf-notion-header { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8125rem; margin-bottom: 0.5rem; color: #141413; }
+    .hiw-mf-avatars { margin-left: auto; display: flex; gap: 0.25rem; }
+    .hiw-mf-avatar { width: 24px; height: 24px; border-radius: 6px; background: #e8e6dc; display: flex; align-items: center; justify-content: center; font-size: 0.625rem; font-weight: 600; color: #5e5d59; overflow: hidden; }
+    .hiw-mf-avatar.active { border: 2px solid #4aa682; }
+    .hiw-mf-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
+    .hiw-mf-table th { padding: 0.35rem 0.5rem; text-align: left; font-weight: 500; color: #87867f; border-bottom: 1px solid #f0eee6; font-size: 0.625rem; }
+    .hiw-mf-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #f0eee6; color: #141413; }
+    .hiw-tag { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.5625rem; font-weight: 500; }
+    .hiw-tag.green { background: #dbeddb; color: #1e6b53; }
+    .hiw-tag.yellow { background: #fdecc8; color: #9a6700; }
+    .hiw-tag.red { background: #fde8e8; color: #b53333; }
+    .hiw-mf-caption { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.875rem; background: rgba(0,0,0,0.72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: white; border-radius: 10px; font-size: 0.6875rem; white-space: nowrap; z-index: 10; }
+    .hiw-mf-caption img { border-radius: 3px; }
+    .hiw-mf-caption span { transition: opacity 0.15s ease; }
+    .hiw-mf-controls { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem; background: #f5f4ed; border-top: 1px solid #e8e6dc; }
+    .hiw-mf-ctrl { width: 32px; height: 32px; border-radius: 50%; background: white; border: 1px solid #e8e6dc; display: flex; align-items: center; justify-content: center; color: #5e5d59; }
+    .hiw-mf-ctrl.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .hiw-mf-ctrl.end { background: #b53333; border-color: #b53333; color: white; }
 
     /* Step 1: Download Visual */
     .hiw-setup-card {
@@ -1646,80 +1851,41 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Mobile: vertical stacking */
+    /* Mobile: timeline hidden, carousel stays horizontal */
     @media (max-width: 767px) {
-      .hiw-timeline-track {
-        flex-direction: column;
-        max-width: 36px;
-        align-items: center;
-      }
-
-      .hiw-timeline {
-        flex-direction: row;
-        margin-bottom: 1.5rem;
-      }
-
-      .hiw-timeline-line {
-        top: 20px;
-        bottom: 20px;
-        left: 50%;
-        right: auto;
-        width: 2px;
-        height: auto;
-        transform: translateX(-50%);
-      }
-
-      .hiw-timeline-progress {
-        width: 100% !important;
-        height: 0%;
-        transition: height 0.4s var(--ease-out);
-      }
-
-      .hiw-timeline-dots {
-        flex-direction: column;
-        height: 200px;
-      }
-
-      .hiw-cards {
-        flex-direction: column;
-        overflow-x: visible;
-        scroll-snap-type: none;
-      }
+      .hiw-timeline { display: none; }
 
       .hiw-card {
-        min-width: 0;
-        flex: none;
-        max-width: 100%;
+        flex: 0 0 92%;
       }
 
-      .hiw-chat-visual {
-        flex-direction: column;
-      }
-
-      .hiw-mini-calendar {
-        width: 100%;
+      .hiw-visual {
+        overflow: hidden;
       }
     }
 
     /* ── Comparison Section ───────────────────────────── */
     .comparison {
       background: var(--bg);
+      position: relative;
+      z-index: 2;
     }
 
     .comparison-header {
       text-align: center;
-      margin-bottom: 2rem;
+      margin-bottom: 2.5rem;
     }
 
     .comparison-table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       font-size: 0.875rem;
     }
 
     .comparison-table th,
     .comparison-table td {
-      padding: 1rem;
+      padding: 0.875rem 1rem;
       text-align: left;
       border-bottom: 1px solid var(--border);
     }
@@ -1727,11 +1893,10 @@
     .comparison-table th {
       font-weight: 600;
       color: var(--text-tertiary);
-      font-size: 0.8125rem;
-    }
-
-    .comparison-table th:last-child {
-      color: var(--accent);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--accent);
     }
 
     .comparison-table td:first-child {
@@ -1743,21 +1908,31 @@
       color: var(--text-secondary);
     }
 
-    .comparison-table td:last-child {
-      color: var(--success);
+    /* ── CallingClaw highlight column (2nd column) ── */
+    .comparison-table th.col-highlight {
+      color: var(--text);
+      font-weight: 700;
+      background: rgba(220, 74, 58, 0.06);
+    }
+
+    .comparison-table td.col-highlight {
+      background: rgba(220, 74, 58, 0.04);
+      color: var(--text);
       font-weight: 500;
     }
 
-    .check-yes {
-      color: var(--success);
+    /* ── Status cells ── */
+    .cmp-yes {
+      color: var(--text);
     }
 
-    .check-partial {
+    .cmp-partial {
       color: var(--text-tertiary);
     }
 
-    .check-no {
-      color: var(--text-tertiary);
+    .cmp-no {
+      color: var(--border-light);
+      font-size: 1.1em;
     }
 
     /* ── Features Grid ────────────────────────────────── */
@@ -1794,8 +1969,140 @@
     }
 
     .feature-item p {
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
+      max-width: 22ch;
       margin-inline: auto;
+      line-height: 1.5;
+    }
+
+    /* ── Architecture Section ────────────────────────── */
+    .architecture {
+      background: var(--bg-subtle);
+      position: relative;
+      z-index: 2;
+    }
+
+    .arch-diagram {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      max-width: 900px;
+      margin-inline: auto;
+    }
+
+    .arch-brain-card {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+    }
+
+    .arch-brain-card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.125rem;
+    }
+
+    .arch-badge {
+      display: inline-block;
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .arch-badge.s1 {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .arch-badge.s2 {
+      background: rgba(56, 152, 236, 0.08);
+      color: #3898ec;
+    }
+
+    .arch-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .arch-stat {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+    }
+
+    .arch-stat-label {
+      color: var(--text-tertiary);
+    }
+
+    .arch-stat-value {
+      font-weight: 600;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+    }
+
+    /* Memory bridge */
+    .arch-bridge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      padding: 0 1rem;
+      min-width: 80px;
+    }
+
+    .arch-bridge-line {
+      width: 2px;
+      flex: 1;
+      min-height: 20px;
+      background: var(--border);
+    }
+
+    .arch-bridge-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+
+    .arch-bridge-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .arch-bridge-sub {
+      font-size: 0.625rem;
+      color: var(--text-tertiary);
+    }
+
+    @media (max-width: 768px) {
+      .arch-diagram {
+        flex-direction: column;
+        gap: 0;
+      }
+      .arch-bridge {
+        flex-direction: row;
+        padding: 0.75rem 0;
+        min-width: 0;
+      }
+      .arch-bridge-line {
+        width: auto;
+        height: 2px;
+        min-height: 0;
+        flex: 1;
+      }
     }
 
     /* ── CTA Section ──────────────────────────────────── */
@@ -1957,6 +2264,40 @@
       .comparison-table td {
         padding: 0.75rem 0.5rem;
       }
+
+      /* Hero: less padding, image already nearly full-width */
+      .hero {
+        padding-block: clamp(3rem, 8vw, 5rem) 0;
+      }
+      .hero-image-container {
+        width: calc(100% - 1rem) !important;
+      }
+
+      /* HiW carousel: horizontal only, scale inner content */
+      .hiw-card {
+        flex: 0 0 92% !important;
+        padding: 1rem 0.75rem;
+      }
+      .hiw-carousel-clip { overflow: hidden !important; }
+      .hiw-tabs {
+        gap: 0.375rem;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 0.25rem;
+      }
+      .hiw-tab { width: auto; min-width: 0; }
+      .hiw-tab-label { font-size: 0.625rem; }
+
+      /* Keep horizontal layout in all cards, just scale down via zoom */
+      .hiw-visual {
+        zoom: 0.72;
+        overflow: hidden;
+      }
+      .hiw-onboard-split { min-height: auto; }
+      .hiw-daily-split { min-height: auto; }
+      .hiw-mf-sidebar { flex: 0 0 120px; }
+      .hiw-mf-caption { white-space: normal; max-width: 90%; }
     }
 
     /* ── Scroll Animation Observer ────────────────────── */
@@ -1984,9 +2325,10 @@
         CallingClaw
       </a>
       <ul class="nav-links">
-        <li><a href="#features">Business</a></li>
-        <li><a href="#comparison">Features</a></li>
-        <li><a href="#demo">Vision</a></li>
+        <li><a href="#features">Product</a></li>
+        <li><a href="#how-it-works">How it Works</a></li>
+        <li><a href="#comparison">Comparison</a></li>
+        <li><a href="#architecture">Architecture</a></li>
         <li>
           <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2157,10 +2499,9 @@
   </section>
 
   <!-- Meeting Harness Section -->
-  <section class="meeting-harness">
+  <section class="meeting-harness" id="features">
     <div class="container">
       <h2><span class="underline">Meeting Harness</span> for Your Full-time Agents</h2>
-      <p class="meeting-harness-subtitle">CoCo doesn't replace your agent — it gives your agent a meeting room, a calendar, and a voice.<br>Your agent's own capabilities come along naturally.</p>
       <div class="badge-row">
         <span class="badge accent">
           <img src="../Assests/logo-openclaw.png" class="claw-icon" alt="">
@@ -2171,6 +2512,7 @@
           Claude Code
         </span>
       </div>
+      <p class="meeting-harness-subtitle">CallingClaw doesn't replace your agent — it gives your agent a meeting room, a calendar, and a voice. Your agent's own capabilities come along naturally.</p>
       <div class="capability-row">
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg></span> Memory</span>
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span> Files</span>
@@ -2178,6 +2520,7 @@
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span> Browser & Cookies</span>
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Calendar</span>
         <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span> Voice</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span> Skills</span>
       </div>
     </div>
   </section>
@@ -2258,148 +2601,302 @@
 
   <!-- How It Works Section -->
   <section class="how-it-works" id="how-it-works">
-    <div class="container">
+    <!-- Flickering grid on dark bg -->
+    <div class="hiw-grid-base" id="hiwGridBaseWrap"><canvas id="hiwGridBase"></canvas></div>
+    <div class="hiw-grid-glow" id="hiwGridGlowWrap"><canvas id="hiwGridGlow"></canvas></div>
+    <div class="container" style="position:relative;z-index:1;">
       <div class="hiw-header">
-        <h2>How to Setup the Agentware</h2>
-        <p>From download to autonomous execution in four steps</p>
+        <div class="hiw-label">How It Works</div>
+        <h2>Four steps to a working agent.</h2>
+        <p>GUI for onboarding, invisible for daily use.</p>
       </div>
 
-      <!-- Timeline -->
-      <div class="hiw-timeline">
-        <div class="hiw-timeline-track">
-          <div class="hiw-timeline-line">
-            <div class="hiw-timeline-progress" id="hiwProgress"></div>
-          </div>
-          <div class="hiw-timeline-dots">
-            <button class="hiw-dot active" data-step="0">1</button>
-            <button class="hiw-dot" data-step="1">2</button>
-            <button class="hiw-dot" data-step="2">3</button>
-            <button class="hiw-dot" data-step="3">4</button>
-          </div>
-        </div>
+      <!-- Apple-style Progress Tabs -->
+      <div class="hiw-tabs" id="hiwTabs">
+        <button class="hiw-tab active" data-step="0">
+          <span class="hiw-tab-label">GUI for Onboarding</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+        <button class="hiw-tab" data-step="1">
+          <span class="hiw-tab-label">CLI &amp; Invisible Daily</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+        <button class="hiw-tab" data-step="2">
+          <span class="hiw-tab-label">Live Meeting</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+        <button class="hiw-tab" data-step="3">
+          <span class="hiw-tab-label">Results &amp; Action</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
       </div>
 
-      <!-- Cards -->
+      <!-- Carousel -->
+      <div class="hiw-carousel-clip">
+      <div class="hiw-carousel">
       <div class="hiw-cards" id="hiwCards">
 
-        <!-- Step 1: GUI for Setting Up -->
-        <div class="hiw-card" data-hiw-card="0">
-          <span class="hiw-card-step">Step 1</span>
+        <!-- Step 1: GUI Onboarding — Desktop permission screen -->
+        <div class="hiw-card active" data-hiw-card="0">
+          <span class="hiw-card-step">Onboarding</span>
           <h3>GUI for Setting Up</h3>
-          <p class="hiw-card-desc">Download the desktop app and grant permissions. Connect to your OpenClaw agent with one click.</p>
+          <p class="hiw-card-desc">Download the desktop app. A guided setup walks you through each permission — screen, mic, accessibility, then connects to your agent.</p>
           <div class="hiw-visual">
-            <div class="hiw-setup-card">
-              <svg class="hiw-setup-icon" viewBox="0 0 60 60" fill="none">
-                <rect x="8" y="12" width="44" height="32" rx="4" fill="var(--surface-elevated)" stroke="var(--border)" stroke-width="1.5"/>
-                <rect x="14" y="18" width="32" height="20" rx="2" fill="var(--bg-subtle)"/>
-                <circle cx="30" cy="48" r="2" fill="var(--text-tertiary)"/>
-                <rect x="22" y="50" width="16" height="2" rx="1" fill="var(--text-tertiary)"/>
-              </svg>
-              <div class="hiw-setup-title">Download desktop app and setup permissions</div>
-              <ul class="hiw-checklist">
-                <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Screen Recording</li>
-                <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Microphone</li>
-                <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Accessibility</li>
-                <li><span class="hiw-check"><svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5"/></svg></span> Connect to OpenClaw</li>
-              </ul>
-              <div class="hiw-setup-btn">Get Started</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 2: CLI & Agent Messaging -->
-        <div class="hiw-card" data-hiw-card="1">
-          <span class="hiw-card-step">Step 2</span>
-          <h3>CLI &amp; Agent Messaging</h3>
-          <p class="hiw-card-desc">Book a time with your agent through CLI or messaging. Your agent will prepare context from recent work in advance.</p>
-          <div class="hiw-visual">
-            <div class="hiw-chat-visual">
-              <div class="hiw-chat-messages">
-                <div class="hiw-chat-bubble user">Let's review the landing page tomorrow at 3pm</div>
-                <div class="hiw-chat-bubble agent">Scheduled! I'll prepare context from your recent PRD, design files, and last meeting's decisions before we start. &#10003;</div>
-              </div>
-              <div class="hiw-mini-calendar">
-                <div class="hiw-cal-header">Tomorrow</div>
-                <div class="hiw-cal-slot"><span>1:00</span></div>
-                <div class="hiw-cal-slot"><span>2:00</span></div>
-                <div class="hiw-cal-slot">
-                  <span>3:00</span>
-                  <div class="hiw-cal-event">Landing Page Review</div>
+            <div class="hiw-onboard-split">
+              <!-- Left: permission steps -->
+              <div class="hiw-onboard-left">
+                <div class="hiw-ob-tag">Step 1 / 4</div>
+                <div class="hiw-ob-title">Screen Understanding</div>
+                <div class="hiw-ob-desc">CallingClaw needs to see the screen to understand what's being discussed in meetings.</div>
+                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Granted</div>
+                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Microphone — Granted</div>
+                <div class="hiw-ob-status pending"><span class="hiw-ob-dot yellow"></span> Accessibility — Waiting...</div>
+                <div class="hiw-ob-status"><span class="hiw-ob-dot grey"></span> Connect to OpenClaw</div>
+                <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+                  <span class="hiw-ob-btn primary">Grant Accessibility</span>
+                  <span class="hiw-ob-btn ghost">Skip</span>
                 </div>
-                <div class="hiw-cal-slot"><span>4:00</span></div>
+              </div>
+              <!-- Right: visual -->
+              <div class="hiw-onboard-right">
+                <div class="hiw-ob-screen-frame">
+                  <div class="hiw-ob-scan-line"></div>
+                  <div class="hiw-ob-highlight" style="top:20%;left:15%">Slide</div>
+                  <div class="hiw-ob-highlight" style="top:50%;left:55%">Code</div>
+                  <div class="hiw-ob-highlight" style="top:75%;left:30%">Diagram</div>
+                </div>
+                <!-- Progress dots -->
+                <div class="hiw-ob-dots">
+                  <span class="hiw-ob-pip done"></span>
+                  <span class="hiw-ob-pip done"></span>
+                  <span class="hiw-ob-pip active"></span>
+                  <span class="hiw-ob-pip"></span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Step 3: Join Meeting & Discuss -->
+        <!-- Step 2: CLI & Invisible Daily — Telegram + Calendar -->
+        <div class="hiw-card" data-hiw-card="1">
+          <span class="hiw-card-step">Daily Use</span>
+          <h3>CLI &amp; Invisible for Daily Use</h3>
+          <p class="hiw-card-desc">Message your agent on Telegram or CLI. It schedules meetings, prepares context from your recent work, and stays ready.</p>
+          <div class="hiw-visual">
+            <div class="hiw-daily-split">
+              <!-- Left: Telegram-style chat -->
+              <div class="hiw-tg-chat">
+                <div class="hiw-tg-header">
+                  <div class="hiw-tg-avatar">
+                    <img src="../Assests/callingclaw-logo.png" width="28" height="28" style="object-fit:contain;" alt="">
+                  </div>
+                  <div>
+                    <div style="font-weight:600;font-size:0.8125rem;color:var(--text);">CallingClaw</div>
+                    <div style="font-size:0.6875rem;color:var(--success);">online</div>
+                  </div>
+                </div>
+                <div class="hiw-tg-body">
+                  <div class="hiw-tg-msg out">Review the landing page tomorrow at 3pm</div>
+                  <div class="hiw-tg-msg in" style="max-width:95%;">
+                    <div style="font-weight:600;">Meeting created &#x2705;</div>
+                    <div style="margin-top:0.4rem;font-size:0.6875rem;line-height:1.6;">
+                      Meet: <span style="color:#3898ec;text-decoration:underline;">https://meet.google.com/abc-defg-hij</span><br>
+                      Time: 9:10 AM (~12 min from now)<br>
+                      Auto-join: 9:08 cron set
+                    </div>
+                    <div style="margin-top:0.5rem;font-size:0.6875rem;font-weight:600;color:var(--text);">Meeting plan:</div>
+                    <div style="font-size:0.625rem;line-height:1.6;color:var(--text-secondary);margin-top:0.2rem;">
+                      1. Share screen, open site-1/index.html<br>
+                      2. Scroll top to bottom, showcase:<br>
+                      &nbsp;&nbsp;&#x2022; Hero animation + scroll expand<br>
+                      &nbsp;&nbsp;&#x2022; Section scroll-reveal effects<br>
+                      &nbsp;&nbsp;&#x2022; Bottom CTA<br>
+                      3. Discuss adjustments after review
+                    </div>
+                    <div class="hiw-tg-attachment" style="margin-top:0.5rem;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      landing-review_prep.md
+                    </div>
+                    <!-- Google Meet link preview card -->
+                    <div class="hiw-tg-link-card">
+                      <div class="hiw-tg-link-left">
+                        <div style="color:#4aa682;font-size:0.625rem;font-weight:600;">Google Meet</div>
+                        <div style="font-size:0.5625rem;line-height:1.4;color:var(--text-secondary);margin-top:0.1rem;">Real-time meetings by Google. Share video, desktop, and presentations.</div>
+                      </div>
+                      <div class="hiw-tg-link-icon">
+                        <img src="https://fonts.gstatic.com/s/i/productlogos/meet_2020q4/v1/web-96dp/logo_meet_2020q4_color_2x_web_96dp.png" width="28" height="28" alt="Google Meet" style="object-fit:contain;">
+                      </div>
+                    </div>
+                    <div class="hiw-tg-check">&#10003;&#10003;</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Right: Calendly-style slots -->
+              <div class="hiw-cal-panel">
+                <div class="hiw-cal-panel-header">
+                  <div style="font-weight:600;font-size:0.8125rem;">Tomorrow, Apr 13</div>
+                  <div style="font-size:0.6875rem;color:var(--text-tertiary);">3 slots available</div>
+                </div>
+                <div class="hiw-cal-slots">
+                  <div class="hiw-cal-slot-btn">1:00 PM</div>
+                  <div class="hiw-cal-slot-btn">2:00 PM</div>
+                  <div class="hiw-cal-slot-btn booked">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                      <span>3:00 PM</span>
+                      <span style="font-size:0.625rem;color:var(--accent);font-weight:600;">BOOKED</span>
+                    </div>
+                    <!-- Expanded event card -->
+                    <div class="hiw-cal-event-card">
+                      <div style="font-weight:600;font-size:0.75rem;color:var(--text);margin-bottom:0.25rem;">Landing Page Review</div>
+                      <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">Google Meet &bull; 30 min</div>
+                      <div class="hiw-cal-prep-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Meeting Prep attached
+                      </div>
+                    </div>
+                  </div>
+                  <div class="hiw-cal-slot-btn">4:00 PM</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Live Meeting — full meeting frame from legacy -->
         <div class="hiw-card" data-hiw-card="2">
-          <span class="hiw-card-step">Step 3</span>
-          <h3>Join Meeting &amp; Discuss</h3>
-          <p class="hiw-card-desc">Your agent presents, discusses, and collects goals and requirements. It shares screen, navigates pages, and responds to your questions in real time.</p>
-          <div class="hiw-visual hiw-meeting-visual">
-            <div class="hiw-meeting-chrome">
-              <div class="hiw-meeting-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                Landing Page Review — CallingClaw
+          <span class="hiw-card-step">Live Meeting</span>
+          <h3>Join, Present &amp; Discuss</h3>
+          <p class="hiw-card-desc">Your agent joins Google Meet, shares screen with browser tabs, moves a visible cursor, and speaks with live captions.</p>
+          <div class="hiw-visual" style="padding:0;">
+            <!-- Meeting frame chrome -->
+            <div class="hiw-mf-header">
+              <div class="hiw-mf-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> OpenClaw is sharing screen</div>
+              <div class="hiw-mf-live"><span class="hiw-mf-live-dot"></span> LIVE</div>
+            </div>
+            <!-- Browser chrome with tabs -->
+            <div class="hiw-mf-browser">
+              <div class="hiw-mf-dots"><span style="background:#ff5f57"></span><span style="background:#ffbd2e"></span><span style="background:#27c93f"></span></div>
+              <div class="hiw-mf-tabs">
+                <span class="hiw-mf-tab active">📋 Sprint Backlog</span>
+                <span class="hiw-mf-tab">🔧 System Flow</span>
+                <span class="hiw-mf-tab">🌐 Website Review</span>
               </div>
-              <span class="hiw-live-badge">Live</span>
             </div>
-            <table class="hiw-sprint-table">
-              <thead>
-                <tr><th>Decision Point</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>Hero copy emphasizes memory</td><td><span class="hiw-status done">Decided</span></td></tr>
-                <tr><td>CTA: "Join the waitlist"</td><td><span class="hiw-status done">Decided</span></td></tr>
-                <tr><td>Footer layout bug</td><td><span class="hiw-status progress">Fix after launch</span></td></tr>
-              </tbody>
-            </table>
-            <div class="hiw-meeting-caption">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-              CallingClaw: Three decisions confirmed. I'll update the page after we wrap up.
+            <!-- Screen + Sidebar layout -->
+            <div class="hiw-mf-body">
+              <!-- Left: Screen content -->
+              <div class="hiw-mf-screen">
+                <div class="hiw-mf-cursor" id="hiwMfCursor">
+                  <svg width="16" height="20" viewBox="0 0 24 28" fill="none"><path d="M5.5 3.2V20.8c0 .45.26.75.68.75.17 0 .35-.04.52-.14l4.43-2.8 2.83 4.95a1 1 0 0 0 1.54.44 1 1 0 0 0 .44-1.54l-2.83-4.95H18.5c.45 0 .75-.26.75-.68 0-.17-.04-.35-.14-.52L6.61 3.2" fill="var(--accent)" stroke="white" stroke-width="1"/></svg>
+                </div>
+                <div class="hiw-mf-notion-header">
+                  <span>📋</span> <strong>Sprint Backlog</strong>
+                  <div class="hiw-mf-avatars">
+                    <span class="hiw-mf-avatar">P</span>
+                    <span class="hiw-mf-avatar active"><img src="../Assests/callingclaw-logo.png" width="16" height="16" style="object-fit:contain" alt=""></span>
+                  </div>
+                </div>
+                <table class="hiw-mf-table">
+                  <thead><tr><th>Task</th><th>Status</th><th>Priority</th><th>Assignee</th></tr></thead>
+                  <tbody>
+                    <tr><td>Implement voice routing</td><td><span class="hiw-tag green">Done</span></td><td>P0</td><td><img src="../Assests/callingclaw-logo.png" width="12" height="12" style="object-fit:contain;vertical-align:middle;margin-right:2px" alt="">OpenClaw</td></tr>
+                    <tr><td>Add screen share API</td><td><span class="hiw-tag yellow">In Progress</span></td><td>P0</td><td><img src="../Assests/callingclaw-logo.png" width="12" height="12" style="object-fit:contain;vertical-align:middle;margin-right:2px" alt="">OpenClaw</td></tr>
+                    <tr><td>Calendar integration</td><td><span class="hiw-tag red">Blocked</span></td><td>P1</td><td>Peter</td></tr>
+                    <tr><td>Visual diff optimization</td><td><span class="hiw-tag green">Done</span></td><td>P1</td><td><img src="../Assests/callingclaw-logo.png" width="12" height="12" style="object-fit:contain;vertical-align:middle;margin-right:2px" alt="">OpenClaw</td></tr>
+                  </tbody>
+                </table>
+                <div class="hiw-mf-caption" id="hiwMfCaption">
+                  <img src="../Assests/callingclaw-logo.png" width="14" height="14" style="object-fit:contain" alt=""> <span id="hiwMfCaptionText"><strong style="color:white">CallingClaw:</strong> <span style="color:white">Here's our current sprint plan.</span></span>
+                </div>
+              </div>
+              <!-- Right: Stage sidebar -->
+              <div class="hiw-mf-sidebar">
+                <!-- System 1 feed -->
+                <div class="hiw-mf-side-section">
+                  <div class="hiw-mf-side-label">System 1 <span style="color:var(--accent);">&#x25CF;</span></div>
+                  <div class="hiw-mf-feed">
+                    <div class="hiw-mf-feed-item">&#x1F5E3; Presenting sprint backlog...</div>
+                    <div class="hiw-mf-feed-item">&#x1F5E3; Voice routing is done</div>
+                    <div class="hiw-mf-feed-item">&#x1F527; Called: <span style="font-family:var(--font-mono);font-size:0.5625rem;">share_screen</span></div>
+                  </div>
+                </div>
+                <!-- System 2 feed -->
+                <div class="hiw-mf-side-section">
+                  <div class="hiw-mf-side-label">System 2 <span style="color:#3898ec;">&#x25CF;</span></div>
+                  <div class="hiw-mf-feed">
+                    <div class="hiw-mf-feed-item">&#x1F50D; Searching MEMORY.md...</div>
+                    <div class="hiw-mf-feed-item">&#x26A1; Opening site-1/index.html</div>
+                    <div class="hiw-mf-feed-item">&#x2705; Context injected (3 items)</div>
+                  </div>
+                </div>
+                <!-- Working Documents -->
+                <div class="hiw-mf-side-section">
+                  <div class="hiw-mf-side-label">Documents</div>
+                  <div class="hiw-mf-docs">
+                    <div class="hiw-mf-doc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> landing-review_prep.md</div>
+                    <div class="hiw-mf-doc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> DESIGN.md</div>
+                    <div class="hiw-mf-doc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/></svg> site-1/index.html</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="hiw-meeting-participants">
-              <span class="hiw-participant"><span class="hiw-participant-dot speaking"></span> CallingClaw</span>
-              <span class="hiw-participant"><span class="hiw-participant-dot silent"></span> You</span>
+            <!-- Meeting controls -->
+            <div class="hiw-mf-controls">
+              <span class="hiw-mf-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></span>
+              <span class="hiw-mf-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+              <span class="hiw-mf-ctrl active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+              <span class="hiw-mf-ctrl end"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
             </div>
           </div>
         </div>
 
-        <!-- Step 4: Get Results & Keep Working -->
+        <!-- Step 4: Results & Action — Review table + executing -->
         <div class="hiw-card" data-hiw-card="3">
-          <span class="hiw-card-step">Step 4</span>
-          <h3>Get Results &amp; Keep Working</h3>
-          <p class="hiw-card-desc">After the meeting, your agent delivers a structured summary with action items, then keeps working on them autonomously.</p>
+          <span class="hiw-card-step">After Meeting</span>
+          <h3>Results &amp; Autonomous Action</h3>
+          <p class="hiw-card-desc">Every requirement has a paired screenshot and timestamp. No more manual screenshotting and describing — your agent already knows what was discussed at each moment, so alignment is immediate.</p>
           <div class="hiw-visual">
             <div class="hiw-summary-card">
               <div class="hiw-summary-header">
                 <div class="hiw-summary-title">Meeting Summary — Landing Page Review</div>
-                <div class="hiw-summary-meta">12 min &bull; 3 decisions &bull; 3 action items</div>
+                <div class="hiw-summary-meta">12 min &bull; 3 decisions &bull; 2 review items</div>
               </div>
-              <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Action Items</div>
-                <ul class="hiw-summary-list">
-                  <li><input type="checkbox" checked disabled> Update hero copy to emphasize memory</li>
-                  <li><input type="checkbox" checked disabled> Change CTA to "Join the waitlist"</li>
-                  <li><input type="checkbox" disabled> Fix footer layout bug</li>
-                </ul>
-              </div>
-              <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg> Key Decisions</div>
-                <ul class="hiw-summary-list">
-                  <li>&bull; Hero emphasizes agent comes with memory, not blank</li>
-                  <li>&bull; Ship layout bug fix after copy update</li>
-                  <li>&bull; Deploy preview to Vercel for final sign-off</li>
-                </ul>
-              </div>
-              <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Files Updated</div>
-                <div class="hiw-summary-files">
-                  <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> site-1/index.html</span>
-                  <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Vercel preview deployed</span>
-                </div>
-              </div>
+              <!-- Two-column review table -->
+              <table class="hiw-review-table">
+                <thead><tr><th>Screenshot</th><th>Discussion &amp; Action</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="hiw-review-frame">
+                      <div class="hiw-review-thumb">
+                        <div style="background:var(--bg-subtle);border-radius:6px;width:100%;height:80px;display:flex;align-items:center;justify-content:center;font-size:0.625rem;color:var(--text-tertiary);">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="hiw-review-content">
+                      <span class="hiw-review-time">23:16</span>
+                      <div style="font-weight:600;font-size:0.8125rem;color:var(--text);margin-bottom:0.25rem;">Hero Copy Update</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">Emphasize agent comes with full memory, not blank. Update tagline and subtitle.</div>
+                      <span class="hiw-review-priority p1">Key</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="hiw-review-frame">
+                      <div class="hiw-review-thumb">
+                        <div style="background:var(--bg-subtle);border-radius:6px;width:100%;height:80px;display:flex;align-items:center;justify-content:center;font-size:0.625rem;color:var(--text-tertiary);">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="hiw-review-content">
+                      <span class="hiw-review-time">23:22</span>
+                      <div style="font-weight:600;font-size:0.8125rem;color:var(--text);margin-bottom:0.25rem;">Footer Layout Bug</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">Column alignment broken on mobile. Fix spacing after copy update ships.</div>
+                      <span class="hiw-review-priority p3">Info</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
               <div class="hiw-summary-status">
                 <span class="hiw-spinner"></span>
                 Agent is executing action items...
@@ -2408,7 +2905,9 @@
           </div>
         </div>
 
-      </div>
+      </div> <!-- /.hiw-cards -->
+      </div> <!-- /.hiw-carousel -->
+      </div> <!-- /.hiw-carousel-clip -->
     </div>
   </section>
 
@@ -2417,66 +2916,123 @@
     <div class="container">
       <div class="comparison-header">
         <h2>Comparison</h2>
-        <p style="color:var(--text-secondary); margin-top:0.75rem; max-width:640px;">Traditional meeting AI records and transcribes. Pika talks and acts in the cloud. CallingClaw runs locally — with full access to your machine.</p>
+        <p class="section-subtitle" style="margin-top:0.75rem;">Traditional meeting AI records and transcribes. Pika talks and acts in the cloud. CallingClaw runs locally — with full access to your machine.</p>
       </div>
 
       <table class="comparison-table">
         <thead>
           <tr>
-            <th>Capability</th>
-            <th>Otter / Fireflies</th>
+            <th></th>
+            <th class="col-highlight">CallingClaw</th>
             <th>Pika Stream</th>
-            <th>CallingClaw</th>
+            <th>Otter / Fireflies</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>Real-time voice participation</td>
-            <td class="check-no">—</td>
-            <td class="check-partial">Partial</td>
-            <td class="check-yes">Yes</td>
+            <td class="col-highlight"><span class="cmp-yes">Full duplex</span></td>
+            <td class="cmp-partial">Partial</td>
+            <td><span class="cmp-no">—</span></td>
           </tr>
           <tr>
-            <td>Screen perception & sharing</td>
-            <td class="check-no">—</td>
-            <td class="check-no">—</td>
-            <td class="check-yes">Yes (Vision + DOM)</td>
+            <td>Screen perception &amp; sharing</td>
+            <td class="col-highlight"><span class="cmp-yes">Vision + DOM</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td><span class="cmp-no">—</span></td>
           </tr>
           <tr>
             <td>Computer control</td>
-            <td class="check-no">—</td>
-            <td class="check-no">—</td>
-            <td class="check-yes">Voice-triggered</td>
+            <td class="col-highlight"><span class="cmp-yes">Voice-triggered</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td><span class="cmp-no">—</span></td>
+          </tr>
+          <tr>
+            <td>Agent MCP action</td>
+            <td class="col-highlight"><span class="cmp-yes">Full tool use</span></td>
+            <td class="cmp-partial">Limited</td>
+            <td><span class="cmp-no">—</span></td>
           </tr>
           <tr>
             <td>Meeting preparation</td>
-            <td class="check-no">—</td>
-            <td class="check-no">—</td>
-            <td class="check-yes">Automatic</td>
+            <td class="col-highlight"><span class="cmp-yes">Automatic</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td><span class="cmp-no">—</span></td>
           </tr>
           <tr>
             <td>Cross-meeting memory</td>
-            <td class="check-partial">Transcript only</td>
-            <td class="check-partial">Limited</td>
-            <td class="check-yes">Local file memory</td>
+            <td class="col-highlight"><span class="cmp-yes">Local file memory</span></td>
+            <td class="cmp-partial">Limited</td>
+            <td class="cmp-partial">Transcript only</td>
           </tr>
           <tr>
             <td>Live action item capture</td>
-            <td class="check-partial">Post-meeting only</td>
-            <td class="check-no">—</td>
-            <td class="check-yes">Real-time</td>
+            <td class="col-highlight"><span class="cmp-yes">Real-time</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td class="cmp-partial">Post-meeting</td>
           </tr>
           <tr>
             <td>Data privacy</td>
-            <td class="check-partial">Cloud</td>
-            <td class="check-partial">Cloud</td>
-            <td class="check-yes">100% local processing</td>
+            <td class="col-highlight"><span class="cmp-yes">100% local</span></td>
+            <td class="cmp-partial">Cloud</td>
+            <td class="cmp-partial">Cloud</td>
           </tr>
         </tbody>
       </table>
 
-      <!-- Features Grid -->
-      <div class="features-grid" id="features">
+    </div>
+  </section>
+
+  <!-- Architecture Section -->
+  <section class="architecture" id="architecture">
+    <div class="container">
+      <div style="text-align:center;margin-bottom:2.5rem;">
+        <h2>Architecture</h2>
+        <p class="section-subtitle" style="margin-top:0.5rem;">Like the human brain in <em>Thinking, Fast and Slow</em> — a fast voice system for real-time dialogue, a slow reasoning system for deep execution, connected through shared memory.</p>
+      </div>
+
+      <!-- Dual-brain diagram -->
+      <div class="arch-diagram">
+        <!-- System 1 -->
+        <div class="arch-brain-card s1">
+          <div class="arch-badge s1">System 1 — Fast Thinking</div>
+          <h3>Voice AI</h3>
+          <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">OpenAI Realtime / Gemini Live</div>
+          <p style="font-size:0.8125rem;line-height:1.5;margin-bottom:1rem;">Conversational, intuitive, immediate. Handles real-time dialogue, answering questions, guiding discussions, and aligning context through natural voice.</p>
+          <div class="arch-stats">
+            <div class="arch-stat"><span class="arch-stat-label">Latency</span><span class="arch-stat-value">~300ms</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Modality</span><span class="arch-stat-value">Voice + Vision</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Best For</span><span class="arch-stat-value">Dialogue, Q&amp;A, Align</span></div>
+          </div>
+        </div>
+
+        <!-- Memory bridge (center) -->
+        <div class="arch-bridge">
+          <div class="arch-bridge-line"></div>
+          <div class="arch-bridge-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg>
+          </div>
+          <div class="arch-bridge-label">Memory</div>
+          <div class="arch-bridge-sub">Context Bridge</div>
+          <div class="arch-bridge-line"></div>
+        </div>
+
+        <!-- System 2 -->
+        <div class="arch-brain-card s2">
+          <div class="arch-badge s2">System 2 — Slow Thinking</div>
+          <h3>OpenClaw</h3>
+          <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">Claude (Deep Reasoning)</div>
+          <p style="font-size:0.8125rem;line-height:1.5;margin-bottom:1rem;">Analytical, methodical, thorough. Reads files, accesses memory, plans multi-step execution. Prepares meeting briefs before, executes action items after.</p>
+          <div class="arch-stats">
+            <div class="arch-stat"><span class="arch-stat-label">Latency</span><span class="arch-stat-value">2-10s</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Modality</span><span class="arch-stat-value">Text + Files + Code</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Best For</span><span class="arch-stat-value">Execute, Optimize, Build</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Privacy badges -->
+      <div class="features-grid" style="margin-top:3rem;">
         <div class="feature-item scroll-reveal">
           <div class="feature-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2486,7 +3042,7 @@
             </svg>
           </div>
           <h4>Open Source</h4>
-          <p>Fully open source under Apache 2.0 license</p>
+          <p>Apache 2.0 license. Full codebase on GitHub.</p>
         </div>
         <div class="feature-item scroll-reveal">
           <div class="feature-icon">
@@ -2496,7 +3052,7 @@
             </svg>
           </div>
           <h4>Free</h4>
-          <p>No subscription, no usage fees, just bring your API keys</p>
+          <p>No subscription, no fees. Bring your own API keys.</p>
         </div>
         <div class="feature-item scroll-reveal">
           <div class="feature-icon">
@@ -2507,7 +3063,7 @@
             </svg>
           </div>
           <h4>100% Local</h4>
-          <p>All processing happens on your machine</p>
+          <p>All agent data stays on your machine.</p>
         </div>
       </div>
     </div>
@@ -2621,45 +3177,47 @@
     const heroWrapper = document.querySelector('.hero-image-wrapper');
 
     if (heroImageContainer && heroDemoPanel && heroPinSpacer && heroImage && heroWrapper) {
-      // Register ScrollTrigger plugin
       gsap.registerPlugin(ScrollTrigger);
 
       const heroTagline = document.getElementById('heroTagline');
       const gridBaseWrap = document.getElementById('flickeringGridBaseWrap');
       const gridGlowWrap = document.getElementById('flickeringGridGlowWrap');
 
-      // Ensure demo panel starts hidden below center
+      // Demo panel starts hidden below center
       gsap.set(heroDemoPanel, {
         xPercent: -50,
         y: '100%',
         opacity: 0,
       });
 
-      // Create timeline for the hero animation
+      // Mobile: shorter scroll distance (image already nearly full-width)
+      const isMobile = window.innerWidth < 768;
       const heroTl = gsap.timeline({
         scrollTrigger: {
           trigger: heroPinSpacer,
-          start: 'bottom bottom',
-          end: '+=100%',
+          start: isMobile ? 'top 20%' : 'center center',
+          end: isMobile ? '+=30%' : '+=60%',
           pin: true,
-          scrub: 0.5,
+          scrub: 0.3,
           anticipatePin: 1,
           onUpdate: function(self) {
             const p = self.progress; // 0 → 1
 
-            // Fade out tagline fast (gone by 40% scroll)
+            // Tagline fades in sync with image expansion covering it
+            // Fades 0→1 over first 50% of scroll — stays visible long enough
             if (heroTagline) {
-              const taglineOpacity = Math.max(0, 1 - p * 2.5);
+              const taglineOpacity = Math.max(0, 1 - p * 2);
               heroTagline.style.opacity = taglineOpacity;
               heroTagline.style.visibility = taglineOpacity <= 0 ? 'hidden' : 'visible';
             }
 
-            // Fade out flickering grid (gone by 80% scroll)
+            // Flickering grid fades out — gone by end of animation
             if (gridBaseWrap) {
-              gridBaseWrap.style.opacity = Math.max(0, 1 - p * 1.25);
+              gridBaseWrap.style.opacity = Math.max(0, 1 - p);
             }
             if (gridGlowWrap) {
-              gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.25);
+              // Glow fades faster than base
+              gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
             }
           },
         }
@@ -2670,27 +3228,24 @@
         width: '100vw',
         borderRadius: '0px',
         duration: 1,
-        ease: 'none'
+        ease: 'power1.inOut'
       }, 0);
 
-      // Demo panel slides from below to vertical center, fading in
+      // Demo panel slides in during second half of animation
       heroTl.to(heroDemoPanel, {
         y: '-50%',
         opacity: 1,
-        duration: 1,
-        ease: 'none'
-      }, 0);
+        duration: 0.6,
+        ease: 'power2.out'
+      }, 0.4);
 
-      // After pin ends, keep grid hidden for the rest of the page
+      // After hero animation ends, keep grid hidden for rest of page
       ScrollTrigger.create({
         trigger: heroPinSpacer,
         start: 'bottom top',
         onEnter: function() {
           if (gridBaseWrap) gridBaseWrap.style.opacity = '0';
           if (gridGlowWrap) gridGlowWrap.style.opacity = '0';
-        },
-        onLeaveBack: function() {
-          // Grid will be restored by the main timeline onUpdate
         },
       });
     }
@@ -2915,6 +3470,203 @@
       }, { passive: true });
     }
 
+    // ── How-It-Works: Apple Peek-Through Carousel ─────────────────────
+    ;(function initHiwCarousel() {
+      var tabs = document.querySelectorAll('.hiw-tab');
+      var track = document.getElementById('hiwCards');
+      var cards = document.querySelectorAll('.hiw-card');
+      var carousel = document.querySelector('.hiw-carousel');
+      if (!tabs.length || !track || !cards.length || !carousel) return;
+
+      var current = 0;
+      var total = cards.length;
+      var DURATION = 6000;
+      var startTime = null;
+      var rafId = null;
+      var paused = false;
+
+      // Calculate the pixel offset to center card[index] in the carousel
+      function getOffset(index) {
+        var carouselW = carousel.offsetWidth;
+        var card = cards[index];
+        // Card left edge relative to track start
+        var cardLeft = card.offsetLeft;
+        var cardW = card.offsetWidth;
+        // Center the card: shift so card center aligns with carousel center
+        return -(cardLeft - (carouselW - cardW) / 2);
+      }
+
+      function goTo(index) {
+        current = index;
+        track.style.transform = 'translateX(' + getOffset(current) + 'px)';
+
+        // Active card highlight
+        cards.forEach(function(c, i) {
+          c.classList.toggle('active', i === current);
+        });
+
+        // Tab states
+        tabs.forEach(function(tab, i) {
+          var fill = tab.querySelector('.hiw-tab-fill');
+          tab.classList.remove('active', 'visited');
+          fill.style.transition = 'none';
+          if (i < current) {
+            tab.classList.add('visited');
+            fill.style.width = '100%';
+          } else if (i === current) {
+            tab.classList.add('active');
+            fill.style.width = '0%';
+          } else {
+            fill.style.width = '0%';
+          }
+        });
+
+        startTime = null;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(tick);
+      }
+
+      function tick(now) {
+        if (paused) { rafId = null; return; }
+        if (!startTime) startTime = now;
+        var progress = Math.min((now - startTime) / DURATION, 1);
+
+        tabs[current].querySelector('.hiw-tab-fill').style.width = (progress * 100) + '%';
+
+        if (progress >= 1) {
+          rafId = null;
+          goTo((current + 1) % total);
+        } else {
+          rafId = requestAnimationFrame(tick);
+        }
+      }
+
+      // Click tab → jump + restart
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          goTo(parseInt(tab.dataset.step));
+        });
+      });
+
+      // Pause on hover
+      var clipEl = document.querySelector('.hiw-carousel-clip');
+      if (clipEl) {
+        clipEl.addEventListener('mouseenter', function() { paused = true; });
+        clipEl.addEventListener('mouseleave', function() {
+          paused = false;
+          if (!rafId) rafId = requestAnimationFrame(tick);
+        });
+      }
+
+      // Recalculate on resize
+      window.addEventListener('resize', function() {
+        track.style.transition = 'none';
+        track.style.transform = 'translateX(' + getOffset(current) + 'px)';
+        requestAnimationFrame(function() { track.style.transition = ''; });
+      });
+
+      // Start when visible, pause when not
+      var section = document.querySelector('.how-it-works');
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            paused = false;
+            if (!rafId) {
+              if (!startTime) goTo(0);
+              else rafId = requestAnimationFrame(tick);
+            }
+          } else {
+            paused = true;
+          }
+        });
+      }, { threshold: 0.2 });
+      if (section) observer.observe(section);
+
+      // Set first card active immediately
+      cards[0].classList.add('active');
+    })();
+
+    // ── Step 3 Meeting Frame: Cursor + Caption Animation ────────────
+    ;(function initMfAnimation() {
+      var cursor = document.getElementById('hiwMfCursor');
+      var captionText = document.getElementById('hiwMfCaptionText');
+      var screen = cursor && cursor.parentElement;
+      if (!cursor || !captionText || !screen) return;
+
+      function moveTo(xPct, yPct, dur) {
+        cursor.style.transition = 'left ' + dur + 'ms cubic-bezier(0.25,0.1,0.25,1), top ' + dur + 'ms cubic-bezier(0.25,0.1,0.25,1)';
+        cursor.style.left = xPct + '%';
+        cursor.style.top = yPct + '%';
+        return new Promise(function(r) { setTimeout(r, dur); });
+      }
+
+      function click() {
+        return new Promise(function(r) {
+          cursor.style.transform = 'scale(0.8)';
+          setTimeout(function() { cursor.style.transform = 'scale(1)'; setTimeout(r, 100); }, 150);
+        });
+      }
+
+      function say(text) {
+        captionText.style.opacity = '0';
+        setTimeout(function() {
+          captionText.innerHTML = '<strong style="color:white">CallingClaw:</strong> <span style="color:white">' + text + '</span>';
+          captionText.style.opacity = '1';
+        }, 150);
+      }
+
+      function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+      async function runLoop() {
+        while (true) {
+          // Point at sprint table header
+          say("Here's our current sprint plan.");
+          await moveTo(30, 30, 800);
+          await wait(1500);
+
+          // Point at first row (voice routing — Done)
+          say("Voice routing is done — that was the hard part.");
+          await moveTo(25, 42, 600);
+          await click();
+          await wait(1800);
+
+          // Point at second row (screen share — In Progress)
+          say("Screen share API is in progress now.");
+          await moveTo(35, 52, 500);
+          await click();
+          await wait(1800);
+
+          // Point at third row (calendar — Blocked)
+          say("Calendar integration is blocked on Peter's side.");
+          await moveTo(28, 62, 500);
+          await wait(1800);
+
+          // Point at fourth row (visual diff — Done)
+          say("Visual diff optimization shipped yesterday.");
+          await moveTo(40, 72, 600);
+          await click();
+          await wait(1500);
+
+          // Move to center, ask question
+          say("Any questions about the plan?");
+          await moveTo(50, 45, 800);
+          await wait(2500);
+        }
+      }
+
+      // Start when the card becomes visible
+      var card = document.querySelector('[data-hiw-card="2"]');
+      if (!card) return;
+      var started = false;
+      var obs = new IntersectionObserver(function(entries) {
+        if (entries[0].isIntersecting && !started) {
+          started = true;
+          runLoop();
+        }
+      }, { threshold: 0.5 });
+      obs.observe(card);
+    })();
+
     // ── Flickering Grid Animation (ported from React FlickeringGrid) ────
     ;(function initFlickeringGrid() {
       // ── Color parser: any CSS color → "rgba(r, g, b," prefix ──
@@ -3012,7 +3764,7 @@
       if (baseCanvas) {
         createGrid(baseCanvas, {
           color: '#FFD6D1',
-          maxOpacity: 0.5,
+          maxOpacity: 0.45,
           flickerChance: 0.1,
           squareSize: 4,
           gridGap: 4,
@@ -3024,8 +3776,8 @@
       const glowWrap = document.getElementById('flickeringGridGlowWrap');
       if (glowCanvas && glowWrap) {
         createGrid(glowCanvas, {
-          color: '#FF6B5A',
-          maxOpacity: 0.55,
+          color: '#DC4A3A',
+          maxOpacity: 0.5,
           flickerChance: 0.3,
           squareSize: 4,
           gridGap: 4,
@@ -3051,6 +3803,29 @@
         document.addEventListener('mousemove', function() {
           if (firstMove) { glowWrap.classList.add('active'); firstMove = false; }
         }, { passive: true, once: true });
+      }
+
+      // ── HiW section grid (dark bg, cream-colored) ──
+      var hiwBase = document.getElementById('hiwGridBase');
+      var hiwGlowCanvas = document.getElementById('hiwGridGlow');
+      var hiwGlowWrap = document.getElementById('hiwGridGlowWrap');
+      if (hiwBase) {
+        createGrid(hiwBase, { color: '#1a3d35', maxOpacity: 0.4, flickerChance: 0.08, squareSize: 4, gridGap: 5 });
+      }
+      if (hiwGlowCanvas && hiwGlowWrap) {
+        createGrid(hiwGlowCanvas, { color: '#faf9f5', maxOpacity: 0.25, flickerChance: 0.25, squareSize: 4, gridGap: 5 });
+        document.addEventListener('mousemove', function(e) {
+          var sect = document.querySelector('.how-it-works');
+          if (!sect) return;
+          var r = sect.getBoundingClientRect();
+          if (e.clientY < r.top || e.clientY > r.bottom) { hiwGlowWrap.classList.remove('active'); return; }
+          hiwGlowWrap.classList.add('active');
+          var x = ((e.clientX - r.left) / r.width * 100).toFixed(1);
+          var y = ((e.clientY - r.top) / r.height * 100).toFixed(1);
+          var mask = 'radial-gradient(350px circle at ' + x + '% ' + y + '%, white, transparent)';
+          hiwGlowWrap.style.webkitMaskImage = mask;
+          hiwGlowWrap.style.maskImage = mask;
+        }, { passive: true });
       }
     })();
   </script>
