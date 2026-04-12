@@ -6,7 +6,7 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, resolveAndInjectPrep, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import { PresentationEngine } from "../modules/presentation-engine";
 import type { Services, RouteHandler } from "./types";
@@ -150,35 +150,15 @@ export function meetingRoutes(services: Services): RouteHandler {
         const meetingId = session.meetingId;
         services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
 
-        // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
-        // DEDUP: Skip if session already has a prep file (e.g., from /api/meeting/delegate)
-        // or if meetingPrepSkill already has a loaded brief for this meeting.
-        let prepBrief: any = null;
-        const existingPrepBrief = services.meetingPrepSkill?.currentBrief;
-        const sessionHasPrep = session.files?.prep;
-        if (sessionHasPrep || existingPrepBrief) {
-          // Prep already exists — inject into voice context
-          prepBrief = existingPrepBrief;
-          if (prepBrief && services.realtime.connected) {
-            injectMeetingBrief(services.realtime, prepBrief);
-            console.log("[Meeting] Layer 2 meeting brief injected (existing prep)");
-          } else if (sessionHasPrep && services.realtime.connected) {
-            // Brief not in memory but prep file exists on disk — read and inject raw markdown
-            try {
-              const prepPath = session.files!.prep as string;
-              const raw = await Bun.file(prepPath).text();
-              if (raw && raw.length > 100) {
-                // Truncate to fit voice context (~4000 chars)
-                // Resources are now at the top of prep markdown, simple truncation preserves them
-                const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
-                services.realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
-                console.log(`[Meeting] Layer 2 injected from disk prep (${raw.length} chars → ${content.length} chars)`);
-              }
-            } catch (e: any) {
-              console.warn(`[Meeting] Failed to read prep file from disk: ${e.message}`);
-            }
-          }
-        }
+        // Resolve and inject meeting prep brief (shared helper handles all fallbacks:
+        // session.files.prep → currentBrief with topic validation → disk scan for recent prep)
+        let prepBrief: any = await resolveAndInjectPrep({
+          session,
+          meetTopic,
+          meetingPrepSkill: services.meetingPrepSkill,
+          sessionManager: services.sessionManager!,
+          realtime: services.realtime,
+        });
 
         // Load presentation script if a prep JSON exists (speakingPlan + scenes)
         // This powers PRESENTER mode — voice follows the plan, shares screen, scrolls in sync

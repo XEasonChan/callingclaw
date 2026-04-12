@@ -36,7 +36,8 @@ import type { OpenClawBridge } from "./openclaw_bridge";
 import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "./voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, resolveAndInjectPrep, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "./voice-persona";
+import { topicSimilarity } from "./modules/session-manager";
 import { generateStageHtml, resolveDocumentUrl } from "./modules/stage-generator";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
@@ -1611,15 +1612,22 @@ export function startConfigServer(services: Services) {
         } else if (services.realtime.connected) {
           voiceStarted = true;
         }
-        let prepBrief: any = null;
+        // Resolve and inject meeting prep brief (shared helper handles all fallbacks:
+        // session.files.prep → currentBrief with topic validation → disk scan for recent prep)
+        let prepBrief: any = await resolveAndInjectPrep({
+          session,
+          meetTopic,
+          meetingPrepSkill: services.meetingPrepSkill,
+          sessionManager: services.sessionManager!,
+          realtime: services.realtime,
+        });
 
         // Check for local presentation script (prep JSON with speakingPlan + scenes)
         // This enables PRESENTER mode without waiting for OpenClaw
-        // IMPORTANT: Clear stale brief from previous meeting first, then match by meetingId
         if (services.meetingPrepSkill) {
-          // Clear previous meeting's brief to ensure we never use stale data
+          // Clear previous meeting's brief if topic doesn't match (fuzzy check)
           const prevBrief = services.meetingPrepSkill.currentBrief;
-          if (prevBrief && prevBrief.topic !== meetTopic) {
+          if (prevBrief && topicSimilarity(prevBrief.topic, meetTopic) < 0.3) {
             services.meetingPrepSkill.setBrief(null as any);
             console.log(`[Meeting] Cleared stale prep brief (was: "${prevBrief.topic}", now: "${meetTopic}")`);
           }

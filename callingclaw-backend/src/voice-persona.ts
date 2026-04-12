@@ -37,6 +37,9 @@ import type { VoiceModule } from "./modules/voice";
 import type { MeetingPrepSkill, MeetingPrepBrief } from "./skills/meeting-prep";
 import type { CalendarAttendee } from "./mcp_client/google_cal";
 import type { EventBus } from "./modules/event-bus";
+import type { SessionManager, MeetingSession } from "./modules/session-manager";
+import { topicSimilarity } from "./modules/session-manager";
+import { SHARED_DIR } from "./config";
 import {
   CORE_IDENTITY,
   MISSION_CONTEXT_PREFIX,
@@ -205,6 +208,104 @@ export function injectMeetingBrief(
   const briefText = buildMeetingBriefContext(brief);
   if (!briefText) return false;
   return voiceModule.injectContext(briefText);
+}
+
+/**
+ * Resolve meeting prep and inject into voice session. Shared by both join codepaths
+ * (meeting-routes.ts and config_server.ts) to eliminate duplication.
+ *
+ * Resolution order:
+ *   1. session.files.prep exists on disk → read and inject
+ *   2. currentBrief in memory + topic fuzzy match → inject
+ *   3. Scan ~/.callingclaw/shared/ for recent *_prep.md files → inject best match
+ *
+ * @returns The matched MeetingPrepBrief (or null if none found)
+ */
+export async function resolveAndInjectPrep(opts: {
+  session: MeetingSession;
+  meetTopic: string;
+  meetingPrepSkill: MeetingPrepSkill | null;
+  sessionManager: SessionManager;
+  realtime: VoiceModule;
+}): Promise<MeetingPrepBrief | null> {
+  const { session, meetTopic, meetingPrepSkill, sessionManager, realtime } = opts;
+
+  // Source 1: Session has a registered prep file
+  const sessionHasPrep = session.files?.prep;
+  const existingPrepBrief = meetingPrepSkill?.currentBrief ?? null;
+
+  if (sessionHasPrep && realtime.connected) {
+    // If currentBrief matches this session's topic, use it (richer than raw markdown)
+    if (existingPrepBrief && topicSimilarity(existingPrepBrief.topic, meetTopic) > 0.3) {
+      injectMeetingBrief(realtime, existingPrepBrief);
+      console.log("[PrepResolve] Injected currentBrief (session has prep file, topic validated)");
+      return existingPrepBrief;
+    }
+    // Otherwise read raw markdown from disk
+    try {
+      const { resolve } = require("path");
+      const prepPath = sessionHasPrep.startsWith("/") ? sessionHasPrep : resolve(SHARED_DIR, sessionHasPrep);
+      const raw = await Bun.file(prepPath).text();
+      if (raw && raw.length > 100) {
+        const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
+        realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
+        console.log(`[PrepResolve] Injected from disk prep (${raw.length} chars)`);
+      }
+    } catch (e: any) {
+      console.warn(`[PrepResolve] Failed to read prep file: ${e.message}`);
+    }
+    return existingPrepBrief;
+  }
+
+  // Source 2: currentBrief in memory with topic validation
+  if (existingPrepBrief && realtime.connected) {
+    const score = topicSimilarity(existingPrepBrief.topic, meetTopic);
+    if (score > 0.3) {
+      injectMeetingBrief(realtime, existingPrepBrief);
+      console.log(`[PrepResolve] Injected currentBrief (topic match: ${score.toFixed(2)})`);
+      return existingPrepBrief;
+    } else {
+      console.log(`[PrepResolve] Skipping stale brief: "${existingPrepBrief.topic.slice(0, 40)}" ≠ "${meetTopic.slice(0, 40)}" (score=${score.toFixed(2)})`);
+    }
+  }
+
+  // Source 3: Scan disk for recent *_prep.md files
+  if (realtime.connected) {
+    try {
+      const { readdirSync, statSync } = require("fs");
+      const { resolve } = require("path");
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+
+      const prepFiles = readdirSync(SHARED_DIR)
+        .filter((f: string) => f.endsWith("_prep.md"))
+        .map((f: string) => {
+          const full = resolve(SHARED_DIR, f);
+          try { return { name: f, path: full, mtime: statSync(full).mtimeMs }; }
+          catch { return null; }
+        })
+        .filter((f: any) => f && f.mtime > twoHoursAgo)
+        .sort((a: any, b: any) => b.mtime - a.mtime);
+
+      for (const pf of prepFiles) {
+        const raw = await Bun.file(pf.path).text();
+        if (!raw || raw.length < 100) continue;
+        const firstLine = raw.split("\n")[0]?.replace(/^#+\s*/, "").trim() || "";
+        const score = topicSimilarity(firstLine, meetTopic);
+        if (score > 0.3) {
+          const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
+          realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
+          console.log(`[PrepResolve] Disk scan match: ${pf.name} (topic: "${firstLine.slice(0, 40)}", score=${score.toFixed(2)}, ${raw.length} chars)`);
+          // Register this file with the session for future lookups
+          sessionManager.registerFile(session.meetingId, "prep", pf.name);
+          return null; // No structured brief, but context was injected
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[PrepResolve] Disk scan failed: ${e.message}`);
+    }
+  }
+
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════
