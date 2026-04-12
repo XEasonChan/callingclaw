@@ -1,8 +1,201 @@
 [
   {
+    "id": "task_mnptqngk_7ue8",
+    "task": "将 8-9 轮 scenario-eval 发现的 bug 整理为修复任务清单并录入 OpenClaw 跟踪（Andrew 明确要求'放到 OpenClaw 里面去实施'）",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-09",
+    "createdAt": 1775639210564,
+    "updatedAt": 1775639210564
+  },
+  {
+    "id": "task_mnptqngk_i24o",
+    "task": "【P0】设置 Whisper language='zh' — 9 轮 eval 每轮都在重复发现同一问题，累计 100+ 条乱码消息",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-09",
+    "createdAt": 1775639210564,
+    "updatedAt": 1775639210564
+  },
+  {
+    "id": "task_mnptqngk_ucmx",
+    "task": "修复 notes/extractActionItems 内容过滤 — 过滤 [Screen] 描述、system prompt 注入、CoCo 开场白等非 action_item 内容",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-10",
+    "createdAt": 1775639210564,
+    "updatedAt": 1775639210564
+  },
+  {
+    "id": "task_mnptqngk_5ot1",
+    "task": "排查已知回归 bug：GitHub 链接打开失败、share_screen 域名拼接错误 — Andrew 确认'preverse 测试时有测试过'说明这些是回归而非新问题",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-10",
+    "createdAt": 1775639210564,
+    "updatedAt": 1775639210564
+  },
+  {
+    "id": "task_mnptqngk_gieg",
+    "task": "Zoom 平台兼容性验证 — 新 session 主题为 'Zoom test'，需确认 CoCo 在 Zoom 上的 join/present/speak 能力（之前所有 eval 均在 Google Meet 上）",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-12",
+    "createdAt": 1775639210564,
+    "updatedAt": 1775639210564
+  },
+  {
+    "id": "task_mnn9udkq_1u9o",
+    "task": "[P1] 重新安排 Launch Video Brief 讨论：本轮未实质开始，需要找到视频脚本文件后再组织",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn9sgr0_inyr",
+    "createdAt": 1775484859706,
+    "updatedAt": 1775484859706
+  },
+  {
+    "id": "task_mnn9udkp_sum2",
+    "task": "[P0] Whisper language hint 设为 zh — 今晚多轮测试中反复出现中文→外语误识别，直接影响 Demo 和产品可信度",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn9sgr0_inyr",
+    "createdAt": 1775484859705,
+    "updatedAt": 1775484859705
+  },
+  {
+    "id": "task_mnn9748o_m5zp",
+    "task": "[P1] search_files 默认启用 content_search：当前文件名搜索 miss 后需手动重试。修改默认参数或在 CoCo system prompt 中添加规则：首次 miss 自动加 content_search=true 重试",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-08",
+    "sourceMeetingId": "mtg_mnn8zhth_9zze",
+    "createdAt": 1775483774520,
+    "updatedAt": 1775483774520
+  },
+  {
+    "id": "task_mnn9748o_fcuy",
+    "task": "[P1] 找到并确认上线视频脚本文件位置（'launch video script'）：search_files 未找到，需手动定位文件并统一命名",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn8zhth_9zze",
+    "createdAt": 1775483774520,
+    "updatedAt": 1775483774520
+  },
+  {
+    "id": "task_mnn9748o_w1ev",
+    "task": "[P2] 剩余 E2E 验证：leave_meeting（本轮未测）+ Google 搜索输入（上轮延迟）。其余工具全部通过",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-08",
+    "sourceMeetingId": "mtg_mnn8zhth_9zze",
+    "createdAt": 1775483774520,
+    "updatedAt": 1775483774520
+  },
+  {
+    "id": "task_mnn9748o_mu5e",
+    "task": "[P2] Realtime API function_call 失败 root cause 排查：sendText 已可用但 function_call 是更优架构（类型安全）。查 session.update tools schema + tool_choice 配置",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-09",
+    "sourceMeetingId": "mtg_mnn8zhth_9zze",
+    "createdAt": 1775483774520,
+    "updatedAt": 1775483774520
+  },
+  {
+    "id": "task_mnn9748n_g6ur",
+    "task": "[P1] 投屏首次失败排查：用户反馈 '投屏没成功' 但 CoCo 端显示已分享。可能是 Meet 端共享延迟或 Playwright 页面加载未完成。检查 share_screen 执行到 Meet 端显示的延迟",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-08",
+    "sourceMeetingId": "mtg_mnn8zhth_9zze",
+    "createdAt": 1775483774519,
+    "updatedAt": 1775483774519
+  },
+  {
+    "id": "task_mnn9748l_aakn",
+    "task": "[P0] Whisper 中文识别修复：设置 language='zh' 或 prompt hint 注入中文常用词。当前状态直接影响 Demo 视频质量和产品可信度。GA Realtime 1.5 支持 gpt-4o-transcribe 可作为替代方案",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn8zhth_9zze",
+    "createdAt": 1775483774517,
+    "updatedAt": 1775483774517
+  },
+  {
+    "id": "task_mnn6un9k_ac96",
+    "task": "补充 leave_meeting 调用验证 — 确认离会流程是否完整执行",
+    "status": "cancelled",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn6su7v_vjce",
+    "createdAt": 1775479833416,
+    "updatedAt": 1775479833416
+  },
+  {
+    "id": "task_mnn6un9k_uf81",
+    "task": "建立 E2E 回归测试 checklist：每个工具 (share_screen, interact, leave_meeting) 独立验证 + 组合验证",
+    "status": "cancelled",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-08",
+    "sourceMeetingId": "mtg_mnn6su7v_vjce",
+    "createdAt": 1775479833416,
+    "updatedAt": 1775479833416
+  },
+  {
+    "id": "task_mnn6un9k_e6yl",
+    "task": "记录本次 E2E 测试结果到 bug tracker（interact 失败为 P0）",
+    "status": "cancelled",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn6su7v_vjce",
+    "createdAt": 1775479833416,
+    "updatedAt": 1775479833416
+  },
+  {
+    "id": "task_mnn6un9j_461x",
+    "task": "修复 interact 工具不可用问题 — 确认 interact (scroll/click) 是否注册到当前 session 的工具列表中",
+    "status": "cancelled",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn6su7v_vjce",
+    "createdAt": 1775479833415,
+    "updatedAt": 1775479833415
+  },
+  {
+    "id": "task_mnn6un9j_fotk",
+    "task": "验证 PLATFORM_EXCLUDED_TOOLS 配置是否误过滤了 interact 工具",
+    "status": "cancelled",
+    "priority": "medium",
+    "assignee": "Andrew",
+    "deadline": "2026-04-07",
+    "sourceMeetingId": "mtg_mnn6su7v_vjce",
+    "createdAt": 1775479833415,
+    "updatedAt": 1775479833415
+  },
+  {
     "id": "task_mn8l0m9e_x8rl",
     "task": "Join Google Meet meeting (testing callingclaw)",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "User",
     "deadline": "2025-03-27T15:00:00+08:00",
@@ -13,7 +206,7 @@
   {
     "id": "task_mn8l0m9e_vss9",
     "task": "Task description (from notes placeholder)",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Person name",
     "deadline": "N/A",
@@ -24,7 +217,7 @@
   {
     "id": "task_mmyq443h_cpvr",
     "task": "Review and refine the PowerPoint slides for clarity and impact on the audience.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "xueyi chen",
     "deadline": "2023-10-30",
@@ -35,7 +228,7 @@
   {
     "id": "task_mmyq443h_bwh3",
     "task": "Finalize the use case documentation for the event.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "XEason Chan",
     "deadline": "2023-10-31",
@@ -46,7 +239,7 @@
   {
     "id": "task_mmyq443h_og8v",
     "task": "Verify the technical setup of audio systems is optimal for the event.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Technical Team",
     "deadline": "2023-10-28",
@@ -57,7 +250,7 @@
   {
     "id": "task_mmypmmyz_vqdj",
     "task": "Review and document user's standards for project work.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Assistant",
     "deadline": "2023-11-07",
@@ -68,7 +261,7 @@
   {
     "id": "task_mmypmmyz_l2cn",
     "task": "Establish a regular check-in schedule to ensure alignment with user expectations.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Assistant",
     "deadline": "2023-11-10",
@@ -79,7 +272,7 @@
   {
     "id": "task_mmyb2ziw_088e",
     "task": "Submit first draft of the project report",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice",
     "deadline": "2023-11-10",
@@ -89,7 +282,7 @@
   {
     "id": "task_mmyb2ziw_avj1",
     "task": "Conduct a peer review of code implementations",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob",
     "deadline": "2023-11-05",
@@ -99,7 +292,7 @@
   {
     "id": "task_mmyb2ziw_x3a3",
     "task": "Prepare a presentation for next week's stakeholder meeting",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Charlie",
     "deadline": "2023-11-07",
@@ -109,7 +302,7 @@
   {
     "id": "task_mmyb2ziw_i8jh",
     "task": "Compile feedback from last project phase for team review",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Diana",
     "deadline": "2023-11-08",
@@ -119,7 +312,7 @@
   {
     "id": "task_mmxx26qj_a0dh",
     "task": "Review and update the project timeline to reflect more realistic deadlines.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Smith",
     "deadline": "2023-11-15",
@@ -129,7 +322,7 @@
   {
     "id": "task_mmxx26qj_2zmz",
     "task": "Draft a communication plan to enhance team coordination.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Charlie Davis",
     "deadline": "2023-11-10",
@@ -139,7 +332,7 @@
   {
     "id": "task_mmxx26qj_5mal",
     "task": "Set up weekly progress check-in meetings.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Dana Lee",
     "deadline": "2023-11-05",
@@ -149,7 +342,7 @@
   {
     "id": "task_mmxx25tm_am7e",
     "task": "Develop a proposal for addressing identified project issues.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Taylor Smith",
     "deadline": "2023-11-18",
@@ -160,7 +353,7 @@
   {
     "id": "task_mmxx25tm_l3mn",
     "task": "Coordinate a follow-up meeting with the client to ensure alignment on project objectives.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Morgan Lee",
     "deadline": "2023-11-20",
@@ -171,7 +364,7 @@
   {
     "id": "task_mmxx25tl_etkq",
     "task": "Compile a detailed progress report of the current project phase.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Jordan Brown",
     "deadline": "2023-11-15",
@@ -182,7 +375,7 @@
   {
     "id": "task_mmxww0ye_az49",
     "task": "Review current project deliverables",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alex",
     "deadline": "2023-11-10",
@@ -193,7 +386,7 @@
   {
     "id": "task_mmxww0ye_16kd",
     "task": "Prepare a detailed report on progress and challenges",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Jamie",
     "deadline": "2023-11-12",
@@ -204,7 +397,7 @@
   {
     "id": "task_mmxww0ye_cqls",
     "task": "Organize follow-up meeting to discuss findings",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Morgan",
     "deadline": "2023-11-15",
@@ -215,7 +408,7 @@
   {
     "id": "task_mmxwu3g8_bpel",
     "task": "Redesign UI elements based on user feedback",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Charlie Lee",
     "deadline": "2023-11-25",
@@ -225,7 +418,7 @@
   {
     "id": "task_mmxwu3g7_7gdd",
     "task": "Enhance and update project documentation",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice Smith",
     "deadline": "2023-11-15",
@@ -235,7 +428,7 @@
   {
     "id": "task_mmxwu3g7_2i8e",
     "task": "Develop and integrate a comprehensive testing plan",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Johnson",
     "deadline": "2023-11-20",
@@ -245,7 +438,7 @@
   {
     "id": "task_mmxvikut_g5jj",
     "task": "Prepare a presentation highlighting Electron desktop flow and recent fixes.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew",
     "deadline": "By end of the month",
@@ -255,7 +448,7 @@
   {
     "id": "task_mmxvikur_hzay",
     "task": "Resolve the PyAudio sidecar crash issue by implementing a serialization lock or queue.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Technical Team",
     "deadline": "Before next development sprint",
@@ -265,7 +458,7 @@
   {
     "id": "task_mmxviju9_9ig3",
     "task": "Prepare a presentation highlighting the Electron transition, resolved audio issues, and upcoming cloud GTM strategy.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew",
     "deadline": "2023-11-10",
@@ -276,7 +469,7 @@
   {
     "id": "task_mmxviju6_nmag",
     "task": "Resolve PyAudio sidecar crash with a serialization lock or queue.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Development Team",
     "deadline": "2023-11-15",
@@ -287,7 +480,7 @@
   {
     "id": "task_mmxth0ng_mtvi",
     "task": "Update the project timeline based on current assessments.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alex",
     "deadline": "2023-10-18",
@@ -297,7 +490,7 @@
   {
     "id": "task_mmxth0nc_i8vk",
     "task": "Review and provide feedback on the draft proposal.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Morgan",
     "deadline": "2023-10-17",
@@ -307,7 +500,7 @@
   {
     "id": "task_mmxth0na_eeli",
     "task": "Complete the project phase documentation.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Jamie",
     "deadline": "2023-10-15",
@@ -317,7 +510,7 @@
   {
     "id": "task_mmxtgxkt_duo2",
     "task": "Schedule a follow-up meeting to discuss progress",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Assistant",
     "deadline": "2023-11-07",
@@ -328,7 +521,7 @@
   {
     "id": "task_mmxtgxks_febk",
     "task": "Review project standards and quality expectations",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Project Manager",
     "deadline": "2023-11-01",
@@ -339,7 +532,7 @@
   {
     "id": "task_mmxtgxks_35l8",
     "task": "Develop a timeline for deliverables",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team Lead",
     "deadline": "2023-11-05",
@@ -350,7 +543,7 @@
   {
     "id": "task_mmxt5vlb_3ya9",
     "task": "Review current project timelines and adjust if necessary.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Jordan",
     "deadline": "2023-11-10",
@@ -361,7 +554,7 @@
   {
     "id": "task_mmxt5vlb_arqc",
     "task": "Ensure all team members are aware of quality standards.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Taylor",
     "deadline": "2023-11-08",
@@ -372,7 +565,7 @@
   {
     "id": "task_mmxt5vlb_24qd",
     "task": "Prepare a report on the project's current status addressing any deviations.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Morgan",
     "deadline": "2023-11-13",
@@ -383,7 +576,7 @@
   {
     "id": "task_mmx6mffu_ctkv",
     "task": "Research and present the new tool for team productivity.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Charlie Green",
     "deadline": "2023-10-18",
@@ -393,7 +586,7 @@
   {
     "id": "task_mmx6mffu_ovsz",
     "task": "Prepare a summary of quality standards and distribute to the team.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice Johnson",
     "deadline": "2023-10-13",
@@ -403,7 +596,7 @@
   {
     "id": "task_mmx6mfft_48v1",
     "task": "Review current resource allocation and propose adjustments.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Smith",
     "deadline": "2023-10-15",
@@ -413,7 +606,7 @@
   {
     "id": "task_mmx6ksg9_hm1p",
     "task": "Compile user feedback into a comprehensive report.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice Johnson",
     "deadline": "October 15, 2023",
@@ -424,7 +617,7 @@
   {
     "id": "task_mmx6ksg9_nlle",
     "task": "Ensure project aligns with the current standards and rectify any deviations.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Smith",
     "deadline": "October 20, 2023",
@@ -435,7 +628,7 @@
   {
     "id": "task_mmx6ksg9_i62y",
     "task": "Prepare a follow-up presentation on how feedback will be integrated into the project plan.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Cynthia Lee",
     "deadline": "October 18, 2023",
@@ -446,7 +639,7 @@
   {
     "id": "task_mmx3iy4p_xmxb",
     "task": "Research current industry standards relevant to the project.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Lead Developer",
     "deadline": "2023-11-15",
@@ -456,7 +649,7 @@
   {
     "id": "task_mmx3iy4p_1viy",
     "task": "Create a framework for collecting and integrating user feedback.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "UX Designer",
     "deadline": "2023-11-10",
@@ -466,7 +659,7 @@
   {
     "id": "task_mmx3iy4p_772h",
     "task": "Develop detailed project documentation template.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "QA Analyst",
     "deadline": "2023-11-18",
@@ -476,7 +669,7 @@
   {
     "id": "task_mmx3itc7_b230",
     "task": "Create detailed report on project challenges and potential solutions.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice Johnson",
     "deadline": "2023-11-15",
@@ -487,7 +680,7 @@
   {
     "id": "task_mmx3itc7_qric",
     "task": "Develop a revised project timeline considering new insights.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Smith",
     "deadline": "2023-11-10",
@@ -498,7 +691,7 @@
   {
     "id": "task_mmx3itc7_wl0o",
     "task": "Organize a quality standards workshop for the team.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Carol Martinez",
     "deadline": "2023-11-20",
@@ -509,7 +702,7 @@
   {
     "id": "task_mmx3iql9_dqrq",
     "task": "Prepare updated project plan with detailed timelines.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Smith",
     "deadline": "2023-11-10",
@@ -519,7 +712,7 @@
   {
     "id": "task_mmx3iqla_ihx2",
     "task": "Draft a summary of user feedback and proposed changes.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Catherine Lee",
     "deadline": "2023-11-12",
@@ -529,7 +722,7 @@
   {
     "id": "task_mmx3iqla_687j",
     "task": "Develop a checklist for project deliverables to ensure standards are met.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "David Tran",
     "deadline": "2023-11-15",
@@ -539,7 +732,7 @@
   {
     "id": "task_mmx1v31a_j788",
     "task": "Investigate proposed new technologies and their potential impact.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Dave",
     "deadline": "2023-11-20",
@@ -550,7 +743,7 @@
   {
     "id": "task_mmx1v319_p4a6",
     "task": "Conduct a follow-up meeting to review the project timeline.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice",
     "deadline": "2023-11-10",
@@ -561,7 +754,7 @@
   {
     "id": "task_mmx1v319_ldxz",
     "task": "Prepare a report on the technical challenges and proposed solutions.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob",
     "deadline": "2023-11-15",
@@ -572,7 +765,7 @@
   {
     "id": "task_mmx1v319_331y",
     "task": "Organize a joint session for the design and development teams to improve collaboration.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Carol",
     "deadline": "2023-11-12",
@@ -583,7 +776,7 @@
   {
     "id": "task_mmwd1e77_awue",
     "task": "Follow up on video cropping issues with participants",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "XEason Chan",
     "deadline": "2023-11-05",
@@ -593,7 +786,7 @@
   {
     "id": "task_mmwd1e77_enj2",
     "task": "Confirm technical setup for next meeting",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "xueyi chen",
     "deadline": "2023-11-02",
@@ -603,7 +796,7 @@
   {
     "id": "task_mmwcvt9m_i1ix",
     "task": "Follow up on video cropping issues with participants.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "XEason Chan",
     "deadline": "2023-11-05",
@@ -613,7 +806,7 @@
   {
     "id": "task_mmwcvt9m_i5u9",
     "task": "Confirm technical setup for next meeting.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "xueyi chen",
     "deadline": "2023-10-29",
@@ -623,7 +816,7 @@
   {
     "id": "task_mmwbhsfj_tf7x",
     "task": "Follow up on video cropping issues with participants.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "XEason Chan",
     "deadline": "2023-10-13",
@@ -634,7 +827,7 @@
   {
     "id": "task_mmwbhsfj_cngb",
     "task": "Confirm technical setup for next meeting.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "xueyi chen",
     "deadline": "2023-10-13",
@@ -645,7 +838,7 @@
   {
     "id": "task_mmw9h3au_wl15",
     "task": "MeetingScheduler: 检查日历事件 attendees responseStatus，如果用户 decline 了邀请则跳过 auto-join cron 创建。在 registerCronJob 之前加 decline 检查逻辑。",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "high",
     "createdAt": 1773851653110,
     "updatedAt": 1773851653110
@@ -653,7 +846,7 @@
   {
     "id": "task_mmuk8737_ahm6",
     "task": "Verify Confluence's full data fetching and filter support.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Junhong CHEN",
     "deadline": null,
@@ -664,7 +857,7 @@
   {
     "id": "task_mmuk8737_1loe",
     "task": "Continue testing Confluence data synchronization logic in UAT environment and report progress.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuPeng YAO",
     "deadline": null,
@@ -675,7 +868,7 @@
   {
     "id": "task_mmuk8737_upox",
     "task": "Confirm requirements for Relay scenario related to Confluence page absorption logic.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Isabelle",
     "deadline": null,
@@ -686,7 +879,7 @@
   {
     "id": "task_mmuk8737_r0mf",
     "task": "Monitor feedback on Memo functionality survey and report findings.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Zhifei CAI",
     "deadline": null,
@@ -697,7 +890,7 @@
   {
     "id": "task_mmuk8737_yl7q",
     "task": "Verify changes to the new feature icons in the chat interface.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Development Team",
     "deadline": null,
@@ -708,7 +901,7 @@
   {
     "id": "task_mmuk8737_cex9",
     "task": "Monitor the status of the survey and engagement from users.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Zhifei CAI",
     "deadline": null,
@@ -719,7 +912,7 @@
   {
     "id": "task_mmuk8737_wpo2",
     "task": "Ensure all users are aware of new functionality related to voting and statistics.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "User Experience Team",
     "deadline": null,
@@ -730,7 +923,7 @@
   {
     "id": "task_mmuk8736_w9ee",
     "task": "Confirm the consistency of `hasMyContribution` logic.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuFan HU",
     "deadline": null,
@@ -741,7 +934,7 @@
   {
     "id": "task_mmuk8736_u0hv",
     "task": "Follow up on the time gap issue as mentioned by YuPeng YAO.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuFan HU",
     "deadline": null,
@@ -752,7 +945,7 @@
   {
     "id": "task_mmuk8736_0vua",
     "task": "Follow up on the data synchronization time gap issue after YuFan HU's confirmation.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuPeng YAO",
     "deadline": null,
@@ -763,7 +956,7 @@
   {
     "id": "task_mmuk8736_j5cq",
     "task": "Confirm if Confluence supports filter search.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Isabelle",
     "deadline": null,
@@ -774,7 +967,7 @@
   {
     "id": "task_mmuk8736_rsz4",
     "task": "Update the Confluence process to ensure clearer permissions regarding data filtering.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Isabelle",
     "deadline": null,
@@ -785,7 +978,7 @@
   {
     "id": "task_mmuk8736_q48q",
     "task": "Explore the implementation of a tool parameter for data differentiation as suggested by Junhong CHEN.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuPeng YAO",
     "deadline": null,
@@ -796,7 +989,7 @@
   {
     "id": "task_mmuk8736_off3",
     "task": "Double confirm the logic of `hasMyContribution` per Yi BAI's request.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuFan HU",
     "deadline": null,
@@ -807,7 +1000,7 @@
   {
     "id": "task_mmuk8736_zeo6",
     "task": "Respond to Yi BAI's questions about the current `hasMyContribution` logic.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew CHEN",
     "deadline": null,
@@ -818,7 +1011,7 @@
   {
     "id": "task_mmuk8736_nffi",
     "task": "Ensure `hasMyContribution` logic's cumulative accuracy.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "YuFan HU",
     "deadline": null,
@@ -829,7 +1022,7 @@
   {
     "id": "task_mmuk8736_x7n1",
     "task": "Add preset phrases for Relay digital greetings.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Isabelle",
     "deadline": null,
@@ -840,7 +1033,7 @@
   {
     "id": "task_mmuk8736_7ec0",
     "task": "Modify Relay digital response delay settings.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Junhong CHEN",
     "deadline": null,
@@ -851,7 +1044,7 @@
   {
     "id": "task_mmug3e96_zxdj",
     "task": "Ensure all team members are aligned with the project's next steps.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Dana",
     "deadline": "2023-11-17",
@@ -861,7 +1054,7 @@
   {
     "id": "task_mmug3e95_28pt",
     "task": "Prepare detailed progress report for the client.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice",
     "deadline": "2023-11-15",
@@ -871,7 +1064,7 @@
   {
     "id": "task_mmug3e95_1xzq",
     "task": "Develop a plan to address identified roadblocks.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob",
     "deadline": "2023-11-20",
@@ -881,7 +1074,7 @@
   {
     "id": "task_mmug3e95_qt1c",
     "task": "Schedule a client review meeting to discuss upcoming deliverables.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Charlie",
     "deadline": "2023-11-18",
@@ -891,7 +1084,7 @@
   {
     "id": "task_mmug2sn5_2tim",
     "task": "Prepare a detailed timeline for the next phase of the project",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Alice Johnson",
     "deadline": "2023-11-10",
@@ -901,7 +1094,7 @@
   {
     "id": "task_mmug2sn5_sm9s",
     "task": "Establish weekly update meetings",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Bob Smith",
     "deadline": "2023-11-05",
@@ -911,7 +1104,7 @@
   {
     "id": "task_mmug2sn5_h5x4",
     "task": "Review the quality standards document",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Carol Martinez",
     "deadline": "2023-11-12",
@@ -921,7 +1114,7 @@
   {
     "id": "task_mmug2sn5_hrfo",
     "task": "Conduct a resource allocation assessment",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Dave Lee",
     "deadline": "2023-11-14",
@@ -931,7 +1124,7 @@
   {
     "id": "task_mmuf1k2z_ght2",
     "task": "Confirm requirements with Isabelle for Relay scenario data sync prioritization.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Yi BAI",
     "deadline": "2023-11-10",
@@ -942,7 +1135,7 @@
   {
     "id": "task_mmuf1k2y_21ud",
     "task": "Review the cumulative logic proposal for 'isMyContribution'.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Yi BAI",
     "deadline": "2023-11-15",
@@ -953,7 +1146,7 @@
   {
     "id": "task_mmue0m9f_ke2r",
     "task": "Ensure the testing team adheres to the new QA protocol updates.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Quality Assurance Lead",
     "deadline": "2023-11-15",
@@ -963,7 +1156,7 @@
   {
     "id": "task_mmue0m9f_ua9a",
     "task": "Compile recent user feedback and prepare a summary report for the development team.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Product Owner",
     "deadline": "2023-11-12",
@@ -973,7 +1166,7 @@
   {
     "id": "task_mmue0m9d_sudr",
     "task": "Review and update coding standards documentation.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Development Team Lead",
     "deadline": "2023-11-10",
@@ -983,7 +1176,7 @@
   {
     "id": "task_mmucki7m_km6i",
     "task": "Compile a complete to-do checklist for CallingClaw launch.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Xia ZHONG",
     "deadline": "Saturday before launch",
@@ -993,7 +1186,7 @@
   {
     "id": "task_mmucki7m_kbtk",
     "task": "Prepare presentation highlights and content.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Shanda",
     "deadline": "Friday, day before launch",
@@ -1003,7 +1196,7 @@
   {
     "id": "task_mmucki7l_5n9i",
     "task": "Review the narrative of the Crossroad Pitch Deck 10 pages.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "Saturday before launch",
@@ -1013,7 +1206,7 @@
   {
     "id": "task_mmuckgq2_ibyb",
     "task": "Review Crossroad Pitch Deck narrative.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "Before next meeting",
@@ -1023,7 +1216,7 @@
   {
     "id": "task_mmuckgq2_jvao",
     "task": "Compile a complete task list for Launch.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team",
     "deadline": "Saturday",
@@ -1033,7 +1226,7 @@
   {
     "id": "task_mmublapl_vl9q",
     "task": "Finalize complete to-do list for pre-launch preparation.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team",
     "deadline": "March 17, 2023",
@@ -1043,7 +1236,7 @@
   {
     "id": "task_mmublapk_zimx",
     "task": "Review 'Crossroads' 10-page pitch deck narrative line.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "March 17, prior to Saturday launch",
@@ -1053,7 +1246,7 @@
   {
     "id": "task_mmublamd_qdty",
     "task": "Review the Crossroad Pitch Deck's 10-page narrative.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "Before Saturday Launch",
@@ -1063,7 +1256,7 @@
   {
     "id": "task_mmublamd_tmjz",
     "task": "Finalize and confirm the complete task list needed for the launch.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team CallingClaw",
     "deadline": "Before Saturday Launch",
@@ -1073,7 +1266,7 @@
   {
     "id": "task_mmublaiy_l390",
     "task": "Review and finalize the 10-page Crossing Pitch Deck narration.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "Before Saturday launch",
@@ -1083,7 +1276,7 @@
   {
     "id": "task_mmubl8zt_83ee",
     "task": "Review the narrative structure of the 10-page Pitch Deck.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "Before the end of this week's meetings.",
@@ -1094,7 +1287,7 @@
   {
     "id": "task_mmubl8zt_l0h6",
     "task": "Create and finalize a complete checklist of pending tasks for the launch.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Xia Zhong",
     "deadline": "By Friday, before the launch.",
@@ -1105,7 +1298,7 @@
   {
     "id": "task_mmta0g1w_7k0j",
     "task": "Finalize presentation content and structure.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew",
     "deadline": "Before the hackathon on Saturday",
@@ -1116,7 +1309,7 @@
   {
     "id": "task_mmta0g1w_jvgt",
     "task": "Prepare visual materials and presentation aids for the hackathon.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Xe",
     "deadline": "Before the hackathon on Saturday",
@@ -1127,7 +1320,7 @@
   {
     "id": "task_mmrwyl7d_xp8n",
     "task": "Discuss Context Sync 增量架构方案",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew",
     "deadline": "To be determined",
@@ -1138,7 +1331,7 @@
   {
     "id": "task_mmrwyl7d_w7hv",
     "task": "Review audio configuration issues mentioned in Telegram",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team",
     "deadline": "To be determined",
@@ -1149,7 +1342,7 @@
   {
     "id": "task_mmrwyl7d_in4d",
     "task": "Verify audio settings for all participants.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew CHEN",
     "deadline": "Before the next meeting",
@@ -1160,7 +1353,7 @@
   {
     "id": "task_mmrwyl7d_qted",
     "task": "Check if all participants can hear each other during the meeting.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "CallingClaw",
     "deadline": "Before the meeting starts",
@@ -1171,7 +1364,7 @@
   {
     "id": "task_mmrwpvqq_9wzi",
     "task": "Update project timeline and pricing details.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "王怡 Yvonne",
     "deadline": "EOD today",
@@ -1182,7 +1375,7 @@
   {
     "id": "task_mmrwpvqq_ky6d",
     "task": "Discuss Context Sync 增量架构方案",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew",
     "deadline": "Next meeting",
@@ -1193,7 +1386,7 @@
   {
     "id": "task_mmrwpvqq_9m6o",
     "task": "Review audio configuration issues mentioned in Telegram",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team",
     "deadline": "Before next meeting",
@@ -1204,7 +1397,7 @@
   {
     "id": "task_mmrw1pu3_s1ad",
     "task": "Confirm audio settings in Google Meet to use the BlackHole configuration.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Participants",
     "deadline": "2023-11-10",
@@ -1215,7 +1408,7 @@
   {
     "id": "task_mmrw1pu3_tmjm",
     "task": "Check the audio pipeline status to ensure Voice AI functionality.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "AndrewClaw",
     "deadline": "2023-11-10",
@@ -1226,7 +1419,7 @@
   {
     "id": "task_mmrw1pu3_znph",
     "task": "Implement the auto-greeting fix and upgrade to version 2.3.0 or higher.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Development Team",
     "deadline": "2023-11-20",
@@ -1237,7 +1430,7 @@
   {
     "id": "task_mmrw1pu3_94cz",
     "task": "Explore the option to upgrade to version 2.3.0+ to address audio configuration issues.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Development Team",
     "deadline": "2023-11-25",
@@ -1248,7 +1441,7 @@
   {
     "id": "task_mmrw1pu2_c2nx",
     "task": "Test the audio bridge connection to ensure that Voice AI can hear.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "All meeting attendees",
     "deadline": "2023-11-10",
@@ -1259,7 +1452,7 @@
   {
     "id": "task_mmrw1pu2_g3r8",
     "task": "Prepare detailed discussion materials on the CallingClaw Context Sync architecture plan.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Meeting Organizer",
     "deadline": "2023-11-15",
@@ -1270,7 +1463,7 @@
   {
     "id": "task_mmrw1pu2_5k3m",
     "task": "Confirm and discuss the 7 decision points of the architecture.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Meeting Participants",
     "deadline": "2023-11-16",
@@ -1281,7 +1474,7 @@
   {
     "id": "task_mmp43hcv_o347",
     "task": "Organize and prioritize incoming notifications for more efficient project management.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Project Team",
     "deadline": "March 20, 2023",
@@ -1291,7 +1484,7 @@
   {
     "id": "task_mmp43hcv_gv7d",
     "task": "Ensure all team members are reviewing and acting on relevant notifications daily.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "All Team Members",
     "deadline": "Ongoing",
@@ -1301,7 +1494,7 @@
   {
     "id": "task_mmp42fyp_quy6",
     "task": "Analyze Duolingo's engagement analytics based on current notifications.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew Chen",
     "deadline": "March 20, 2023",
@@ -1312,7 +1505,7 @@
   {
     "id": "task_mmp42fyp_bqnm",
     "task": "Prioritize which app notifications need immediate attention and potential adjustments.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew Chen",
     "deadline": "March 18, 2023",
@@ -1323,7 +1516,7 @@
   {
     "id": "task_mmp3yrvn_2fkk",
     "task": "Implement a system to filter and prioritize high-frequency notifications from apps like Tanka and Telegram.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Team Lead",
     "deadline": "2023-11-15",
@@ -1334,7 +1527,7 @@
   {
     "id": "task_mmp3yrvm_nyog",
     "task": "Evaluate and categorize applications based on notification frequency and user interaction importance.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew Chen",
     "deadline": "2023-11-10",
@@ -1345,7 +1538,7 @@
   {
     "id": "task_mmouafle_l6we",
     "task": "Ensure all video and audio settings are correctly configured before important meetings.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "xueyi chen",
     "deadline": "Before the next scheduled meeting",
@@ -1356,7 +1549,7 @@
   {
     "id": "task_mmnaa3bk_ibqq",
     "task": "Set up a feedback collection mechanism for early Apollo users.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Product Team",
     "deadline": "Ongoing",
@@ -1367,7 +1560,7 @@
   {
     "id": "task_mmnaa3be_6f21",
     "task": "Investigate options for automating the deployment process for easier user onboarding.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Engineering Team",
     "deadline": "2024-01-15",
@@ -1378,7 +1571,7 @@
   {
     "id": "task_mmnaa3be_wd0z",
     "task": "Establish a robust support system for Apollo users.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Support Team",
     "deadline": "2024-01-10",
@@ -1389,7 +1582,7 @@
   {
     "id": "task_mmnaa3b8_s5a1",
     "task": "Explore strategies to simplify user interface and create guides for Apollo.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Development Team",
     "deadline": "2024-01-15",
@@ -1400,7 +1593,7 @@
   {
     "id": "task_mmn2yo2z_mtac",
     "task": "Send out a follow-up email with meeting details and next steps.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "xueyi chen",
     "deadline": "October 5, 2023",
@@ -1411,7 +1604,7 @@
   {
     "id": "task_mmn2yo2y_kbeo",
     "task": "Resolve technical issues with Google Meet setup to ensure better sharing capabilities.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew CHEN",
     "deadline": "October 10, 2023",
@@ -1422,7 +1615,7 @@
   {
     "id": "task_mmm5mhpt_atxk",
     "task": "Test audio input and output for clarity",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "User",
     "deadline": "N/A",
@@ -1433,7 +1626,7 @@
   {
     "id": "task_mmm5mhps_p4sw",
     "task": "Verify that CallingClaw audio bridge is functioning properly post-testing",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "Andrew",
     "deadline": "N/A",
@@ -1444,7 +1637,7 @@
   {
     "id": "task_mmlnd9rt_iyvl",
     "task": "Admit Andrew from the waiting list or change host controls to allow users to join without approval.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "user",
     "deadline": "ASAP",
@@ -1455,7 +1648,7 @@
   {
     "id": "task_mmlnd9rt_431k",
     "task": "Change Google Meet settings to allow anyone with the link to join without needing host approval.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "user",
     "deadline": "By next meeting",
@@ -1466,7 +1659,7 @@
   {
     "id": "task_mmlnd9rt_kwwn",
     "task": "Admit Andrew to the meeting using his email and adjust settings if the admit button is not visible.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "user",
     "deadline": "Immediate",
@@ -1477,7 +1670,7 @@
   {
     "id": "task_mmlnd9rs_ag68",
     "task": "Change the meeting setting so anyone with the link can join without needing to be admitted.",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "medium",
     "assignee": "user",
     "deadline": "ASAP",
@@ -1498,7 +1691,7 @@
   {
     "id": "task_mmkfmfdl_iklp",
     "task": "Refactor auth module to use PKCE flow",
-    "status": "pending",
+    "status": "cancelled",
     "priority": "high",
     "assignee": "openclaw",
     "deadline": "2026-03-12",

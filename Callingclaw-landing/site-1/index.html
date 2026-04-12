@@ -17,7 +17,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Hedvig+Letters+Serif:opsz@12..24&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Hedvig+Letters+Serif:opsz@12..24&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!-- GSAP + ScrollTrigger + Lenis for smooth scroll animations -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -25,27 +25,30 @@
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
 
   <style>
-    /* ── Design Tokens ─────────────────────────────────── */
+    /* ── Design Tokens — Whisperflow Palette ────────────── */
     :root {
-      --bg: #ffffff;
-      --bg-subtle: #faf9f9;
+      --bg: #FDFDF6;
+      --bg-subtle: #FAF9F4;
       --surface: #ffffff;
       --surface-elevated: #ffffff;
-      --text: #1f2937;
+      --moss: #0E2923;
+      --text: #0A0A0A;
       --text-secondary: #6b7280;
       --text-tertiary: #9ca3af;
-      --accent: #dc4a3a;
+      --accent: #DC4A3A;
       --accent-hover: #c43d2e;
-      --accent-light: #fef2f1;
+      --accent-light: rgba(220, 74, 58, 0.08);
       --accent-glow: rgba(220, 74, 58, 0.1);
+      --accent-pale: #FFD6D1;
       --success: #4aa682;
       --success-light: #e6f4ee;
       --danger: #dc4a3a;
       --border: #e5e7eb;
       --border-light: #f3f4f6;
+      --suited-black: #0A0A0A;
 
-      --font-display: "Hedvig Letters Serif", Georgia, serif;
-      --font-body: "Hedvig Letters Serif", Georgia, serif;
+      --font-display: "Fraunces", "Hedvig Letters Serif", Georgia, serif;
+      --font-body: "Inter", "Hedvig Letters Serif", Georgia, serif;
       --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
       --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -61,10 +64,11 @@
 
     /* ── Dark Theme ──────────────────────────────────── */
     [data-theme="dark"] {
-      --bg: #111113;
-      --bg-subtle: #18181b;
-      --surface: #1f1f23;
-      --surface-elevated: #27272b;
+      --bg: #0A0F0E;
+      --bg-subtle: #111916;
+      --surface: #162220;
+      --surface-elevated: #1D2B28;
+      --moss: #0E2923;
       --text: #e4e4e7;
       --text-secondary: #a1a1aa;
       --text-tertiary: #71717a;
@@ -72,11 +76,13 @@
       --accent-hover: #f07a6b;
       --accent-light: rgba(232, 93, 76, 0.12);
       --accent-glow: rgba(232, 93, 76, 0.15);
+      --accent-pale: #3d2220;
       --success: #6bb39a;
       --success-light: rgba(107, 179, 154, 0.12);
       --danger: #e85d4c;
-      --border: #2d2d32;
-      --border-light: #252529;
+      --border: #1D2B28;
+      --border-light: #162220;
+      --suited-black: #0A0A0A;
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
       --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
       --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
@@ -125,13 +131,13 @@
     /* ── Typography ─────────────────────────────────────── */
     h1, h2, h3, h4 {
       font-family: var(--font-display);
-      font-weight: 600;
+      font-weight: 500;
       line-height: 1.2;
       letter-spacing: -0.01em;
       color: var(--text);
     }
 
-    h1 { font-size: clamp(2.5rem, 5vw, 3.5rem); font-weight: 600; letter-spacing: -0.02em; }
+    h1 { font-size: clamp(2.5rem, 5vw, 3.5rem); font-weight: 500; letter-spacing: -0.02em; }
     h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); letter-spacing: -0.02em; }
     h3 { font-size: clamp(1.125rem, 2vw, 1.375rem); }
     h4 { font-size: 1rem; font-weight: 600; }
@@ -156,32 +162,51 @@
       padding-block: clamp(3rem, 8vw, 6rem);
     }
 
-    /* ── Nav ──────────────────────────────────────────── */
+    /* ── Nav — Floating Pill ──────────────────────────── */
     nav {
       position: sticky;
       top: 0;
       z-index: 100;
-      padding-block: 1rem;
-      background: var(--bg);
-      border-bottom: 1px solid var(--border);
-      transition: background var(--duration) ease;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: center;
+      background: transparent;
     }
 
     nav .container {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 100px;
+      border: 1px solid rgba(14, 41, 35, 0.08);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      padding: 0.375rem 0.375rem 0.375rem 1rem;
+      max-width: 720px;
+      width: 100%;
+      gap: 0.25rem;
+    }
+
+    [data-theme="dark"] nav .container {
+      background: rgba(22, 34, 32, 0.9);
+      border-color: rgba(255, 255, 255, 0.08);
     }
 
     .logo {
       font-family: var(--font-display);
       font-weight: 700;
-      font-size: 1.125rem;
+      font-size: 1rem;
       letter-spacing: -0.02em;
-      color: var(--accent);
+      color: var(--moss);
       display: flex;
       align-items: center;
       gap: 0.5rem;
+    }
+
+    [data-theme="dark"] .logo {
+      color: var(--text);
     }
 
     .logo-mark {
@@ -220,14 +245,22 @@
     }
 
     .nav-links a {
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       font-weight: 500;
-      color: var(--text-secondary);
-      padding: 0.5rem 0;
-      transition: color var(--duration) var(--ease-out);
+      font-family: var(--font-body);
+      color: rgba(10, 10, 10, 0.6);
+      padding: 0.375rem 0.75rem;
+      border-radius: 100px;
+      transition: all var(--duration) var(--ease-out);
     }
 
-    .nav-links a:hover { color: var(--text); }
+    .nav-links a:hover {
+      color: var(--text);
+      background: rgba(14, 41, 35, 0.05);
+    }
+
+    [data-theme="dark"] .nav-links a { color: rgba(255,255,255,0.5); }
+    [data-theme="dark"] .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 
     /* ── Theme Toggle ────────────────────────────────── */
     .theme-toggle {
@@ -272,8 +305,8 @@
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
+      padding: 0.75rem 1.75rem;
+      border-radius: 100px;
       font-family: var(--font-body);
       font-size: 0.875rem;
       font-weight: 600;
@@ -284,27 +317,28 @@
     }
 
     .btn-primary {
-      background: var(--accent);
-      color: white;
+      background: var(--bg);
+      color: var(--accent);
+      border: 1px solid rgba(14, 41, 35, 0.1);
+      box-shadow: var(--shadow-sm);
     }
 
     .btn-primary:hover {
-      background: var(--accent-hover);
-      color: white;
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-accent);
+      color: var(--accent);
+      transform: scale(1.02);
+      box-shadow: var(--shadow-md);
     }
 
     .btn-secondary {
-      background: var(--bg-subtle);
-      color: var(--text);
-      border: 1px solid var(--border);
+      background: var(--suited-black);
+      color: #BABABA;
+      border: none;
     }
 
     .btn-secondary:hover {
-      background: var(--surface);
-      border-color: var(--text-tertiary);
-      color: var(--text);
+      background: var(--suited-black);
+      color: #d4d4d4;
+      transform: scale(1.02);
     }
 
     /* ── Hero Section ─────────────────────────────────── */
@@ -315,17 +349,54 @@
       position: relative;
     }
 
-    /* ── Hero Noise Canvas Background ────────────────── */
+    /* ── Hero Etheral Shadow Background ─────────────── */
     .hero-noise-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%; /* covers entire hero section, no visible boundary */
+      display: none; /* replaced by etheral shadow */
+    }
+
+    .hero-shadow-bg {
+      display: none; /* replaced by flickering grid */
+    }
+
+    /* ── Flickering Grid Background (ported from React) ── */
+    .flickering-grid-wrap {
+      position: fixed;
+      inset: 0;
       z-index: 0;
       pointer-events: none;
-      opacity: 0.6; /* slightly transparent so hero image shows through */
+      transition: opacity 0.4s ease;
     }
+
+    .flickering-grid-wrap canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .flickering-grid-base {
+      -webkit-mask-image: radial-gradient(1000px circle at center, white, transparent);
+      mask-image: radial-gradient(1000px circle at center, white, transparent);
+    }
+
+    .flickering-grid-glow {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .flickering-grid-glow canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .flickering-grid-glow.active {
+      opacity: 1;
+    }
+
 
     .hero .container,
     .hero .hero-image-wrapper {
@@ -528,7 +599,9 @@
     }
 
     .demo-panel-table-icon {
-      font-size: 1rem;
+      display: inline-flex;
+      align-items: center;
+      color: var(--text-secondary);
     }
 
     .demo-panel-table-title {
@@ -775,8 +848,17 @@
     }
 
     .capability-tag .cap-icon {
-      font-size: 0.85rem;
-      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      color: var(--text-secondary);
+    }
+
+    .capability-tag .cap-icon svg {
+      width: 100%;
+      height: 100%;
     }
 
     /* ── Bandwidth Section ────────────────────────────── */
@@ -910,7 +992,11 @@
     }
 
     .speed-attachment-icon {
-      font-size: 0.875rem;
+      display: inline-flex;
+      align-items: center;
+      width: 12px;
+      height: 12px;
+      color: rgba(255,255,255,0.9);
     }
 
     /* Bandwidth Image Container */
@@ -1916,10 +2002,17 @@
     </div>
   </nav>
 
+  <!-- Flickering Grid Background (fixed, fades out after hero) -->
+  <div class="flickering-grid-wrap flickering-grid-base" id="flickeringGridBaseWrap">
+    <canvas id="flickeringGridBase"></canvas>
+  </div>
+  <div class="flickering-grid-glow" id="flickeringGridGlowWrap">
+    <canvas id="flickeringGridGlow"></canvas>
+  </div>
+
   <!-- Hero Section -->
   <section class="hero">
-    <canvas class="hero-noise-canvas" id="heroNoiseCanvas"></canvas>
-    <div class="container">
+    <div class="container" id="heroTagline">
       <h1>Your Agent Needs <span class="gradient">a Seat,</span><br>Not a Notepad <span class="gradient">in meetings</span></h1>
       <p class="hero-subtitle">CallingClaw joins video calls with full memory of your work — ready to discuss, present, and act.</p>
       <div class="hero-actions">
@@ -1979,7 +2072,7 @@
 
           <div class="demo-panel-content">
             <div class="demo-panel-table-header">
-              <span class="demo-panel-table-icon">📋</span>
+              <span class="demo-panel-table-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
               <span class="demo-panel-table-title">Sprint Backlog</span>
               <div class="demo-panel-avatars">
                 <div class="demo-avatar">Peter</div>
@@ -2079,12 +2172,12 @@
         </span>
       </div>
       <div class="capability-row">
-        <span class="capability-tag"><span class="cap-icon">🧠</span> Memory</span>
-        <span class="capability-tag"><span class="cap-icon">📁</span> Files</span>
-        <span class="capability-tag"><span class="cap-icon">🔧</span> MCP Tools</span>
-        <span class="capability-tag"><span class="cap-icon">🌐</span> Browser & Cookies</span>
-        <span class="capability-tag"><span class="cap-icon">📅</span> Calendar</span>
-        <span class="capability-tag"><span class="cap-icon">🎙</span> Voice</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg></span> Memory</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span> Files</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span> MCP Tools</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span> Browser & Cookies</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Calendar</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span> Voice</span>
       </div>
     </div>
   </section>
@@ -2112,11 +2205,11 @@
             <div class="speed-card-text">Three different points that didn't align with our requirement, the first one is the home page tagline, then the feature section layout, and finally the CTA button color.</div>
             <div class="speed-attachments">
               <span class="speed-attachment">
-                <span class="speed-attachment-icon">📸</span>
+                <span class="speed-attachment-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
                 screenshot_landing.png
               </span>
               <span class="speed-attachment">
-                <span class="speed-attachment-icon">📄</span>
+                <span class="speed-attachment-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
                 index.html
               </span>
             </div>
@@ -2285,7 +2378,7 @@
                 <div class="hiw-summary-meta">12 min &bull; 3 decisions &bull; 3 action items</div>
               </div>
               <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title">&#x1F4CB; Action Items</div>
+                <div class="hiw-summary-section-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Action Items</div>
                 <ul class="hiw-summary-list">
                   <li><input type="checkbox" checked disabled> Update hero copy to emphasize memory</li>
                   <li><input type="checkbox" checked disabled> Change CTA to "Join the waitlist"</li>
@@ -2293,7 +2386,7 @@
                 </ul>
               </div>
               <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title">&#x1F4A1; Key Decisions</div>
+                <div class="hiw-summary-section-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg> Key Decisions</div>
                 <ul class="hiw-summary-list">
                   <li>&bull; Hero emphasizes agent comes with memory, not blank</li>
                   <li>&bull; Ship layout bug fix after copy update</li>
@@ -2301,7 +2394,7 @@
                 </ul>
               </div>
               <div class="hiw-summary-section">
-                <div class="hiw-summary-section-title">&#x1F4CE; Files Updated</div>
+                <div class="hiw-summary-section-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Files Updated</div>
                 <div class="hiw-summary-files">
                   <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> site-1/index.html</span>
                   <span class="hiw-summary-file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Vercel preview deployed</span>
@@ -2531,6 +2624,10 @@
       // Register ScrollTrigger plugin
       gsap.registerPlugin(ScrollTrigger);
 
+      const heroTagline = document.getElementById('heroTagline');
+      const gridBaseWrap = document.getElementById('flickeringGridBaseWrap');
+      const gridGlowWrap = document.getElementById('flickeringGridGlowWrap');
+
       // Ensure demo panel starts hidden below center
       gsap.set(heroDemoPanel, {
         xPercent: -50,
@@ -2547,26 +2644,55 @@
           pin: true,
           scrub: 0.5,
           anticipatePin: 1,
+          onUpdate: function(self) {
+            const p = self.progress; // 0 → 1
+
+            // Fade out tagline fast (gone by 40% scroll)
+            if (heroTagline) {
+              const taglineOpacity = Math.max(0, 1 - p * 2.5);
+              heroTagline.style.opacity = taglineOpacity;
+              heroTagline.style.visibility = taglineOpacity <= 0 ? 'hidden' : 'visible';
+            }
+
+            // Fade out flickering grid (gone by 80% scroll)
+            if (gridBaseWrap) {
+              gridBaseWrap.style.opacity = Math.max(0, 1 - p * 1.25);
+            }
+            if (gridGlowWrap) {
+              gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.25);
+            }
+          },
         }
       });
 
-      // Both phases run in parallel and finish together at 100% scroll:
       // Image expands to full viewport width
       heroTl.to(heroImageContainer, {
         width: '100vw',
-        borderRadius: '16px',
+        borderRadius: '0px',
         duration: 1,
         ease: 'none'
       }, 0);
 
       // Demo panel slides from below to vertical center, fading in
-      // Starts at 0% and finishes at 100% — synced with image expansion
       heroTl.to(heroDemoPanel, {
-        y: '-50%',       // vertically centered (top:50% + y:-50%)
+        y: '-50%',
         opacity: 1,
         duration: 1,
         ease: 'none'
       }, 0);
+
+      // After pin ends, keep grid hidden for the rest of the page
+      ScrollTrigger.create({
+        trigger: heroPinSpacer,
+        start: 'bottom top',
+        onEnter: function() {
+          if (gridBaseWrap) gridBaseWrap.style.opacity = '0';
+          if (gridGlowWrap) gridGlowWrap.style.opacity = '0';
+        },
+        onLeaveBack: function() {
+          // Grid will be restored by the main timeline onUpdate
+        },
+      });
     }
 
     // Observe bandwidth image
@@ -2789,197 +2915,142 @@
       }, { passive: true });
     }
 
-    // ── Hero Noise Canvas Animation ─────────────────────────────────────
-    // Adapted from 21st.dev/community/components/Scottclayton3d/music-reactive-hero-section
-    // Stripped audio reactivity; colors tuned to CallingClaw coral-red + cream palette
-    ;(function initHeroNoise() {
-      const canvas = document.getElementById('heroNoiseCanvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      let animId = null;
-      let filmGrain = null;
-
-      // ── Theme-aware colors ──────────────────────────
-      function getThemeColors() {
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        return isDark
-          ? { bg: [17, 17, 19],      // #111113
-              wave1: { h: 8,   s: 72, l: 42 }, // deep coral
-              wave2: { h: 15,  s: 55, l: 35 }, // warm brick
-              wave3: { h: 25,  s: 40, l: 28 }, // muted amber
-              wave4: { h: 350, s: 50, l: 32 }, // dark rose
-              grainAlpha: 0.035 }
-          : { bg: [250, 249, 249],    // #faf9f9
-              wave1: { h: 8,   s: 68, l: 62 }, // coral red #dc4a3a tint
-              wave2: { h: 18,  s: 55, l: 72 }, // peach / cream-coral
-              wave3: { h: 30,  s: 45, l: 78 }, // warm cream
-              wave4: { h: 355, s: 50, l: 68 }, // soft rose
-              grainAlpha: 0.025 };
+    // ── Flickering Grid Animation (ported from React FlickeringGrid) ────
+    ;(function initFlickeringGrid() {
+      // ── Color parser: any CSS color → "rgba(r, g, b," prefix ──
+      function toRGBA(color) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 1;
+        const cx = c.getContext('2d');
+        cx.fillStyle = color;
+        cx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = cx.getImageData(0, 0, 1, 1).data;
+        return `rgba(${r}, ${g}, ${b},`;
       }
 
-      // ── Film Grain Generator ────────────────────────
-      // Film grain at 1/3 resolution for larger, more visible grain particles
-      const GRAIN_SCALE = 3; // each grain pixel = 3x3 screen pixels
-      class FilmGrain {
-        constructor(w, h) {
-          this.fullW = w; this.fullH = h;
-          this.w = Math.ceil(w / GRAIN_SCALE);
-          this.h = Math.ceil(h / GRAIN_SCALE);
-          this.offCanvas = document.createElement('canvas');
-          this.offCanvas.width = this.w; this.offCanvas.height = this.h;
-          this.offCtx = this.offCanvas.getContext('2d');
-          this.offCtx.imageSmoothingEnabled = false;
-          this.frame = 0;
-          this.imageData = this.offCtx.createImageData(this.w, this.h);
-          this._generate();
-        }
-        _generate() {
-          const d = this.imageData.data;
-          for (let i = 0; i < d.length; i += 4) {
-            const v = Math.random() * 255;
-            d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
+      // ── Create one flickering grid on a canvas ──────
+      function createGrid(canvas, opts) {
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const squareSize = opts.squareSize || 4;
+        const gridGap = opts.gridGap || 4;
+        const flickerChance = opts.flickerChance || 0.1;
+        const maxOpacity = opts.maxOpacity || 0.3;
+        const colorPrefix = toRGBA(opts.color || '#000');
+
+        let cols, rows, squares, w, h;
+        let lastTime = 0;
+        let animId = null;
+        let inView = true;
+
+        function resize() {
+          w = canvas.parentElement.clientWidth;
+          h = canvas.parentElement.clientHeight;
+          canvas.width = w * dpr;
+          canvas.height = h * dpr;
+          canvas.style.width = w + 'px';
+          canvas.style.height = h + 'px';
+          cols = Math.floor(w / (squareSize + gridGap));
+          rows = Math.floor(h / (squareSize + gridGap));
+          squares = new Float32Array(cols * rows);
+          for (let i = 0; i < squares.length; i++) {
+            squares[i] = Math.random() * maxOpacity;
           }
-          this.offCtx.putImageData(this.imageData, 0, 0);
         }
-        update() {
-          this.frame++;
-          if (this.frame % 3 === 0) {
-            const d = this.imageData.data;
-            const t = this.frame * 0.01;
-            for (let i = 0; i < d.length; i += 4) {
-              const grain = Math.random();
-              const x = (i >> 2) % this.w;
-              const y = ((i >> 2) / this.w) | 0;
-              const pattern = Math.sin(x * 0.02 + t) * Math.cos(y * 0.02 - t);
-              const v = (grain * 0.8 + pattern * 0.2) * 255;
-              d[i] = d[i+1] = d[i+2] = v;
+
+        function draw(time) {
+          if (!inView) { animId = requestAnimationFrame(draw); return; }
+          const dt = (time - lastTime) / 1000;
+          lastTime = time;
+
+          // Update flickering
+          for (let i = 0; i < squares.length; i++) {
+            if (Math.random() < flickerChance * dt) {
+              squares[i] = Math.random() * maxOpacity;
             }
-            this.offCtx.putImageData(this.imageData, 0, 0);
           }
+
+          // Draw
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+              const opacity = squares[i * rows + j];
+              ctx.fillStyle = colorPrefix + opacity + ')';
+              ctx.fillRect(
+                i * (squareSize + gridGap) * dpr,
+                j * (squareSize + gridGap) * dpr,
+                squareSize * dpr,
+                squareSize * dpr
+              );
+            }
+          }
+
+          animId = requestAnimationFrame(draw);
         }
-        apply(ctx, alpha, hue) {
-          ctx.save();
-          ctx.imageSmoothingEnabled = false; // keep grain pixelated when scaled up
-          // Soft overlay grain — scaled up for larger particles
-          ctx.globalCompositeOperation = 'overlay';
-          ctx.globalAlpha = alpha;
-          ctx.drawImage(this.offCanvas, 0, 0, this.w, this.h, 0, 0, this.fullW, this.fullH);
-          // Subtle color tint
-          ctx.globalCompositeOperation = 'overlay';
-          ctx.globalAlpha = alpha * 0.3;
-          ctx.fillStyle = `hsla(${hue}, 45%, 55%, 1)`;
-          ctx.fillRect(0, 0, this.fullW, this.fullH);
-          ctx.restore();
-        }
-        resize(w, h) {
-          this.fullW = w; this.fullH = h;
-          this.w = Math.ceil(w / GRAIN_SCALE);
-          this.h = Math.ceil(h / GRAIN_SCALE);
-          this.offCanvas.width = this.w; this.offCanvas.height = this.h;
-          this.imageData = this.offCtx.createImageData(this.w, this.h);
-          this._generate();
-        }
-      }
 
-      // ── Wave config ─────────────────────────────────
-      const waves = [
-        { amp: 40, freq: 0.003, speed: 0.010, offset: 0,              opacity: 0.22 },
-        { amp: 32, freq: 0.004, speed: 0.008, offset: Math.PI * 0.5,  opacity: 0.16 },
-        { amp: 25, freq: 0.005, speed: 0.013, offset: Math.PI,        opacity: 0.12 },
-        { amp: 42, freq: 0.002, speed: 0.005, offset: Math.PI * 1.5,  opacity: 0.09 },
-      ];
+        // Visibility optimization
+        const io = new IntersectionObserver(([e]) => { inView = e.isIntersecting; }, { threshold: 0 });
+        io.observe(canvas);
 
-      let time = 0;
+        // Resize handling
+        const ro = new ResizeObserver(() => resize());
+        ro.observe(canvas.parentElement);
 
-      // ── Resize handler ──────────────────────────────
-      function resize() {
-        canvas.width  = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-        if (filmGrain) filmGrain.resize(canvas.width, canvas.height);
-      }
-      resize();
-      window.addEventListener('resize', resize);
-
-      filmGrain = new FilmGrain(canvas.width, canvas.height);
-
-      // ── Render loop ─────────────────────────────────
-      function draw() {
+        resize();
         animId = requestAnimationFrame(draw);
-        const W = canvas.width, H = canvas.height;
-        const colors = getThemeColors();
 
-        // Clear with background color
-        const [br, bg, bb] = colors.bg;
-        ctx.fillStyle = `rgb(${br},${bg},${bb})`;
-        ctx.fillRect(0, 0, W, H);
+        // Respect reduced motion
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          cancelAnimationFrame(animId);
+        }
 
-        // Gentle ambient intensity (sine-based breathing, no audio)
-        const breath  = 0.35 + Math.sin(time * 0.008) * 0.15;
-        const breath2 = 0.25 + Math.sin(time * 0.012) * 0.10;
+        return { resize, destroy() { cancelAnimationFrame(animId); io.disconnect(); ro.disconnect(); } };
+      }
 
-        time++;
+      // ── Base grid: subtle pink/coral flickering ─────
+      const baseCanvas = document.getElementById('flickeringGridBase');
+      if (baseCanvas) {
+        createGrid(baseCanvas, {
+          color: '#FFD6D1',
+          maxOpacity: 0.5,
+          flickerChance: 0.1,
+          squareSize: 4,
+          gridGap: 4,
+        });
+      }
 
-        // ── Draw waves (centered in canvas, behind tagline) ──
-        const baseY = H * 0.5;
-
-        waves.forEach((w, i) => {
-          w.offset += w.speed;
-          const waveColor = [colors.wave1, colors.wave2, colors.wave3, colors.wave4][i];
-          const dynamicAmp = w.amp * (1 + breath * 1.2);
-          const alpha = w.opacity * (0.6 + breath * 0.4);
-
-          const grad = ctx.createLinearGradient(0, baseY - dynamicAmp, 0, baseY + dynamicAmp * 2);
-          grad.addColorStop(0, `hsla(${waveColor.h}, ${waveColor.s}%, ${waveColor.l}%, 0)`);
-          grad.addColorStop(0.4, `hsla(${waveColor.h}, ${waveColor.s}%, ${waveColor.l + 8}%, ${alpha})`);
-          grad.addColorStop(1, `hsla(${waveColor.h}, ${waveColor.s}%, ${waveColor.l}%, 0)`);
-
-          ctx.beginPath();
-          for (let x = -20; x <= W + 20; x += 3) {
-            const y1 = Math.sin(x * w.freq + w.offset) * dynamicAmp;
-            const y2 = Math.sin(x * w.freq * 2 + w.offset * 1.5) * (dynamicAmp * 0.2 * breath2);
-            const y3 = Math.sin(x * w.freq * 0.5 + w.offset * 0.7) * (dynamicAmp * 0.35);
-            const y = baseY + y1 + y2 + y3;
-            if (x === -20) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-          }
-          ctx.lineTo(W + 20, H);
-          ctx.lineTo(-20, H);
-          ctx.closePath();
-          ctx.fillStyle = grad;
-          ctx.fill();
+      // ── Glow grid: brighter, follows mouse ─────────
+      const glowCanvas = document.getElementById('flickeringGridGlow');
+      const glowWrap = document.getElementById('flickeringGridGlowWrap');
+      if (glowCanvas && glowWrap) {
+        createGrid(glowCanvas, {
+          color: '#FF6B5A',
+          maxOpacity: 0.55,
+          flickerChance: 0.3,
+          squareSize: 4,
+          gridGap: 4,
         });
 
-        // ── Film grain ────────────────────────────────
-        filmGrain.update();
-        filmGrain.apply(ctx, colors.grainAlpha, 10); // hue ~10 = coral tint
+        // Mouse tracking — radial mask follows cursor
+        document.addEventListener('mousemove', function(e) {
+          const x = (e.clientX / window.innerWidth * 100).toFixed(1);
+          const y = (e.clientY / window.innerHeight * 100).toFixed(1);
+          const mask = 'radial-gradient(400px circle at ' + x + '% ' + y + '%, white, transparent)';
+          glowWrap.style.webkitMaskImage = mask;
+          glowWrap.style.maskImage = mask;
+        }, { passive: true });
 
-        // ── Vignette ──────────────────────────────────
-        const vig = ctx.createRadialGradient(W/2, H/2, W * 0.25, W/2, H/2, W * 0.85);
-        vig.addColorStop(0, 'rgba(0,0,0,0)');
-        vig.addColorStop(0.6, `rgba(${br},${bg},${bb},0.15)`);
-        vig.addColorStop(1, `rgba(${br},${bg},${bb},0.5)`);
-        ctx.fillStyle = vig;
-        ctx.fillRect(0, 0, W, H);
-
-        // ── Subtle flicker (barely perceptible) ──────
-        const flicker = Math.sin(time * 0.3) * 0.003 + Math.random() * 0.002;
-        ctx.fillStyle = `rgba(255,255,255,${flicker})`;
-        ctx.fillRect(0, 0, W, H);
-      }
-
-      draw();
-
-      // ── Cleanup on theme change (reuses same canvas) ──
-      const themeObs = new MutationObserver(() => {
-        // colors recalculated each frame via getThemeColors(), no action needed
-      });
-      themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-      // Respect reduced motion
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        cancelAnimationFrame(animId);
-        // Draw one static frame
-        draw();
-        cancelAnimationFrame(animId);
+        document.addEventListener('mouseenter', function() {
+          glowWrap.classList.add('active');
+        });
+        document.addEventListener('mouseleave', function() {
+          glowWrap.classList.remove('active');
+        });
+        // Start hidden, show on first move
+        let firstMove = true;
+        document.addEventListener('mousemove', function() {
+          if (firstMove) { glowWrap.classList.add('active'); firstMove = false; }
+        }, { passive: true, once: true });
       }
     })();
   </script>

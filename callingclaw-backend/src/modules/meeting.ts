@@ -30,6 +30,7 @@ export class MeetingModule {
   private _openclawBridge: OpenClawBridge | null = null;
   private _meetingStartTime: number | null = null;
   private _extractionTimer: Timer | null = null;
+  private _maxRecordingTimer: Timer | null = null;
   private _extracting = false;
   private _extractionCount = 0;
   private _lastExtractionHash = "";
@@ -55,12 +56,24 @@ export class MeetingModule {
       clearInterval(this._extractionTimer);
       this._extractionTimer = null;
     }
+    if (this._maxRecordingTimer) {
+      clearTimeout(this._maxRecordingTimer);
+      this._maxRecordingTimer = null;
+    }
     if (this._transcriptHandler) {
       this.context.off("transcript", this._transcriptHandler);
       this._transcriptHandler = null;
     }
 
     this._meetingStartTime = Date.now();
+
+    // Hard timeout: force-stop recording after 3 hours (safety net for stuck state)
+    this._maxRecordingTimer = setTimeout(() => {
+      if (this._meetingStartTime) {
+        console.error("[Meeting] Max recording duration (3h) reached — force-stopping");
+        this.stopRecording();
+      }
+    }, 3 * 60 * 60 * 1000);
     this._summaryCount = 0;
     this._lastSummaryHash = "";
     this._extractionCount = 0;
@@ -99,6 +112,9 @@ export class MeetingModule {
    */
   stopRecording() {
     if (this._extractionTimer) clearInterval(this._extractionTimer);
+    this._extractionTimer = null;
+    if (this._maxRecordingTimer) clearTimeout(this._maxRecordingTimer);
+    this._maxRecordingTimer = null;
     if (this._transcriptHandler) {
       this.context.off("transcript", this._transcriptHandler);
       this._transcriptHandler = null;

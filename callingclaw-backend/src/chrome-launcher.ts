@@ -1088,6 +1088,8 @@ export class ChromeLauncher {
   private _admissionInterval: ReturnType<typeof setInterval> | null = null;
   private _admittedSet = new Set<string>();
   private _meetingEndCallback: (() => void) | null = null;
+  private _endCheckFailures = 0;
+  private static readonly MAX_END_CHECK_FAILURES = 20; // 20 × 3s = 60s of consecutive failures → force trigger
 
   /**
    * Monitor for attendee admission requests in Google Meet.
@@ -1116,13 +1118,27 @@ export class ChromeLauncher {
             const ended = await this._checkMeetingEndedLib();
             if (ended) {
               console.log("[MeetAdmit] Meeting ended detected — triggering cleanup");
+              this._endCheckFailures = 0;
               const cb = this._meetingEndCallback;
               this._meetingEndCallback = null;
               this.stopAdmissionMonitor();
               cb();
               return;
             }
-          } catch {}
+            this._endCheckFailures = 0;
+          } catch (e: any) {
+            this._endCheckFailures++;
+            console.warn(`[MeetAdmit] Meeting-end check failed (${this._endCheckFailures}/${ChromeLauncher.MAX_END_CHECK_FAILURES}): ${e.message}`);
+            if (this._endCheckFailures >= ChromeLauncher.MAX_END_CHECK_FAILURES) {
+              console.error("[MeetAdmit] Too many consecutive failures — force-triggering meeting end");
+              this._endCheckFailures = 0;
+              const cb = this._meetingEndCallback;
+              this._meetingEndCallback = null;
+              this.stopAdmissionMonitor();
+              if (cb) cb();
+              return;
+            }
+          }
         }
 
         // L1: Pure JS eval
@@ -1304,6 +1320,7 @@ export class ChromeLauncher {
       this._admissionInterval = null;
     }
     this._meetingEndCallback = null;
+    this._endCheckFailures = 0;
     const admitted = [...this._admittedSet];
     console.log(`[MeetAdmit] Monitor stopped. Admitted ${admitted.length} attendees.`);
     return admitted;
@@ -1317,17 +1334,32 @@ export class ChromeLauncher {
     this._meetingEndCallback = callback;
     if (!this._admissionInterval) {
       console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
+      this._endCheckFailures = 0;
       this._admissionInterval = setInterval(async () => {
         try {
           const ended = await this._checkMeetingEndedLib();
           if (ended) {
             console.log("[MeetEnd] Meeting ended detected — triggering cleanup");
+            this._endCheckFailures = 0;
+            const cb = this._meetingEndCallback;
+            this._meetingEndCallback = null;
+            this.stopAdmissionMonitor();
+            if (cb) cb();
+          } else {
+            this._endCheckFailures = 0;
+          }
+        } catch (e: any) {
+          this._endCheckFailures++;
+          console.warn(`[MeetEnd] Detection failed (${this._endCheckFailures}/${ChromeLauncher.MAX_END_CHECK_FAILURES}): ${e.message}`);
+          if (this._endCheckFailures >= ChromeLauncher.MAX_END_CHECK_FAILURES) {
+            console.error("[MeetEnd] Too many consecutive failures — force-triggering meeting end");
+            this._endCheckFailures = 0;
             const cb = this._meetingEndCallback;
             this._meetingEndCallback = null;
             this.stopAdmissionMonitor();
             if (cb) cb();
           }
-        } catch {}
+        }
       }, 3000);
     }
   }
