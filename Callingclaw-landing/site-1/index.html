@@ -568,9 +568,9 @@
     .hero-yt-play {
       display: none; /* shown via JS on mobile */
       position: absolute;
-      bottom: 1.5rem;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
       z-index: 5;
       width: 56px;
       height: 40px;
@@ -581,7 +581,7 @@
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .hero-yt-play:hover { transform: translateX(-50%) scale(1.08); box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4); }
+    .hero-yt-play:hover { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4); }
     .hero-yt-play::after {
       content: "";
       position: absolute;
