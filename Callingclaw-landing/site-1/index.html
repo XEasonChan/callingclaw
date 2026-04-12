@@ -523,308 +523,45 @@
       border-radius: inherit;
     }
 
-    /* Demo Panel Overlay — centered, container width, vertically centered when done */
+    /* Demo Panel Overlay — YouTube embed container */
     .hero-demo-panel {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, 100%);
-      width: min(calc(100vw - 3rem), 1200px);
-      background: rgba(255, 255, 255, 0.97);
-      backdrop-filter: blur(16px);
+      width: min(calc(100vw - 3rem), 960px);
       border-radius: 12px;
       box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
       overflow: hidden;
       z-index: 10;
       will-change: transform, opacity;
+      background: #000;
     }
 
-    [data-theme="dark"] .hero-demo-panel {
-      background: rgba(31, 31, 35, 0.95);
+    .hero-demo-panel .yt-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
     }
 
-    /* Demo Panel Header */
-    .demo-panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.625rem 0.875rem;
-      background: var(--bg-subtle);
-      border-bottom: 1px solid var(--border);
-      font-size: 0.75rem;
-    }
-
-    .demo-panel-title {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-    }
-
-    .demo-panel-title svg {
-      width: 14px;
-      height: 14px;
-    }
-
-    .demo-panel-live {
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-      color: var(--success);
-      font-weight: 600;
-      font-size: 0.6875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .demo-panel-live::before {
-      content: "";
-      width: 6px;
-      height: 6px;
-      background: var(--success);
-      border-radius: 50%;
-      animation: livePulse 1.5s ease-in-out infinite;
-    }
-
-    /* Demo Panel Tabs */
-    .demo-panel-tabs {
-      display: flex;
-      gap: 1px;
-      padding: 0.5rem 0.5rem 0;
-      background: #e8e6dc;
-    }
-
-    [data-theme="dark"] .demo-panel-tabs {
-      background: #323232;
-    }
-
-    .demo-panel-tab {
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-      padding: 0.375rem 0.625rem;
-      background: #d1cfc5;
-      border: none;
-      border-radius: 6px 6px 0 0;
-      font-family: var(--font-body);
-      font-size: 0.625rem;
-      font-weight: 500;
-      color: #5e5d59;
-      cursor: pointer;
-    }
-
-    [data-theme="dark"] .demo-panel-tab {
-      background: #252525;
-      color: #87867f;
-    }
-
-    .demo-panel-tab.active {
-      background: #faf9f5;
-      color: #141413;
-    }
-
-    [data-theme="dark"] .demo-panel-tab.active {
-      background: #191919;
-      color: #e4e4e7;
-    }
-
-    .demo-panel-tab svg {
-      width: 12px;
-      height: 12px;
-    }
-
-    /* Demo Panel Content */
-    .demo-panel-content {
-      padding: 0.75rem;
-      background: #faf9f5;
-      min-height: 180px;
-    }
-
-    [data-theme="dark"] .demo-panel-content {
-      background: #191919;
-    }
-
-    .demo-panel-table-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.625rem;
-    }
-
-    .demo-panel-table-icon {
-      display: inline-flex;
-      align-items: center;
-      color: var(--text-secondary);
-    }
-
-    .demo-panel-table-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: #141413;
-    }
-
-    [data-theme="dark"] .demo-panel-table-title {
-      color: #ffffffcf;
-    }
-
-    .demo-panel-avatars {
-      margin-left: auto;
-      display: flex;
-      gap: 0.375rem;
-    }
-
-    .demo-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.625rem;
-      font-weight: 600;
-      background: var(--warm-sand);
-      color: var(--text-secondary);
-    }
-
-    .demo-avatar.active {
-      background: var(--accent-light);
-      color: var(--accent);
-      border: 2px solid var(--accent);
-    }
-
-    /* Mini Table */
-    .demo-mini-table {
-      background: white;
-      border-radius: 4px;
-      border: 1px solid #f0eee6;
-      overflow: hidden;
-      font-size: 0.6875rem;
-    }
-
-    [data-theme="dark"] .demo-mini-table {
-      background: #2f2f2f;
-      border-color: #373737;
-    }
-
-    .demo-mini-row {
-      display: grid;
-      grid-template-columns: 1.5fr 0.8fr 0.5fr 1fr;
-      border-bottom: 1px solid #f0eee6;
-    }
-
-    [data-theme="dark"] .demo-mini-row {
-      border-color: #373737;
-    }
-
-    .demo-mini-row:last-child {
-      border-bottom: none;
-    }
-
-    .demo-mini-row.header {
-      background: #faf9f5;
-      font-weight: 500;
-      color: #87867f;
-    }
-
-    [data-theme="dark"] .demo-mini-row.header {
-      background: #252525;
-    }
-
-    .demo-mini-cell {
-      padding: 0.375rem 0.5rem;
-      color: #141413;
-      border-right: 1px solid #f0eee6;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    [data-theme="dark"] .demo-mini-cell {
-      color: #ffffffcf;
-      border-color: #373737;
-    }
-
-    .demo-mini-cell:last-child {
-      border-right: none;
-    }
-
-    .demo-tag {
-      display: inline-block;
-      padding: 0.0625rem 0.25rem;
-      border-radius: 2px;
-      font-size: 0.5625rem;
-    }
-
-    .demo-tag.green { background: #dbeddb; color: #1e6b53; }
-    .demo-tag.yellow { background: #fdecc8; color: #9a6700; }
-
-    [data-theme="dark"] .demo-tag.green { background: #2b593f; color: #6ee7b7; }
-    [data-theme="dark"] .demo-tag.yellow { background: #594a2b; color: #fcd34d; }
-
-    /* Speech Bubble in Demo */
-    .demo-speech-bubble {
+    .hero-demo-panel .yt-wrap iframe {
       position: absolute;
-      bottom: 0.75rem;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(220, 74, 58, 0.9);
-      color: white;
-      padding: 0.5rem 0.75rem;
-      border-radius: 6px;
-      font-size: 0.6875rem;
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-      white-space: nowrap;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
     }
 
-    .demo-speech-bubble svg {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-    }
-
-    /* Demo Controls */
-    .demo-panel-controls {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.625rem;
-      background: var(--bg-subtle);
-      border-top: 1px solid var(--border);
-    }
-
-    .demo-control-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    /* Transparent overlay — blocks iframe scroll-swallowing during GSAP scrub */
+    .hero-demo-panel .yt-scroll-guard {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
       cursor: pointer;
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
     }
 
-    .demo-control-btn svg {
-      width: 14px;
-      height: 14px;
-    }
-
-    .demo-control-btn.screen-share {
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
-    }
-
-    .demo-control-btn.end {
-      background: var(--danger);
-      color: white;
-      border-color: var(--danger);
+    .hero-demo-panel .yt-scroll-guard.inactive {
+      display: none;
     }
 
     /* ── Meeting Harness Section ─────────────────────── */
@@ -2165,6 +1902,10 @@
       flex-wrap: wrap;
     }
 
+    .cta-actions .btn {
+      min-width: 220px;
+    }
+
     /* Telephone Line SVG */
     .telephone-line {
       position: absolute;
@@ -2309,8 +2050,20 @@
         margin-bottom: 1.5rem;
       }
       .hero-actions {
+        flex-direction: column;
+        align-items: center;
         gap: 0.75rem;
         margin-bottom: 2rem;
+      }
+      .hero-actions .btn,
+      .cta-actions .btn {
+        min-width: 260px;
+        width: 260px;
+      }
+      .cta-actions {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
       }
       .hero-image-container {
         width: calc(100% - 1rem) !important;
@@ -2418,122 +2171,19 @@
         <div class="hero-image-container" id="heroImageContainer">
           <img src="../Assests/HeroPage_Background.png" alt="AI agent in meeting room" class="hero-image" id="heroImage">
 
-        <!-- Demo Panel that slides up -->
+        <!-- Demo Panel — YouTube embed (slides up on scroll) -->
         <div class="hero-demo-panel">
-          <div class="demo-panel-header">
-            <div class="demo-panel-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-              OpenClaw is sharing screen
-            </div>
-            <div class="demo-panel-live">LIVE</div>
-          </div>
-
-          <div class="demo-panel-tabs">
-            <button class="demo-panel-tab active">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <path d="M8 10h8M8 14h6"/>
-              </svg>
-              Sprint Backlog
-            </button>
-            <button class="demo-panel-tab">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-              </svg>
-              System Flow
-            </button>
-            <button class="demo-panel-tab">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 16v-4M12 8h.01"/>
-              </svg>
-              Website Review
-            </button>
-          </div>
-
-          <div class="demo-panel-content">
-            <div class="demo-panel-table-header">
-              <span class="demo-panel-table-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
-              <span class="demo-panel-table-title">Sprint Backlog</span>
-              <div class="demo-panel-avatars">
-                <div class="demo-avatar">Peter</div>
-                <div class="demo-avatar active">
-                  <img src="../Assests/callingclaw-logo.png" width="16" height="16" style="object-fit:contain;" alt="">
-                </div>
-              </div>
-            </div>
-
-            <div class="demo-mini-table">
-              <div class="demo-mini-row header">
-                <div class="demo-mini-cell">Task</div>
-                <div class="demo-mini-cell">Status</div>
-                <div class="demo-mini-cell">Priority</div>
-                <div class="demo-mini-cell">Assignee</div>
-              </div>
-              <div class="demo-mini-row">
-                <div class="demo-mini-cell">Implement voice routing</div>
-                <div class="demo-mini-cell"><span class="demo-tag green">Done</span></div>
-                <div class="demo-mini-cell">P0</div>
-                <div class="demo-mini-cell"><img src="../Assests/callingclaw-logo.png" class="claw-icon-sm" alt=""> OpenClaw</div>
-              </div>
-              <div class="demo-mini-row">
-                <div class="demo-mini-cell">Add screen share API</div>
-                <div class="demo-mini-cell"><span class="demo-tag yellow">In Progress</span></div>
-                <div class="demo-mini-cell">P0</div>
-                <div class="demo-mini-cell"><img src="../Assests/callingclaw-logo.png" class="claw-icon-sm" alt=""> OpenClaw</div>
-              </div>
-              <div class="demo-mini-row">
-                <div class="demo-mini-cell">Calendar integration</div>
-                <div class="demo-mini-cell"><span class="demo-tag yellow">Blocked</span></div>
-                <div class="demo-mini-cell">P1</div>
-                <div class="demo-mini-cell">Peter</div>
-              </div>
-              <div class="demo-mini-row">
-                <div class="demo-mini-cell">Visual diff optimization</div>
-                <div class="demo-mini-cell"><span class="demo-tag green">Done</span></div>
-                <div class="demo-mini-cell">P1</div>
-                <div class="demo-mini-cell"><img src="../Assests/callingclaw-logo.png" class="claw-icon-sm" alt=""> OpenClaw</div>
-              </div>
-            </div>
-
-            <!-- Speech bubble -->
-            <div class="demo-speech-bubble">
-              <img src="../Assests/callingclaw-logo.png" width="20" height="20" style="object-fit:contain;" alt="">
-              OpenClaw: Screen share API is in progress now.
-            </div>
-          </div>
-
-          <div class="demo-panel-controls">
-            <button class="demo-control-btn" title="Mic">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-            </button>
-            <button class="demo-control-btn" title="Camera">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M23 7l-7 5 7 5V7z"/>
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-              </svg>
-            </button>
-            <button class="demo-control-btn screen-share" title="Screen share">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-            </button>
-            <button class="demo-control-btn end" title="End call">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-              </svg>
-            </button>
+          <div class="yt-wrap">
+            <!-- REPLACE VIDEO_ID with your actual YouTube video ID -->
+            <iframe
+              src="https://www.youtube.com/embed/VIDEO_ID?rel=0&modestbranding=1&color=white"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+              loading="lazy"
+              title="CallingClaw Demo">
+            </iframe>
+            <!-- Scroll guard: blocks iframe from eating scroll events during GSAP pin -->
+            <div class="yt-scroll-guard" id="ytScrollGuard"></div>
           </div>
         </div>
         </div>
@@ -3234,6 +2884,7 @@
 
       // Pin the ENTIRE hero section — tagline + image all stay fixed
       const heroSection = document.querySelector('.hero');
+      const ytScrollGuard = document.getElementById('ytScrollGuard');
       const isMobile = window.innerWidth < 768;
       const heroTl = gsap.timeline({
         scrollTrigger: {
@@ -3252,6 +2903,11 @@
             }
             if (gridGlowWrap) {
               gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
+            }
+
+            // Remove scroll guard once animation is complete so user can play video
+            if (ytScrollGuard) {
+              ytScrollGuard.classList.toggle('inactive', p >= 0.98);
             }
           },
         }
