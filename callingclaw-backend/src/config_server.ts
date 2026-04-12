@@ -2539,7 +2539,14 @@ STEP-BY-STEP FLOW:
         // Each step emits progress events → Desktop shows real-time log in side panel.
 
         const prepId = `prep_${Date.now()}`;
-        const prepMeetingId = services.sessionManager!.generateId();
+
+        // Create session in SessionManager immediately (so session is queryable + ID is stable)
+        const prepSession = services.sessionManager!.findOrCreate({
+          topic: body.topic,
+          meetUrl: body.url,
+          startTime: body.start_time,
+        });
+        const prepMeetingId = prepSession.meetingId;
 
         // Return immediately with just the topic
         const agenda = {
@@ -2560,7 +2567,8 @@ STEP-BY-STEP FLOW:
 
         // ── Background pipeline: title → time → calendar → deep research ──
         // Every step emits "meeting.prep_progress" so Desktop can show live log
-        if (services.openclawBridge?.connected) {
+        const canPrepare = services.agentAdapter?.connected || services.openclawBridge?.connected;
+        if (canPrepare) {
           (async () => {
             const emit = (step: string, data?: any) => {
               services.eventBus.emit("meeting.prep_progress", { prepId, step, ...data });
@@ -2676,6 +2684,11 @@ STEP-BY-STEP FLOW:
               });
             }
           })();
+        }
+
+        if (!canPrepare) {
+          console.warn(`[MeetingPrepare] ⚠️ No agent available — prep will not run (adapter=${services.agentAdapter?.connected ?? false}, openclaw=${services.openclawBridge?.connected ?? false})`);
+          agenda.prepStatus = "skipped";
         }
 
         return Response.json(agenda, { headers });
