@@ -94,22 +94,43 @@ bun run src/callingclaw.ts
 
 ---
 
-## What happens when you join a meeting
+## The full meeting lifecycle
+
+CallingClaw doesn't start when you join a meeting. It starts when you have an idea.
 
 ```
-You say: "/callingclaw join https://meet.google.com/abc-defg-hij"
+You say: "帮我安排一个会讨论 Website Launch Timeline"
 
-  CallingClaw opens Chrome (Playwright, no virtual audio drivers)
-  → Injects audio bridge via addInitScript (intercepts getUserMedia)
-  → Joins the meeting, announces itself as AI
-  → Starts real-time voice conversation (~300ms latency)
-  → Captures screenshots every 40s for visual context
-  → Detects action items in real-time from the conversation
-  → Can share screen, present docs, scroll, click on voice command
-  → On leave: generates summary, creates todos, sends to Telegram
+  BEFORE THE MEETING
+  ──────────────────
+  → Creates Google Calendar event with Meet link
+  → Sends invites to participants
+  → Researches topic: pulls relevant docs, past decisions, open threads
+  → Generates structured prep brief with talking points + questions
+  → Builds presentation plan (speaking phases + scenes + documents)
+  → Waits. Joins automatically 2 minutes before start time.
+
+  DURING THE MEETING
+  ──────────────────
+  → Announces itself as AI, introduces the agenda
+  → Real-time voice conversation (~300ms, System 1)
+  → Perceives shared screens via Gemini Flash every 40s
+  → Shares its own screen to present docs, scroll, click
+  → Captures action items AS they happen (not post-meeting)
+  → System 2 runs in parallel: searches memory, pulls context,
+    answers "what did we decide last time?" instantly
+
+  AFTER THE MEETING
+  ─────────────────
+  → Generates branded HTML summary with action items
+  → Sends to Telegram for review and confirmation
+  → Creates tasks with owners and deadlines
+  → Updates memory with new decisions and context
+  → Executes follow-up tasks: draft emails, update docs, file tickets
+  → Next meeting on this topic: arrives with full history
 ```
 
-Before the meeting even starts, CallingClaw runs a **prep pipeline**: reads your calendar, researches participants, pulls relevant docs from memory, reviews past meeting decisions, and generates a structured brief with talking points. The AI arrives to the meeting better prepared than most humans.
+The meeting is the middle of the workflow, not the whole workflow. CallingClaw handles before, during, and after so you can focus on the actual conversation.
 
 ---
 
