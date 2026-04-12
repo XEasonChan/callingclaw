@@ -6,7 +6,8 @@
 
 > An AI agent that joins Google Meet as a real participant — with memory, vision, and hands. It listens, speaks, presents, scrolls, clicks, and takes action.
 
-<img width="1277" height="872" alt="CallingClaw Meeting Stage" src="https://github.com/user-attachments/assets/6b32dee0-d41c-4cc1-b572-ad7b9b549bf6" />
+<img width="1492" height="1169" alt="ScreenShot_2026-04-13_000729_137" src="https://github.com/user-attachments/assets/15e11295-dce2-496a-a3b4-49885de85c85" />
+
 
 **v2.9.2** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md) · [Team Intro Deck](https://callingclaw-team-intro.vercel.app/)
 
