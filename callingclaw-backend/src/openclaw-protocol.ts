@@ -38,6 +38,10 @@ export interface OC001_Response {
 }
 
 export const OC001_PROMPT = (req: OC001_Request) => {
+  const { detectLanguage } = require("./prompt-constants");
+  const topicLang = detectLanguage(req.topic);
+  const langLabel = topicLang === "zh" ? "Chinese" : topicLang === "ja" ? "Japanese" : topicLang === "ko" ? "Korean" : "English";
+
   const attendeeSection = req.attendees?.length
     ? `\n## Meeting Attendees\n${req.attendees
         .map((a) => `- ${a.name || a.email}${a.name ? ` (${a.email})` : ""}${a.status ? ` — ${a.status}` : ""}`)
@@ -52,12 +56,15 @@ Read the relevant files and your memory, then generate a structured JSON meeting
 ## Meeting Topic
 ${req.topic}
 
+## Output Language
+CRITICAL: The meeting topic is in ${langLabel}. ALL output (summary, keyPoints, expectedQuestions, speakingPlan, scenes) MUST be written in **${langLabel}**. Do NOT switch to another language because your memory or files are in a different language. The meeting topic language determines the output language.
+
 ## Additional Context from User
 ${req.userContext || "(no additional context)"}${attendeeSection}
 
 ## What to Include
 
-1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in the user's preferred language.
+1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in **${langLabel}** (matching the meeting topic).
 2. **keyPoints**: 5-8 bullet points covering the main topics to discuss. **Must include at least 1 item prefixed with "⚠️ Past lesson:" if MEMORY.md contains relevant past mistakes, failures, or lessons learned for this topic.**
 3. **architectureDecisions**: For each major technical decision, explain WHAT was decided and WHY.
 4. **expectedQuestions**: 3-5 questions that might come up, with suggested answers. **Include questions about past failures and how to avoid them.**
@@ -77,7 +84,7 @@ Return ONLY valid JSON matching this exact structure:
 {
   "topic": "string",
   "goal": "string — what the meeting should achieve",
-  "summary": "string — 2-3 paragraphs in user's language",
+  "summary": "string — 2-3 paragraphs in the SAME language as the meeting topic",
   "keyPoints": ["string — 5-8 bullet points"],
   "architectureDecisions": [{"decision": "string", "rationale": "string"}],
   "expectedQuestions": [{"question": "string", "suggestedAnswer": "string"}],
