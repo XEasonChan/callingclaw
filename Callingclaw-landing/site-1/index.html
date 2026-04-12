@@ -564,6 +564,76 @@
       display: none;
     }
 
+    /* ── Mobile: YouTube play button on hero image ── */
+    .hero-yt-play {
+      display: none; /* shown via JS on mobile */
+      position: absolute;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      width: 56px;
+      height: 40px;
+      background: #ff0000;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .hero-yt-play:hover { transform: translateX(-50%) scale(1.08); box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4); }
+    .hero-yt-play::after {
+      content: "";
+      position: absolute;
+      top: 50%; left: 54%;
+      transform: translate(-50%, -50%);
+      border-style: solid;
+      border-width: 8px 0 8px 14px;
+      border-color: transparent transparent transparent white;
+    }
+
+    /* Fullscreen YouTube modal */
+    .yt-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.92);
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .yt-modal.open { display: flex; }
+    .yt-modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      font-size: 1.25rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+    .yt-modal-body {
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .yt-modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
     /* ── Meeting Harness Section ─────────────────────── */
     .meeting-harness {
       text-align: center;
@@ -2189,8 +2259,10 @@
       <div class="hero-pin-spacer" id="heroPinSpacer">
         <div class="hero-image-container" id="heroImageContainer">
           <img src="../Assests/HeroPage_Background.png" alt="AI agent in meeting room" class="hero-image" id="heroImage">
+          <!-- Mobile: YouTube play button overlay (shown via JS) -->
+          <button class="hero-yt-play" id="heroYtPlay" aria-label="Play demo video"></button>
 
-        <!-- Demo Panel — YouTube embed (slides up on scroll) -->
+        <!-- Demo Panel — YouTube embed (slides up on scroll, desktop only) -->
         <div class="hero-demo-panel">
           <div class="yt-wrap">
             <!-- REPLACE VIDEO_ID with your actual YouTube video ID -->
@@ -2908,19 +2980,33 @@
       const isMobile = window.innerWidth < 768;
 
       if (isMobile) {
-        // ── MOBILE: no pin, no expand. YouTube overlaps image via CSS. ──
-        // Position demo panel statically over the bottom of the hero image
-        heroDemoPanel.style.position = 'relative';
-        heroDemoPanel.style.top = 'auto';
-        heroDemoPanel.style.left = 'auto';
-        heroDemoPanel.style.transform = 'none';
-        heroDemoPanel.style.opacity = '1';
-        heroDemoPanel.style.width = '100%';
-        heroDemoPanel.style.marginTop = '-15%';
-        heroDemoPanel.style.borderRadius = '12px';
-        // Remove scroll guard on mobile — no pin, no scroll conflict
-        var ytGuard = document.getElementById('ytScrollGuard');
-        if (ytGuard) ytGuard.classList.add('inactive');
+        // ── MOBILE: hide demo panel, show play button on hero image ──
+        heroDemoPanel.style.display = 'none';
+        var playBtn = document.getElementById('heroYtPlay');
+        if (playBtn) playBtn.style.display = 'block';
+
+        // Play button opens YouTube modal
+        var ytModal = document.getElementById('ytModal');
+        var ytModalBody = document.getElementById('ytModalBody');
+        var ytModalClose = document.getElementById('ytModalClose');
+        if (playBtn && ytModal && ytModalBody) {
+          playBtn.addEventListener('click', function() {
+            ytModalBody.innerHTML = '<iframe src="https://www.youtube.com/embed/VIDEO_ID?rel=0&autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="CallingClaw Demo"></iframe>';
+            ytModal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+          });
+          ytModalClose.addEventListener('click', function() {
+            ytModal.classList.remove('open');
+            ytModalBody.innerHTML = '';
+            document.body.style.overflow = '';
+          });
+          ytModal.addEventListener('click', function(e) {
+            if (e.target === ytModal) {
+              ytModalClose.click();
+            }
+          });
+        }
+
         // Fade grid on scroll
         ScrollTrigger.create({
           trigger: heroWrapper,
@@ -3563,6 +3649,12 @@
       }
     })();
   </script>
+
+  <!-- YouTube modal (mobile play button triggers this) -->
+  <div class="yt-modal" id="ytModal">
+    <button class="yt-modal-close" id="ytModalClose">&times;</button>
+    <div class="yt-modal-body" id="ytModalBody"></div>
+  </div>
 
 </body>
 </html>
