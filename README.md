@@ -8,9 +8,34 @@
 
 <img width="1277" height="872" alt="CallingClaw Meeting Stage" src="https://github.com/user-attachments/assets/6b32dee0-d41c-4cc1-b572-ad7b9b549bf6" />
 
-**v2.9.0** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md) · [Team Intro Deck](https://callingclaw-team-intro.vercel.app/)
+**v2.9.2** · [www.callingclaw.com](https://www.callingclaw.com) · [Changelog](CHANGELOG.md) · [Team Intro Deck](https://callingclaw-team-intro.vercel.app/)
 
 Multi-provider voice AI (OpenAI Realtime 1.5, Gemini 3.1 Live, Grok) with a dual-brain architecture: fast voice model for real-time conversation + slow reasoning model for deep research. Page Agent DOM extraction for screen understanding. Claude Code Channels for Telegram dispatch.
+
+---
+
+## Quick Start with Claude Code
+
+The fastest way to get CallingClaw running. Paste this into [Claude Code](https://claude.ai/code):
+
+```
+Clone https://github.com/XEasonChan/callingclaw.git into my current directory.
+Read the CLAUDE.md, then help me set up CallingClaw step by step:
+1. Install dependencies (Bun for backend, npm for desktop)
+2. Create .env from .env.example and help me fill in my API keys
+3. Start the backend and verify it's healthy
+4. Launch the desktop app
+```
+
+Claude Code will read `CLAUDE.md` (the full technical guide), install everything, and walk you through configuration interactively. It handles the `.env` setup, Google OAuth token generation, and macOS permission checks.
+
+**Already have the repo?** Just tell Claude Code:
+
+```
+Read CLAUDE.md then start CallingClaw. Help me configure any missing API keys.
+```
+
+> **For AI agents:** `CLAUDE.md` contains the complete architecture, module wiring, context model, and known gotchas. It is the single source of truth for programmatic understanding of this codebase.
 
 ---
 
@@ -147,14 +172,21 @@ bun run src/callingclaw.ts
 
 # In another terminal — check health
 curl http://localhost:4000/api/status
-# Should return: {"callingclaw":"running","version":"2.9.0",...}
+# Should return: {"callingclaw":"running","version":"2.9.2",...}
 ```
 
 ---
 
 ## Quick Start
 
-### Option A: Desktop App (recommended)
+### Option A: Download DMG (easiest)
+
+Download `CallingClaw-2.9.2-arm64.dmg` from [Releases](https://github.com/XEasonChan/callingclaw/releases/latest), drag to Applications, and open. The app:
+- Bundles the backend + Bun runtime (auto-installs dependencies on first launch)
+- Walks you through onboarding: permissions, Google account, API keys
+- Auto-starts the backend daemon on every launch
+
+### Option B: Desktop App (from source)
 
 ```bash
 cd callingclaw-desktop
@@ -167,7 +199,7 @@ The Desktop app:
 - Provider/voice selector in status bar (Gemini, Grok, or OpenAI)
 - Click "Talk Locally" on any meeting card to start a voice conversation
 
-### Option B: Backend Only + Browser
+### Option C: Backend Only + Browser
 
 ```bash
 cd callingclaw-backend
@@ -178,7 +210,7 @@ Then open:
 - **Voice Test:** http://localhost:4000/voice-test.html (browser-based voice with mic/speaker)
 - **Control Panel:** http://localhost:4000/ (full dashboard)
 
-### Option C: Development Mode
+### Option D: Development Mode
 
 ```bash
 # Backend with hot reload
@@ -305,7 +337,7 @@ callingclaw/
 ├── ROADMAP.md                    # Future plans
 ├── TODOS.md                      # Tracked work items
 ├── plugins/                      # Claude Code Channel plugin (EventBus bridge)
-└── VERSION                       # Current version (2.9.0)
+└── VERSION                       # Current version (2.9.2)
 ```
 
 ---
