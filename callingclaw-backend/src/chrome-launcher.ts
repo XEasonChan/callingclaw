@@ -29,6 +29,7 @@ import { resolve } from "path";
 import { homedir } from "os";
 import { existsSync, mkdirSync, rmSync } from "fs";
 import { CONFIG } from "./config";
+import { CURSOR_INJECT_JS } from "./utils/page-extract";
 
 // Always use dedicated CallingClaw profile (lightweight, fast startup).
 // Google cookies are imported from the user's main Chrome on first launch.
@@ -258,17 +259,31 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   }
 
   // Pipeline A: getReceivers approach
+  // cc._triedTrackIds tracks which receiver tracks we already tried (to avoid re-picking muted ones)
+  cc._triedTrackIds = cc._triedTrackIds || new Set();
+  cc._lastNonZeroAt = Date.now();
+  cc._cycleCount = 0;
+
   function setupCapture(pc) {
     if (cc.captureActive) return;
     var receivers = pc.getReceivers();
     var audioRecvs = receivers.filter(function(r) { return r.track && r.track.kind === 'audio' && r.track.readyState === 'live'; });
     if (audioRecvs.length === 0) return;
 
-    // Prefer unmuted receiver
-    var audioRecv = audioRecvs.find(function(r) { return !r.track.muted; }) || audioRecvs[0];
+    // Prefer unmuted receiver that we haven't already tried (on retry)
+    var audioRecv = audioRecvs.find(function(r) { return !r.track.muted && !cc._triedTrackIds.has(r.track.id); })
+      || audioRecvs.find(function(r) { return !r.track.muted; })
+      || audioRecvs.find(function(r) { return !cc._triedTrackIds.has(r.track.id); })
+      || audioRecvs[0];
     var track = audioRecv.track;
+    cc._triedTrackIds.add(track.id);
 
-    console.log('[CC-Audio] Receivers: ' + audioRecvs.length + ', using: ' + track.id.substring(0, 10) + ' muted=' + track.muted);
+    // Reset tried set if we've exhausted all receivers (allow full re-scan)
+    if (cc._triedTrackIds.size >= audioRecvs.length) {
+      cc._triedTrackIds.clear();
+    }
+
+    console.log('[CC-Audio] Receivers: ' + audioRecvs.length + ', using: ' + track.id.substring(0, 10) + ' muted=' + track.muted + ' cycle#' + cc._cycleCount);
 
     if (cc.captureSource) { try { cc.captureSource.disconnect(); } catch(e) {} }
     if (cc.captureWorklet) { try { cc.captureWorklet.disconnect(); } catch(e) {} }
@@ -296,9 +311,18 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       sendAudioChunk(int16);
     };
 
-    track.onmute = function() { console.log('[CC-Audio] Track MUTED'); };
+    track.onmute = function() {
+      console.log('[CC-Audio] Track MUTED — forcing receiver cycle');
+      cc.captureActive = false;
+      cc._cycleCount++;
+      // Next 2s interval will call setupCapture with a different receiver
+    };
     track.onunmute = function() { console.log('[CC-Audio] Track UNMUTED'); };
-    track.onended = function() { console.log('[CC-Audio] Track ENDED — will retry'); cc.captureActive = false; };
+    track.onended = function() {
+      console.log('[CC-Audio] Track ENDED — will retry');
+      cc.captureActive = false;
+      cc._cycleCount++;
+    };
 
     cc.captureActive = true;
     console.log('[CC-Audio] Pipeline A active (track: ' + track.id.substring(0, 10) + ')');
@@ -357,6 +381,30 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       }
     }
   }, 2000);
+
+  // ── Audio health check: detect silent capture and auto-cycle receiver ──
+  // Meet may switch the active audio receiver mid-meeting (new participant joins,
+  // network reconnect, SFU migration). When this happens, the old track goes
+  // muted but doesn't always fire onmute. This watchdog catches silent capture
+  // and forces a receiver cycle.
+  setInterval(function() {
+    if (!cc.captureActive) return;
+    // Check if we've seen non-zero amplitude recently
+    if (cc.captureMaxAmp > 100) {
+      cc._lastNonZeroAt = Date.now();
+      cc.captureMaxAmp = 0; // reset for next window
+      return;
+    }
+    var silentMs = Date.now() - (cc._lastNonZeroAt || 0);
+    if (silentMs > 30000) {
+      cc._cycleCount++;
+      console.log('[CC-Audio] SILENT for ' + Math.round(silentMs / 1000) + 's — cycling receiver (cycle#' + cc._cycleCount + ')');
+      cc.captureActive = false;
+      cc.captureMaxAmp = 0;
+      cc._lastNonZeroAt = Date.now(); // prevent rapid re-trigger
+      // Next 2s interval will call setupCapture with a different receiver
+    }
+  }, 15000);
 
   // ── Pipeline C: Zoom fallback — capture from AudioContext.destination tap ──
   // Zoom uses WASM+DataChannels, not RTC receivers. The init script patches
@@ -1460,6 +1508,8 @@ export class ChromeLauncher {
         await this._presentingPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
         // Rename tab title to match Chrome's auto-select flag
         await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+        // Inject virtual cursor overlay for click effects (must be AFTER title set)
+        await this._presentingPage.evaluate(CURSOR_INJECT_JS);
         console.log(`[ShareScreen] Opened presenting tab: ${presentUrl}`);
 
         // Switch back to Meet
@@ -1590,6 +1640,8 @@ export class ChromeLauncher {
     try {
       await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
       await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+      // Re-inject virtual cursor overlay (destroyed by navigation)
+      await this._presentingPage.evaluate(CURSOR_INJECT_JS);
       return true;
     } catch (e: any) {
       console.warn("[ChromeLauncher] Presenting page navigate failed:", e.message);
