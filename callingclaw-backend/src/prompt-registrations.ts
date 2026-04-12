@@ -398,7 +398,7 @@ Return JSON with: topic, goal, summary, keyPoints[], architectureDecisions[], ex
     name: "Vision Model (Screenshot Analysis)",
     category: "config",
     model: "N/A (configuration)",
-    scenario: "Model for screenshot analysis. Runs every ~40s during meetings.",
+    scenario: "Model for screenshot analysis. Captures every 1s, analyzes every ~3s during meetings.",
     file: "src/config.ts",
     line: 135,
     dynamic: false,

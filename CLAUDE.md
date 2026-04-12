@@ -125,7 +125,7 @@ During meetings, CallingClaw uses its own fast models, NOT OpenClaw:
 | Module | Model | Purpose |
 |--------|-------|---------|
 | VoiceModule | OpenAI Realtime / Gemini Live | Real-time voice conversation |
-| VisionModule | Gemini Flash (OpenRouter) → gpt-4o-mini fallback | Screenshot analysis every ~40s |
+| VisionModule | Gemini Flash (OpenRouter) → gpt-4o-mini fallback | Screenshot capture 1s, analysis every ~3s |
 | ContextRetriever | Haiku (OpenRouter) | Gap detection + agentic search |
 | TranscriptAuditor | Haiku (OpenRouter) | Real-time intent classification |
 | ComputerUseModule | Haiku/Sonnet (Anthropic API) | Screen control when voice AI requests |

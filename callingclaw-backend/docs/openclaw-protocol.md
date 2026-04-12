@@ -29,7 +29,7 @@ Each call type has:
 | OC-004 | Todo Delivery | Meeting ends + todos | "sent" | 3-8s |
 | OC-005 | Summary Delivery | Meeting ends, no todos | "sent" | 3-8s |
 | OC-006 | Todo Execution | User confirms todo | JSON status | 10-60s |
-| OC-007 | Vision Push | Every ~40s in meeting | "ok" (fire & forget) | 2-5s |
+| OC-007 | Vision Push | Every ~15s in meeting (batch of 5) | "ok" (fire & forget) | 2-5s |
 | OC-008 | CU Delegation | Claude CU agent | Text result | 5-30s |
 | OC-009 | Follow-up Fallback | Delivery fails | "ok" (fire & forget) | 2-5s |
 

@@ -363,7 +363,7 @@ export function parseOC006(raw: string): OC006_Response {
 
 // ══════════════════════════════════════════════════════════════
 // OC-007: Meeting Vision Context Push
-// Trigger: Every ~40s during meeting (batch of 5 screen descriptions)
+// Trigger: Every ~15s during meeting (batch of 5 screen descriptions at 3s analysis interval)
 // ══════════════════════════════════════════════════════════════
 
 export interface OC007_Request {

@@ -116,7 +116,7 @@ You say: "Let's Discuss about Website Launch in a video call"
   ──────────────────
   → Announces itself as AI, introduces the agenda
   → Real-time voice conversation (~300ms, System 1)
-  → Perceives shared screens via Gemini Flash every 40s
+  → Perceives shared screens via Gemini Flash (1s capture, 3s analysis)
   → Shares its own screen to present docs, scroll, click
   → Captures action items AS they happen (not post-meeting)
   → System 2 runs in parallel: searches memory, pulls context,

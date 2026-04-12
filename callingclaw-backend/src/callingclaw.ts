@@ -310,7 +310,7 @@ const vision = new VisionModule({
       appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`, eventBus, activeMeetingId || undefined);
     }
 
-    // Push visual context to agent every 5 descriptions (~40 seconds)
+    // Push visual context to agent every 5 descriptions (~15 seconds at 3s analysis interval)
     if (_meetingVisionBuffer.length >= 5 && agentAdapter.connected) {
       const batch = _meetingVisionBuffer.splice(0);
       agentAdapter.executeTask(
