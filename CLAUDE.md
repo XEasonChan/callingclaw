@@ -97,7 +97,7 @@ Event-driven integration hub (`modules/event-bus.ts`). Supports WebSocket subscr
 - **Main process** (`main/index.js`) — DaemonSupervisor (spawns/manages Bun backend), PermissionChecker, window+tray management, IPC handlers
 - **Renderer** (`renderer/index.html`, vanilla JS) — communicates with backend via HTTP/WS to localhost:4000
 - **Preload** (`preload/index.js`) — contextBridge exposes `callingclaw.*` API
-- **Audio Bridge** (`renderer/audio-bridge.js`) — AudioWorklet capture+playback with ring buffer. Two modes: `direct` (local mic/speaker) and `meet_bridge` (BlackHole routing)
+- **Audio Bridge** (`renderer/audio-bridge.js`) — AudioWorklet capture+playback with ring buffer. Direct mode only (local mic/speaker). Meet audio is handled by Playwright `addInitScript` injection in ChromeLauncher, not through Electron.
 
 ### WebSocket Multiplexing
 
@@ -153,9 +153,7 @@ OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-00
 | **Audio setSinkId** | Must be called BEFORE `getUserMedia()` (Electron bug #40704) | v2.5.0 |
 | **Scheduler events** | Use `meeting.prep_ready` not `scheduler.prep_ready` — frontend only listens for the former | v2.7.8 |
 | **MeetingScheduler dedup** | Must check existing sessions by meetUrl/calendarEventId before creating new ones | v2.7.9 |
-| **BlackHole speaker** | If system default output = BlackHole, direct mode AI audio goes to virtual device | v2.7.10 |
-| **getUserMedia + BlackHole** | Even virtual audio devices trigger macOS TCC mic permission — must be in checkAll() | v2.7.10 |
-| **BlackHole macOS 26** | BlackHole 0.6.1 loopback is BROKEN on macOS 26 Tahoe (0 signal). Use Playwright addInitScript audio injection instead | v2.7.11 |
+| **BlackHole removed** | BlackHole virtual audio replaced by Playwright `addInitScript` audio injection in v2.7.12. `clearAudioDevicePrefs()` in ChromeLauncher still needed to prevent Chrome from loading cached BlackHole device prefs from old profiles | v2.7.12 |
 | **Meet audio receivers** | Meet creates 5+ audio receivers per PeerConnection, most are `muted=true` (silence). MUST select `track.muted===false` for the active speaker | v2.7.11 |
 | **Worklet cross-origin** | AudioWorklet.addModule() from localhost fails inside Meet page (cross-origin). MUST use Blob URL inline worklet code | v2.7.11 |
 | **Playwright CLI vs Library** | `playwright-cli` eval() cannot intercept getUserMedia (Meet caches at module load). MUST use Playwright library `addInitScript()` for pre-load injection | v2.7.11 |
@@ -163,7 +161,6 @@ OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-00
 | **Audio capture self-check** | After joining Meet, MUST verify captured audio has nonzero amplitude (maxAmp > 0). If all zeros, cycle through ALL receivers trying each for 5s — the unmuted receiver may appear later after join stabilizes. **FIXED v2.7.12**: setupCapture cycles receivers by index with triedReceiverIdx | v2.7.12 |
 | **Playwright lib vs CLI coexistence** | `launchPersistentContext` holds Chrome process — playwright-cli CANNOT connect to same profile simultaneously. **FIXED v2.7.12**: ChromeLauncher.joinGoogleMeet() + admission monitor use Playwright library directly, playwright-cli bypassed for Meet join | v2.7.12 |
 | **Admit monitor missing** | **FIXED v2.7.12**: Admission monitor ported to ChromeLauncher (startAdmissionMonitor, _admitEvalLib, onMeetingEnd). Uses page.evaluate() directly | v2.7.12 |
-| **BlackHole in Chrome prefs** | Chrome profile saves last-used audio devices. If BlackHole was previously selected, Meet picks it on next launch → muted audio. ChromeLauncher.clearAudioDevicePrefs() resets to system default on every launch | v2.7.19 |
 | **Screen share native dialog** | Chrome's screen picker dialog is NATIVE (not DOM), Playwright CANNOT click it. Use `--auto-select-desktop-capture-source=CallingClaw Presenting` flag to auto-select tab by title match. Set tab title via `document.title = "CallingClaw Presenting"` before sharing | v2.7.19 |
 | **Stage iframe cross-origin** | Pre-generated Stage HTML must be served via localhost (not `file://`). `file://` parent + `http://localhost` iframe = cross-origin → `contentDocument` blocked. Stage generator writes to `public/` dir | v2.8.14 |
 | **Whisper Chinese recognition** | OpenAI transcription defaults to English, misrecognizes Chinese as Russian/Korean/Polish. Set `language` in transcription config. Configurable via `TRANSCRIPTION_LANGUAGE` env var (default: `zh,en`) | v2.8.14 |

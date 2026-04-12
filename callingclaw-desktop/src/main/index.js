@@ -74,7 +74,7 @@ CallingClaw uses a dual-process AI architecture:
 
 When you join a meeting via \\\`/callingclaw join\\\`, CallingClaw:
 1. Opens the meeting URL in Chrome
-2. Bridges audio via BlackHole virtual devices
+2. Injects audio via Playwright addInitScript (no virtual drivers)
 3. Starts real-time voice conversation
 4. Captures screenshots for visual context
 5. Extracts action items during the meeting

@@ -33,21 +33,21 @@ OpenClaw is the brain (deep reasoning, memory, coding). CallingClaw is the meeti
 
 * This is the fallback path when OpenClaw Gateway is not running
 
-### 2. BlackHole Bundled in DMG
+### 2. Playwright Audio Injection (replaces BlackHole)
 
-**Approach: Bundle BlackHole .pkg in Electron app's&#x20;**`extraResources`
+**Decision (v2.7.12):** Replaced BlackHole virtual audio driver with Playwright `addInitScript()` browser-level audio injection.
 
-* During first launch, CallingClaw detects if BlackHole is installed
+* **Why:** BlackHole 0.6.1 loopback is broken on macOS 26 Tahoe (0 signal). Virtual audio drivers also require system restart and complicate onboarding.
 
-* If not, runs bundled installer: `osascript -e 'do shell script "installer -pkg PATH -target /" with administrator privileges'`
+* **How it works:** `addInitScript()` intercepts RTCPeerConnection in Chrome before Meet page loads. Captures meeting audio from `track.muted===false` receiver, injects AI audio via `replaceTrack()`. Ring buffer AudioWorklet ensures gapless playback.
 
-* Onboarding only shows verification status, not an install step
+* **Key files:** `public/meet-audio-inject.js`, `public/playback-worklet.js`, `src/chrome-launcher.ts`
 
-**Backend action required:** None. This is Electron-side only.
+* **No virtual drivers needed.** No system restart. No user configuration.
 
-### 3. Microphone Permission Not Needed
+### 3. Microphone Permission — Direct Mode Only
 
-BlackHole virtual audio doesn't require macOS microphone permission. CallingClaw captures meeting audio via BlackHole routing, not the physical mic. Removed from onboarding.
+Microphone TCC permission is only needed for Direct mode (non-meeting voice conversations). Meet Bridge mode handles all audio through Playwright injection in Chrome, bypassing Electron's audio pipeline entirely.
 
 ### 4. Skill File Contents
 
