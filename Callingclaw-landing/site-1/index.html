@@ -2265,9 +2265,22 @@
         padding: 0.75rem 0.5rem;
       }
 
-      /* Hero: less padding, image already nearly full-width */
+      /* Hero: smaller type on mobile to reduce line breaks */
       .hero {
         padding-block: clamp(3rem, 8vw, 5rem) 0;
+      }
+      .hero h1 {
+        font-size: 2rem;
+        max-width: 100%;
+        margin-bottom: 1rem;
+      }
+      .hero-subtitle {
+        font-size: 0.9375rem;
+        margin-bottom: 1.5rem;
+      }
+      .hero-actions {
+        gap: 0.75rem;
+        margin-bottom: 2rem;
       }
       .hero-image-container {
         width: calc(100% - 1rem) !important;
@@ -3203,20 +3216,11 @@
           onUpdate: function(self) {
             const p = self.progress; // 0 → 1
 
-            // Tagline fades in sync with image expansion covering it
-            // Fades 0→1 over first 50% of scroll — stays visible long enough
-            if (heroTagline) {
-              const taglineOpacity = Math.max(0, 1 - p * 2);
-              heroTagline.style.opacity = taglineOpacity;
-              heroTagline.style.visibility = taglineOpacity <= 0 ? 'hidden' : 'visible';
-            }
-
-            // Flickering grid fades out — gone by end of animation
+            // Flickering grid fades out as image expands
             if (gridBaseWrap) {
               gridBaseWrap.style.opacity = Math.max(0, 1 - p);
             }
             if (gridGlowWrap) {
-              // Glow fades faster than base
               gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
             }
           },
