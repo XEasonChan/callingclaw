@@ -2047,11 +2047,11 @@
         padding: 0.75rem 0.5rem;
       }
 
-      /* Hero: smaller type on mobile to reduce line breaks */
+      /* Hero: no pin on mobile, natural scroll */
       .hero {
         padding-top: 5rem;
         padding-bottom: 1rem;
-        min-height: 100vh;
+        min-height: auto;
       }
       .hero h1 {
         font-size: 2rem;
@@ -2893,73 +2893,85 @@
     if (heroImageContainer && heroDemoPanel && heroPinSpacer && heroImage && heroWrapper) {
       gsap.registerPlugin(ScrollTrigger);
 
-      const heroTagline = document.getElementById('heroTagline');
       const gridBaseWrap = document.getElementById('flickeringGridBaseWrap');
       const gridGlowWrap = document.getElementById('flickeringGridGlowWrap');
-
-      // Demo panel starts hidden below the image
-      gsap.set(heroDemoPanel, {
-        xPercent: -50,
-        y: '100%',
-        opacity: 0,
-      });
-
-      // Pin the ENTIRE hero section — tagline + image all stay fixed
-      const heroSection = document.querySelector('.hero');
-      const ytScrollGuard = document.getElementById('ytScrollGuard');
       const isMobile = window.innerWidth < 768;
-      const heroTl = gsap.timeline({
-        scrollTrigger: {
-          trigger: heroSection,
-          start: 'top top',
-          end: '+=50%',
-          pin: true,
-          scrub: 0.3,
-          anticipatePin: 1,
+
+      if (isMobile) {
+        // ── MOBILE: no pin, no expand. YouTube overlaps image via CSS. ──
+        // Position demo panel statically over the bottom of the hero image
+        heroDemoPanel.style.position = 'relative';
+        heroDemoPanel.style.top = 'auto';
+        heroDemoPanel.style.left = 'auto';
+        heroDemoPanel.style.transform = 'none';
+        heroDemoPanel.style.opacity = '1';
+        heroDemoPanel.style.width = '100%';
+        heroDemoPanel.style.marginTop = '-15%';
+        heroDemoPanel.style.borderRadius = '12px';
+        // Remove scroll guard on mobile — no pin, no scroll conflict
+        var ytGuard = document.getElementById('ytScrollGuard');
+        if (ytGuard) ytGuard.classList.add('inactive');
+        // Fade grid on scroll
+        ScrollTrigger.create({
+          trigger: heroWrapper,
+          start: 'top 60%',
+          end: 'bottom top',
           onUpdate: function(self) {
-            const p = self.progress; // 0 → 1
+            var p = self.progress;
+            if (gridBaseWrap) gridBaseWrap.style.opacity = Math.max(0, 1 - p * 2);
+            if (gridGlowWrap) gridGlowWrap.style.opacity = Math.max(0, 1 - p * 3);
+          }
+        });
+      } else {
+        // ── DESKTOP: pin hero, expand image, slide demo panel in ──
+        gsap.set(heroDemoPanel, {
+          xPercent: -50,
+          y: '100%',
+          opacity: 0,
+        });
 
-            // Flickering grid fades out as image expands
-            if (gridBaseWrap) {
-              gridBaseWrap.style.opacity = Math.max(0, 1 - p);
-            }
-            if (gridGlowWrap) {
-              gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
-            }
+        var heroSection = document.querySelector('.hero');
+        var ytScrollGuard = document.getElementById('ytScrollGuard');
+        var heroTl = gsap.timeline({
+          scrollTrigger: {
+            trigger: heroSection,
+            start: 'top top',
+            end: '+=50%',
+            pin: true,
+            scrub: 0.3,
+            anticipatePin: 1,
+            onUpdate: function(self) {
+              var p = self.progress;
+              if (gridBaseWrap) gridBaseWrap.style.opacity = Math.max(0, 1 - p);
+              if (gridGlowWrap) gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
+              if (ytScrollGuard) ytScrollGuard.classList.toggle('inactive', p >= 0.98);
+            },
+          }
+        });
 
-            // Remove scroll guard once animation is complete so user can play video
-            if (ytScrollGuard) {
-              ytScrollGuard.classList.toggle('inactive', p >= 0.98);
-            }
+        heroTl.to(heroImageContainer, {
+          width: '100vw',
+          borderRadius: '0px',
+          duration: 1,
+          ease: 'power1.inOut'
+        }, 0);
+
+        heroTl.to(heroDemoPanel, {
+          y: '-50%',
+          opacity: 1,
+          duration: 0.6,
+          ease: 'power2.out'
+        }, 0.4);
+
+        ScrollTrigger.create({
+          trigger: heroPinSpacer,
+          start: 'bottom top',
+          onEnter: function() {
+            if (gridBaseWrap) gridBaseWrap.style.opacity = '0';
+            if (gridGlowWrap) gridGlowWrap.style.opacity = '0';
           },
-        }
-      });
-
-      // Image expands to full viewport width
-      heroTl.to(heroImageContainer, {
-        width: '100vw',
-        borderRadius: '0px',
-        duration: 1,
-        ease: 'power1.inOut'
-      }, 0);
-
-      // Demo panel slides in during second half of animation
-      heroTl.to(heroDemoPanel, {
-        y: '-50%',
-        opacity: 1,
-        duration: 0.6,
-        ease: 'power2.out'
-      }, 0.4);
-
-      // After hero animation ends, keep grid hidden for rest of page
-      ScrollTrigger.create({
-        trigger: heroPinSpacer,
-        start: 'bottom top',
-        onEnter: function() {
-          if (gridBaseWrap) gridBaseWrap.style.opacity = '0';
-          if (gridGlowWrap) gridGlowWrap.style.opacity = '0';
-        },
-      });
+        });
+      }
     }
 
     // Observe bandwidth image
