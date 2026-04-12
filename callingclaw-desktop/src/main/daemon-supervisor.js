@@ -70,6 +70,25 @@ class DaemonSupervisor extends EventEmitter {
     this.emit('log', `[Supervisor] Starting daemon: ${bunPath} ${args.join(' ')}`);
     this.emit('log', `[Supervisor] Working dir: ${this._daemonDir}`);
 
+    // Auto-install dependencies if node_modules is missing (first run after DMG install)
+    const nodeModulesDir = path.join(this._daemonDir, 'node_modules');
+    if (!fs.existsSync(nodeModulesDir) && fs.existsSync(path.join(this._daemonDir, 'package.json'))) {
+      this.emit('log', '[Supervisor] Installing dependencies (first run)...');
+      try {
+        const { execSync } = require('child_process');
+        execSync(`"${bunPath}" install`, {
+          cwd: this._daemonDir,
+          timeout: 60000,
+          env: { ...process.env, PATH: `${path.dirname(bunPath)}:${process.env.PATH}` },
+        });
+        this.emit('log', '[Supervisor] Dependencies installed');
+      } catch (e) {
+        this.emit('log', `[Supervisor] bun install failed: ${e.message}`);
+        this.emit('error', new Error(`Failed to install backend dependencies: ${e.message}`));
+        throw e;
+      }
+    }
+
     // Ensure .env exists in daemon dir — symlink to ~/.callingclaw/.env if bundled (DMG install)
     // Bun auto-loads .env from cwd, so bundled backend needs access to user's env file
     const envInDaemon = path.join(this._daemonDir, '.env');
