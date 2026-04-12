@@ -2257,8 +2257,26 @@
       }
 
       .features-grid {
-        grid-template-columns: 1fr;
-        gap: 2rem;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+      }
+      .feature-icon {
+        width: 32px;
+        height: 32px;
+        margin-bottom: 0.5rem;
+        border-radius: 8px;
+      }
+      .feature-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .feature-item h4 {
+        font-size: 0.8125rem;
+        margin-bottom: 0.25rem;
+      }
+      .feature-item p {
+        font-size: 0.6875rem;
+        max-width: none;
       }
 
       .comparison-table {
