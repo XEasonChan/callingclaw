@@ -88,12 +88,6 @@ Read CLAUDE.md then start CallingClaw. Help me configure any missing API keys.
 │  │ PostMeetingDelivery → Summary + action items to Telegram │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                │
-│  ┌─ Chrome (Playwright) ───────────────────────────────────┐   │
-│  │ Tab 1: Google Meet (audio injection + capture)          │   │
-│  │ Tab 2: Presenting page (DOM extract + W3C click)        │   │
-│  │ Page Agent: indexed DOM tree → interact tool             │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                │
 │  Meeting Stage (/stage) — S1 voice + S2 agent dual panels      │
 │  EventBus → /ws/events → Claude Code Channel plugin            │
 │  5-Layer Context: Identity → Tools → Mission → Live → Conv     │
