@@ -1140,11 +1140,24 @@
     .hiw-ob-btn { display: inline-block; padding: 0.4rem 0.75rem; border-radius: 8px; font-size: 0.6875rem; font-weight: 600; cursor: default; }
     .hiw-ob-btn.primary { background: var(--accent); color: white; }
     .hiw-ob-btn.ghost { background: transparent; color: var(--text-tertiary); }
-    .hiw-ob-screen-frame { width: 80%; aspect-ratio: 4/3; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden; margin-bottom: 0.75rem; }
-    .hiw-ob-scan-line { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: obScan 2.5s ease-in-out infinite; }
+    .hiw-ob-screen-frame { width: 100%; aspect-ratio: 16/10; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden; }
+    .hiw-ob-scan-line { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); box-shadow: 0 0 8px var(--accent); z-index: 2; animation: obScan 2.5s ease-in-out infinite; }
     @keyframes obScan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
-    .hiw-ob-highlight { position: absolute; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.5625rem; font-weight: 600; background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent); animation: obHighlight 2.5s ease-in-out infinite; }
-    @keyframes obHighlight { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+    /* Red bounding boxes — match desktop onboarding UI */
+    .hiw-ob-box { position: absolute; border: 2px solid var(--accent); border-radius: 6px; opacity: 0; pointer-events: none; animation: obBoxPulse 2.5s ease-in-out infinite; }
+    .hiw-ob-box.b1 { top: 4%; left: 3%; width: 45%; height: 30%; animation-delay: 0.3s; }
+    .hiw-ob-box.b2 { top: 4%; right: 3%; width: 30%; height: 42%; animation-delay: 0.8s; }
+    .hiw-ob-box.b3 { bottom: 4%; left: 3%; width: 94%; height: 22%; animation-delay: 1.3s; }
+    .hiw-ob-box.b4 { top: 38%; left: 3%; width: 45%; height: 26%; animation-delay: 1.0s; }
+    .hiw-ob-box.b5 { top: 50%; right: 3%; width: 30%; height: 22%; animation-delay: 0.5s; }
+    @keyframes obBoxPulse { 0%,30% { opacity: 0; } 35%,55% { opacity: 1; } 60%,100% { opacity: 0; } }
+    /* Labels near bounding boxes */
+    .hiw-ob-label { position: absolute; font-size: 0.5rem; font-weight: 600; color: var(--accent); background: var(--surface); padding: 1px 4px; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); opacity: 0; pointer-events: none; animation: obBoxPulse 2.5s ease-in-out infinite; }
+    .hiw-ob-label.l1 { top: 35%; left: 5%; animation-delay: 0.5s; }
+    .hiw-ob-label.l2 { top: 47%; right: 5%; animation-delay: 1.0s; }
+    .hiw-ob-label.l3 { bottom: 27%; left: 5%; animation-delay: 1.5s; }
+    .hiw-ob-label.l4 { top: 65%; left: 20%; animation-delay: 1.2s; }
+    .hiw-ob-label.l5 { top: 73%; right: 8%; animation-delay: 0.7s; }
     .hiw-ob-dots { display: flex; gap: 6px; }
     .hiw-ob-pip { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; }
     .hiw-ob-pip.done { background: var(--success); border-color: var(--success); }
@@ -1886,7 +1899,7 @@
     .cta-content {
       position: relative;
       z-index: 1;
-      padding-block: clamp(2rem, 5vw, 3rem) clamp(8rem, 20vw, 14rem);
+      padding-block: clamp(2rem, 5vw, 3rem) clamp(12rem, 25vw, 18rem);
     }
 
     .cta-content h2 {
@@ -2354,9 +2367,18 @@
               <div class="hiw-onboard-right">
                 <div class="hiw-ob-screen-frame">
                   <div class="hiw-ob-scan-line"></div>
-                  <div class="hiw-ob-highlight" style="top:20%;left:15%">Slide</div>
-                  <div class="hiw-ob-highlight" style="top:50%;left:55%">Code</div>
-                  <div class="hiw-ob-highlight" style="top:75%;left:30%">Diagram</div>
+                  <!-- Red bounding boxes — fill the virtual screen like desktop onboarding -->
+                  <div class="hiw-ob-box b1"></div>
+                  <div class="hiw-ob-box b2"></div>
+                  <div class="hiw-ob-box b3"></div>
+                  <div class="hiw-ob-box b4"></div>
+                  <div class="hiw-ob-box b5"></div>
+                  <!-- Labels -->
+                  <div class="hiw-ob-label l1">Slide</div>
+                  <div class="hiw-ob-label l2">Code</div>
+                  <div class="hiw-ob-label l3">Footer</div>
+                  <div class="hiw-ob-label l4">Diagram</div>
+                  <div class="hiw-ob-label l5">Nav</div>
                 </div>
                 <!-- Progress dots -->
                 <div class="hiw-ob-dots">
@@ -2618,7 +2640,7 @@
             <th></th>
             <th class="col-highlight">CallingClaw</th>
             <th>Pika Stream</th>
-            <th>Otter / Fireflies</th>
+            <th>Granola / Otter</th>
           </tr>
         </thead>
         <tbody>
