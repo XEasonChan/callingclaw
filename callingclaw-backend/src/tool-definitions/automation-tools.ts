@@ -12,7 +12,7 @@ import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { ZoomSkill } from "../skills/zoom";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion } from "../voice-persona";
-import { PAGE_EXTRACT_JS, PAGE_CLICK_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
+import { PAGE_EXTRACT_JS, PAGE_CLICK_JS, PAGE_TEXT_CLICK_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
 
 export interface AutomationToolDeps {
   automationRouter: AutomationRouter;
@@ -435,52 +435,8 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
                     actionResult = `Clicked element [${target}].`;
                   }
                 } else {
-                  // Text-based fallback: target="Download for Mac" (fuzzy match + W3C events)
-                  const clickResult = await cl.evaluateOnPresentingPage(`(() => {
-                    var els = document.querySelectorAll('a,button,input,textarea,[role="button"],[role="textbox"],[contenteditable="true"],[onclick]');
-                    var target = null;
-                    var targetText = ${JSON.stringify(target.toLowerCase())};
-                    for (var el of els) {
-                      if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
-                      var text = (el.textContent || '').toLowerCase().trim();
-                      if (text.includes(targetText)) { target = el; break; }
-                    }
-                    if (!target) {
-                      // Try aria-label match
-                      for (var el of els) {
-                        var label = (el.getAttribute('aria-label') || '').toLowerCase();
-                        if (label.includes(targetText)) { target = el; break; }
-                      }
-                    }
-                    if (!target) return JSON.stringify({ ok: false });
-
-                    // W3C click: scrollIntoView + hit-test + synthetic events
-                    target.scrollIntoView({ behavior: 'instant', block: 'center' });
-                    var rect = target.getBoundingClientRect();
-                    var x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
-                    var hit = document.elementFromPoint(x, y);
-                    var ct = (hit instanceof HTMLElement && target.contains(hit)) ? hit : target;
-                    var po = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerType: 'mouse' };
-                    var mo = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 };
-                    ct.dispatchEvent(new PointerEvent('pointerover', po));
-                    ct.dispatchEvent(new PointerEvent('pointerenter', Object.assign({}, po, { bubbles: false })));
-                    ct.dispatchEvent(new MouseEvent('mouseover', mo));
-                    ct.dispatchEvent(new MouseEvent('mouseenter', Object.assign({}, mo, { bubbles: false })));
-                    ct.dispatchEvent(new PointerEvent('pointerdown', po));
-                    ct.dispatchEvent(new MouseEvent('mousedown', mo));
-                    target.focus({ preventScroll: true });
-                    ct.dispatchEvent(new PointerEvent('pointerup', po));
-                    ct.dispatchEvent(new MouseEvent('mouseup', mo));
-                    // Prevent navigation-away on external links (would kill the presenting tab)
-                    var href = target.tagName === 'A' ? target.getAttribute('href') : null;
-                    var isExternal = href && (href.startsWith('http') && !href.includes(location.hostname));
-                    var isDownload = href && (href.includes('.dmg') || href.includes('.zip') || href.includes('.exe') || target.hasAttribute('download'));
-                    if (isExternal || isDownload) {
-                      return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60), link: href, external: true });
-                    }
-                    ct.click();
-                    return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60) });
-                  })()`);
+                  // Text-based fallback: target="Download for Mac" (fuzzy match + W3C events + cursor)
+                  const clickResult = await cl.evaluateOnPresentingPage(PAGE_TEXT_CLICK_JS(target));
                   try {
                     const r = JSON.parse(String(clickResult));
                     if (r.ok && r.external) {

@@ -38,6 +38,69 @@
 export const PAGE_CONTEXT_ID = "ctx_page_dom";
 
 /**
+ * JavaScript to inject a virtual cursor overlay into the presenting page.
+ * Creates a red pointer cursor that animates to click targets with a ripple effect.
+ * Idempotent: safe to call multiple times (checks for existing cursor).
+ *
+ * Exposes window.__ccCursor = { flyTo(x,y), ripple(x,y,opts?), hide() }
+ * - flyTo: returns Promise that resolves after cursor flight animation (~400ms)
+ * - ripple: creates an expanding/fading circle at click point
+ * - hide: hides the cursor element
+ */
+export const CURSOR_INJECT_JS = `(() => {
+  if (window.__ccCursor) return;
+
+  // Create cursor element — red pointer SVG
+  var cursor = document.createElement('div');
+  cursor.id = 'cc-cursor';
+  cursor.innerHTML = '<svg width="20" height="24" viewBox="0 0 20 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M1 1L1 19.5L5.5 15L10.5 23L14 21L9 13L15 12L1 1Z" fill="#E63946" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>' +
+    '</svg>';
+  cursor.style.cssText = 'position:fixed;top:0;left:0;z-index:2147483647;pointer-events:none;' +
+    'transform:translate(-4px,-2px);opacity:0;transition:left 0.4s cubic-bezier(0.34,1.56,0.64,1),' +
+    'top 0.4s cubic-bezier(0.34,1.56,0.64,1),opacity 0.15s ease;will-change:left,top,opacity;';
+  document.body.appendChild(cursor);
+
+  // Add ripple keyframe animation
+  var style = document.createElement('style');
+  style.textContent = '@keyframes cc-ripple{0%{transform:scale(0);opacity:0.6}100%{transform:scale(1);opacity:0}}' +
+    '.cc-ripple{position:fixed;width:40px;height:40px;border-radius:50%;border:2px solid #E63946;' +
+    'pointer-events:none;z-index:2147483646;animation:cc-ripple 0.5s ease-out forwards;}';
+  document.head.appendChild(style);
+
+  var lastX = 0, lastY = 0;
+
+  window.__ccCursor = {
+    flyTo: function(x, y) {
+      return new Promise(function(resolve) {
+        cursor.style.left = x + 'px';
+        cursor.style.top = y + 'px';
+        cursor.style.opacity = '1';
+        lastX = x; lastY = y;
+        // Wait for CSS transition to complete
+        var done = false;
+        function finish() { if (!done) { done = true; resolve(); } }
+        cursor.addEventListener('transitionend', finish, { once: true });
+        // Fallback timeout in case transitionend doesn't fire
+        setTimeout(finish, 450);
+      });
+    },
+    ripple: function(x, y, opts) {
+      if (opts && opts.skip) return;
+      var el = document.createElement('div');
+      el.className = 'cc-ripple';
+      el.style.left = (x - 20) + 'px';
+      el.style.top = (y - 20) + 'px';
+      document.body.appendChild(el);
+      setTimeout(function() { el.remove(); }, 600);
+    },
+    hide: function() {
+      cursor.style.opacity = '0';
+    }
+  };
+})()`;
+
+/**
  * JavaScript to evaluate inside the browser page.
  * Returns hierarchical DOM with semantic context + indexed interactive elements.
  */
@@ -161,52 +224,11 @@ export const PAGE_EXTRACT_JS = `(() => {
 })()`;
 
 /**
- * W3C-compliant click by index.
- * Dispatches full pointer/mouse event sequence (from Page Agent's actions.ts).
- * Uses hit-test to find deepest element at click coordinates.
+ * Shared W3C click dispatch logic, used by both PAGE_CLICK_JS and PAGE_TEXT_CLICK_JS.
+ * Inlined into the generated JS string to avoid duplication.
+ * Includes cursor animation (flyTo + ripple) before dispatching events.
  */
-export function PAGE_CLICK_JS(index: number): string {
-  return `(() => {
-    // Rebuild the same index map as PAGE_EXTRACT_JS
-    var idx = 0;
-    var target = null;
-    var seen = new Set();
-    document.querySelectorAll('a[href],button,input,select,textarea,[role="button"],[role="textbox"],[role="tab"],[role="menuitem"],[contenteditable="true"],[onclick]')
-      .forEach(function(el) {
-        if (target) return;
-        if (el.offsetWidth === 0 || el.offsetHeight === 0) return;
-        if (el.closest('[aria-hidden="true"]')) return;
-        var text = (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 60);
-        if (!text) text = el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('alt') || '';
-        text = text.trim();
-        if (!text || text.length < 2) return;
-        var key = el.tagName.toLowerCase() + ':' + text.toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        if (idx === ${index}) target = el;
-        idx++;
-      });
-
-    // Also check cursor:pointer elements
-    if (!target) {
-      idx = 0; seen.clear();
-      document.querySelectorAll('*').forEach(function(el) {
-        if (target) return;
-        if (el.offsetWidth === 0 || el.offsetHeight === 0) return;
-        try { if (getComputedStyle(el).cursor !== 'pointer') return; } catch { return; }
-        if (el.closest('[aria-hidden="true"]')) return;
-        var text = (el.textContent || '').trim().slice(0, 60);
-        if (!text || text.length < 2) return;
-        var key = el.tagName.toLowerCase() + ':' + text.toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        if (idx === ${index}) target = el;
-        idx++;
-      });
-    }
-
-    if (!target) return JSON.stringify({ ok: false, error: 'Element index ${index} not found' });
-
+const W3C_CLICK_DISPATCH_JS = `
     // Scroll into view
     target.scrollIntoView({ behavior: 'instant', block: 'center' });
 
@@ -214,6 +236,11 @@ export function PAGE_CLICK_JS(index: number): string {
     var rect = target.getBoundingClientRect();
     var x = rect.left + rect.width / 2;
     var y = rect.top + rect.height / 2;
+
+    // Cursor animation: fly to target, then ripple
+    if (window.__ccCursor) {
+      await window.__ccCursor.flyTo(x, y);
+    }
 
     // Hit-test: find deepest element at coordinates (matches real browser behavior)
     var hitTarget = document.elementFromPoint(x, y);
@@ -239,12 +266,129 @@ export function PAGE_CLICK_JS(index: number): string {
     // 4. Release
     clickTarget.dispatchEvent(new PointerEvent('pointerup', pointerOpts));
     clickTarget.dispatchEvent(new MouseEvent('mouseup', mouseOpts));
+`;
 
-    // 5. Click activation
+/**
+ * DOM walk that matches PAGE_EXTRACT_JS indexing exactly.
+ * Used by both PAGE_CLICK_JS and PAGE_TEXT_CLICK_JS to find elements
+ * using the same index assignment strategy as extraction.
+ */
+const DOM_WALK_FIND_JS = `
+    var idx = 0;
+    var target = null;
+    var seen = new Set();
+    var SEMANTIC = new Set(['nav','header','footer','main','section','aside','form','dialog','article']);
+
+    function walkFind(node) {
+      if (!node || node.nodeType !== 1 || target) return;
+      var el = node;
+      if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
+      if (el.closest('[aria-hidden="true"]')) return;
+      var tag = el.tagName.toLowerCase();
+
+      // Check if interactive (same logic as PAGE_EXTRACT_JS)
+      var isInteractive = false;
+      if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) isInteractive = true;
+      else if (el.getAttribute('role') === 'button' || el.getAttribute('role') === 'tab' || el.getAttribute('role') === 'menuitem') isInteractive = true;
+      else if (el.hasAttribute('onclick')) isInteractive = true;
+      if (!isInteractive) {
+        try { if (getComputedStyle(el).cursor === 'pointer') isInteractive = true; } catch {}
+      }
+
+      // Interactive element: assign index (same as PAGE_EXTRACT_JS)
+      if (isInteractive && el.offsetWidth > 0) {
+        var text = (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 60);
+        if (!text) text = el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('alt') || '';
+        text = text.trim();
+        if (text && text.length >= 2) {
+          var key = tag + ':' + text.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            if (idx === FIND_INDEX) target = el;
+            idx++;
+          }
+        }
+      }
+
+      // Recurse (skip script, style, svg, iframe — same as PAGE_EXTRACT_JS)
+      if (!/^(SCRIPT|STYLE|NOSCRIPT|SVG|IFRAME)$/i.test(tag)) {
+        for (var child of el.children) { walkFind(child); }
+      }
+    }
+    walkFind(document.body);
+`;
+
+/**
+ * W3C-compliant click by index.
+ * Uses the same DOM walk as PAGE_EXTRACT_JS to ensure index N maps to
+ * the same element the voice AI sees as [N] in the extracted DOM.
+ * Includes cursor animation (flyTo + ripple) before dispatching events.
+ */
+export function PAGE_CLICK_JS(index: number): string {
+  const findJS = DOM_WALK_FIND_JS.replace(/FIND_INDEX/g, String(index));
+  return `(async () => {
+    ${findJS}
+
+    if (!target) return JSON.stringify({ ok: false, error: 'Element index ${index} not found' });
+
+    ${W3C_CLICK_DISPATCH_JS}
+
+    // 5. Ripple + Click activation
+    if (window.__ccCursor) window.__ccCursor.ripple(x, y);
     clickTarget.click();
 
     var text = (target.textContent || '').trim().slice(0, 60);
     return JSON.stringify({ ok: true, text: text, tag: target.tagName.toLowerCase() });
+  })()`;
+}
+
+/**
+ * W3C-compliant click by text content (fuzzy match).
+ * Extracted from automation-tools.ts inline JS for DRY.
+ * Includes cursor animation. For external/download links, flies to target
+ * but skips ripple since the link is not actually clicked.
+ */
+export function PAGE_TEXT_CLICK_JS(targetText: string): string {
+  return `(async () => {
+    var els = document.querySelectorAll('a,button,input,textarea,[role="button"],[role="textbox"],[contenteditable="true"],[onclick]');
+    var target = null;
+    var searchText = ${JSON.stringify(targetText.toLowerCase())};
+
+    // Text content match
+    for (var el of els) {
+      if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
+      var text = (el.textContent || '').toLowerCase().trim();
+      if (text.includes(searchText)) { target = el; break; }
+    }
+
+    // Aria-label fallback
+    if (!target) {
+      for (var el of els) {
+        var label = (el.getAttribute('aria-label') || '').toLowerCase();
+        if (label.includes(searchText)) { target = el; break; }
+      }
+    }
+
+    if (!target) return JSON.stringify({ ok: false });
+
+    ${W3C_CLICK_DISPATCH_JS}
+
+    // Check if external/download link (should NOT navigate away)
+    var href = target.tagName === 'A' ? target.getAttribute('href') : null;
+    var isExternal = href && (href.startsWith('http') && !href.includes(location.hostname));
+    var isDownload = href && (href.includes('.dmg') || href.includes('.zip') || href.includes('.exe') || target.hasAttribute('download'));
+
+    if (isExternal || isDownload) {
+      // Fly to target but skip ripple — we didn't actually click
+      if (window.__ccCursor) window.__ccCursor.ripple(x, y, { skip: true });
+      return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60), link: href, external: true });
+    }
+
+    // 5. Ripple + Click activation
+    if (window.__ccCursor) window.__ccCursor.ripple(x, y);
+    clickTarget.click();
+
+    return JSON.stringify({ ok: true, text: (target.textContent || '').trim().slice(0, 60) });
   })()`;
 }
 
