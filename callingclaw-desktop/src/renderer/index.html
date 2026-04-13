@@ -556,35 +556,97 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 .layers-bar { position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; } .layer-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: var(--pill); background: var(--surface); color: var(--text3); transition: all 0.3s; }
 .lb-1 { animation: layerLight 6s ease infinite; } .lb-2 { animation: layerLight 6s ease 1.5s infinite; } .lb-3 { animation: layerLight 6s ease 3s infinite; } .lb-4 { animation: layerLight 6s ease 4.5s infinite; }
 @keyframes layerLight { 0%,10% { background: var(--surface); color: var(--text3); } 12%,28% { background: var(--accent); color: white; } 30%,100% { background: var(--surface); color: var(--text3); } }
-.anim-brain { display: flex; align-items: center; justify-content: center; gap: 40px; } .brain-node { position: relative; width: 100px; height: 100px; }
-.brain-core { width: 60px; height: 60px; border-radius: 50%; position: absolute; top: 20px; left: 20px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--white); z-index: 2; } .brain-core.fast { background: #FF9F0A; } .brain-core.deep { background: var(--accent); }
-.brain-ring { position: absolute; border-radius: 50%; border: 1.5px solid; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; } .brain-node.fast .brain-ring { border-color: #FF9F0A; animation: ringPulse 1.5s ease-out infinite; } .brain-node.deep .brain-ring { border-color: var(--accent); animation: ringPulse 3s ease-out infinite; }
-.ring-1 { width: 80px; height: 80px; animation-delay: 0s !important; } .ring-2 { width: 100px; height: 100px; animation-delay: 0.4s !important; } .ring-3 { width: 120px; height: 120px; animation-delay: 0.8s !important; }
-@keyframes ringPulse { 0% { opacity: 0.6; transform: translate(-50%,-50%) scale(0.7); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.2); } }
-.brain-label { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 500; color: var(--text2); white-space: nowrap; } .bridge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); position: absolute; animation: bridgeFlow 2s linear infinite; } .bridge-dot:nth-child(2) { animation-delay: 0.5s; } .bridge-dot:nth-child(3) { animation-delay: 1s; } .bridge-dot:nth-child(4) { animation-delay: 1.5s; animation-direction: reverse; }
-@keyframes bridgeFlow { 0% { left: 0; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
-.anim-connect { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px; } .connect-logos { display: flex; align-items: center; gap: 60px; position: relative; } .connect-logo { width: 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; z-index: 2; } .cl-openclaw { background: var(--surface); } .cl-callingclaw { background: var(--accent); }
+/* ── Step 2: Voice Conversation Preview ── */
+.ob-voice-preview { display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ob-voice-window { width: 100%; max-width: 300px; background: var(--white); border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
+.ob-voice-wave { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.ob-wave-bars { display: flex; align-items: center; gap: 2px; height: 16px; flex: 1; }
+.ob-wave-bar { width: 3px; border-radius: 2px; background: var(--accent); animation: waveBar 1.2s ease-in-out infinite; }
+.ob-wave-bar:nth-child(1) { height: 6px; animation-delay: 0s; }
+.ob-wave-bar:nth-child(2) { height: 12px; animation-delay: 0.1s; }
+.ob-wave-bar:nth-child(3) { height: 8px; animation-delay: 0.2s; }
+.ob-wave-bar:nth-child(4) { height: 14px; animation-delay: 0.3s; }
+.ob-wave-bar:nth-child(5) { height: 6px; animation-delay: 0.4s; }
+.ob-wave-bar:nth-child(6) { height: 10px; animation-delay: 0.5s; }
+.ob-wave-bar:nth-child(7) { height: 16px; animation-delay: 0.6s; }
+.ob-wave-bar:nth-child(8) { height: 8px; animation-delay: 0.7s; }
+.ob-wave-bar:nth-child(9) { height: 4px; animation-delay: 0.8s; }
+@keyframes waveBar { 0%,100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+.ob-voice-transcript { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.ob-vt-line { font-size: 12px; color: var(--text); line-height: 1.5; opacity: 0; animation: vtFadeIn 0.5s ease forwards; }
+.ob-vt-line:nth-child(1) { animation-delay: 0.5s; }
+.ob-vt-line:nth-child(2) { animation-delay: 1.5s; }
+.ob-vt-line:nth-child(3) { animation-delay: 3s; }
+.ob-vt-line:nth-child(4) { animation-delay: 4s; }
+@keyframes vtFadeIn { to { opacity: 1; } }
+.ob-vt-label { font-size: 10px; font-weight: 700; display: inline-block; margin-right: 4px; }
+.ob-vt-user .ob-vt-label { color: #007AFF; }
+.ob-vt-ai .ob-vt-label { color: var(--accent); }
+.ob-vt-cursor::after { content: ''; display: inline-block; width: 2px; height: 12px; background: var(--accent); animation: blink 0.8s step-end infinite; vertical-align: middle; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ob-wave-bar { animation: none; transform: scaleY(0.7); } .ob-vt-line { opacity: 1; animation: none; } .ob-vt-cursor::after { animation: none; } }
+/* ── Step 5: S1/S2 Architecture Diagram ── */
+.ob-arch { display: flex; flex-direction: column; gap: 0; align-items: stretch; width: 100%; padding: 16px; }
+.ob-arch-card { padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--white); transition: all 0.3s ease; }
+.ob-arch-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(230,57,70,0.12), 0 2px 8px rgba(230,57,70,0.08); }
+.ob-arch-card.s2-active { border-color: #007AFF; box-shadow: 0 0 0 2px rgba(0,122,255,0.12), 0 2px 8px rgba(0,122,255,0.08); }
+.ob-arch-card.dimmed { opacity: 0.4; }
+.ob-arch-badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 4px; margin-bottom: 6px; }
+.ob-arch-badge.s1 { background: rgba(230,57,70,0.1); color: var(--accent); }
+.ob-arch-badge.s2 { background: rgba(0,122,255,0.1); color: #007AFF; }
+.ob-arch-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.ob-arch-models { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.ob-arch-model { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+.ob-arch-model-name { color: var(--text); font-weight: 500; }
+.ob-arch-model-role { color: var(--text2); font-size: 10px; }
+.ob-arch-key-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--text2); transition: all 0.3s; }
+.ob-arch-key-tag.openai { }
+.ob-arch-key-tag.openrouter { }
+.ob-arch-key-tag.validated { background: rgba(52,199,89,0.1); border-color: rgba(52,199,89,0.3); color: var(--green); }
+.ob-arch-stats { display: flex; gap: 8px; font-size: 10px; color: var(--text2); margin-top: 4px; }
+.ob-arch-bridge { display: flex; align-items: center; gap: 4px; justify-content: center; padding: 3px 0; }
+.ob-arch-bridge-line { flex: 1; height: 1px; background: var(--border); }
+.ob-arch-bridge-icon { width: 24px; height: 24px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--text2); flex-shrink: 0; }
+.ob-arch-footer { text-align: center; font-size: 10px; color: var(--text3); margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.ob-arch-unconfigured { display: none; font-size: 10px; font-weight: 600; color: var(--text3); margin-left: 8px; }
+.ob-arch-card.dimmed .ob-arch-unconfigured { display: inline; }
+@media (prefers-reduced-motion: reduce) { .ob-arch-card, .ob-arch-key-tag { transition: none; } }
+/* ── Step 4: Google Calendar Preview ── */
+.ob-gcal-preview { display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ob-gcal-window { width: 100%; max-width: 300px; background: var(--white); border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
+.ob-gcal-titlebar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.ob-gcal-slots { padding: 4px 0; }
+.ob-gcal-slot { display: flex; align-items: flex-start; gap: 8px; padding: 0 12px; min-height: 32px; }
+.ob-gcal-time { font-size: 10px; color: var(--text3); font-weight: 500; min-width: 32px; padding-top: 2px; flex-shrink: 0; }
+.ob-gcal-line { flex: 1; height: 1px; background: var(--border); margin-top: 8px; }
+.ob-gcal-slot-event { align-items: stretch; min-height: auto; padding-bottom: 6px; }
+.ob-gcal-event { flex: 1; background: rgba(0,131,45,0.08); border-left: 3px solid #00832D; border-radius: 0 6px 6px 0; padding: 8px 10px; }
+.ob-gcal-event-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.ob-gcal-event-meta { font-size: 10px; color: var(--text2); margin-bottom: 6px; }
+.ob-gcal-meet-link { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #00832D; margin-bottom: 8px; }
+.ob-gcal-event-attendees { display: flex; flex-direction: column; gap: 4px; }
+.ob-gcal-attendee { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text2); }
+.ob-gcal-avatar { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: white; flex-shrink: 0; }
+.ob-gcal-avatar.you { background: #4285F4; }
+.ob-gcal-avatar.agent { background: var(--accent); }
+.ob-gcal-badge-join { font-size: 9px; font-weight: 600; color: var(--green); background: rgba(52,199,89,0.1); padding: 1px 5px; border-radius: 3px; margin-left: auto; }
+.anim-connect { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px; } .connect-logos { display: flex; align-items: center; gap: 60px; position: relative; } .connect-logo { width: 64px; height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; z-index: 2; } .cl-openclaw { background: var(--surface); } .cl-callingclaw { background: var(--surface); }
 .connect-line { position: absolute; top: 50%; left: 64px; right: 64px; height: 2px; transform: translateY(-50%); } .connect-line-bg { background: var(--border); width: 100%; height: 100%; border-radius: 1px; } .connect-line-fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--accent); border-radius: 1px; width: 0; animation: lineFill 2s ease-out 0.5s forwards; }
 @keyframes lineFill { to { width: 100%; } } .connect-terminal { background: #1C1C1E; border-radius: 8px; padding: 14px 18px; font-family: var(--mono); font-size: 12px; color: #E5E5EA; min-width: 280px; overflow: hidden; }
 .term-line { opacity: 0; animation: termType 0.5s ease forwards; } .term-line:nth-child(1) { animation-delay: 2s; } .term-line:nth-child(2) { animation-delay: 3s; } .term-line:nth-child(3) { animation-delay: 4s; } @keyframes termType { to { opacity: 1; } }
-.term-prompt { color: var(--green); } .term-cmd { color: #E5E5EA; } .term-result { color: var(--text3); } .converge-ring { width: 200px; height: 200px; position: relative; }
-.converge-icon { position: absolute; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--white); box-shadow: var(--shadow); animation: converge 2.5s ease-in-out 0.5s forwards; } .ci-0 { top: 0; left: 80px; } .ci-1 { top: 60px; right: 0; } .ci-2 { bottom: 0; right: 20px; } .ci-3 { bottom: 0; left: 20px; } .ci-4 { top: 60px; left: 0; }
-@keyframes converge { to { top: 80px; left: 80px; right: auto; bottom: auto; opacity: 0; transform: scale(0.5); } }
-.converge-center {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
-  width: 64px; height: 64px; border-radius: 16px; background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-  animation: centerAppear 0.6s ease-out 2.5s forwards;
-  box-shadow: 0 0 0 0 rgba(230,57,70,0);
-}
-@keyframes centerAppear {
-  to { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 0 20px rgba(230,57,70,0.08); }
-}
-.converge-text {
-  position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%);
-  font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap;
-  opacity: 0; animation: iconAppear 0.4s ease 3s forwards;
-}
+.term-prompt { color: var(--green); } .term-cmd { color: #E5E5EA; } .term-result { color: var(--text3); }
+/* ── Step 7: Ready Panel ── */
+.ob-ready-panel { display: flex; align-items: center; justify-content: center; padding: 24px; }
+.ob-ready-content { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ob-ready-logo { width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; opacity: 0; animation: readyLogoIn 0.8s ease-out 0.3s forwards; }
+@keyframes readyLogoIn { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+.ob-ready-title { font-size: 18px; font-weight: 700; color: var(--text); opacity: 0; animation: iconAppear 0.4s ease 0.8s forwards; }
+.ob-ready-subtitle { font-size: 12px; color: var(--text2); margin-bottom: 12px; opacity: 0; animation: iconAppear 0.4s ease 1s forwards; }
+.ob-ready-checks { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 200px; opacity: 0; animation: iconAppear 0.4s ease 1.2s forwards; }
+.ob-ready-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+.ob-ready-check svg { flex-shrink: 0; }
+.ob-ready-powered { display: flex; flex-direction: column; align-items: center; margin-top: 16px; opacity: 0; animation: iconAppear 0.4s ease 1.6s forwards; }
+@media (prefers-reduced-motion: reduce) { .ob-ready-logo, .ob-ready-title, .ob-ready-subtitle, .ob-ready-checks, .ob-ready-powered { opacity: 1; animation: none; } }
 
 /* ── Focus Visible ───────────────────────────────────── */
 :focus-visible {
@@ -810,14 +872,34 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   <div id="view-onboarding" class="view">
     <div class="ob-step active" data-ob="0"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Welcome</div><div class="ob-title">Give a meeting room<br>to your OpenClaw</div><div class="ob-desc">OpenClaw can attend meetings, confirm requirements, bring unified memory, and execute on its own -- like a remote employee.<br><br>CallingClaw is OpenClaw's meeting room.</div><div class="ob-actions"><button class="btn btn-primary" onclick="obNext()">Get Started</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div></div><div class="ob-right"><div class="anim-canvas anim-welcome"><div style="position:relative;"><div class="room-label">Meeting Room</div><div class="room-frame"><div class="room-door"></div><div class="room-lobster"><svg width="48" height="48" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#E63946"/><path d="M17 28C10 20 14 10 22 16C18 12 24 9 27 14" fill="#E63946"/><path d="M43 28C50 20 46 10 38 16C42 12 36 9 33 14" fill="#E63946"/><circle cx="25" cy="28" r="2.5" fill="white"/><circle cx="35" cy="28" r="2.5" fill="white"/><circle cx="25" cy="28" r="1.2" fill="#1C1C1E"/><circle cx="35" cy="28" r="1.2" fill="#1C1C1E"/><path d="M25 24C22 14 16 10 13 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M35 24C38 14 44 10 47 12" stroke="#E63946" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg></div><div class="room-icons"><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div></div></div></div></div></div></div></div>
     <div class="ob-step" data-ob="1"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 1 / 7</div><div class="ob-title">Screen Understanding</div><div class="ob-desc">CallingClaw needs to see the screen to understand what's being discussed in meetings. Once authorized, the AI can analyze the screen in real time and extract key information.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-screen-btn" onclick="obGrantScreen()">Grant Screen Recording</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-screen-status"></div></div><div class="ob-right"><div class="anim-canvas anim-screen"><div class="screen-frame"><div class="screen-el el-1"></div><div class="screen-el el-2"></div><div class="screen-el el-3"></div><div class="scan-line"></div><div class="screen-highlight hl-1"></div><div class="screen-highlight hl-2"></div><div class="screen-highlight hl-3"></div><div class="screen-tag tag-1">Slide</div><div class="screen-tag tag-2">Code</div><div class="screen-tag tag-3">Diagram</div></div></div></div></div></div>
-    <div class="ob-step" data-ob="2"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 2 / 7</div><div class="ob-title">Voice Conversation</div><div class="ob-desc">CallingClaw needs microphone access to listen in real time. Both Talk Locally and in-meeting voice interaction rely on this permission.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-mic-btn" onclick="obGrantMic()">Grant Microphone</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-mic-status"></div></div><div class="ob-right"><div class="anim-canvas" style="display:flex;align-items:center;justify-content:center;"><svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div></div></div></div>
+    <div class="ob-step" data-ob="2"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 2 / 7</div><div class="ob-title">Voice Conversation</div><div class="ob-desc">CallingClaw needs microphone access to listen in real time. Both Talk Locally and in-meeting voice interaction rely on this permission.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-mic-btn" onclick="obGrantMic()">Grant Microphone</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-mic-status"></div></div><div class="ob-right"><div class="anim-canvas ob-voice-preview">
+      <div class="ob-voice-window">
+        <!-- Waveform -->
+        <div class="ob-voice-wave">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          <div class="ob-wave-bars">
+            <span class="ob-wave-bar"></span><span class="ob-wave-bar"></span><span class="ob-wave-bar"></span>
+            <span class="ob-wave-bar"></span><span class="ob-wave-bar"></span><span class="ob-wave-bar"></span>
+            <span class="ob-wave-bar"></span><span class="ob-wave-bar"></span><span class="ob-wave-bar"></span>
+          </div>
+          <span style="font-size:10px;color:var(--accent);font-weight:600;">Listening</span>
+        </div>
+        <!-- Simulated transcript -->
+        <div class="ob-voice-transcript">
+          <div class="ob-vt-line ob-vt-user"><span class="ob-vt-label">You</span> Can you summarize the key decisions?</div>
+          <div class="ob-vt-line ob-vt-ai"><span class="ob-vt-label">AI</span> Sure — three decisions were made: migrate to v2 API, deadline March 30, and Sarah owns the rollout.</div>
+          <div class="ob-vt-line ob-vt-user"><span class="ob-vt-label">You</span> Create action items from that.</div>
+          <div class="ob-vt-line ob-vt-ai ob-vt-typing"><span class="ob-vt-label">AI</span> <span class="ob-vt-cursor"></span></div>
+        </div>
+      </div>
+    </div></div></div></div>
     <div class="ob-step" data-ob="3"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 3 / 7</div><div class="ob-title">Smart Actions</div><div class="ob-desc">CallingClaw can open files, switch apps, and navigate browsers. A 4-layer automation strategy always finds the fastest approach.</div><div class="ob-actions"><button class="btn btn-primary" id="ob-access-btn" onclick="obGrantAccess()">Grant Accessibility</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-access-status"></div></div><div class="ob-right"><div class="anim-canvas anim-actions"><div style="position:relative;"><div class="actions-stage"><div class="action-target at-btn at-btn-press">Button</div><div class="action-target at-input at-typing"></div><div class="action-target at-window">Window</div><div class="action-cursor"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="#1C1C1E" stroke="white" stroke-width="1"/></svg></div></div><div class="layers-bar"><span class="layer-badge lb-1">L1</span><span class="layer-badge lb-2">L2</span><span class="layer-badge lb-3">L3</span><span class="layer-badge lb-4">L4</span></div></div></div></div></div></div>
     <div class="ob-step" data-ob="4"><div class="ob-body"><div class="ob-left">
       <!-- Phase 1: Sign in (shown when not logged in) -->
       <div id="ob-google-phase1">
         <div class="ob-tag">Step 4 / 7</div>
-        <div class="ob-title">Give CallingClaw an Email</div>
-        <div class="ob-desc">CallingClaw joins meetings with OpenClaw's memory, tasks, and context. Give it a Google account so it can attend as a real participant.</div>
+        <div class="ob-title">Give Your Agent an Identity</div>
+        <div class="ob-desc">Your agent needs a Google account to join meetings as a real participant. It reads your calendar, auto-joins scheduled calls, and shows up with its own name — just like a human teammate.</div>
         <div class="ob-actions">
           <button class="btn btn-primary" id="ob-google-btn" onclick="obGoogleLogin()">Sign in with Google</button>
           <button class="btn btn-ghost" onclick="obNext()">Skip</button>
@@ -828,7 +910,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
       <div id="ob-google-phase2" style="display:none;">
         <div class="ob-tag">Step 4 / 7</div>
         <div class="ob-title">Ready to Join Meetings</div>
-        <div class="ob-desc" style="margin-bottom:16px;">CallingClaw will join meetings with OpenClaw's memory and tasks. Participants see the name below.</div>
+        <div class="ob-desc" style="margin-bottom:16px;">Your agent will read this calendar for upcoming meetings, auto-join with prep notes, and appear as a named participant.</div>
         <div class="input-group">
           <div class="input-label">CallingClaw's account</div>
           <div id="ob-google-email-display" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;">
@@ -849,19 +931,97 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           <button class="btn btn-ghost" onclick="obNext()">Skip</button>
         </div>
       </div>
-    </div><div class="ob-right"><div class="anim-canvas" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;">
-      <svg width="56" height="56" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      <div style="text-align:center;">
-        <div style="font-size:14px;color:var(--text2);margin-bottom:4px;">Joins with</div>
-        <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
-          <svg viewBox="0 0 60 60" fill="none" width="20" height="20"><ellipse cx="30" cy="34" rx="13" ry="16" fill="var(--text3)"/><circle cx="25" cy="28" r="2" fill="white"/><circle cx="35" cy="28" r="2" fill="white"/></svg>
-          <span style="font-size:13px;color:var(--text3);">OpenClaw memory + tasks</span>
+    </div><div class="ob-right"><div class="anim-canvas ob-gcal-preview">
+      <!-- Google Calendar mini window -->
+      <div class="ob-gcal-window">
+        <div class="ob-gcal-titlebar">
+          <svg width="16" height="16" viewBox="0 0 200 200" fill="none"><rect width="200" height="200" rx="40" fill="#4285F4"/><rect x="20" y="60" width="160" height="120" rx="8" fill="white"/><rect x="60" y="20" width="16" height="56" rx="8" fill="#EA4335"/><rect x="124" y="20" width="16" height="56" rx="8" fill="#EA4335"/><rect x="40" y="88" width="36" height="28" rx="4" fill="#FBBC05" opacity="0.3"/><rect x="82" y="88" width="36" height="28" rx="4" fill="#4285F4" opacity="0.15"/><rect x="124" y="88" width="36" height="28" rx="4" fill="#4285F4" opacity="0.15"/><rect x="40" y="124" width="36" height="28" rx="4" fill="#4285F4" opacity="0.15"/><rect x="82" y="124" width="36" height="56" rx="4" fill="#E63946" opacity="0.2"/><rect x="124" y="124" width="36" height="28" rx="4" fill="#34A853" opacity="0.2"/></svg>
+          <span style="font-size:12px;font-weight:600;color:var(--text);">Google Calendar</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:auto;">Today</span>
+        </div>
+        <!-- Calendar time slots -->
+        <div class="ob-gcal-slots">
+          <div class="ob-gcal-slot"><span class="ob-gcal-time">9:00</span><div class="ob-gcal-line"></div></div>
+          <div class="ob-gcal-slot"><span class="ob-gcal-time">10:00</span><div class="ob-gcal-line"></div></div>
+          <div class="ob-gcal-slot ob-gcal-slot-event">
+            <span class="ob-gcal-time">11:00</span>
+            <!-- Meeting event card -->
+            <div class="ob-gcal-event">
+              <div class="ob-gcal-event-title">Sprint Review</div>
+              <div class="ob-gcal-event-meta">11:00 AM - 11:30 AM</div>
+              <div class="ob-gcal-meet-link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14v-4z" fill="#00832D"/><rect x="1" y="6" width="14" height="12" rx="2" fill="#00832D"/><path d="M5 10l2 2-2 2" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <span>meet.google.com/abc-defg-hij</span>
+              </div>
+              <div class="ob-gcal-event-attendees">
+                <div class="ob-gcal-attendee"><div class="ob-gcal-avatar you">You</div><span>you@company.com</span></div>
+                <div class="ob-gcal-attendee"><div class="ob-gcal-avatar agent">CC</div><span>callingclaw@gmail.com</span><span class="ob-gcal-badge-join">Auto-join</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="ob-gcal-slot"><span class="ob-gcal-time">12:00</span><div class="ob-gcal-line"></div></div>
         </div>
       </div>
     </div></div></div></div>
-    <div class="ob-step" data-ob="5"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 5 / 7</div><div class="ob-title">Connect AI Engine</div><div class="ob-desc">OpenAI API Key powers real-time voice conversation in meetings. OpenClaw provides deep reasoning and code execution capabilities.</div><div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="ob-key-openai" placeholder="sk-..."></div><div class="input-group"><div class="input-label">OpenRouter API Key (optional)</div><input class="input-field" type="password" id="ob-key-openrouter" placeholder="sk-or-v1-..."></div><div class="ob-actions"><button class="btn btn-primary" onclick="obSaveKeys()">Save & Continue</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div></div><div class="ob-right"><div class="anim-canvas anim-brain"><div class="brain-node fast"><div class="brain-core fast">Voice</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">300ms response</div></div><div style="position:relative;width:60px;height:20px;"><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div><div class="bridge-dot"></div></div><div class="brain-node deep"><div class="brain-core deep">Reasoning</div><div class="brain-ring ring-1"></div><div class="brain-ring ring-2"></div><div class="brain-ring ring-3"></div><div class="brain-label">Deep analysis</div></div></div></div></div></div>
-    <div class="ob-step" data-ob="6"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 6 / 7</div><div class="ob-title">Connect OpenClaw</div><div class="ob-desc">OpenClaw is CallingClaw's brain -- providing deep reasoning, memory, and meeting prep. Make sure OpenClaw is running, then install the skill so it can call meeting functions.</div><div class="input-group"><div class="input-label">OpenClaw Gateway URL</div><input class="input-field" type="text" id="ob-openclaw-url" placeholder="localhost:18789" value="localhost:18789"></div><div class="ob-actions"><button class="btn btn-secondary" id="ob-oc-test-btn" onclick="obTestOpenClaw()">Test Connection</button><button class="btn btn-primary" id="ob-skill-btn" onclick="obInstallSkill()">Install /callingclaw Skill</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-skill-status"></div></div><div class="ob-right"><div class="anim-canvas anim-connect"><div class="connect-logos"><div class="connect-logo cl-openclaw"><svg width="32" height="32" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="13" ry="16" fill="#8E8E93"/><path d="M17 28C10 20 14 10 22 16" fill="#8E8E93"/><path d="M43 28C50 20 46 10 38 16" fill="#8E8E93"/><circle cx="25" cy="28" r="2" fill="white"/><circle cx="35" cy="28" r="2" fill="white"/></svg></div><div class="connect-line"><div class="connect-line-bg"></div><div class="connect-line-fill"></div></div><div class="connect-logo cl-callingclaw"><svg viewBox="0 0 20 20" fill="none" width="24" height="24"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div></div><div class="connect-terminal"><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw status</span></div><div class="term-line"><span class="term-result">CallingClaw running on :4000</span></div><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw join meet.google.com/abc</span></div></div></div></div></div></div>
-    <div class="ob-step" data-ob="7"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Ready</div><div class="ob-title">All Set</div><div class="ob-desc" id="ob-summary">Checking configuration...</div><div class="ob-actions"><button class="btn btn-primary" onclick="obFinish(true)">Start CallingClaw</button><button class="btn btn-ghost" onclick="obFinish(false)">Start Later</button></div><div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);line-height:1.6;">In Claude Code, type:<br><code style="color:var(--accent);font-weight:600;">/callingclaw join &lt;meeting-url&gt;</code><br>to start your first AI meeting</div></div><div class="ob-right"><div class="anim-canvas anim-ready"><div class="converge-ring"><div class="converge-icon ci-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div class="converge-icon ci-1"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M4 1L4 17L8.5 12.5L13 20L16 18.5L11.5 11L17 10L4 1Z" fill="var(--text2)"/></svg></div><div class="converge-icon ci-2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="converge-icon ci-3"><svg width="18" height="18" viewBox="0 0 60 60" fill="none"><ellipse cx="30" cy="34" rx="11" ry="13" fill="var(--text2)"/></svg></div><div class="converge-icon ci-4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div><div class="converge-center"><svg viewBox="0 0 20 20" fill="none" width="28" height="28"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg></div><div class="converge-text">Ready to take meetings</div></div></div></div></div></div>
+    <div class="ob-step" data-ob="5"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 5 / 7</div><div class="ob-title">Connect AI Engine</div><div class="ob-desc">OpenAI API Key powers real-time voice conversation in meetings. OpenClaw provides deep reasoning and code execution capabilities.</div><div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="ob-key-openai" placeholder="sk-..."></div><div class="input-group"><div class="input-label">OpenRouter API Key (optional)</div><input class="input-field" type="password" id="ob-key-openrouter" placeholder="sk-or-v1-..."></div><div class="ob-actions"><button class="btn btn-primary" onclick="obSaveKeys()">Save & Continue</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div></div><div class="ob-right"><div class="anim-canvas ob-arch" aria-label="CallingClaw dual-brain architecture: System One for voice and vision, System Two for reasoning and action">
+      <!-- System 1 — Voice & Vision -->
+      <div class="ob-arch-card active" id="ob-arch-s1" aria-label="System One: Voice and Presentation. Powered by OpenAI Realtime API and Gemini Flash">
+        <div class="ob-arch-badge s1">System 1 — Fast</div>
+        <div class="ob-arch-title">Voice & Vision</div>
+        <div class="ob-arch-models">
+          <div class="ob-arch-model"><span class="ob-arch-model-name">OpenAI Realtime</span><span class="ob-arch-key-tag openai" id="ob-kt-openai-s1">🔑 OpenAI Key</span></div>
+          <div class="ob-arch-model"><span class="ob-arch-model-name">Gemini Flash <span class="ob-arch-model-role">(vision)</span></span><span class="ob-arch-key-tag openrouter" id="ob-kt-or-s1">🔑 OpenRouter</span></div>
+        </div>
+        <div class="ob-arch-stats"><span>~300ms</span><span>Voice + Vision</span><span>Real-time</span></div>
+      </div>
+      <!-- Memory Bridge -->
+      <div class="ob-arch-bridge">
+        <div class="ob-arch-bridge-line"></div>
+        <div class="ob-arch-bridge-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/></svg></div>
+        <div class="ob-arch-bridge-line"></div>
+      </div>
+      <!-- System 2 — Agent & Reasoning -->
+      <div class="ob-arch-card" id="ob-arch-s2" aria-label="System Two: Agent and Reasoning. Powered by Haiku and Sonnet via OpenRouter">
+        <div class="ob-arch-badge s2">System 2 — Slow<span class="ob-arch-unconfigured" id="ob-arch-notcfg">Not configured</span></div>
+        <div class="ob-arch-title">Agent & Reasoning</div>
+        <div class="ob-arch-models">
+          <div class="ob-arch-model"><span class="ob-arch-model-name">Haiku <span class="ob-arch-model-role">(intent + search)</span></span><span class="ob-arch-key-tag openrouter" id="ob-kt-or-s2a">🔑 OpenRouter</span></div>
+          <div class="ob-arch-model"><span class="ob-arch-model-name">Sonnet <span class="ob-arch-model-role">(computer use)</span></span><span class="ob-arch-key-tag openrouter" id="ob-kt-or-s2b">🔑 OpenRouter</span></div>
+        </div>
+        <div class="ob-arch-stats"><span>2-10s</span><span>Text + Code</span><span>Deep Reasoning</span></div>
+      </div>
+      <!-- Privacy footer -->
+      <div class="ob-arch-footer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Your keys stay local — never sent to our servers</div>
+    </div></div></div></div>
+    <div class="ob-step" data-ob="6"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Step 6 / 7</div><div class="ob-title">Connect OpenClaw</div><div class="ob-desc">OpenClaw is CallingClaw's brain -- providing deep reasoning, memory, and meeting prep. Make sure OpenClaw is running, then install the skill so it can call meeting functions.</div><div class="input-group"><div class="input-label">OpenClaw Gateway URL</div><input class="input-field" type="text" id="ob-openclaw-url" placeholder="localhost:18789" value="localhost:18789"></div><div class="ob-actions"><button class="btn btn-secondary" id="ob-oc-test-btn" onclick="obTestOpenClaw()">Test Connection</button><button class="btn btn-primary" id="ob-skill-btn" onclick="obInstallSkill()">Install /callingclaw Skill</button><button class="btn btn-ghost" onclick="obNext()">Next</button></div><div class="ob-status" id="ob-skill-status"></div></div><div class="ob-right"><div class="anim-canvas anim-connect"><div class="connect-logos"><div class="connect-logo cl-openclaw"><img src="../../assets/logo-openclaw.png" width="40" height="40" alt="OpenClaw" style="object-fit:contain;border-radius:8px;"></div><div class="connect-line"><div class="connect-line-bg"></div><div class="connect-line-fill"></div></div><div class="connect-logo cl-callingclaw"><img src="../../assets/icon.png" width="40" height="40" alt="CallingClaw" style="object-fit:contain;border-radius:8px;"></div></div><div class="connect-terminal"><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw status</span></div><div class="term-line"><span class="term-result">CallingClaw running on :4000</span></div><div class="term-line"><span class="term-prompt">$ </span><span class="term-cmd">/callingclaw join meet.google.com/abc</span></div></div></div></div></div></div>
+    <div class="ob-step" data-ob="7"><div class="ob-body"><div class="ob-left"><div class="ob-tag">Ready</div><div class="ob-title">All Set</div><div class="ob-desc" id="ob-summary">Checking configuration...</div><div class="ob-actions"><button class="btn btn-primary" onclick="obFinish(true)">Start CallingClaw</button><button class="btn btn-ghost" onclick="obFinish(false)">Start Later</button></div><div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--radius-sm);font-size:13px;color:var(--text2);line-height:1.6;">In Claude Code, type:<br><code style="color:var(--accent);font-weight:600;">/callingclaw join &lt;meeting-url&gt;</code><br>to start your first AI meeting</div></div><div class="ob-right"><div class="anim-canvas ob-ready-panel">
+      <div class="ob-ready-content">
+        <!-- Logo -->
+        <div class="ob-ready-logo">
+          <img src="../../assets/icon.png" width="64" height="64" alt="CallingClaw" style="object-fit:contain;">
+        </div>
+        <div class="ob-ready-title">CallingClaw</div>
+        <div class="ob-ready-subtitle">Ready to take meetings</div>
+        <!-- Config checklist -->
+        <div class="ob-ready-checks">
+          <div class="ob-ready-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>Screen Recording</span></div>
+          <div class="ob-ready-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>Microphone</span></div>
+          <div class="ob-ready-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>Accessibility</span></div>
+          <div class="ob-ready-check" id="ob-ready-email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Google Account</span></div>
+          <div class="ob-ready-check" id="ob-ready-keys"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg><span>AI Engine Keys</span></div>
+          <div class="ob-ready-check" id="ob-ready-oc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg><span>OpenClaw</span></div>
+        </div>
+        <!-- Powered by -->
+        <div class="ob-ready-powered">
+          <span style="font-size:10px;color:var(--text3);">Powered by</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <img src="../../assets/icon.png" width="20" height="20" alt="CallingClaw" style="object-fit:contain;">
+            <span style="font-size:10px;color:var(--text3);">+</span>
+            <img src="../../assets/logo-openclaw.png" width="20" height="20" alt="OpenClaw" style="object-fit:contain;">
+          </div>
+        </div>
+      </div>
+    </div></div></div></div>
     <div class="ob-progress" id="ob-progress"></div>
   </div>
 </div>
@@ -3070,12 +3230,24 @@ async function obSaveKeys() {
   const openaiKey = document.getElementById('ob-key-openai')?.value?.trim();
   const openrouterKey = document.getElementById('ob-key-openrouter')?.value?.trim();
   const btn = document.querySelector('[data-ob="5"] .btn-primary, [data-ob="5"] button[onclick*="obSaveKeys"]');
-  if (!openaiKey) { obNext(); return; }
+  if (!openaiKey) {
+    // Skip: dim S2 if no OpenRouter key
+    if (!openrouterKey) obArchDimS2();
+    obNext(); return;
+  }
   if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
   try {
     const r = await fetch(API + '/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openai_api_key: openaiKey, openrouter_api_key: openrouterKey || undefined }) });
     if (r.ok) {
       if (btn) { btn.textContent = '✓ Saved'; btn.className = 'btn btn-secondary'; }
+      // Validate key tags on arch diagram
+      var ktOpenai = document.getElementById('ob-kt-openai-s1');
+      if (ktOpenai) { ktOpenai.textContent = '✓ OpenAI Key'; ktOpenai.classList.add('validated'); }
+      if (openrouterKey) {
+        document.querySelectorAll('.ob-arch-key-tag.openrouter').forEach(function(el) { el.textContent = '✓ OpenRouter'; el.classList.add('validated'); });
+      } else {
+        obArchDimS2();
+      }
       setTimeout(() => obNext(), 800);
     } else {
       if (btn) { btn.textContent = 'Save failed — retry'; btn.disabled = false; }
@@ -3084,6 +3256,40 @@ async function obSaveKeys() {
     if (btn) { btn.textContent = 'Connection failed — daemon not running?'; btn.disabled = false; }
   }
 }
+
+function obArchDimS2() {
+  var s2 = document.getElementById('ob-arch-s2');
+  if (s2) s2.classList.add('dimmed');
+}
+
+// Focus-driven S1/S2 highlight on Step 5 key inputs
+(function() {
+  var openaiInput = document.getElementById('ob-key-openai');
+  var orInput = document.getElementById('ob-key-openrouter');
+  var s1 = document.getElementById('ob-arch-s1');
+  var s2 = document.getElementById('ob-arch-s2');
+  if (!openaiInput || !orInput || !s1 || !s2) return;
+  openaiInput.addEventListener('focus', function() {
+    s1.classList.add('active'); s1.classList.remove('s2-active');
+    s2.classList.remove('active', 's2-active');
+  });
+  orInput.addEventListener('focus', function() {
+    s2.classList.add('s2-active'); s2.classList.remove('dimmed');
+    s1.classList.remove('active');
+  });
+  openaiInput.addEventListener('blur', function() {
+    // Restore default: S1 active
+    if (document.activeElement !== orInput) {
+      s1.classList.add('active');
+    }
+  });
+  orInput.addEventListener('blur', function() {
+    if (document.activeElement !== openaiInput) {
+      s1.classList.add('active');
+    }
+    s2.classList.remove('s2-active');
+  });
+})();
 
 async function obTestOpenClaw() {
   var btn = document.getElementById('ob-oc-test-btn');
