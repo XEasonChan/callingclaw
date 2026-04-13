@@ -789,10 +789,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <span class="titlebar-name">CallingClaw</span>
     <span class="titlebar-ver" id="app-ver"></span>
   </div>
-  <div class="titlebar-right">
-    <button class="tb-btn" id="btn-overlay" title="Meeting Overlay">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="8" y="21" width="8" height="0" rx="0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-    </button>
+  <div class="titlebar-right" id="titlebar-right">
     <button class="tb-btn" id="btn-settings" title="Settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
@@ -1571,16 +1568,14 @@ function addMpTranscript(speaker, text, type) {
 
 // View switching
 var _currentView = 'home';
-var _settingsGearSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
-var _homeSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
 function showView(name) {
   _currentView = name;
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   var settingsBtn = document.getElementById('btn-settings');
   settingsBtn.classList.toggle('active', name === 'settings');
-  // Toggle icon: gear on home, home icon on settings
-  settingsBtn.innerHTML = name === 'settings' ? _homeSvg : _settingsGearSvg;
-  settingsBtn.title = name === 'settings' ? 'Home' : 'Settings';
+  // Hide titlebar-right entirely when in settings (sidebar has Home button)
+  var tbRight = document.getElementById('titlebar-right');
+  if (tbRight) tbRight.style.display = name === 'settings' ? 'none' : '';
   document.querySelector('.statusbar').style.display = name === 'onboarding' ? 'none' : '';
   document.querySelector('.titlebar').style.display = name === 'onboarding' ? 'none' : '';
   if (name === 'settings') runAllChecks();
@@ -1589,7 +1584,6 @@ function showView(name) {
 document.getElementById('btn-settings').onclick = function() {
   showView(_currentView === 'settings' ? 'home' : 'settings');
 };
-document.getElementById('btn-overlay').onclick = () => window.callingclaw.overlay.show();
 // Settings sidebar navigation
 var _setTabs = document.getElementById('set-tabs');
 if (_setTabs) _setTabs.addEventListener('click', function(e) {
@@ -1878,8 +1872,7 @@ function buildMeetingListHTML() {
     html += '<div class="meet-date"><div class="meet-date-num" style="color:var(--accent);">&#9679;</div></div>';
     html += '<div class="meet-info"><div class="meet-title">' + esc(S.status.meeting.topic || 'Current Meeting') + '</div><div class="meet-time">Recording</div></div>';
     html += '<span class="meet-badge badge-live">Live</span>';
-    html += '<div class="meet-actions"><span class="meet-action local" onclick="window.callingclaw.overlay.show()">Open Overlay</span>';
-    html += '<span class="meet-action" style="color:#DC2626;" onclick="leaveMeeting()">Leave</span></div>';
+    html += '<div class="meet-actions"><span class="meet-action" style="color:#DC2626;" onclick="leaveMeeting()">Leave</span></div>';
     html += '</div></div>';
   }
 
