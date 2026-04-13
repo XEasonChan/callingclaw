@@ -5,6 +5,7 @@
 import type { EventBus } from "./event-bus";
 import type { SharedContext } from "./shared-context";
 import type { OpenClawBridge } from "../openclaw_bridge";
+import { detectLanguage } from "../prompt-constants";
 
 const NO_SHOW_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -67,13 +68,18 @@ export class NoShowDetector {
       waitedMinutes: 5,
     });
 
-    // Notify user via OpenClaw
+    // Notify user via OpenClaw (language matches meeting topic)
     if (this.openclawBridge.connected) {
+      const lang = detectLanguage(this._meetTopic);
+      const msg = lang === "zh"
+        ? `我已在会议「${this._meetTopic}」中等候5分钟了，您还没有加入。需要我先退出吗？您随时可以让我重新加入。`
+        : lang === "ja"
+        ? `会議「${this._meetTopic}」で5分間お待ちしていますが、まだ参加されていません。退出しましょうか？いつでも再参加できます。`
+        : `I've been waiting in "${this._meetTopic}" for 5 minutes but you haven't joined yet. Should I leave? You can have me rejoin anytime.`;
       this.openclawBridge.sendTaskIsolated(
-        `CallingClaw 在会议「${this._meetTopic}」中等了5分钟，但用户还没有加入。` +
-        `请用 Telegram 向用户发送以下消息：\n\n` +
-        `"我已在会议「${this._meetTopic}」中等候5分钟了，您还没有加入。需要我先退出吗？您随时可以让我重新加入。"\n\n` +
-        `用中文发送，发完后回复 "sent"。`
+        `CallingClaw has been waiting in meeting "${this._meetTopic}" for 5 minutes ` +
+        `but the user hasn't joined. Send this message to the user via Telegram:\n\n` +
+        `"${msg}"\n\nReply "sent" when done.`
       ).catch((e: any) => {
         console.warn("[NoShow] Failed to notify user:", e.message);
       });

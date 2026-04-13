@@ -17,6 +17,7 @@ import { ChromeLauncher } from "./chrome-launcher";
 import { PeekabooClient } from "./mcp_client/peekaboo";
 import { ZoomSkill } from "./skills/zoom";
 import { MeetJoiner, detectPlatform, type MeetingPlatform } from "./meet_joiner";
+import { detectLanguage } from "./prompt-constants";
 import { OpenClawBridge } from "./openclaw_bridge";
 import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
@@ -425,11 +426,16 @@ eventBus.on("meeting.started", (data) => {
   // (OpenClawBridge tracks a single chatResolve at a time)
   if (openclawBridge.connected) {
     setTimeout(() => {
+      const lang = detectLanguage(notifyTopic);
+      const msg = lang === "zh"
+        ? `已加入会议「${notifyTopic}」，在里面等您 🎧`
+        : lang === "ja"
+        ? `会議「${notifyTopic}」に参加しました。お待ちしています 🎧`
+        : `Joined meeting "${notifyTopic}", waiting for you 🎧`;
       openclawBridge.sendTaskIsolated(
-        `CallingClaw 已加入会议「${notifyTopic}」，正在等待用户。` +
-        `请用 Telegram 向用户发送以下消息：\n\n` +
-        `"已加入会议「${notifyTopic}」，在里面等您 🎧"\n\n` +
-        `用中文发送，发完后回复 "sent"。`
+        `CallingClaw joined meeting "${notifyTopic}". ` +
+        `Send this message to the user via Telegram:\n\n"${msg}"\n\n` +
+        `Reply "sent" when done.`
       ).catch((e: any) => {
         console.warn("[MeetingNotify] Failed to notify user of join:", e.message);
       });
