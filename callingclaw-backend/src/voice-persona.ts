@@ -85,6 +85,72 @@ export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string
 }
 
 /**
+ * Build engagement bids from a prep brief.
+ * These are pre-computed topics the AI should proactively raise during conversation.
+ * Inspired by GBrain's bid system — never say "anything else?", bring up the next topic.
+ *
+ * Sources (priority order):
+ * 1. Expected questions from prep (highest signal — things that SHOULD be discussed)
+ * 2. Past lessons / warnings from key points (⚠️ prefixed)
+ * 3. Unresolved items from previous meetings
+ * 4. Decision points that need resolution
+ * 5. Key points not yet covered
+ *
+ * Returns up to 8 bids. Each is a single actionable sentence.
+ */
+function buildEngagementBids(brief: MeetingPrepBrief): string[] {
+  const bids: string[] = [];
+  const MAX_BIDS = 8;
+
+  // 1. Expected questions → "Ask about: ..."
+  if (brief.expectedQuestions?.length) {
+    for (const q of brief.expectedQuestions.slice(0, 3)) {
+      const question = typeof q === "string" ? q : q.question;
+      if (question) bids.push(`Ask: ${question}`);
+    }
+  }
+
+  // 2. Past lessons (⚠️ prefixed key points) → "Flag: ..."
+  if (brief.keyPoints?.length) {
+    for (const pt of brief.keyPoints) {
+      if (pt.startsWith("⚠️") && bids.length < MAX_BIDS) {
+        bids.push(`Flag past lesson: ${pt.replace(/^⚠️\s*Past lesson:\s*/i, "")}`);
+      }
+    }
+  }
+
+  // 3. Previous context (unresolved items) → "Follow up: ..."
+  if (brief.previousContext && bids.length < MAX_BIDS) {
+    const openItems = brief.previousContext.match(/(?:open|unresolved|pending|TODO|action)[:：]?\s*(.+)/gi);
+    if (openItems) {
+      for (const item of openItems.slice(0, 2)) {
+        bids.push(`Follow up on: ${item.trim().slice(0, 80)}`);
+      }
+    }
+  }
+
+  // 4. Decision points → "Drive decision: ..."
+  if (brief.decisionPoints?.length) {
+    for (const dp of brief.decisionPoints.slice(0, 2)) {
+      if (bids.length < MAX_BIDS) bids.push(`Drive decision: ${dp}`);
+    }
+  }
+
+  // 5. Remaining key points → "Raise: ..."
+  if (brief.keyPoints?.length && bids.length < MAX_BIDS) {
+    for (const pt of brief.keyPoints) {
+      if (!pt.startsWith("⚠️") && bids.length < MAX_BIDS) {
+        // Skip if already covered by another bid
+        const covered = bids.some(b => b.toLowerCase().includes(pt.slice(0, 20).toLowerCase()));
+        if (!covered) bids.push(`Raise: ${pt.slice(0, 80)}`);
+      }
+    }
+  }
+
+  return bids.slice(0, MAX_BIDS);
+}
+
+/**
  * Build the Layer 2 meeting brief text for injection via conversation.item.create.
  * This is injected ONCE after session starts — not in session.update instructions.
  *
@@ -143,6 +209,16 @@ export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefi
     }
   }
 
+  // Engagement Bids — pre-computed topics the AI should proactively raise
+  // Inspired by GBrain's bid system: never say "anything else?" — bring up the next topic
+  const bids = buildEngagementBids(brief);
+  if (bids.length > 0) {
+    parts.push(`\nENGAGEMENT BIDS (use these to drive the conversation — cycle through them, never repeat):`);
+    for (let i = 0; i < bids.length; i++) {
+      parts.push(`${i + 1}. ${bids[i]}`);
+    }
+  }
+
   parts.push(`\n${PREP_TOOL_HINT}`);
   parts.push(MISSION_CONTEXT_SUFFIX);
 
@@ -183,6 +259,15 @@ function buildPlaybookContext(brief: MeetingPrepBrief): string {
     parts.push(`\nDECISIONS TO DRIVE:`);
     for (const dp of brief.decisionPoints) {
       parts.push(`- ${dp}`);
+    }
+  }
+
+  // Engagement Bids for playbook mode too
+  const bids = buildEngagementBids(brief);
+  if (bids.length > 0) {
+    parts.push(`\nENGAGEMENT BIDS (between presentation sections, use these for Q&A):`);
+    for (let i = 0; i < bids.length; i++) {
+      parts.push(`${i + 1}. ${bids[i]}`);
     }
   }
 
