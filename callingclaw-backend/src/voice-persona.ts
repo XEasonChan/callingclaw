@@ -98,15 +98,71 @@ export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string
  *
  * Returns up to 8 bids. Each is a single actionable sentence.
  */
-export function buildEngagementBids(brief: MeetingPrepBrief): string[] {
-  const bids: string[] = [];
+export interface AgendaBid {
+  text: string;         // "Ask: Will this impact performance?"
+  type: "ask" | "flag" | "followup" | "decide" | "raise";
+  docUrl?: string;      // URL to show on Stage when discussing this topic
+  scrollTarget?: string; // section to scroll to within the doc
+}
+
+/**
+ * Build engagement bids from a prep brief, each optionally linked to a document.
+ * The AI cycles through these to drive conversation. The Stage shows progress.
+ * When an agenda item has a docUrl, advancing to it auto-navigates the presentation.
+ */
+export function buildEngagementBids(brief: MeetingPrepBrief): AgendaBid[] {
+  const bids: AgendaBid[] = [];
   const MAX_BIDS = 8;
 
-  // 1. Expected questions → "Ask about: ..."
+  // Build a keyword → URL index from brief's filePaths + browserUrls for matching
+  const docIndex: Array<{ keywords: string[]; url: string }> = [];
+  for (const f of (brief.filePaths || [])) {
+    const name = f.path.split("/").pop() || f.path;
+    docIndex.push({
+      keywords: [name.toLowerCase(), f.description?.toLowerCase() || ""].filter(Boolean),
+      url: f.path.startsWith("http") ? f.path : `http://localhost:4000/render.html?file=${encodeURIComponent(f.path)}`,
+    });
+  }
+  for (const u of (brief.browserUrls || [])) {
+    docIndex.push({
+      keywords: [u.url.toLowerCase(), u.description?.toLowerCase() || ""].filter(Boolean),
+      url: u.url,
+    });
+  }
+  // Also index scenes if available
+  for (const s of (brief.scenes || [])) {
+    if (s.url) {
+      docIndex.push({
+        keywords: [s.talkingPoints?.toLowerCase() || "", s.scrollTarget?.toLowerCase() || ""].filter(Boolean),
+        url: s.url,
+      });
+    }
+  }
+
+  function matchDoc(text: string): { url?: string; scrollTarget?: string } {
+    const lower = text.toLowerCase();
+    for (const doc of docIndex) {
+      if (doc.keywords.some(k => k && (lower.includes(k.slice(0, 15)) || k.includes(lower.slice(0, 15))))) {
+        return { url: doc.url };
+      }
+    }
+    // Check scenes for scrollTarget match
+    for (const s of (brief.scenes || [])) {
+      if (s.scrollTarget && lower.includes(s.scrollTarget.toLowerCase().slice(0, 15))) {
+        return { url: s.url, scrollTarget: s.scrollTarget };
+      }
+    }
+    return {};
+  }
+
+  // 1. Expected questions → "Ask: ..."
   if (brief.expectedQuestions?.length) {
     for (const q of brief.expectedQuestions.slice(0, 3)) {
       const question = typeof q === "string" ? q : q.question;
-      if (question) bids.push(`Ask: ${question}`);
+      if (question && bids.length < MAX_BIDS) {
+        const doc = matchDoc(question);
+        bids.push({ text: `Ask: ${question}`, type: "ask", ...doc });
+      }
     }
   }
 
@@ -114,7 +170,9 @@ export function buildEngagementBids(brief: MeetingPrepBrief): string[] {
   if (brief.keyPoints?.length) {
     for (const pt of brief.keyPoints) {
       if (pt.startsWith("⚠️") && bids.length < MAX_BIDS) {
-        bids.push(`Flag past lesson: ${pt.replace(/^⚠️\s*Past lesson:\s*/i, "")}`);
+        const clean = pt.replace(/^⚠️\s*Past lesson:\s*/i, "");
+        const doc = matchDoc(clean);
+        bids.push({ text: `Flag past lesson: ${clean}`, type: "flag", ...doc });
       }
     }
   }
@@ -124,7 +182,10 @@ export function buildEngagementBids(brief: MeetingPrepBrief): string[] {
     const openItems = brief.previousContext.match(/(?:open|unresolved|pending|TODO|action)[:：]?\s*(.+)/gi);
     if (openItems) {
       for (const item of openItems.slice(0, 2)) {
-        bids.push(`Follow up on: ${item.trim().slice(0, 80)}`);
+        if (bids.length < MAX_BIDS) {
+          const doc = matchDoc(item);
+          bids.push({ text: `Follow up on: ${item.trim().slice(0, 80)}`, type: "followup", ...doc });
+        }
       }
     }
   }
@@ -132,7 +193,10 @@ export function buildEngagementBids(brief: MeetingPrepBrief): string[] {
   // 4. Decision points → "Drive decision: ..."
   if (brief.decisionPoints?.length) {
     for (const dp of brief.decisionPoints.slice(0, 2)) {
-      if (bids.length < MAX_BIDS) bids.push(`Drive decision: ${dp}`);
+      if (bids.length < MAX_BIDS) {
+        const doc = matchDoc(dp);
+        bids.push({ text: `Drive decision: ${dp}`, type: "decide", ...doc });
+      }
     }
   }
 
@@ -140,9 +204,11 @@ export function buildEngagementBids(brief: MeetingPrepBrief): string[] {
   if (brief.keyPoints?.length && bids.length < MAX_BIDS) {
     for (const pt of brief.keyPoints) {
       if (!pt.startsWith("⚠️") && bids.length < MAX_BIDS) {
-        // Skip if already covered by another bid
-        const covered = bids.some(b => b.toLowerCase().includes(pt.slice(0, 20).toLowerCase()));
-        if (!covered) bids.push(`Raise: ${pt.slice(0, 80)}`);
+        const covered = bids.some(b => b.text.toLowerCase().includes(pt.slice(0, 20).toLowerCase()));
+        if (!covered) {
+          const doc = matchDoc(pt);
+          bids.push({ text: `Raise: ${pt.slice(0, 80)}`, type: "raise", ...doc });
+        }
       }
     }
   }
@@ -205,7 +271,9 @@ export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefi
   if (bids.length > 0) {
     parts.push(`\nAGENDA (drive these topics — cycle through, never repeat, use read_prep for details):`);
     for (let i = 0; i < bids.length; i++) {
-      parts.push(`${i + 1}. ${bids[i]}`);
+      const bid = bids[i];
+      const docHint = bid.docUrl ? ` [show: ${bid.docUrl.split("/").pop()}]` : "";
+      parts.push(`${i + 1}. ${bid.text}${docHint}`);
     }
   }
 
@@ -249,7 +317,9 @@ function buildPlaybookContext(brief: MeetingPrepBrief): string {
   if (bids.length > 0) {
     parts.push(`\nQ&A AGENDA (between sections, drive these topics):`);
     for (let i = 0; i < bids.length; i++) {
-      parts.push(`${i + 1}. ${bids[i]}`);
+      const bid = bids[i];
+      const docHint = bid.docUrl ? ` [show: ${bid.docUrl.split("/").pop()}]` : "";
+      parts.push(`${i + 1}. ${bid.text}${docHint}`);
     }
   }
 

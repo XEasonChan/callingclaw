@@ -769,8 +769,9 @@
     var documents = new Map();
 
     // ── Agenda ──────────────────────────────────────
-    var AGENDA_BIDS = []; // injected by stage-generator or fetched from API
+    var AGENDA_BIDS = []; // injected by stage-generator: [{text, type, docUrl?, scrollTarget?}]
     var AGENDA_CURRENT = -1;
+    var TYPE_ICONS = { ask: '❓', flag: '⚠️', followup: '🔄', decide: '🎯', raise: '💡' };
 
     function renderAgenda() {
       var panel = document.getElementById('agenda');
@@ -781,11 +782,19 @@
       AGENDA_BIDS.forEach(function(bid, i) {
         var item = document.createElement('div');
         item.className = 'agenda-item' + (i === AGENDA_CURRENT ? ' current' : '') + (i < AGENDA_CURRENT ? ' done' : '');
-        // Strip prefix (Ask:, Raise:, etc.) for cleaner display
-        var text = bid.replace(/^(Ask|Flag past lesson|Follow up on|Drive decision|Raise):\s*/i, '');
-        var prefix = bid.match(/^(Ask|Flag|Follow up|Drive|Raise)/i);
-        var icon = prefix ? ({ Ask: '❓', Flag: '⚠️', Follow: '🔄', Drive: '🎯', Raise: '💡' }[prefix[1]] || '📌') : '📌';
-        item.innerHTML = '<span class="dot"></span><span class="bid-text">' + icon + ' ' + esc(text.slice(0, 55)) + (text.length > 55 ? '...' : '') + '</span>';
+        // bid can be string (legacy) or {text, type, docUrl}
+        var text = typeof bid === 'string' ? bid : bid.text;
+        var type = typeof bid === 'string' ? 'raise' : (bid.type || 'raise');
+        var hasDoc = typeof bid !== 'string' && bid.docUrl;
+        // Strip prefix for cleaner display
+        var clean = text.replace(/^(Ask|Flag past lesson|Follow up on|Drive decision|Raise):\s*/i, '');
+        var icon = TYPE_ICONS[type] || '📌';
+        item.innerHTML = '<span class="dot"></span>' +
+          '<span class="bid-text">' + icon + ' ' + esc(clean.slice(0, 55)) + (clean.length > 55 ? '...' : '') + '</span>' +
+          (hasDoc ? '<span style="opacity:0.4;font-size:10px;margin-left:auto;">📄</span>' : '');
+        // Click to manually advance + navigate
+        item.onclick = function() { advanceAgenda(i); };
+        item.style.cursor = 'pointer';
         list.appendChild(item);
       });
     }
@@ -794,6 +803,27 @@
       if (typeof index === 'number') AGENDA_CURRENT = index;
       else AGENDA_CURRENT++;
       renderAgenda();
+      // Auto-navigate presentation iframe if this bid has a docUrl
+      var bid = AGENDA_BIDS[AGENDA_CURRENT];
+      if (bid && typeof bid !== 'string' && bid.docUrl) {
+        var frame = document.getElementById('slideFrame');
+        if (frame) {
+          frame.src = bid.docUrl;
+          // If scrollTarget specified, scroll after load
+          if (bid.scrollTarget) {
+            frame.onload = function() {
+              try {
+                var doc = frame.contentDocument || frame.contentWindow.document;
+                var target = doc.querySelector('[id*="' + bid.scrollTarget + '"]') ||
+                  Array.from(doc.querySelectorAll('h1,h2,h3,h4,p,section')).find(function(el) {
+                    return el.textContent.toLowerCase().includes(bid.scrollTarget.toLowerCase());
+                  });
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } catch(e) {} // cross-origin
+            };
+          }
+        }
+      }
     }
 
     // ── Clock ────────────────────────────────────────

@@ -10,7 +10,7 @@ export interface StageGeneratorOptions {
   title: string;
   documentUrl: string;  // iframe src (e.g., render.html?file=... or launch-video-brief.html)
   documents?: Array<{ name: string; path: string; badge?: string }>;
-  agendaBids?: string[];  // engagement bids for AGENDA panel
+  agendaBids?: Array<{ text: string; type: string; docUrl?: string; scrollTarget?: string }>;  // engagement bids for AGENDA panel
 }
 
 /**
