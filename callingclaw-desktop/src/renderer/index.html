@@ -2353,6 +2353,17 @@ async function startLocalTalk(topic) {
     addMpActivity('error', 'Startup failed: ' + e.message);
     if (voiceLabel) voiceLabel.textContent = 'Connection Failed';
     if (voiceDot) voiceDot.style.background = 'var(--accent)';
+    // Show retry button so user can reconnect after fixing keys/config
+    var retryArea = document.getElementById('sp-retry-area');
+    if (!retryArea) {
+      retryArea = document.createElement('div');
+      retryArea.id = 'sp-retry-area';
+      retryArea.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:8px;padding:8px 12px;';
+      retryArea.innerHTML = '<button class="btn btn-sm btn-primary" onclick="retryLocalTalk()">Retry Connection</button>'
+        + '<span style="font-size:11px;color:var(--text3);">Check API keys in Settings if this persists</span>';
+      var voiceStatusEl = document.getElementById('sp-voice-status');
+      if (voiceStatusEl) voiceStatusEl.parentNode.insertBefore(retryArea, voiceStatusEl.nextSibling);
+    } else { retryArea.style.display = 'flex'; }
     try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
     localTalkStarting = false;
     return;
@@ -2360,8 +2371,22 @@ async function startLocalTalk(topic) {
     localTalkStarting = false;
   }
 
-  // 3. Attach direct audio transport after both APIs succeeded
+  // 3. Hide retry area on success + attach audio transport
+  var retryArea = document.getElementById('sp-retry-area');
+  if (retryArea) retryArea.style.display = 'none';
   startAudioBridge('direct');
+}
+
+async function retryLocalTalk() {
+  // Clean up previous failed session, then restart
+  var retryArea = document.getElementById('sp-retry-area');
+  if (retryArea) retryArea.style.display = 'none';
+  stopAudioBridge();
+  try { await fetch(API + '/api/voice/session/stop', { method: 'POST' }); } catch (_) {}
+  try { await fetch(API + '/api/meeting/talk-locally/stop', { method: 'POST' }); } catch (_) {}
+  // Re-read keys from .env (backend reloads on next request)
+  localTalkStarting = false;
+  startLocalTalk(localTalkTopic || 'Local Conversation');
 }
 
 // ── Mic level animation for side panel ──
