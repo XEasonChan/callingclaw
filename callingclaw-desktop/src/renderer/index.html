@@ -1307,8 +1307,8 @@ function openMeetingPanel(meetingId, mode) {
     '  <div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>Live Transcript</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
     '  <div class="mp-transcript" id="mp-transcript"></div>',
     mode === 'local' ? '  <div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
-    // Stop conversation button at bottom of feed
-    mode === 'local' ? '  <div style="padding:16px 0 8px;text-align:center;"><button class="btn btn-danger" onclick="stopLocalTalk()" style="width:100%;justify-content:center;gap:6px;">Stop Conversation</button></div>' : '',
+    // Stop button — always visible at bottom of feed
+    '  <div style="padding:16px 0 8px;text-align:center;" id="sp-feed-stop"><button class="btn btn-danger" onclick="' + (mode === 'local' ? 'stopLocalTalk()' : 'leaveMeeting()') + '" style="width:100%;justify-content:center;gap:6px;">' + (mode === 'local' ? 'Stop Conversation' : 'Leave Meeting') + '</button></div>',
     '</div>',
     // Tab: Prep Doc
     '<div class="sp-tab-content" id="sp-tab-prep">',
@@ -2576,6 +2576,11 @@ function startAudioBridge(mode) {
     console.warn('[AudioBridge] audio-bridge.js not loaded');
     return;
   }
+  // Guard: prevent duplicate WebSocket connections (root cause of audio overlap)
+  if (_audioBridgeWs && _audioBridgeWs.readyState !== WebSocket.CLOSED) {
+    console.log('[AudioBridge] WebSocket already active (state: ' + _audioBridgeWs.readyState + '), skipping');
+    return;
+  }
   // Non-blocking audio device guard
   if (mode === 'direct' && window.callingclaw && window.callingclaw.audio) {
     window.callingclaw.audio.getDefaultOutput().then(function(out) {
@@ -2939,8 +2944,10 @@ function routeWsEvent(msg) {
         prepBadge.innerHTML = '<span class="meet-file-icon">📋</span> Meeting Prep';
         prepBadge.setAttribute('onclick', "event.stopPropagation();openMeetingFileInPanel('" + esc(prTarget.meetingId) + "','prep')");
       }
-      // Show the prep content in panel
-      if (prMdContent) openPanel('📋 ' + (prTarget.topic || prTopic), prMdContent);
+      // Show the prep content: if tabbed meeting panel is open, update the Prep tab only.
+      // If no tabbed panel, open a standalone prep panel.
+      var hasTabbedPanel = document.getElementById('sp-tabs');
+      if (!hasTabbedPanel && prMdContent) openPanel('📋 ' + (prTarget.topic || prTopic), prMdContent);
       // Update prep tab badge if tabbed panel is open
       var prTab = document.querySelector('#sp-tabs .sp-tab[data-tab="prep"]');
       if (prTab) prTab.innerHTML = 'Meeting Prep<span class="sp-tab-badge ready">✓</span>';
