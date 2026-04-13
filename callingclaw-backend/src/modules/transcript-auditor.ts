@@ -221,8 +221,18 @@ export class TranscriptAuditor {
 
     // Action-level dedup (not utterance-level — a single utterance can trigger
     // both fast lane action AND slow lane retrieval)
+    // Scroll actions are repeatable — "scroll down" x3 means scroll 3 times.
+    // Only dedup non-repeatable actions (share_screen, navigate, etc.)
+    // Scroll/click are repeatable — "scroll down" x3 means scroll 3 times.
+    // Only dedup non-repeatable actions (share_screen, navigate, etc.)
+    const isRepeatableAction = intent.action.startsWith("scroll") || intent.action === "browser_click";
     const actionKey = `${intent.action}:${JSON.stringify(intent.params)}`;
-    if (this._recentActions.includes(actionKey)) return;
+    if (!isRepeatableAction && this._recentActions.includes(actionKey)) {
+      console.log(`[TranscriptAuditor] Skipping duplicate: ${actionKey}`);
+      return;
+    }
+    // For repeatable actions, enforce a 2s cooldown to prevent STT chunk duplication
+    if (isRepeatableAction && Date.now() - this._lastExecutionTs < 2000) return;
 
     this._fastLaneProcessing = true;
     const startTs = Date.now();
@@ -297,9 +307,10 @@ export class TranscriptAuditor {
 
       if (!result.action) return; // No actionable intent
 
-      // Dedup: skip if we just did this exact action
+      // Dedup: skip if we just did this exact action (repeatable actions exempt)
       const actionKey = `${result.action}:${JSON.stringify(result.params)}`;
-      if (this._recentActions.includes(actionKey)) {
+      const isRepeatable = result.action?.startsWith("scroll") || result.action === "browser_click";
+      if (!isRepeatable && this._recentActions.includes(actionKey)) {
         console.log(`[TranscriptAuditor] Skipping duplicate: ${actionKey}`);
         return;
       }
@@ -568,13 +579,18 @@ Respond with JSON only:
       return `not_found: "${userIntent}" — ${elements.length} clickable elements checked`;
     }
 
-    // Step 3: Click by index — guaranteed correct target
+    // Step 3: Click by index with cursor animation — guaranteed correct target
     const target = elements[clickIndex]!;
-    const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+    const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(async () => {
       var els = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"], [onclick]'));
       var el = els[${clickIndex}];
-      if (el) { el.click(); return 'clicked:' + (el.textContent || '').trim().substring(0, 40); }
-      return 'not_found: index out of range';
+      if (!el) return 'not_found: index out of range';
+      el.scrollIntoView({ behavior: 'instant', block: 'center' });
+      var rect = el.getBoundingClientRect();
+      var x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+      if (window.__ccCursor) { await window.__ccCursor.flyTo(x, y); window.__ccCursor.ripple(x, y); }
+      el.click();
+      return 'clicked:' + (el.textContent || '').trim().substring(0, 40);
     })()`);
 
     console.log(`[Auditor] Click resolved: "${userIntent}" → #${clickIndex + 1} [${target.tag}] "${target.text}" → ${clickResult}`);
