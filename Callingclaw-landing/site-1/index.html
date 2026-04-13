@@ -507,12 +507,12 @@
 
     .hero-image-container {
       position: relative;
-      width: min(100% - 2rem, 960px);
+      width: 100vw;
       margin-inline: auto;
       overflow: hidden;
       border-radius: 16px;
-      will-change: width, border-radius;
-      transition: width 0s, border-radius 0s;
+      /* Start scaled down, GSAP animates scale→1 (GPU-only, no layout reflow) */
+      will-change: transform, border-radius;
     }
 
     .hero-image {
@@ -735,6 +735,8 @@
       background: var(--bg);
       position: relative;
       z-index: 2;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 800px;
     }
 
     .bandwidth-header {
@@ -990,12 +992,15 @@
       padding-block: clamp(4rem, 10vw, 6rem);
     }
 
-    .how-it-works { position: relative; overflow: hidden; }
+    .how-it-works { position: relative; overflow: hidden; content-visibility: auto; contain-intrinsic-size: auto 1200px; }
     .hiw-grid-base, .hiw-grid-glow { position: absolute; inset: 0; pointer-events: none; }
     .hiw-grid-base canvas, .hiw-grid-glow canvas { display: block; width: 100%; height: 100%; }
     .hiw-grid-base { -webkit-mask-image: radial-gradient(800px circle at center, white, transparent); mask-image: radial-gradient(800px circle at center, white, transparent); }
     .hiw-grid-glow { opacity: 0; transition: opacity 0.3s ease; }
     .hiw-grid-glow.active { opacity: 1; }
+
+    /* Pause all CSS animations when section is off-screen (toggled via JS) */
+    .how-it-works.offscreen * { animation-play-state: paused !important; }
 
     .how-it-works h2, .how-it-works h3, .how-it-works h4 {
       color: #faf9f5;
@@ -1070,6 +1075,7 @@
       overflow: hidden;
     }
 
+    @keyframes hiwFill { from { width: 0%; } to { width: 100%; } }
     .hiw-tab-fill {
       height: 100%;
       width: 0%;
@@ -2451,66 +2457,51 @@
         <div class="hiw-card active" data-hiw-card="0">
           <span class="hiw-card-step">Onboarding</span>
           <h3>GUI for Setting Up</h3>
-          <p class="hiw-card-desc">Download the desktop app. A guided setup walks you through permissions, then connects your personal email so the agent can schedule and auto-join meetings with you.</p>
+          <p class="hiw-card-desc">Download the desktop app. A guided setup walks you through each permission — screen, mic, accessibility, then connects to your agent.</p>
           <div class="hiw-visual">
             <div class="hiw-onboard-split">
               <!-- Left: permission steps -->
               <div class="hiw-onboard-left">
-                <div class="hiw-ob-tag">Step 5 / 5</div>
-                <div class="hiw-ob-title">Configure Voice Provider</div>
-                <div class="hiw-ob-desc">Set up the fast model for real-time voice and vision. Your API key stays local — CallingClaw calls providers directly from your machine.</div>
-                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Screen Recording</div>
-                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Microphone &amp; Accessibility</div>
-                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Your Personal Email</div>
-                <div class="hiw-ob-status pending"><span class="hiw-ob-dot yellow"></span> Voice &amp; Vision API Key</div>
-                <div class="hiw-ob-email-input">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  <span style="color:var(--text-tertiary);">sk-xxxxxxxx...</span>
-                </div>
-                <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
-                  <span class="hiw-ob-btn primary">Save API Key</span>
+                <div class="hiw-ob-tag">Step 1 / 4</div>
+                <div class="hiw-ob-title">Screen Understanding</div>
+                <div class="hiw-ob-desc">CallingClaw needs to see the screen to understand what's being discussed in meetings.</div>
+                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Granted</div>
+                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Microphone — Granted</div>
+                <div class="hiw-ob-status pending"><span class="hiw-ob-dot yellow"></span> Accessibility — Waiting...</div>
+                <div class="hiw-ob-status"><span class="hiw-ob-dot grey"></span> Connect to OpenClaw</div>
+                <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+                  <span class="hiw-ob-btn primary">Grant Accessibility</span>
                   <span class="hiw-ob-btn ghost">Skip</span>
                 </div>
               </div>
-              <!-- Right: mini architecture diagram with S1 highlighted -->
-              <div class="hiw-onboard-right" style="gap:0.5rem;padding:0.75rem;">
-                <!-- System 1 — highlighted (being configured) -->
-                <div class="hiw-ob-arch-card active">
-                  <div class="hiw-ob-arch-badge s1">System 1 — Fast</div>
-                  <div class="hiw-ob-arch-title">Voice &amp; Vision</div>
-                  <div class="hiw-ob-arch-providers">
-                    <span class="hiw-ob-provider active">OpenAI Realtime</span>
-                    <span class="hiw-ob-provider">Gemini Live</span>
+              <!-- Right: visual -->
+              <div class="hiw-onboard-right">
+                <div class="hiw-ob-screen-frame">
+                  <div class="hiw-ob-titlebar">
+                    <span class="hiw-ob-dot red"></span>
+                    <span class="hiw-ob-dot yellow"></span>
+                    <span class="hiw-ob-dot green"></span>
                   </div>
-                  <div class="hiw-ob-arch-stats">
-                    <span>~300ms</span>
-                    <span>Voice + Vision</span>
-                    <span>Real-time</span>
-                  </div>
-                </div>
-                <!-- Memory bridge mini -->
-                <div class="hiw-ob-arch-bridge">
-                  <div class="hiw-ob-arch-bridge-line"></div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/></svg>
-                  <div class="hiw-ob-arch-bridge-line"></div>
-                </div>
-                <!-- System 2 — dimmed (not being configured now) -->
-                <div class="hiw-ob-arch-card dimmed">
-                  <div class="hiw-ob-arch-badge s2">System 2 — Slow</div>
-                  <div class="hiw-ob-arch-title">Agent (OpenClaw)</div>
-                  <div class="hiw-ob-arch-stats">
-                    <span>2-10s</span>
-                    <span>Text + Code</span>
-                    <span>Deep Reasoning</span>
+                  <div class="hiw-ob-screen-body">
+                    <div class="hiw-ob-scan-line"></div>
+                    <div class="hiw-ob-box b1"></div>
+                    <div class="hiw-ob-box b2"></div>
+                    <div class="hiw-ob-box b3"></div>
+                    <div class="hiw-ob-box b4"></div>
+                    <div class="hiw-ob-box b5"></div>
+                    <div class="hiw-ob-label l1">Slide</div>
+                    <div class="hiw-ob-label l2">Code</div>
+                    <div class="hiw-ob-label l3">Footer</div>
+                    <div class="hiw-ob-label l4">Diagram</div>
+                    <div class="hiw-ob-label l5">Nav</div>
                   </div>
                 </div>
                 <!-- Progress dots -->
                 <div class="hiw-ob-dots">
                   <span class="hiw-ob-pip done"></span>
                   <span class="hiw-ob-pip done"></span>
-                  <span class="hiw-ob-pip done"></span>
-                  <span class="hiw-ob-pip done"></span>
                   <span class="hiw-ob-pip active"></span>
+                  <span class="hiw-ob-pip"></span>
                 </div>
               </div>
             </div>
@@ -2996,7 +2987,7 @@
 
     if (!isTouch) {
       var lenis = new Lenis({
-        duration: 1.2,
+        duration: 0.8,  // shorter = less interpolation lag competing with GSAP scrub
         easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
         orientation: 'vertical',
         gestureOrientation: 'vertical',
@@ -3010,7 +3001,7 @@
         lenis.raf(time * 1000);
       });
 
-      gsap.ticker.lagSmoothing(0);
+      gsap.ticker.lagSmoothing(0); // Lenis official: disable GSAP smoothing (Lenis handles it)
     } else {
       // Touch devices: GSAP normalizeScroll handles touch → scroll for pinned sections
       ScrollTrigger.normalizeScroll(true);
@@ -3092,12 +3083,26 @@
               if (gridBaseWrap) gridBaseWrap.style.opacity = Math.max(0, 1 - p);
               if (gridGlowWrap) gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
               if (ytScrollGuard) ytScrollGuard.classList.toggle('inactive', p >= 0.98);
+              // Hide grid canvases once faded out (saves canvas draw + compositing cost)
+              if (p > 0.7) {
+                if (gridBaseWrap) gridBaseWrap.style.visibility = 'hidden';
+                if (gridGlowWrap) gridGlowWrap.style.visibility = 'hidden';
+              } else {
+                if (gridBaseWrap) gridBaseWrap.style.visibility = '';
+                if (gridGlowWrap) gridGlowWrap.style.visibility = '';
+              }
             },
           }
         });
 
+        // Calculate initial scale: container starts visually as 960px (or viewport - 2rem)
+        var initialWidth = Math.min(window.innerWidth - 32, 960);
+        var fullWidth = window.innerWidth;
+        var startScale = initialWidth / fullWidth;
+        gsap.set(heroImageContainer, { scale: startScale, borderRadius: '16px' });
+
         heroTl.to(heroImageContainer, {
-          width: '100vw',
+          scale: 1,               // transform: scale() — GPU-only, no layout reflow
           borderRadius: '0px',
           duration: 1,
           ease: 'power1.inOut'
@@ -3129,35 +3134,23 @@
     const bandwidthContent = document.querySelector('.bandwidth-content');
     if (bandwidthContent) observer.observe(bandwidthContent);
 
-    // ── Action Cards Scroll Animation ─────────────────────────
+    // ── Action Cards Scroll Animation (GSAP ScrollTrigger) ──
     const actionCards = document.querySelectorAll('.action-card');
     const bandwidthSection = document.querySelector('.bandwidth-image-container');
 
-    if (actionCards.length && bandwidthSection) {
-      const updateActionCardsAnimation = () => {
-        const rect = bandwidthSection.getBoundingClientRect();
-        const windowHeight = window.innerHeight;
+    if (actionCards.length >= 2 && bandwidthSection) {
+      // Use ScrollTrigger instead of manual scroll+getBoundingClientRect (avoids layout thrash)
+      actionCards.forEach(function(card) { card.style.willChange = 'transform, opacity'; });
+      gsap.set(actionCards, { opacity: 0, y: 40 });
 
-        // Calculate scroll progress within the bandwidth section
-        const sectionProgress = Math.max(0, Math.min(1,
-          (windowHeight - rect.top) / (windowHeight + rect.height * 0.5)
-        ));
-
-        // First card (Retrieving) appears at 30-50% progress
-        const card1Progress = Math.max(0, Math.min(1, (sectionProgress - 0.3) / 0.2));
-        actionCards[0].style.opacity = card1Progress;
-        actionCards[0].style.transform = `translateY(${40 * (1 - card1Progress)}px)`;
-
-        // Second card (Updating) appears at 50-70% progress
-        const card2Progress = Math.max(0, Math.min(1, (sectionProgress - 0.5) / 0.2));
-        actionCards[1].style.opacity = card2Progress;
-        actionCards[1].style.transform = `translateY(${40 * (1 - card2Progress)}px)`;
-      };
-
-      window.addEventListener('scroll', () => {
-        requestAnimationFrame(updateActionCardsAnimation);
-      }, { passive: true });
-      updateActionCardsAnimation();
+      gsap.to(actionCards[0], {
+        opacity: 1, y: 0,
+        scrollTrigger: { trigger: bandwidthSection, start: 'top 70%', end: 'center center', scrub: true }
+      });
+      gsap.to(actionCards[1], {
+        opacity: 1, y: 0,
+        scrollTrigger: { trigger: bandwidthSection, start: 'top 50%', end: 'center 30%', scrub: true }
+      });
     }
 
     // Observe scroll reveal elements
@@ -3323,25 +3316,27 @@
       }
     }
 
-    // Start presentation when scroll animation completes (demo panel fully visible)
-    // Uses scroll position check instead of IntersectionObserver (which fails on pinned elements)
+    // Start presentation when hero scroll animation nears completion
+    // Uses GSAP onUpdate progress check (no scroll listener, no getComputedStyle)
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      let presentationStarted = false;
-      window.addEventListener('scroll', function checkDemoVisible() {
-        if (presentationStarted) return;
-        const panel = document.querySelector('.hero-demo-panel');
-        if (!panel) return;
-        // Check if panel has opacity > 0.8 (animation nearly complete)
-        const opacity = parseFloat(window.getComputedStyle(panel).opacity);
-        if (opacity > 0.8) {
-          presentationStarted = true;
-          window.removeEventListener('scroll', checkDemoVisible);
-          setTimeout(runPresentation, 300);
-        }
-      }, { passive: true });
+      var presentationStarted = false;
+      var heroSection = document.querySelector('.hero');
+      if (heroSection) {
+        ScrollTrigger.create({
+          trigger: heroSection,
+          start: 'top top',
+          end: '+=50%',
+          onUpdate: function(self) {
+            if (!presentationStarted && self.progress > 0.85) {
+              presentationStarted = true;
+              setTimeout(runPresentation, 300);
+            }
+          }
+        });
+      }
     }
 
-    // ── How-It-Works: Apple Peek-Through Carousel ─────────────────────
+    // ── How-It-Works: Apple-style Carousel (CSS animation, no rAF loop) ──
     ;(function initHiwCarousel() {
       var tabs = document.querySelectorAll('.hiw-tab');
       var track = document.getElementById('hiwCards');
@@ -3351,130 +3346,113 @@
 
       var current = 0;
       var total = cards.length;
-      var DURATION = 6000;
-      var startTime = null;
-      var rafId = null;
+      var DURATION = 6;
       var paused = false;
 
-      // Calculate the pixel offset to center card[index] in the carousel
       function getOffset(index) {
         var carouselW = carousel.offsetWidth;
         var card = cards[index];
-        // Card left edge relative to track start
-        var cardLeft = card.offsetLeft;
-        var cardW = card.offsetWidth;
-        // Center the card: shift so card center aligns with carousel center
-        return -(cardLeft - (carouselW - cardW) / 2);
+        return -(card.offsetLeft - (carouselW - card.offsetWidth) / 2);
       }
 
       function goTo(index) {
         current = index;
         track.style.transform = 'translateX(' + getOffset(current) + 'px)';
 
-        // Active card highlight
-        cards.forEach(function(c, i) {
-          c.classList.toggle('active', i === current);
-        });
+        cards.forEach(function(c, i) { c.classList.toggle('active', i === current); });
 
-        // Tab states
+        // Tab states: CSS animation drives the fill bar (no JS rAF loop)
         tabs.forEach(function(tab, i) {
           var fill = tab.querySelector('.hiw-tab-fill');
           tab.classList.remove('active', 'visited');
-          fill.style.transition = 'none';
+          fill.style.animation = 'none';
           if (i < current) {
             tab.classList.add('visited');
             fill.style.width = '100%';
           } else if (i === current) {
             tab.classList.add('active');
             fill.style.width = '0%';
+            // CSS animation: 0→100% over DURATION seconds, GPU-composited
+            fill.offsetHeight; // force reflow to restart animation
+            fill.style.animation = 'hiwFill ' + DURATION + 's linear forwards';
+            fill.style.animationPlayState = paused ? 'paused' : 'running';
           } else {
             fill.style.width = '0%';
           }
         });
-
-        startTime = null;
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(tick);
       }
 
-      function tick(now) {
-        if (paused) { rafId = null; return; }
-        if (!startTime) startTime = now;
-        var progress = Math.min((now - startTime) / DURATION, 1);
+      // CSS animation end → advance to next card
+      tabs.forEach(function(tab) {
+        var fill = tab.querySelector('.hiw-tab-fill');
+        fill.addEventListener('animationend', function() {
+          if (!paused) goTo((current + 1) % total);
+        });
+      });
 
-        tabs[current].querySelector('.hiw-tab-fill').style.width = (progress * 100) + '%';
-
-        if (progress >= 1) {
-          rafId = null;
-          goTo((current + 1) % total);
-        } else {
-          rafId = requestAnimationFrame(tick);
-        }
-      }
-
-      // Click tab → jump + restart
+      // Click tab → jump
       tabs.forEach(function(tab) {
         tab.addEventListener('click', function() {
           goTo(parseInt(tab.dataset.step));
         });
       });
 
-      // Pause on hover
-      var clipEl = document.querySelector('.hiw-carousel-clip');
-      if (clipEl) {
-        clipEl.addEventListener('mouseenter', function() { paused = true; });
-        clipEl.addEventListener('mouseleave', function() {
-          paused = false;
-          if (!rafId) rafId = requestAnimationFrame(tick);
-        });
+      // Pause/resume: toggle CSS animation-play-state (no JS timer needed)
+      function setPaused(p) {
+        paused = p;
+        var fill = tabs[current] && tabs[current].querySelector('.hiw-tab-fill');
+        if (fill) fill.style.animationPlayState = p ? 'paused' : 'running';
       }
 
-      // Recalculate on resize
+      var clipEl = document.querySelector('.hiw-carousel-clip');
+      if (clipEl) {
+        clipEl.addEventListener('mouseenter', function() { setPaused(true); });
+        clipEl.addEventListener('mouseleave', function() { setPaused(false); });
+      }
+
       window.addEventListener('resize', function() {
         track.style.transition = 'none';
         track.style.transform = 'translateX(' + getOffset(current) + 'px)';
         requestAnimationFrame(function() { track.style.transition = ''; });
       });
 
-      // Start when visible, pause when not
+      // Visibility: pause CSS animation when off-screen
       var section = document.querySelector('.how-it-works');
-      var observer = new IntersectionObserver(function(entries) {
+      new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
-          if (entry.isIntersecting) {
-            paused = false;
-            if (!rafId) {
-              if (!startTime) goTo(0);
-              else rafId = requestAnimationFrame(tick);
-            }
-          } else {
-            paused = true;
-          }
+          if (entry.isIntersecting) { setPaused(false); if (!current) goTo(0); }
+          else { setPaused(true); }
         });
-      }, { threshold: 0.2 });
-      if (section) observer.observe(section);
+      }, { threshold: 0.2 }).observe(section);
 
-      // Set first card active immediately
       cards[0].classList.add('active');
     })();
 
     // ── Step 3 Meeting Frame: Cursor + Caption Animation ────────────
+    // Pauses when card is not active or not visible (no wasted CPU)
     ;(function initMfAnimation() {
       var cursor = document.getElementById('hiwMfCursor');
       var captionText = document.getElementById('hiwMfCaptionText');
-      var screen = cursor && cursor.parentElement;
-      if (!cursor || !captionText || !screen) return;
+      if (!cursor || !captionText) return;
 
-      function moveTo(xPct, yPct, dur) {
+      var active = false;
+      var abortCtrl = null;
+
+      function moveTo(xPct, yPct, dur, signal) {
         cursor.style.transition = 'left ' + dur + 'ms cubic-bezier(0.25,0.1,0.25,1), top ' + dur + 'ms cubic-bezier(0.25,0.1,0.25,1)';
         cursor.style.left = xPct + '%';
         cursor.style.top = yPct + '%';
-        return new Promise(function(r) { setTimeout(r, dur); });
+        return new Promise(function(r, rej) {
+          var t = setTimeout(r, dur);
+          if (signal) signal.addEventListener('abort', function() { clearTimeout(t); rej('aborted'); });
+        });
       }
 
-      function click() {
-        return new Promise(function(r) {
+      function clickAnim(signal) {
+        return new Promise(function(r, rej) {
           cursor.style.transform = 'scale(0.8)';
-          setTimeout(function() { cursor.style.transform = 'scale(1)'; setTimeout(r, 100); }, 150);
+          var t = setTimeout(function() { cursor.style.transform = 'scale(1)'; setTimeout(r, 100); }, 150);
+          if (signal) signal.addEventListener('abort', function() { clearTimeout(t); rej('aborted'); });
         });
       }
 
@@ -3486,56 +3464,65 @@
         }, 150);
       }
 
-      function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-
-      async function runLoop() {
-        while (true) {
-          // Point at sprint table header
-          say("Here's our current sprint plan.");
-          await moveTo(30, 30, 800);
-          await wait(1500);
-
-          // Point at first row (voice routing — Done)
-          say("Voice routing is done — that was the hard part.");
-          await moveTo(25, 42, 600);
-          await click();
-          await wait(1800);
-
-          // Point at second row (screen share — In Progress)
-          say("Screen share API is in progress now.");
-          await moveTo(35, 52, 500);
-          await click();
-          await wait(1800);
-
-          // Point at third row (calendar — Blocked)
-          say("Calendar integration is blocked on Peter's side.");
-          await moveTo(28, 62, 500);
-          await wait(1800);
-
-          // Point at fourth row (visual diff — Done)
-          say("Visual diff optimization shipped yesterday.");
-          await moveTo(40, 72, 600);
-          await click();
-          await wait(1500);
-
-          // Move to center, ask question
-          say("Any questions about the plan?");
-          await moveTo(50, 45, 800);
-          await wait(2500);
-        }
+      function wait(ms, signal) {
+        return new Promise(function(r, rej) {
+          var t = setTimeout(r, ms);
+          if (signal) signal.addEventListener('abort', function() { clearTimeout(t); rej('aborted'); });
+        });
       }
 
-      // Start when the card becomes visible
+      async function runLoop(signal) {
+        try {
+          while (!signal.aborted) {
+            say("Here's our current sprint plan.");
+            await moveTo(30, 30, 800, signal);
+            await wait(1500, signal);
+            say("Voice routing is done — that was the hard part.");
+            await moveTo(25, 42, 600, signal);
+            await clickAnim(signal);
+            await wait(1800, signal);
+            say("Screen share API is in progress now.");
+            await moveTo(35, 52, 500, signal);
+            await clickAnim(signal);
+            await wait(1800, signal);
+            say("Calendar integration is blocked on Peter's side.");
+            await moveTo(28, 62, 500, signal);
+            await wait(1800, signal);
+            say("Visual diff optimization shipped yesterday.");
+            await moveTo(40, 72, 600, signal);
+            await clickAnim(signal);
+            await wait(1500, signal);
+            say("Any questions about the plan?");
+            await moveTo(50, 45, 800, signal);
+            await wait(2500, signal);
+          }
+        } catch(e) { /* aborted — clean stop */ }
+      }
+
+      // Only run when card 2 is visible and active in the carousel
       var card = document.querySelector('[data-hiw-card="2"]');
       if (!card) return;
-      var started = false;
-      var obs = new IntersectionObserver(function(entries) {
-        if (entries[0].isIntersecting && !started) {
-          started = true;
-          runLoop();
+      new IntersectionObserver(function(entries) {
+        var visible = entries[0].isIntersecting && card.classList.contains('active');
+        if (visible && !active) {
+          active = true;
+          abortCtrl = new AbortController();
+          runLoop(abortCtrl.signal);
+        } else if (!visible && active) {
+          active = false;
+          if (abortCtrl) abortCtrl.abort();
         }
-      }, { threshold: 0.5 });
-      obs.observe(card);
+      }, { threshold: 0.3 }).observe(card);
+    })();
+
+    // ── Pause HiW CSS animations when off-screen ──
+    ;(function() {
+      var hiw = document.querySelector('.how-it-works');
+      if (!hiw) return;
+      hiw.classList.add('offscreen');
+      new IntersectionObserver(function(entries) {
+        hiw.classList.toggle('offscreen', !entries[0].isIntersecting);
+      }, { threshold: 0 }).observe(hiw);
     })();
 
     // ── Flickering Grid Animation (ported from React FlickeringGrid) ────
@@ -3554,7 +3541,7 @@
       // ── Create one flickering grid on a canvas ──────
       function createGrid(canvas, opts) {
         const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = 1; // Cap at 1x — decorative 4px dots don't need retina (saves 4x draw calls)
         const squareSize = opts.squareSize || 4;
         const gridGap = opts.gridGap || 4;
         const flickerChance = opts.flickerChance || 0.1;
@@ -3581,14 +3568,19 @@
           }
         }
 
+        var frameSkip = 0;
         function draw(time) {
-          if (!inView) { animId = requestAnimationFrame(draw); return; }
+          animId = requestAnimationFrame(draw);
+          if (!inView) return;
+          // Throttle to ~15fps (every 4th frame) — 4 canvases at 60fps kills the main thread
+          if (++frameSkip < 4) return;
+          frameSkip = 0;
           const dt = (time - lastTime) / 1000;
           lastTime = time;
 
           // Update flickering
           for (let i = 0; i < squares.length; i++) {
-            if (Math.random() < flickerChance * dt) {
+            if (Math.random() < flickerChance * dt * 4) {
               squares[i] = Math.random() * maxOpacity;
             }
           }
@@ -3607,8 +3599,6 @@
               );
             }
           }
-
-          animId = requestAnimationFrame(draw);
         }
 
         // Visibility optimization
@@ -3654,11 +3644,15 @@
           gridGap: 4,
         });
 
-        // Mouse tracking — radial mask follows cursor
+        // Mouse tracking — radial mask follows cursor (throttled to ~30fps)
+        var lastMaskUpdate = 0;
         document.addEventListener('mousemove', function(e) {
-          const x = (e.clientX / window.innerWidth * 100).toFixed(1);
-          const y = (e.clientY / window.innerHeight * 100).toFixed(1);
-          const mask = 'radial-gradient(400px circle at ' + x + '% ' + y + '%, white, transparent)';
+          var now = performance.now();
+          if (now - lastMaskUpdate < 33) return; // ~30fps cap
+          lastMaskUpdate = now;
+          var x = (e.clientX / window.innerWidth * 100).toFixed(1);
+          var y = (e.clientY / window.innerHeight * 100).toFixed(1);
+          var mask = 'radial-gradient(400px circle at ' + x + '% ' + y + '%, white, transparent)';
           glowWrap.style.webkitMaskImage = mask;
           glowWrap.style.maskImage = mask;
         }, { passive: true });
