@@ -190,17 +190,6 @@ export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefi
     }
   }
 
-  // Top 3 key points only (full list via read_prep("all_points"))
-  if (brief.keyPoints?.length > 0) {
-    parts.push("\nKEY POINTS:");
-    for (const pt of brief.keyPoints.slice(0, 3)) {
-      parts.push(`- ${pt}`);
-    }
-    if (brief.keyPoints.length > 3) {
-      parts.push(`(${brief.keyPoints.length - 3} more via read_prep)`);
-    }
-  }
-
   // Attendees
   if (brief.attendees?.length > 0) {
     const others = brief.attendees.filter((a) => !a.self);
@@ -209,11 +198,12 @@ export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefi
     }
   }
 
-  // Engagement Bids — pre-computed topics the AI should proactively raise
-  // Inspired by GBrain's bid system: never say "anything else?" — bring up the next topic
+  // Engagement Bids — unified conversation driver (replaces separate KEY POINTS + Q&A sections)
+  // Merges: key points, expected questions, past lessons, decision points, unresolved items
+  // into a single actionable list the AI cycles through. Keeps Layer 2 compact.
   const bids = buildEngagementBids(brief);
   if (bids.length > 0) {
-    parts.push(`\nENGAGEMENT BIDS (use these to drive the conversation — cycle through them, never repeat):`);
+    parts.push(`\nAGENDA (drive these topics — cycle through, never repeat, use read_prep for details):`);
     for (let i = 0; i < bids.length; i++) {
       parts.push(`${i + 1}. ${bids[i]}`);
     }
@@ -254,18 +244,10 @@ function buildPlaybookContext(brief: MeetingPrepBrief): string {
     }
   }
 
-  // Decision points
-  if (brief.decisionPoints && brief.decisionPoints.length > 0) {
-    parts.push(`\nDECISIONS TO DRIVE:`);
-    for (const dp of brief.decisionPoints) {
-      parts.push(`- ${dp}`);
-    }
-  }
-
-  // Engagement Bids for playbook mode too
+  // Unified agenda bids — merges decision points + Q&A + key points into one list
   const bids = buildEngagementBids(brief);
   if (bids.length > 0) {
-    parts.push(`\nENGAGEMENT BIDS (between presentation sections, use these for Q&A):`);
+    parts.push(`\nQ&A AGENDA (between sections, drive these topics):`);
     for (let i = 0; i < bids.length; i++) {
       parts.push(`${i + 1}. ${bids[i]}`);
     }
