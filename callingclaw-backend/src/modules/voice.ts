@@ -173,14 +173,14 @@ export class VoiceModule {
 
     // ── Audio State + Interruption: User starts speaking ──
     this.client.on("input_audio_buffer.speech_started", () => {
-      // Echo debounce: if AI was recently speaking, speech_started is likely echo
-      // (AI's own voice looping back via Meet/Zoom SFU).
-      // Guard both DURING speaking AND for a window AFTER speaking ends,
-      // because Zoom's SFU adds 500-2000ms echo delay.
+      // Echo debounce: ONLY suppress during active speaking or a brief tail after.
+      // P0 FIX: must check _audioState === "speaking" — without this check,
+      // real user speech within 1.5s of AI finishing gets blocked as "echo",
+      // breaking the entire conversation loop.
       const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
-      const echoThresholdMs = this._presentationMode ? 3000 : 1500;
-      if (msSinceLastOutput < echoThresholdMs) {
-        console.log(`[Voice] Echo debounce: speech_started ${msSinceLastOutput}ms after last audio output (threshold: ${echoThresholdMs}ms) — ignoring`);
+      const echoThresholdMs = this._presentationMode ? 2000 : 800;
+      if (this._audioState === "speaking" && msSinceLastOutput < echoThresholdMs) {
+        console.log(`[Voice] Echo debounce: speech_started ${msSinceLastOutput}ms after last audio output (threshold: ${echoThresholdMs}ms, state: speaking) — ignoring`);
         return; // Skip this interruption — likely echo
       }
 
@@ -418,8 +418,10 @@ export class VoiceModule {
                 ts: Date.now(),
               });
               this._feedbackScreenshot(name).catch(() => {});
-              // NO response.create — model will see [DONE] context on next turn
-              console.log(`[Voice] Slow tool ${name} completed async → context injected (no response.create)`);
+              // Trigger model to process the result and decide next action.
+              // Without this, the model sees the context but won't speak or call another tool.
+              this.client.sendEvent("response.create", {});
+              console.log(`[Voice] Slow tool ${name} completed async → triggered response`);
             }).catch((e: any) => {
               this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
               this.context.addTranscript({
@@ -427,7 +429,8 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: Error: ${e.message}`,
                 ts: Date.now(),
               });
-              console.error(`[Voice] Slow tool ${name} failed:`, e.message);
+              this.client.sendEvent("response.create", {});
+              console.error(`[Voice] Slow tool ${name} failed → triggered response:`, e.message);
             });
           }
         }
