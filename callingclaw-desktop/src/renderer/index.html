@@ -1307,6 +1307,8 @@ function openMeetingPanel(meetingId, mode) {
     '  <div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>Live Transcript</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
     '  <div class="mp-transcript" id="mp-transcript"></div>',
     mode === 'local' ? '  <div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
+    // Stop conversation button at bottom of feed
+    mode === 'local' ? '  <div style="padding:16px 0 8px;text-align:center;"><button class="btn btn-danger" onclick="stopLocalTalk()" style="width:100%;justify-content:center;gap:6px;">Stop Conversation</button></div>' : '',
     '</div>',
     // Tab: Prep Doc
     '<div class="sp-tab-content" id="sp-tab-prep">',
@@ -2609,8 +2611,12 @@ function startAudioBridge(mode) {
       if (e.data instanceof ArrayBuffer) {
         var view = new Uint8Array(e.data);
         if (view[0] === 0x01 && view.length > 1) {
-          // Audio frame: skip marker byte, pass raw PCM16 to playback
-          ElectronAudioBridge.playAudioBinary(e.data.slice(1));
+          // Audio frame: copy PCM16 data after marker byte into aligned buffer
+          // slice(1) would create odd-byte-offset buffer — Int16Array needs 2-byte alignment
+          var pcmBytes = new Uint8Array(e.data, 1);
+          var aligned = new ArrayBuffer(pcmBytes.length);
+          new Uint8Array(aligned).set(pcmBytes);
+          ElectronAudioBridge.playAudioBinary(aligned);
         } else if (view[0] === 0x02) {
           ElectronAudioBridge.interruptPlayback();
         }
