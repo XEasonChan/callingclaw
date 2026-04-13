@@ -146,12 +146,12 @@ export class OpenClawBridge {
       maxProtocol: 3,
       client: {
         id: "gateway-client",
-        version: "2026.2.6",
+        version: "2026.4.11",
         platform: "darwin",
         mode: "backend",
       },
       role: "operator",
-      scopes: ["operator.admin"],
+      scopes: ["operator.admin", "operator.write"],
       caps: [],
       auth,
     });

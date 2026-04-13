@@ -1461,6 +1461,25 @@ export class ChromeLauncher {
       // Last resort: navigate away
       try { await page.goto("about:blank"); } catch {}
       return false;
+    } finally {
+      // Clean up orphaned pages (presenting tab, stale blank tabs)
+      if (this._presentingPage) {
+        try { await this._presentingPage.close(); } catch {}
+        this._presentingPage = null;
+      }
+      if (this._context) {
+        const pages = this._context.pages();
+        const mainPage = this._page;
+        for (const p of pages) {
+          if (p === mainPage) continue;
+          try {
+            const url = p.url();
+            if (url === "about:blank" || url === "") {
+              await p.close();
+            }
+          } catch {}
+        }
+      }
     }
   }
 
@@ -1631,11 +1650,9 @@ export class ChromeLauncher {
 
   /** Navigate presenting page to a new URL */
   async navigatePresentingPage(url: string): Promise<boolean> {
+    if (!this._context) return false;
     if (!this._presentingPage) {
-      // Create presenting page if it doesn't exist
-      if (this._context) {
-        this._presentingPage = await this._context.newPage();
-      } else return false;
+      this._presentingPage = await this._context.newPage();
     }
     try {
       await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
@@ -1645,22 +1662,20 @@ export class ChromeLauncher {
       return true;
     } catch (e: any) {
       console.warn("[ChromeLauncher] Presenting page navigate failed:", e.message);
-      // If page is dead, null it so next call recreates instead of retrying dead page
-      if (e.message?.includes("closed") || e.message?.includes("Target")) {
+      // Close the failed page before retrying (prevents orphaned blank tabs)
+      try { await this._presentingPage?.close(); } catch {}
+      this._presentingPage = null;
+      // Try once more with a fresh page
+      try {
+        this._presentingPage = await this._context.newPage();
+        await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+        console.log("[ChromeLauncher] Presenting page recreated successfully");
+        return true;
+      } catch (e2: any) {
+        console.warn("[ChromeLauncher] Presenting page recreate also failed:", e2.message);
+        try { await this._presentingPage?.close(); } catch {}
         this._presentingPage = null;
-        // Try once more with a fresh page
-        if (this._context) {
-          try {
-            this._presentingPage = await this._context.newPage();
-            await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-            await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
-            console.log("[ChromeLauncher] Presenting page recreated successfully");
-            return true;
-          } catch (e2: any) {
-            console.warn("[ChromeLauncher] Presenting page recreate also failed:", e2.message);
-            this._presentingPage = null;
-          }
-        }
       }
       return false;
     }
