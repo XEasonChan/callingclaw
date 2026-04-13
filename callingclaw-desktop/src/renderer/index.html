@@ -359,21 +359,38 @@ a { color: var(--accent); text-decoration: none; } ::selection { background: var
 #st-eng-btn { animation: pulse 2s ease-in-out infinite; font-weight: 600; letter-spacing: 0.3px; box-shadow: 0 0 0 2px var(--accent-soft); }
 
 /* ── Settings View ───────────────────────────────────── */
-#view-settings { flex-direction: column; background: var(--bg); overflow: hidden; height: 100%; }
-.set-head { padding: 16px 32px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--white); flex-shrink: 0; } .set-back { width: 32px; height: 32px; border-radius: 8px; border: none; background: var(--surface); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); transition: background var(--ease); } .set-back:hover { background: var(--border); } .set-head h3 { font-size: 16px; font-weight: 600; }
-.set-tabs { display: flex; gap: 4px; padding: 12px 32px 0; background: var(--white); border-bottom: 1px solid var(--border); flex-shrink: 0; } .set-body { flex: 1; overflow-y: auto; padding: 24px 32px; min-height: 0; -webkit-app-region: no-drag; }
-.set-tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--text2); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all var(--ease); margin-bottom: -1px; font-family: var(--font); } .set-tab:hover { color: var(--text); } .set-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.set-panel { display: none; } .set-panel.active { display: block; } .setup-group { margin-bottom: 24px; } .setup-group h4 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
-.chk-list { display: flex; flex-direction: column; gap: 4px; }
-.chk {
-  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border-radius: var(--radius-sm); background: var(--white);
-  transition: background var(--ease);
-}
-.chk:hover { background: var(--surface); }
-.chk-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-.chk-label { font-size: 14px; flex: 1; }
+#view-settings { background: var(--bg); overflow: hidden; height: 100%; }
+/* ── Settings: macOS System Preferences layout ── */
+.set-layout { display: flex; flex: 1; min-height: 0; }
+.set-sidebar { width: 200px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 16px 12px; overflow-y: auto; -webkit-app-region: no-drag; display: flex; flex-direction: column; gap: 2px; }
+.set-sidebar-group { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); padding: 12px 10px 4px; }
+.set-sidebar-group:first-child { padding-top: 4px; }
+.set-nav { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text); font-family: var(--font); width: 100%; text-align: left; transition: background 0.15s; }
+.set-nav:hover { background: rgba(0,0,0,0.04); }
+.set-nav.active { background: var(--accent); color: white; }
+.set-nav.active .set-nav-icon { color: white; }
+.set-nav-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 5px; flex-shrink: 0; color: var(--text2); }
+.set-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.set-head { padding: 20px 28px 0; flex-shrink: 0; } .set-head h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.set-body { flex: 1; overflow-y: auto; padding: 16px 28px 28px; min-height: 0; -webkit-app-region: no-drag; }
+.set-panel { display: none; } .set-panel.active { display: block; }
+.setup-group { margin-bottom: 20px; }
+.setup-group h4 { font-size: 11px; font-weight: 600; color: var(--text3); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.set-card { background: var(--white); border-radius: var(--radius-sm); border: 1px solid var(--border); overflow: hidden; }
+.set-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.set-row:last-child { border-bottom: none; }
+.set-row-label { font-size: 13px; flex: 1; color: var(--text); }
+.set-row-desc { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.set-row-val { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+.chk-list { display: flex; flex-direction: column; }
+.chk { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.chk:last-child { border-bottom: none; }
+.chk-icon { font-size: 14px; flex-shrink: 0; width: 18px; text-align: center; }
+.chk-label { font-size: 13px; flex: 1; }
 .chk-val { font-size: 12px; color: var(--text2); }
+/* Hide old tab bar (replaced by sidebar) */
+.set-tabs { display: none; }
+.set-back { display: none; }
 
 /* ── Voice Test ──────────────────────────────────────── */
 .vt-grid { display: grid; grid-template-columns: 300px 1fr; gap: 24px; }
@@ -815,68 +832,96 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   </div>
   <!-- SETTINGS VIEW -->
   <div id="view-settings" class="view">
-    <div class="set-head">
-      <button class="set-back" id="btn-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
-      <h3>Settings</h3>
-    </div>
-    <div class="set-tabs" id="set-tabs">
-      <button class="set-tab active" data-p="setup">System Check</button>
-      <button class="set-tab" data-p="voice">Voice Test</button>
-      <button class="set-tab" data-p="logs">Engine Logs</button>
-    </div>
-    <div class="set-body">
-      <div class="set-panel active" id="panel-setup">
-        <div class="setup-group"><h4>Environment</h4><div class="chk-list" id="chk-env"></div></div>
-        <div class="setup-group"><h4>Permissions</h4><div class="chk-list" id="chk-perm"></div></div>
-        <div class="setup-group"><h4>API Keys</h4>
-          <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
-            <div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="key-openai" placeholder="sk-..."></div>
-            <div class="input-group"><div class="input-label">Grok (xAI) API Key</div><input class="input-field" type="password" id="key-xai" placeholder="xai-..."></div>
-            <div class="input-group"><div class="input-label">Gemini API Key</div><input class="input-field" type="password" id="key-gemini" placeholder="AIza..."></div>
-            <div class="input-group"><div class="input-label">OpenRouter API Key (optional)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
-            <button class="btn btn-sm btn-primary" onclick="saveKeys()">Save Keys</button>
+    <div class="set-layout">
+      <!-- Sidebar navigation -->
+      <div class="set-sidebar">
+        <div class="set-sidebar-group">System</div>
+        <button class="set-nav active" data-p="env" onclick="switchSetPanel(this)">
+          <span class="set-nav-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+          Environment
+        </button>
+        <button class="set-nav" data-p="voice-config" onclick="switchSetPanel(this)">
+          <span class="set-nav-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></span>
+          Voice
+        </button>
+        <div class="set-sidebar-group">Agent</div>
+        <button class="set-nav" data-p="connections" onclick="switchSetPanel(this)">
+          <span class="set-nav-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          Connections
+        </button>
+        <div class="set-sidebar-group">Tools</div>
+        <button class="set-nav" data-p="voice" onclick="switchSetPanel(this)">
+          <span class="set-nav-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></svg></span>
+          Voice Test
+        </button>
+        <button class="set-nav" data-p="logs" onclick="switchSetPanel(this)">
+          <span class="set-nav-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+          Engine Logs
+        </button>
+        <div style="flex:1;"></div>
+        <button class="set-nav" style="color:var(--text3);font-size:12px;" onclick="obRestart()">
+          <span class="set-nav-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></span>
+          Re-run Onboarding
+        </button>
+      </div>
+      <!-- Main content -->
+      <div class="set-main">
+        <div class="set-head"><h3 id="set-panel-title">Environment</h3></div>
+        <div class="set-body">
+          <!-- Panel: Environment -->
+          <div class="set-panel active" id="panel-env">
+            <div class="setup-group"><h4>Runtime</h4><div class="set-card"><div class="chk-list" id="chk-env"></div></div></div>
+            <div class="setup-group"><h4>Permissions</h4><div class="set-card"><div class="chk-list" id="chk-perm"></div></div></div>
+            <div class="setup-group"><h4>Audio</h4><div class="set-card"><div class="chk-list" id="chk-audio"></div></div></div>
+            <button class="btn btn-sm btn-secondary" onclick="runAllChecks()" style="margin-top:4px;">Re-check All</button>
           </div>
-        </div>
-        <div class="setup-group"><h4>User Email</h4>
-          <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;">
-            <div class="input-group"><div class="input-label">Your Email (auto-join meeting invites)</div><input class="input-field" type="email" id="user-email" placeholder="you@example.com"></div>
-            <button class="btn btn-sm btn-primary" onclick="saveUserEmail()">Save Email</button>
-            <span id="user-email-status" style="font-size:11px;color:var(--green);margin-left:8px;"></span>
-          </div>
-        </div>
-        <div class="setup-group"><h4>Voice Defaults</h4>
-          <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;display:flex;flex-direction:column;gap:14px;">
-            <div>
-              <div class="input-label" style="margin-bottom:6px;">Talk Locally</div>
-              <div style="display:flex;gap:8px;">
-                <select class="input-field" id="set-local-provider" style="flex:1;" onchange="onSettingsProviderChange('local')">
-                  <option value="openai">OpenAI</option><option value="grok">Grok</option><option value="gemini">Gemini</option>
-                </select>
-                <select class="input-field" id="set-local-voice" style="flex:1;"></select>
+          <!-- Panel: Voice (API Keys + Defaults) -->
+          <div class="set-panel" id="panel-voice-config">
+            <div class="setup-group"><h4>API Keys</h4>
+              <div class="set-card" style="padding:14px;">
+                <div class="input-group"><div class="input-label">OpenAI API Key</div><input class="input-field" type="password" id="key-openai" placeholder="sk-..."></div>
+                <div class="input-group"><div class="input-label">Grok (xAI) API Key</div><input class="input-field" type="password" id="key-xai" placeholder="xai-..."></div>
+                <div class="input-group"><div class="input-label">Gemini API Key</div><input class="input-field" type="password" id="key-gemini" placeholder="AIza..."></div>
+                <div class="input-group"><div class="input-label">OpenRouter API Key (optional)</div><input class="input-field" type="password" id="key-openrouter" placeholder="sk-or-v1-..."></div>
+                <button class="btn btn-sm btn-primary" onclick="saveKeys()">Save Keys</button>
               </div>
-              <div style="color:var(--text3);font-size:11px;margin-top:3px;">Voice model and voice used for local conversations</div>
             </div>
-            <div>
-              <div class="input-label" style="margin-bottom:6px;">Online Meeting</div>
-              <div style="display:flex;gap:8px;">
-                <select class="input-field" id="set-meeting-provider" style="flex:1;" onchange="onSettingsProviderChange('meeting')">
-                  <option value="openai">OpenAI</option><option value="grok">Grok</option><option value="gemini">Gemini</option>
-                </select>
-                <select class="input-field" id="set-meeting-voice" style="flex:1;"></select>
+            <div class="setup-group"><h4>Default Voice — Talk Locally</h4>
+              <div class="set-card" style="padding:14px;">
+                <div style="display:flex;gap:8px;">
+                  <div style="flex:1;"><div class="input-label">Provider</div><select class="input-field" id="set-local-provider" onchange="onSettingsProviderChange('local')"><option value="openai">OpenAI</option><option value="grok">Grok</option><option value="gemini">Gemini</option></select></div>
+                  <div style="flex:1;"><div class="input-label">Voice</div><select class="input-field" id="set-local-voice"></select></div>
+                </div>
+                <div style="color:var(--text3);font-size:11px;margin-top:6px;">Used for local conversations on your machine</div>
               </div>
-              <div style="color:var(--text3);font-size:11px;margin-top:3px;">Voice model and voice used when joining Google Meet / Zoom</div>
+            </div>
+            <div class="setup-group"><h4>Default Voice — Online Meeting</h4>
+              <div class="set-card" style="padding:14px;">
+                <div style="display:flex;gap:8px;">
+                  <div style="flex:1;"><div class="input-label">Provider</div><select class="input-field" id="set-meeting-provider" onchange="onSettingsProviderChange('meeting')"><option value="openai">OpenAI</option><option value="grok">Grok</option><option value="gemini">Gemini</option></select></div>
+                  <div style="flex:1;"><div class="input-label">Voice</div><select class="input-field" id="set-meeting-voice"></select></div>
+                </div>
+                <div style="color:var(--text3);font-size:11px;margin-top:6px;">Used when joining Google Meet or Zoom</div>
+              </div>
             </div>
             <button class="btn btn-sm btn-primary" onclick="saveVoiceDefaults()">Save Voice Defaults</button>
-            <span id="voice-defaults-status" style="font-size:11px;color:var(--green);"></span>
+            <span id="voice-defaults-status" style="font-size:11px;color:var(--green);margin-left:8px;"></span>
           </div>
-        </div>
-        <div class="setup-group"><h4>Connection Status</h4><div class="chk-list" id="chk-conn"></div></div>
-        <div class="setup-group"><h4>Audio Devices</h4><div class="chk-list" id="chk-audio"></div></div>
-        <div style="margin-top:12px;display:flex;gap:10px;">
-          <button class="btn btn-sm btn-secondary" onclick="runAllChecks()">Re-check</button>
-          <button class="btn btn-sm btn-ghost" onclick="obRestart()">Re-run Onboarding</button>
-        </div>
-      </div>
+          <!-- Panel: Connections (Agent) -->
+          <div class="set-panel" id="panel-connections">
+            <div class="setup-group"><h4>OpenClaw Gateway</h4>
+              <div class="set-card"><div class="chk-list" id="chk-conn"></div></div>
+            </div>
+            <div class="setup-group"><h4>User Email</h4>
+              <div class="set-card" style="padding:14px;">
+                <div class="input-group"><div class="input-label">Your Email (receives meeting summaries)</div><input class="input-field" type="email" id="user-email" placeholder="you@example.com"></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                  <button class="btn btn-sm btn-primary" onclick="saveUserEmail()">Save Email</button>
+                  <span id="user-email-status" style="font-size:11px;color:var(--green);"></span>
+                </div>
+              </div>
+            </div>
+          </div>
       <div class="set-panel" id="panel-voice">
         <div class="vt-grid">
           <div style="display:flex;flex-direction:column;gap:16px;">
@@ -888,11 +933,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
           <div class="vt-transcript"><div class="vt-t-head"><div class="st-dot" id="vt-t-dot"></div> Transcript</div><div class="vt-t-body" id="vt-transcript"><div style="text-align:center;color:var(--text3);padding:40px 0;">Click "Start Voice" to begin</div></div><div class="vt-t-foot"><input class="vt-input" id="vt-text-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')vtSendText()"><button class="btn btn-sm btn-primary" onclick="vtSendText()">Send</button></div></div>
         </div>
       </div>
-      <div class="set-panel" id="panel-logs">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:600;">Engine Logs</span><button class="btn btn-sm btn-ghost" onclick="clearLogs()">Clear</button></div>
-        <div class="log-console" id="log-console"></div>
-      </div>
-    </div>
+          <div class="set-panel" id="panel-logs">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:600;">Engine Logs</span><button class="btn btn-sm btn-ghost" onclick="clearLogs()">Clear</button></div>
+            <div class="log-console" id="log-console"></div>
+          </div>
+        </div><!-- /set-body -->
+      </div><!-- /set-main -->
+    </div><!-- /set-layout -->
   </div>
   <!-- ONBOARDING VIEW -->
   <div id="view-onboarding" class="view">
@@ -1529,11 +1576,21 @@ function showView(name) {
 document.getElementById('btn-settings').onclick = () => showView('settings');
 document.getElementById('btn-back').onclick = () => showView('home');
 document.getElementById('btn-overlay').onclick = () => window.callingclaw.overlay.show();
-document.getElementById('set-tabs').addEventListener('click', e => {
-  const tab = e.target.closest('.set-tab'); if (!tab) return;
-  document.querySelectorAll('.set-tab').forEach(t => t.classList.toggle('active', t === tab));
-  document.querySelectorAll('.set-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab.dataset.p));
+// Settings sidebar navigation
+var _setTabs = document.getElementById('set-tabs');
+if (_setTabs) _setTabs.addEventListener('click', function(e) {
+  var tab = e.target.closest('.set-tab'); if (!tab) return;
+  document.querySelectorAll('.set-tab').forEach(function(t) { t.classList.toggle('active', t === tab); });
+  document.querySelectorAll('.set-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'panel-' + tab.dataset.p); });
 });
+var _panelTitles = { env: 'Environment', 'voice-config': 'Voice', connections: 'Connections', voice: 'Voice Test', logs: 'Engine Logs' };
+function switchSetPanel(btn) {
+  var p = btn.dataset.p;
+  document.querySelectorAll('.set-nav').forEach(function(n) { n.classList.toggle('active', n === btn); });
+  document.querySelectorAll('.set-panel').forEach(function(panel) { panel.classList.toggle('active', panel.id === 'panel-' + p); });
+  var titleEl = document.getElementById('set-panel-title');
+  if (titleEl) titleEl.textContent = _panelTitles[p] || p;
+}
 
 // Data fetching
 async function fetchJSON(url) { try { const r = await fetch(url, { signal: AbortSignal.timeout(4000) }); return await r.json(); } catch { return null; } }
