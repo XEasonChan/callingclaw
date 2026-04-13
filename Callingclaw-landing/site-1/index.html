@@ -1027,7 +1027,6 @@
 
     .hiw-header p {
       font-size: 1rem;
-      max-width: 40ch;
     }
 
     /* ── Apple-style Progress Tabs ── */
@@ -1978,6 +1977,7 @@
       justify-content: center;
       text-align: center;
       overflow: hidden;
+      isolation: isolate;
     }
 
     .cta-bg {
@@ -2418,8 +2418,8 @@
     <div class="container" style="position:relative;z-index:1;">
       <div class="hiw-header">
         <div class="hiw-label">How It Works</div>
-        <h2>Four steps to an agent that joins meetings.</h2>
-        <p>GUI for onboarding, invisible for daily use.</p>
+        <h2>Four Steps to Your First Conversation</h2>
+        <p>The full meeting cycle, agentic — from prep to delivery.</p>
       </div>
 
       <!-- Apple-style Progress Tabs -->
@@ -2988,25 +2988,33 @@
       });
     }, observerOptions);
 
-    // ── Lenis Smooth Scroll ─────────────────────────────────────────────
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: 'vertical',
-      gestureOrientation: 'vertical',
-      smoothWheel: true,
-      wheelMultiplier: 1,
-      touchMultiplier: 2,
-    });
+    // ── Smooth Scroll (Lenis on desktop, native on touch devices) ──────
+    // Lenis conflicts with GSAP ScrollTrigger pin+scrub on touch devices
+    // (iPad Safari: touch events → Lenis interpolation → stale scroll progress).
+    // On touch: let native scroll drive ScrollTrigger directly.
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-    // Integrate Lenis with GSAP ScrollTrigger
-    lenis.on('scroll', ScrollTrigger.update);
+    if (!isTouch) {
+      var lenis = new Lenis({
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        orientation: 'vertical',
+        gestureOrientation: 'vertical',
+        smoothWheel: true,
+        wheelMultiplier: 1,
+      });
 
-    gsap.ticker.add((time) => {
-      lenis.raf(time * 1000);
-    });
+      lenis.on('scroll', ScrollTrigger.update);
 
-    gsap.ticker.lagSmoothing(0);
+      gsap.ticker.add((time) => {
+        lenis.raf(time * 1000);
+      });
+
+      gsap.ticker.lagSmoothing(0);
+    } else {
+      // Touch devices: GSAP normalizeScroll handles touch → scroll for pinned sections
+      ScrollTrigger.normalizeScroll(true);
+    }
 
     // ── Hero GSAP ScrollTrigger Animation ─────────────────────────────────
     const heroImageContainer = document.getElementById('heroImageContainer');
