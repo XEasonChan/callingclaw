@@ -2896,6 +2896,16 @@ STEP-BY-STEP FLOW:
           console.warn(`[TalkLocally] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, adapter=${services.agentAdapter?.connected ?? false}, openClaw=${services.openclawBridge?.connected ?? false}`);
         }
 
+        // Step 2.5: Launch Playwright Chrome for execution tools (share_screen, open_file, etc.)
+        // Without this, all Playwright-dependent tools fail with "No page — call launch() first"
+        // This mirrors the launch() call in /api/meeting/join (online meeting mode)
+        try {
+          await services.chromeLauncher.launch();
+          console.log("[TalkLocally] ✅ ChromeLauncher launched for execution tools");
+        } catch (e: any) {
+          console.warn("[TalkLocally] ⚠️ ChromeLauncher launch failed (execution tools unavailable):", e.message);
+        }
+
         // Step 3: Start meeting recording (transcript)
         services.meeting.startRecording();
         services.eventBus.startCorrelation("talk");
