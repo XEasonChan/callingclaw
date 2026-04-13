@@ -2603,13 +2603,25 @@ function startAudioBridge(mode) {
         console.error('[AudioBridge] Start failed:', err);
       });
     };
+    _audioBridgeWs.binaryType = 'arraybuffer';
     _audioBridgeWs.onmessage = function(e) {
+      // Binary: marker byte 0x01 = audio PCM16, 0x02 = interrupt
+      if (e.data instanceof ArrayBuffer) {
+        var view = new Uint8Array(e.data);
+        if (view[0] === 0x01 && view.length > 1) {
+          // Audio frame: skip marker byte, pass raw PCM16 to playback
+          ElectronAudioBridge.playAudioBinary(e.data.slice(1));
+        } else if (view[0] === 0x02) {
+          ElectronAudioBridge.interruptPlayback();
+        }
+        return;
+      }
+      // JSON fallback (legacy / interrupt messages)
       try {
         var msg = JSON.parse(e.data);
         if (msg.type === 'audio_playback' && msg.payload && msg.payload.audio) {
           ElectronAudioBridge.playAudio(msg.payload.audio);
         } else if (msg.type === 'interrupt') {
-          // User started speaking — stop AI audio immediately
           ElectronAudioBridge.interruptPlayback();
         }
       } catch (err) {}

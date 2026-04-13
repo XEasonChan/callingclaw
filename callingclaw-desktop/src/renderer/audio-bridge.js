@@ -302,6 +302,33 @@ var ElectronAudioBridge = (function() {
     }
   }
 
+  // ── Receive AI Audio (binary PCM16 — no base64 round-trip) ──
+
+  function playAudioBinary(pcm16ArrayBuffer) {
+    if (!_running || !_audioCtx || !_playbackWorklet) return;
+    if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(function() {});
+
+    try {
+      var pcm16 = new Int16Array(pcm16ArrayBuffer);
+      var float32 = new Float32Array(pcm16.length);
+      for (var j = 0; j < pcm16.length; j++) {
+        float32[j] = pcm16[j] / 32768;
+      }
+      // Micro fade-in/out (24 samples = 1ms)
+      var FADE = 24;
+      if (float32.length > FADE * 2) {
+        for (var f = 0; f < FADE; f++) {
+          var gain = f / FADE;
+          float32[f] *= gain;
+          float32[float32.length - 1 - f] *= gain;
+        }
+      }
+      _playbackWorklet.port.postMessage(float32, [float32.buffer]);
+    } catch (e) {
+      console.warn('[AudioBridge] playAudioBinary error:', e.message);
+    }
+  }
+
   // ── Interrupt: clear ring buffer ──
 
   function interruptPlayback() {
@@ -360,6 +387,7 @@ var ElectronAudioBridge = (function() {
     start: start,
     stop: stop,
     playAudio: playAudio,
+    playAudioBinary: playAudioBinary,
     interruptPlayback: interruptPlayback,
     getStatus: getStatus,
     getAnalyserNode: getAnalyserNode,
