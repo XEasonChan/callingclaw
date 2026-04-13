@@ -716,6 +716,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .mp-activity-badge.tool { background: var(--yellow-soft); color: var(--yellow); }
 .mp-activity-text { color: var(--text2); word-break: break-word; }
 .mp-activity-time { font-size: 9px; color: var(--text3); margin-left: auto; flex-shrink: 0; }
+/* ── Sidebar S1/S2 Panels ── */
+.sp-s1s2 { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
+.sp-model-panel { border-radius: 8px; border: 1px solid var(--border); background: var(--white); overflow: hidden; }
+.sp-model-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.sp-model-badge { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: white; flex-shrink: 0; }
+.sp-model-badge.s1 { background: var(--accent); }
+.sp-model-badge.s2 { background: #007AFF; }
+.sp-model-name { font-size: 11px; font-weight: 600; color: var(--text); }
+.sp-model-sub { font-size: 9px; color: var(--text3); }
+.sp-model-status { margin-left: auto; font-size: 9px; color: var(--text3); font-weight: 500; }
+.sp-model-log { max-height: 140px; overflow-y: auto; padding: 6px 10px; font-size: 11px; line-height: 1.5; color: var(--text2); }
+.sp-model-log:empty::after { content: 'Waiting...'; color: var(--text3); font-style: italic; }
+.sp-log-entry { margin-bottom: 3px; display: flex; gap: 4px; align-items: baseline; }
+.sp-log-icon { flex-shrink: 0; font-size: 10px; }
+.sp-log-text { word-break: break-word; }
 .mp-transcript { flex: 1; overflow-y: auto; padding: 10px 20px; font-size: 13px; line-height: 1.6; min-height: 120px; border-bottom: 1px solid var(--border); }
 .mp-transcript-entry { margin-bottom: 8px; }
 .mp-transcript-speaker { font-weight: 600; font-size: 11px; color: var(--blue); margin-bottom: 2px; }
@@ -1288,7 +1303,7 @@ function openMeetingPanel(meetingId, mode) {
   var data = getMeetingData(meetingId);
   var title = mode === 'local' ? 'Local Talk: ' + (data.topic || localTalkTopic) : (data.topic || 'Meeting');
   document.getElementById('sp-title').textContent = title;
-  document.getElementById('sp-stop-btn').style.display = '';
+  // Stop button hidden during connecting, shown when voice connects (see voiceLabel update below)
   // Build tabbed layout
   document.getElementById('sp-body').innerHTML = [
     // Tab bar
@@ -1298,17 +1313,23 @@ function openMeetingPanel(meetingId, mode) {
     '  <button class="sp-tab" data-tab="script" onclick="switchPanelTab(\'script\')">Script' + (data.presentation_script && data.presentation_script.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '') + '</button>',
     '  <button class="sp-tab" data-tab="summary" onclick="switchPanelTab(\'summary\')">Summary' + (data.summary.status === 'done' ? '<span class="sp-tab-badge ready">✓</span>' : '<span class="sp-tab-badge pending">…</span>') + '</button>',
     '</div>',
-    // Tab: Live Feed
+    // Tab: Live Feed — S1/S2 panels like Meeting Stage
     '<div class="sp-tab-content active" id="sp-tab-feed">',
-    '  <div class="mp-activity">',
-    '    <div class="mp-section-header" onclick="toggleMpSection(\'activity\')"><span>AI Activity</span><span class="mp-chevron" id="mp-activity-chevron">▾</span></div>',
-    '    <div class="mp-activity-body" id="mp-activity-body"></div>',
+    '  <div class="sp-s1s2">',
+    '    <div class="sp-model-panel sp-s1">',
+    '      <div class="sp-model-head"><span class="sp-model-badge s1">S1</span><div><div class="sp-model-name">System One</div><div class="sp-model-sub">Voice + Presentation</div></div><span class="sp-model-status" id="sp-s1-status">Listening</span></div>',
+    '      <div class="sp-model-log" id="sp-s1-log"></div>',
+    '    </div>',
+    '    <div class="sp-model-panel sp-s2">',
+    '      <div class="sp-model-head"><span class="sp-model-badge s2">S2</span><div><div class="sp-model-name">System Two</div><div class="sp-model-sub">Agent + Action</div></div><span class="sp-model-status" id="sp-s2-status">Standby</span></div>',
+    '      <div class="sp-model-log" id="sp-s2-log"></div>',
+    '    </div>',
     '  </div>',
     '  <div class="mp-section-header" onclick="toggleMpSection(\'transcript\')"><span>Live Transcript</span><span class="mp-chevron" id="mp-transcript-chevron">▾</span></div>',
     '  <div class="mp-transcript" id="mp-transcript"></div>',
+    // Keep old activity body hidden for addMpActivity compat
+    '  <div class="mp-activity-body" id="mp-activity-body" style="display:none;"></div>',
     mode === 'local' ? '  <div class="sp-screenshot" id="sp-screenshot">Connecting...</div>' : '',
-    // Stop button — always visible at bottom of feed
-    '  <div style="padding:16px 0 8px;text-align:center;" id="sp-feed-stop"><button class="btn btn-danger" onclick="' + (mode === 'local' ? 'stopLocalTalk()' : 'leaveMeeting()') + '" style="width:100%;justify-content:center;gap:6px;">' + (mode === 'local' ? 'Stop Conversation' : 'Leave Meeting') + '</button></div>',
     '</div>',
     // Tab: Prep Doc
     '<div class="sp-tab-content" id="sp-tab-prep">',
@@ -1538,15 +1559,33 @@ function handleMeetingEvent(event) {
 }
 
 function addMpActivity(kind, text) {
-  const body = document.getElementById('mp-activity-body');
-  if (!body) return;
-  const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const div = document.createElement('div');
-  div.className = 'mp-activity-entry';
-  div.innerHTML = '<span class="mp-activity-badge ' + kind + '">' + kind + '</span><span class="mp-activity-text">' + esc(text) + '</span><span class="mp-activity-time">' + time + '</span>';
-  body.appendChild(div);
-  body.scrollTop = body.scrollHeight;
-  while (body.children.length > 50) body.removeChild(body.firstChild);
+  var body = document.getElementById('mp-activity-body');
+  if (body) {
+    var time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    var div = document.createElement('div');
+    div.className = 'mp-activity-entry';
+    div.innerHTML = '<span class="mp-activity-badge ' + kind + '">' + kind + '</span><span class="mp-activity-text">' + esc(text) + '</span><span class="mp-activity-time">' + time + '</span>';
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+    while (body.children.length > 50) body.removeChild(body.firstChild);
+  }
+  addS1S2Log(kind, text);
+}
+function addS1S2Log(kind, text) {
+  var isS2 = kind === 'delta' || kind === 'error' || text.indexOf('intent') >= 0 || text.indexOf('search') >= 0 || text.indexOf('Research') >= 0 || text.indexOf('Context retriever') >= 0 || text.indexOf('Agent') >= 0 || text.indexOf('OpenClaw') >= 0;
+  var panel = document.getElementById(isS2 ? 'sp-s2-log' : 'sp-s1-log');
+  if (!panel) return;
+  var icons = { done: '✅', tool: '🔧', delta: '⚡', error: '❌', warn: '⚠️' };
+  var div = document.createElement('div');
+  div.className = 'sp-log-entry';
+  div.innerHTML = '<span class="sp-log-icon">' + (icons[kind] || '•') + '</span><span class="sp-log-text">' + esc(text) + '</span>';
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+  while (panel.children.length > 30) panel.removeChild(panel.firstChild);
+  var s1s = document.getElementById('sp-s1-status');
+  var s2s = document.getElementById('sp-s2-status');
+  if (!isS2 && s1s && kind === 'tool') s1s.textContent = 'Tool call';
+  if (isS2 && s2s) s2s.textContent = kind === 'delta' ? 'Working...' : kind === 'done' ? 'Done' : 'Active';
 }
 
 function addMpTranscript(speaker, text, type) {
@@ -2493,9 +2532,10 @@ async function startLocalTalk(topic) {
     }
     addMpActivity('done', 'Voice session ready (' + (session.provider || 'openai') + ', ' + (session.transport || 'direct') + ')');
 
-    // Update voice status to connected (green)
+    // Update voice status to connected (green) + show stop button
     if (voiceLabel) voiceLabel.textContent = 'Voice Connected';
     if (voiceDot) voiceDot.style.background = 'var(--green)';
+    document.getElementById('sp-stop-btn').style.display = '';
 
   } catch (e) {
     console.warn('[TalkLocally] Parallel startup failed:', e);
