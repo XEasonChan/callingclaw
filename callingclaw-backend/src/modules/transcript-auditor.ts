@@ -620,6 +620,10 @@ Respond with JSON only:
           console.log(`[Auditor] Searching for file: "${query}"`);
           const searchResult = await this.automationRouter.execute(`open file: ${query}`);
           executionResult = searchResult.success ? searchResult.result : `File not found: "${query}"`;
+          // Register found file as a stage document (avoids re-searching next time)
+          if (searchResult.success && searchResult.filePath) {
+            this.context.addStageDocument(searchResult.filePath, "new");
+          }
           break;
         }
 

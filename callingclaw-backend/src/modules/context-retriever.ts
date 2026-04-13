@@ -966,6 +966,14 @@ RULES:
     }
     pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
 
+    // Register found files as stage documents (reduces re-search on next mention)
+    for (const ctx of newContexts) {
+      const pathMatch = ctx.content.match(/(?:^|\s)(\/\S+\.(?:md|json|html|txt|ts|js))/);
+      if (pathMatch && this.context) {
+        this.context.addStageDocument(pathMatch[1], "new");
+      }
+    }
+
     // One-shot conversational hint — injected directly via conversation.item.create.
     // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
     // once and can naturally weave it into conversation if relevant.
