@@ -2813,9 +2813,13 @@ async function runAllChecks() {
   } catch {}
   document.getElementById('chk-conn').innerHTML = [
     { ok: ocOk, label: 'OpenClaw Gateway', val: ocOk ? 'Connected' : 'Not connected' },
-    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? 'Configured' : 'Not configured', action: !envChecks.googleCredentials?.ok ? 'scanGoogle' : null },
+    { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? 'Configured' : 'Not configured', action: 'scanGoogle' },
   ].map(i => {
-    var act = i.action === 'scanGoogle' ? ' <button class="btn btn-sm btn-ghost" onclick="scanGoogleCreds()" style="margin-left:8px;font-size:11px;">Scan Credentials</button>' : '';
+    var act = '';
+    if (i.action === 'scanGoogle') {
+      var btnLabel = i.ok ? 'Reconnect' : 'Scan Credentials';
+      act = ' <button class="btn btn-sm btn-ghost" onclick="scanGoogleCreds()" style="margin-left:8px;font-size:11px;">' + btnLabel + '</button>';
+    }
     return `<div class="chk"><span class="chk-icon">${i.ok ? '&#10003;' : '&#10007;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${i.val}${act}</span></div>`;
   }).join('');
   document.getElementById('chk-audio').innerHTML = '<div class="chk"><span class="chk-icon">&#10003;</span><span class="chk-label">Audio Injection</span><span class="chk-val">Playwright (no driver needed)</span></div>';
@@ -2824,11 +2828,14 @@ async function scanGoogleCreds() {
   try {
     var r = await fetchJSON(API + '/api/google/scan');
     if (r && r.found) {
-      // Auto-apply the found credentials
-      await fetch(API + '/api/google/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r.credentials || {}) });
-      setTimeout(runAllChecks, 1000);
+      var applyResult = await fetchJSON(API + '/api/google/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      if (applyResult && applyResult.ok) {
+        setTimeout(runAllChecks, 500);
+      } else {
+        alert('Found credentials but failed to apply: ' + (applyResult?.error || 'unknown error'));
+      }
     } else {
-      alert('Google OAuth credentials not found. Make sure google-credentials.json and google-token.json exist in ~/.openclaw/workspace/ or ~/.callingclaw/');
+      alert('Google OAuth credentials not found.\n\nMake sure these files exist:\n  ~/.openclaw/workspace/google-credentials.json\n  ~/.openclaw/workspace/google-token.json\n\nor:\n  ~/.callingclaw/google-credentials.json\n  ~/.callingclaw/google-token.json');
     }
   } catch (e) {
     alert('Scan failed: ' + (e.message || e));
