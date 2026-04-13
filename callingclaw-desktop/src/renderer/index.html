@@ -2804,7 +2804,13 @@ async function runAllChecks() {
     return `<div class="chk"><span class="chk-icon">${p.granted ? '&#10003;' : '&#9888;'}</span><span class="chk-label">${i.label}</span><span class="chk-val">${p.status || ''}</span>${action}</div>`;
   }).join('');
   let ocOk = false;
-  try { await fetch('http://localhost:18789', { signal: AbortSignal.timeout(2000) }); ocOk = true; } catch {}
+  try {
+    // Use backend status (same source as status bar) instead of direct gateway fetch
+    var ocStatus = S.status?.openclaw;
+    ocOk = ocStatus === 'connected' || ocStatus === true || ocStatus?.connected === true;
+    // Fallback: direct check if backend status not available
+    if (!ocOk) { await fetch('http://localhost:18789/healthz', { signal: AbortSignal.timeout(2000) }); ocOk = true; }
+  } catch {}
   document.getElementById('chk-conn').innerHTML = [
     { ok: ocOk, label: 'OpenClaw Gateway', val: ocOk ? 'Connected' : 'Not connected' },
     { ok: envChecks.googleCredentials?.ok || false, label: 'Google Calendar', val: envChecks.googleCredentials?.ok ? 'Configured' : 'Not configured', action: !envChecks.googleCredentials?.ok ? 'scanGoogle' : null },
@@ -2817,10 +2823,9 @@ async function runAllChecks() {
 async function scanGoogleCreds() {
   try {
     var r = await fetchJSON(API + '/api/google/scan');
-    if (r && r.found && r.found.length > 0) {
-      // Auto-apply the first found credential
-      var cred = r.found[0];
-      await fetch(API + '/api/google/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) });
+    if (r && r.found) {
+      // Auto-apply the found credentials
+      await fetch(API + '/api/google/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r.credentials || {}) });
       setTimeout(runAllChecks, 1000);
     } else {
       alert('Google OAuth credentials not found. Make sure google-credentials.json and google-token.json exist in ~/.openclaw/workspace/ or ~/.callingclaw/');
