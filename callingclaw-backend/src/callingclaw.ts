@@ -421,15 +421,19 @@ eventBus.on("meeting.started", (data) => {
 
   noShowDetector.activate({ url: data?.url || meetUrl, topic: notifyTopic });
 
+  // Delay notification to avoid clobbering any in-flight OpenClaw task
+  // (OpenClawBridge tracks a single chatResolve at a time)
   if (openclawBridge.connected) {
-    openclawBridge.sendTaskIsolated(
-      `CallingClaw 已加入会议「${notifyTopic}」，正在等待用户。` +
-      `请用 Telegram 向用户发送以下消息：\n\n` +
-      `"已加入会议「${notifyTopic}」，在里面等您 🎧"\n\n` +
-      `用中文发送，发完后回复 "sent"。`
-    ).catch((e: any) => {
-      console.warn("[MeetingNotify] Failed to notify user of join:", e.message);
-    });
+    setTimeout(() => {
+      openclawBridge.sendTaskIsolated(
+        `CallingClaw 已加入会议「${notifyTopic}」，正在等待用户。` +
+        `请用 Telegram 向用户发送以下消息：\n\n` +
+        `"已加入会议「${notifyTopic}」，在里面等您 🎧"\n\n` +
+        `用中文发送，发完后回复 "sent"。`
+      ).catch((e: any) => {
+        console.warn("[MeetingNotify] Failed to notify user of join:", e.message);
+      });
+    }, 15_000); // 15s delay: let any in-flight prep/join task complete first
   }
 
   // ── Start Browser DOM context capture (both modes) ──
