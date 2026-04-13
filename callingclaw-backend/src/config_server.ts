@@ -36,7 +36,7 @@ import type { OpenClawBridge } from "./openclaw_bridge";
 import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, resolveAndInjectPrep, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "./voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, resolveAndInjectPrep, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext, buildEngagementBids } from "./voice-persona";
 import { topicSimilarity } from "./modules/session-manager";
 import { generateStageHtml, resolveDocumentUrl } from "./modules/stage-generator";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
@@ -1831,11 +1831,13 @@ export function startConfigServer(services: Services) {
                 path: f.path,
                 badge: "new" as const,
               }));
+              const agendaBids = brief ? buildEngagementBids(brief) : [];
               customStageUrl = await generateStageHtml({
                 meetingId,
                 title: meetTopic,
                 documentUrl: docUrl,
                 documents: docs,
+                agendaBids,
               });
               console.log(`[Meeting] ✅ Custom Stage generated: ${customStageUrl}`);
             } catch (e: any) {

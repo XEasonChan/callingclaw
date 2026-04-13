@@ -548,6 +548,31 @@
       overflow-y: auto;
     }
 
+    .agenda-list { display: flex; flex-direction: column; gap: 3px; }
+    .agenda-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; font-size: 12px; color: var(--text);
+      background: var(--bg-subtle, rgba(255,255,255,0.03));
+      border: 1px solid var(--border, rgba(255,255,255,0.06));
+      border-radius: 6px; transition: all 0.2s;
+    }
+    .agenda-item .dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      background: var(--border, rgba(255,255,255,0.15));
+    }
+    .agenda-item.current {
+      background: rgba(220, 74, 58, 0.12); border-color: rgba(220, 74, 58, 0.3);
+      font-weight: 600;
+    }
+    .agenda-item.current .dot {
+      background: var(--accent, #dc4a3a);
+      box-shadow: 0 0 6px rgba(220, 74, 58, 0.5);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .agenda-item.done { opacity: 0.4; }
+    .agenda-item.done .dot { background: var(--green, #4aa682); }
+    .agenda-item.done .bid-text { text-decoration: line-through; }
+
     .docs-label {
       font-family: var(--font-display);
       font-size: 13px;
@@ -719,6 +744,12 @@
           </div>
         </div>
 
+        <!-- Agenda -->
+        <div class="documents sketch-box-sm" id="agenda" style="display:none;">
+          <div class="docs-label">Agenda</div>
+          <div class="agenda-list" id="agendaList"></div>
+        </div>
+
         <!-- Working Documents -->
         <div class="documents sketch-box-sm" id="documents">
           <div class="docs-label">Working Documents</div>
@@ -736,6 +767,34 @@
     var DEMO_MODE = true; // set false when real backend is connected
     var ws = null;
     var documents = new Map();
+
+    // ── Agenda ──────────────────────────────────────
+    var AGENDA_BIDS = []; // injected by stage-generator or fetched from API
+    var AGENDA_CURRENT = -1;
+
+    function renderAgenda() {
+      var panel = document.getElementById('agenda');
+      var list = document.getElementById('agendaList');
+      if (!panel || !list || AGENDA_BIDS.length === 0) return;
+      panel.style.display = '';
+      list.innerHTML = '';
+      AGENDA_BIDS.forEach(function(bid, i) {
+        var item = document.createElement('div');
+        item.className = 'agenda-item' + (i === AGENDA_CURRENT ? ' current' : '') + (i < AGENDA_CURRENT ? ' done' : '');
+        // Strip prefix (Ask:, Raise:, etc.) for cleaner display
+        var text = bid.replace(/^(Ask|Flag past lesson|Follow up on|Drive decision|Raise):\s*/i, '');
+        var prefix = bid.match(/^(Ask|Flag|Follow up|Drive|Raise)/i);
+        var icon = prefix ? ({ Ask: '❓', Flag: '⚠️', Follow: '🔄', Drive: '🎯', Raise: '💡' }[prefix[1]] || '📌') : '📌';
+        item.innerHTML = '<span class="dot"></span><span class="bid-text">' + icon + ' ' + esc(text.slice(0, 55)) + (text.length > 55 ? '...' : '') + '</span>';
+        list.appendChild(item);
+      });
+    }
+
+    function advanceAgenda(index) {
+      if (typeof index === 'number') AGENDA_CURRENT = index;
+      else AGENDA_CURRENT++;
+      renderAgenda();
+    }
 
     // ── Clock ────────────────────────────────────────
     function updateClock() {
@@ -944,6 +1003,15 @@
         var name = docPath.split('/').pop() || docPath;
         documents.set(docPath, { name: name, badge: badge, ts: Date.now() });
         renderDocs();
+      }
+
+      // Agenda progression
+      if (type === 'agenda.advanced') {
+        advanceAgenda(data.currentIndex);
+      } else if (type === 'agenda.loaded' && data.bids) {
+        AGENDA_BIDS = data.bids;
+        AGENDA_CURRENT = data.currentIndex || -1;
+        renderAgenda();
       }
 
       // Meeting name

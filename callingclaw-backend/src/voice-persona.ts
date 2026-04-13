@@ -98,7 +98,7 @@ export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string
  *
  * Returns up to 8 bids. Each is a single actionable sentence.
  */
-function buildEngagementBids(brief: MeetingPrepBrief): string[] {
+export function buildEngagementBids(brief: MeetingPrepBrief): string[] {
   const bids: string[] = [];
   const MAX_BIDS = 8;
 

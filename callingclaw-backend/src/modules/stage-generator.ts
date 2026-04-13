@@ -10,6 +10,7 @@ export interface StageGeneratorOptions {
   title: string;
   documentUrl: string;  // iframe src (e.g., render.html?file=... or launch-video-brief.html)
   documents?: Array<{ name: string; path: string; badge?: string }>;
+  agendaBids?: string[];  // engagement bids for AGENDA panel
 }
 
 /**
@@ -19,7 +20,7 @@ export interface StageGeneratorOptions {
  * @returns file:// URL to the generated HTML (in /tmp)
  */
 export async function generateStageHtml(options: StageGeneratorOptions): Promise<string> {
-  const { meetingId, title, documentUrl, documents = [] } = options;
+  const { meetingId, title, documentUrl, documents = [], agendaBids = [] } = options;
 
   // Read the template
   const templatePath = resolve(import.meta.dir, "../../public/stage.html");
@@ -79,7 +80,19 @@ export async function generateStageHtml(options: StageGeneratorOptions): Promise
     html = html.replace('</body>', docsScript + '\n</body>');
   }
 
-  // 6. Disable demo mode (set DEMO_MODE = false early)
+  // 6. Inject agenda bids
+  if (agendaBids.length > 0) {
+    const agendaScript = `
+    <script>
+    // Pre-loaded agenda bids for this meeting
+    AGENDA_BIDS = ${JSON.stringify(agendaBids)};
+    AGENDA_CURRENT = -1;
+    renderAgenda();
+    </script>`;
+    html = html.replace('</body>', agendaScript + '\n</body>');
+  }
+
+  // 7. Disable demo mode (set DEMO_MODE = false early)
   html = html.replace(
     'var DEMO_MODE = true;',
     'var DEMO_MODE = false; // Pre-generated stage — no demo needed'
