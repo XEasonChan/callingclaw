@@ -28,6 +28,7 @@ import { OpenClawDispatcher } from "./openclaw-dispatcher";
 import { createAgentAdapter, type AgentAdapter, type AgentPlatform } from "./agent-adapter";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
+import { NoShowDetector } from "./modules/no-show-detector";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -114,6 +115,7 @@ console.log(`[Init] Agent platform: ${_detectedPlatform}`);
 const contextSync = new ContextSync();
 const openclawBridge = new OpenClawBridge(); // kept for backward compat (activity events, ContextSync)
 const dispatcher = new OpenClawDispatcher(openclawBridge);
+const noShowDetector = new NoShowDetector({ eventBus, context, openclawBridge });
 
 // Job fire handler: when internal timer fires, auto-join the meeting
 const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
@@ -413,6 +415,23 @@ eventBus.on("meeting.started", (data) => {
     }
   }, 3 * 60 * 60 * 1000);
 
+  // ── Notify user via OpenClaw + start no-show detection ──
+  const notifyTopic = data?.topic || meetingPrepSkill.currentBrief?.topic
+    || sessionManager.list({ status: "active" })[0]?.topic || "Meeting";
+
+  noShowDetector.activate({ url: data?.url || meetUrl, topic: notifyTopic });
+
+  if (openclawBridge.connected) {
+    openclawBridge.sendTaskIsolated(
+      `CallingClaw 已加入会议「${notifyTopic}」，正在等待用户。` +
+      `请用 Telegram 向用户发送以下消息：\n\n` +
+      `"已加入会议「${notifyTopic}」，在里面等您 🎧"\n\n` +
+      `用中文发送，发完后回复 "sent"。`
+    ).catch((e: any) => {
+      console.warn("[MeetingNotify] Failed to notify user of join:", e.message);
+    });
+  }
+
   // ── Start Browser DOM context capture (both modes) ──
   // Captures active browser tab DOM every 10s for richer context.
   // Injects compact [SCREEN] updates into Voice AI when the page changes.
@@ -535,6 +554,8 @@ eventBus.on("voice.stopped", () => {
 });
 
 eventBus.on("meeting.ended", async () => {
+  noShowDetector.deactivate();
+
   // Safety net: ensure recording is stopped even if autoLeaveMeeting() failed mid-way
   if (meeting.getNotes().isRecording) {
     console.warn("[Init] meeting.ended fired but recording still active — forcing stopRecording()");

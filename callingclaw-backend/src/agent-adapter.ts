@@ -243,7 +243,7 @@ export function createAgentAdapter(platform: AgentPlatform, deps?: any): AgentAd
   switch (platform) {
     case "openclaw": {
       const { OpenClawAdapter } = require("./adapters/openclaw-adapter");
-      return new OpenClawAdapter(deps?.openclawBridge);
+      return new OpenClawAdapter(deps?.openclawBridge, deps?.onJobFire);
     }
     case "claude-code": {
       const { ClaudeCodeAdapter } = require("./adapters/claude-code-adapter");
