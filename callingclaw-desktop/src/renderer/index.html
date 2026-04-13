@@ -767,7 +767,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 <header class="titlebar">
   <div class="titlebar-left">
     <div class="titlebar-logo">
-      <svg viewBox="0 0 20 20" fill="none"><path d="M14 5.5C14 5.5 12.5 4 10 4C6.5 4 4 6.69 4 10C4 13.31 6.5 16 10 16C12.5 16 14 14.5 14 14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <img src="../../assets/icon.png" width="18" height="18" alt="CallingClaw" style="object-fit:contain;">
     </div>
     <span class="titlebar-name">CallingClaw</span>
     <span class="titlebar-ver" id="app-ver"></span>
@@ -789,7 +789,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         <div id="engine-banner-slot"></div>
         <div id="home-static">
           <div class="greeting">
-            <span class="greeting-emoji">&#129438;</span>
+            <span class="greeting-emoji"><img src="../../assets/icon.png" width="56" height="56" alt="CallingClaw" style="object-fit:contain;"></span>
             <h1>Hey Andrew,<br>What's our next meeting topic?</h1>
           </div>
           <div class="hero-input-wrap">
@@ -842,6 +842,32 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
             <div class="input-group"><div class="input-label">Your Email (auto-join meeting invites)</div><input class="input-field" type="email" id="user-email" placeholder="you@example.com"></div>
             <button class="btn btn-sm btn-primary" onclick="saveUserEmail()">Save Email</button>
             <span id="user-email-status" style="font-size:11px;color:var(--green);margin-left:8px;"></span>
+          </div>
+        </div>
+        <div class="setup-group"><h4>Voice Defaults</h4>
+          <div style="background:var(--white);border-radius:var(--radius-sm);padding:16px;display:flex;flex-direction:column;gap:14px;">
+            <div>
+              <div class="input-label" style="margin-bottom:6px;">Talk Locally</div>
+              <div style="display:flex;gap:8px;">
+                <select class="input-field" id="set-local-provider" style="flex:1;" onchange="onSettingsProviderChange('local')">
+                  <option value="openai">OpenAI</option><option value="grok">Grok</option><option value="gemini">Gemini</option>
+                </select>
+                <select class="input-field" id="set-local-voice" style="flex:1;"></select>
+              </div>
+              <div style="color:var(--text3);font-size:11px;margin-top:3px;">Voice model and voice used for local conversations</div>
+            </div>
+            <div>
+              <div class="input-label" style="margin-bottom:6px;">Online Meeting</div>
+              <div style="display:flex;gap:8px;">
+                <select class="input-field" id="set-meeting-provider" style="flex:1;" onchange="onSettingsProviderChange('meeting')">
+                  <option value="openai">OpenAI</option><option value="grok">Grok</option><option value="gemini">Gemini</option>
+                </select>
+                <select class="input-field" id="set-meeting-voice" style="flex:1;"></select>
+              </div>
+              <div style="color:var(--text3);font-size:11px;margin-top:3px;">Voice model and voice used when joining Google Meet / Zoom</div>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="saveVoiceDefaults()">Save Voice Defaults</button>
+            <span id="voice-defaults-status" style="font-size:11px;color:var(--green);"></span>
           </div>
         </div>
         <div class="setup-group"><h4>Connection Status</h4><div class="chk-list" id="chk-conn"></div></div>
@@ -1032,16 +1058,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <div class="st-item" title="OpenClaw Gateway"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
   </div>
   <div class="st-right" style="display:flex;align-items:center;gap:8px;">
-    <select id="st-provider" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;" onchange="onProviderChange(this.value)">
-      <option value="openai">OpenAI</option>
-      <option value="grok">Grok</option>
-      <option value="gemini">Gemini</option>
-    </select>
-    <select id="st-voice-select" style="font-size:11px;padding:1px 4px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:4px;">
-    </select>
     <button class="btn btn-sm btn-primary" id="st-eng-btn" style="display:none" onclick="toggleEngine()">Start Engine</button>
-    <span id="st-ver"></span>
   </div>
+  <!-- Hidden selectors: values read by startLocalTalk/voice session, configured in Settings -->
+  <select id="st-provider" style="display:none;">
+    <option value="openai">OpenAI</option>
+    <option value="grok">Grok</option>
+    <option value="gemini">Gemini</option>
+  </select>
+  <select id="st-voice-select" style="display:none;"></select>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
@@ -1657,14 +1682,72 @@ function rebuildVoiceSelect(provider) {
 function onProviderChange(provider) {
   rebuildVoiceSelect(provider);
 }
+
+// ── Settings Voice Defaults ──
+var _voiceDefaults = { local: { provider: 'openai', voice: 'marin' }, meeting: { provider: 'openai', voice: 'marin' } };
+
+function rebuildSettingsVoiceSelect(mode) {
+  var provSel = document.getElementById('set-' + mode + '-provider');
+  var voiceSel = document.getElementById('set-' + mode + '-voice');
+  if (!provSel || !voiceSel) return;
+  var provider = provSel.value;
+  voiceSel.innerHTML = '';
+  var voices = VOICE_OPTIONS[provider] || VOICE_OPTIONS.openai;
+  var def = _voiceDefaults[mode]?.voice || VOICE_DEFAULTS[provider];
+  voices.forEach(function(v) {
+    var opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    if (v === def) opt.selected = true;
+    voiceSel.appendChild(opt);
+  });
+}
+
+function onSettingsProviderChange(mode) {
+  rebuildSettingsVoiceSelect(mode);
+}
+
+function saveVoiceDefaults() {
+  _voiceDefaults.local.provider = document.getElementById('set-local-provider').value;
+  _voiceDefaults.local.voice = document.getElementById('set-local-voice').value;
+  _voiceDefaults.meeting.provider = document.getElementById('set-meeting-provider').value;
+  _voiceDefaults.meeting.voice = document.getElementById('set-meeting-voice').value;
+  // Sync hidden status bar selectors (used by startLocalTalk)
+  document.getElementById('st-provider').value = _voiceDefaults.local.provider;
+  rebuildVoiceSelect(_voiceDefaults.local.provider);
+  var stVoice = document.getElementById('st-voice-select');
+  if (stVoice) stVoice.value = _voiceDefaults.local.voice;
+  // Persist to backend
+  fetch(API + '/api/config/voice-defaults', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(_voiceDefaults),
+  }).catch(function() {});
+  var statusEl = document.getElementById('voice-defaults-status');
+  if (statusEl) { statusEl.textContent = '✓ Saved'; setTimeout(function() { statusEl.textContent = ''; }, 2000); }
+}
+
 // Initialize on page load
 (function initProviderVoice() {
   // Try to detect current provider from backend
   fetch(API + '/api/status').then(function(r) { return r.json(); }).then(function(d) {
     var prov = d.voiceSession && d.voiceSession.provider;
-    if (prov) document.getElementById('st-provider').value = prov;
+    if (prov) {
+      document.getElementById('st-provider').value = prov;
+      _voiceDefaults.local.provider = prov;
+      _voiceDefaults.meeting.provider = prov;
+    }
     rebuildVoiceSelect(document.getElementById('st-provider').value);
-  }).catch(function() { rebuildVoiceSelect('openai'); });
+    // Init settings voice selectors
+    var localProv = document.getElementById('set-local-provider');
+    var meetProv = document.getElementById('set-meeting-provider');
+    if (localProv) localProv.value = _voiceDefaults.local.provider;
+    if (meetProv) meetProv.value = _voiceDefaults.meeting.provider;
+    rebuildSettingsVoiceSelect('local');
+    rebuildSettingsVoiceSelect('meeting');
+  }).catch(function() {
+    rebuildVoiceSelect('openai');
+    rebuildSettingsVoiceSelect('local');
+    rebuildSettingsVoiceSelect('meeting');
+  });
 })();
 
 // Meeting status helpers
@@ -2916,7 +2999,7 @@ window.callingclaw.daemon.onStatus(() => setTimeout(refreshAll, 500));
 window.callingclaw.daemon.onError(err => { const d = document.createElement('div'); d.className = 'log-line error'; d.textContent = '[ERROR] ' + err; logConsole.appendChild(d); });
 
 // Version
-(async () => { try { const info = await window.callingclaw.app.info(); document.getElementById('app-ver').textContent = 'v' + info.version; document.getElementById('st-ver').textContent = 'v' + info.version; } catch {} })();
+(async () => { try { const info = await window.callingclaw.app.info(); document.getElementById('app-ver').textContent = 'v' + info.version; } catch {} })();
 
 // Voice Test
 let vtWs = null, vtAudioCtx = null, vtMicStream = null, vtMicSource = null, vtMicProcessor = null, vtMicAnalyser = null, vtPlaybackNode = null;
