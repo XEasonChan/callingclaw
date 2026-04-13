@@ -3549,14 +3549,16 @@ STEP-BY-STEP FLOW:
             }
           } catch {}
         }
-        // If presenting tab exists, navigate it. Then ensure Meet is sharing.
+        // If presenting tab exists, navigate it. Then ensure Meet is still sharing.
         if (shareUrl && services.chromeLauncher.presentingPage) {
           try {
             await services.chromeLauncher.navigatePresentingPage(shareUrl);
             console.log(`[API] Navigated presenting tab to ${shareUrl} (reused)`);
-            // If Meet isn't sharing yet, start sharing
-            if (!services.chromeLauncher.isSharing) {
-              console.log(`[API] Meet not sharing yet — calling shareScreen(${shareUrl?.slice(0, 50)})`);
+            // Re-verify Meet share state (cross-origin navigation can break tab capture)
+            await services.chromeLauncher.page.waitForTimeout(1000);
+            const stillSharing = await services.chromeLauncher.checkSharingStatus();
+            if (!stillSharing) {
+              console.log(`[API] Meet lost share after navigation — restarting shareScreen()`);
               const startResult = await services.chromeLauncher.shareScreen(shareUrl);
               console.log(`[API] shareScreen result: ${JSON.stringify(startResult)}`);
               return Response.json(startResult, { headers });
@@ -3753,8 +3755,15 @@ STEP-BY-STEP FLOW:
             console.log(`[PresentPrep] ${prepId} — Reading page content...`);
             let htmlContent = "";
             if (body.url!.startsWith("http://localhost") && body.url!.includes(`:${CONFIG.port}/`)) {
-              const filename = body.url!.replace(/^http:\/\/localhost:\d+\//, "");
-              htmlContent = await Bun.file(`${import.meta.dir}/../public/${filename}`).text();
+              const parsedUrl = new URL(body.url!);
+              // If URL has query params (e.g. render.html?file=...), fetch via HTTP to get rendered output
+              if (parsedUrl.search) {
+                const resp = await fetch(body.url!, { signal: AbortSignal.timeout(10000) });
+                htmlContent = await resp.text();
+              } else {
+                const filename = parsedUrl.pathname.replace(/^\//, "");
+                htmlContent = await Bun.file(`${import.meta.dir}/../public/${filename}`).text();
+              }
             } else if (body.url!.startsWith("file://")) {
               htmlContent = await Bun.file(decodeURIComponent(body.url!.replace("file://", ""))).text();
             } else {

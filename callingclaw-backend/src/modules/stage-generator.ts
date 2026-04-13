@@ -135,6 +135,15 @@ export function resolveDocumentUrl(brief: any): string | null {
     return `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(mdFile.path)}`;
   }
 
+  // 4. Check browserUrls (e.g., product homepage, GitHub repo)
+  const webUrl = brief.browserUrls?.find((u: any) => {
+    const url = typeof u === "string" ? u : u?.url;
+    return url && url.startsWith("http");
+  });
+  if (webUrl) {
+    return typeof webUrl === "string" ? webUrl : webUrl.url;
+  }
+
   return null;
 }
 

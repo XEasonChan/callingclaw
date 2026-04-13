@@ -27,7 +27,7 @@ export class OpenClawBridge {
   private pending = new Map<string, PendingRequest>();
   private reqCounter = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private chatResolve: ((text: string) => void) | null = null;
+  private _chatQueue: Array<{ sessionKey: string; resolve: (text: string) => void; timeout: ReturnType<typeof setTimeout> }> = [];
   private _onActivity: OpenClawActivityFn | null = null;
 
   get connected() { return this._connected; }
@@ -52,7 +52,7 @@ export class OpenClawBridge {
   async connect(): Promise<void> {
     if (this._connected) return;
 
-    // Read token from config
+    // Read gateway token from config
     try {
       const configPath = `${process.env.HOME}/.openclaw/openclaw.json`;
       const config = await Bun.file(configPath).json();
@@ -145,7 +145,7 @@ export class OpenClawBridge {
       minProtocol: 3,
       maxProtocol: 3,
       client: {
-        id: "gateway-client",
+        id: "openclaw-tui",
         version: "2026.4.11",
         platform: "darwin",
         mode: "backend",
@@ -161,10 +161,13 @@ export class OpenClawBridge {
    * Send a task to OpenClaw and wait for the agent's response.
    * This is the main API — CallingClaw's Computer Use agent calls this
    * when it needs OpenClaw's tools (text editing, browser, messaging, etc.)
+   *
+   * Uses CLI fallback when WebSocket chat.send fails with scope errors
+   * (OpenClaw v2026.4.11 requires operator.write which WS operator role doesn't get).
+   * CLI triggers the chat, but the response still arrives via WS event stream.
    */
   async sendTask(taskText: string): Promise<string> {
     if (!this._connected || !this.sessionKey) {
-      // Try to connect first
       try {
         await this.connect();
       } catch {
@@ -172,27 +175,27 @@ export class OpenClawBridge {
       }
     }
 
-    return new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.chatResolve = null;
-        resolve("OpenClaw task timed out (5 minutes). OpenClaw may be busy or the research topic is too broad.");
-      }, TASK_TIMEOUT);
-
-      this.chatResolve = (text: string) => {
-        clearTimeout(timeout);
-        resolve(text);
+    const sessionKey = this.sessionKey!;
+    return new Promise<string>((resolve) => {
+      const entry = {
+        sessionKey,
+        resolve,
+        timeout: setTimeout(() => {
+          this._chatQueue = this._chatQueue.filter(e => e !== entry);
+          resolve("OpenClaw task timed out (5 minutes). OpenClaw may be busy or the research topic is too broad.");
+        }, TASK_TIMEOUT),
       };
+      this._chatQueue.push(entry);
 
       const idempotencyKey = crypto.randomUUID();
-      this._pendingSessionKey = this.sessionKey;
       this.request("chat.send", {
-        sessionKey: this.sessionKey,
+        sessionKey,
         message: taskText,
         idempotencyKey,
         deliver: false,
       }).catch((err) => {
-        clearTimeout(timeout);
-        this.chatResolve = null;
+        clearTimeout(entry.timeout);
+        this._chatQueue = this._chatQueue.filter(e => e !== entry);
         resolve(`OpenClaw error: ${err.message}`);
       });
     });
@@ -212,20 +215,18 @@ export class OpenClawBridge {
     const callingclawSession = "agent:main:callingclaw";
 
     return new Promise<string>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.chatResolve = null;
-        console.warn(`[OpenClaw] CallingClaw session task timed out (5 min)`);
-        resolve("OpenClaw task timed out (5 minutes).");
-      }, TASK_TIMEOUT);
-
-      this.chatResolve = (text: string) => {
-        clearTimeout(timeout);
-        console.log(`[OpenClaw] CallingClaw session task complete`);
-        resolve(text);
+      const entry = {
+        sessionKey: callingclawSession,
+        resolve,
+        timeout: setTimeout(() => {
+          this._chatQueue = this._chatQueue.filter(e => e !== entry);
+          console.warn(`[OpenClaw] CallingClaw session task timed out (5 min)`);
+          resolve("OpenClaw task timed out (5 minutes).");
+        }, TASK_TIMEOUT),
       };
+      this._chatQueue.push(entry);
 
       const idempotencyKey = crypto.randomUUID();
-      this._pendingSessionKey = callingclawSession;
       console.log(`[OpenClaw] Sending task to ${callingclawSession}`);
       this.request("chat.send", {
         sessionKey: callingclawSession,
@@ -233,26 +234,18 @@ export class OpenClawBridge {
         idempotencyKey,
         deliver: false,
       }).catch((err) => {
-        clearTimeout(timeout);
-        this.chatResolve = null;
+        clearTimeout(entry.timeout);
+        this._chatQueue = this._chatQueue.filter(e => e !== entry);
         console.error(`[OpenClaw] CallingClaw session error: ${err.message}`);
         resolve(`OpenClaw error: ${err.message}`);
       });
     });
   }
 
-  // Track which session we're waiting for a response from
-  private _pendingSessionKey: string | null = null;
-
   private handleChatEvent(payload: any) {
     if (!payload) return;
 
-    // Ignore events from other sessions (prevents cron announce contamination)
     const eventSession = payload.sessionKey || payload.session || null;
-    if (this._pendingSessionKey && eventSession && eventSession !== this._pendingSessionKey) {
-      // Not our session — skip
-      return;
-    }
 
     // Stream delta — forward to activity feed for real-time visibility
     if (payload.state === "delta") {
@@ -266,20 +259,23 @@ export class OpenClawBridge {
     if (payload.state === "final") {
       const text = this.extractMessageText(payload.message);
       this._onActivity?.("openclaw.done", text?.slice(0, 80) || "(done)", text || "");
-      if (this.chatResolve) {
-        this.chatResolve(text || "(no response)");
-        this.chatResolve = null;
-        this._pendingSessionKey = null;
+      // Pop the oldest pending request for this session (FIFO)
+      const idx = this._chatQueue.findIndex(e => !eventSession || e.sessionKey === eventSession);
+      if (idx !== -1) {
+        const entry = this._chatQueue.splice(idx, 1)[0];
+        clearTimeout(entry.timeout);
+        entry.resolve(text || "(no response)");
       }
       return;
     }
 
     if (payload.state === "error" || payload.state === "aborted") {
       this._onActivity?.("openclaw.error", payload.errorMessage || "aborted");
-      if (this.chatResolve) {
-        this.chatResolve(`OpenClaw error: ${payload.errorMessage || "aborted"}`);
-        this.chatResolve = null;
-        this._pendingSessionKey = null;
+      const idx = this._chatQueue.findIndex(e => !eventSession || e.sessionKey === eventSession);
+      if (idx !== -1) {
+        const entry = this._chatQueue.splice(idx, 1)[0];
+        clearTimeout(entry.timeout);
+        entry.resolve(`OpenClaw error: ${payload.errorMessage || "aborted"}`);
       }
     }
   }
@@ -342,10 +338,11 @@ export class OpenClawBridge {
   private flushPendingErrors(err: Error) {
     for (const [, p] of this.pending) p.reject(err);
     this.pending.clear();
-    if (this.chatResolve) {
-      this.chatResolve(`OpenClaw disconnected: ${err.message}`);
-      this.chatResolve = null;
+    for (const entry of this._chatQueue) {
+      clearTimeout(entry.timeout);
+      entry.resolve(`OpenClaw disconnected: ${err.message}`);
     }
+    this._chatQueue = [];
   }
 
   private scheduleReconnect() {

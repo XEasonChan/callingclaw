@@ -1137,7 +1137,9 @@ export class ChromeLauncher {
   private _admittedSet = new Set<string>();
   private _meetingEndCallback: (() => void) | null = null;
   private _endCheckFailures = 0;
+  private _consecutiveEndedChecks = 0;
   private static readonly MAX_END_CHECK_FAILURES = 20; // 20 × 3s = 60s of consecutive failures → force trigger
+  private static readonly CONSECUTIVE_END_CHECKS_REQUIRED = 3; // 3 × 3s = 9s of confirmed "ended" before leaving
 
   /**
    * Monitor for attendee admission requests in Google Meet.
@@ -1165,16 +1167,27 @@ export class ChromeLauncher {
           try {
             const ended = await this._checkMeetingEndedLib();
             if (ended) {
-              console.log("[MeetAdmit] Meeting ended detected — triggering cleanup");
+              this._consecutiveEndedChecks++;
+              if (this._consecutiveEndedChecks >= ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED) {
+                console.log(`[MeetAdmit] Meeting ended (confirmed after ${this._consecutiveEndedChecks} consecutive checks) — triggering cleanup`);
+                this._consecutiveEndedChecks = 0;
+                this._endCheckFailures = 0;
+                const cb = this._meetingEndCallback;
+                this._meetingEndCallback = null;
+                this.stopAdmissionMonitor();
+                cb();
+                return;
+              }
+              console.log(`[MeetAdmit] Meeting may have ended (${this._consecutiveEndedChecks}/${ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED}) — waiting to confirm`);
+            } else {
+              if (this._consecutiveEndedChecks > 0) {
+                console.log(`[MeetAdmit] Meeting-end signal cleared (was ${this._consecutiveEndedChecks}/${ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED}) — false positive`);
+              }
+              this._consecutiveEndedChecks = 0;
               this._endCheckFailures = 0;
-              const cb = this._meetingEndCallback;
-              this._meetingEndCallback = null;
-              this.stopAdmissionMonitor();
-              cb();
-              return;
             }
-            this._endCheckFailures = 0;
           } catch (e: any) {
+            this._consecutiveEndedChecks = 0;
             this._endCheckFailures++;
             console.warn(`[MeetAdmit] Meeting-end check failed (${this._endCheckFailures}/${ChromeLauncher.MAX_END_CHECK_FAILURES}): ${e.message}`);
             if (this._endCheckFailures >= ChromeLauncher.MAX_END_CHECK_FAILURES) {
@@ -1383,20 +1396,29 @@ export class ChromeLauncher {
     if (!this._admissionInterval) {
       console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
       this._endCheckFailures = 0;
+      this._consecutiveEndedChecks = 0;
       this._admissionInterval = setInterval(async () => {
         try {
           const ended = await this._checkMeetingEndedLib();
           if (ended) {
-            console.log("[MeetEnd] Meeting ended detected — triggering cleanup");
-            this._endCheckFailures = 0;
-            const cb = this._meetingEndCallback;
-            this._meetingEndCallback = null;
-            this.stopAdmissionMonitor();
-            if (cb) cb();
+            this._consecutiveEndedChecks++;
+            if (this._consecutiveEndedChecks >= ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED) {
+              console.log(`[MeetEnd] Meeting ended (confirmed after ${this._consecutiveEndedChecks} checks) — triggering cleanup`);
+              this._consecutiveEndedChecks = 0;
+              this._endCheckFailures = 0;
+              const cb = this._meetingEndCallback;
+              this._meetingEndCallback = null;
+              this.stopAdmissionMonitor();
+              if (cb) cb();
+            } else {
+              console.log(`[MeetEnd] Meeting may have ended (${this._consecutiveEndedChecks}/${ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED}) — waiting to confirm`);
+            }
           } else {
+            this._consecutiveEndedChecks = 0;
             this._endCheckFailures = 0;
           }
         } catch (e: any) {
+          this._consecutiveEndedChecks = 0;
           this._endCheckFailures++;
           console.warn(`[MeetEnd] Detection failed (${this._endCheckFailures}/${ChromeLauncher.MAX_END_CHECK_FAILURES}): ${e.message}`);
           if (this._endCheckFailures >= ChromeLauncher.MAX_END_CHECK_FAILURES) {
@@ -1628,6 +1650,22 @@ export class ChromeLauncher {
   /** Get the presenting page (the tab showing shared content) */
   get presentingPage(): any { return this._presentingPage; }
   get isSharing(): boolean { return this._isSharing; }
+
+  /** Check Meet's actual sharing state by querying the DOM (not the stale _isSharing flag) */
+  async checkSharingStatus(): Promise<boolean> {
+    if (!this._page) return false;
+    try {
+      const status = String(await this._page.evaluate(`(() => {
+        var stop = document.querySelector('[aria-label*="Stop sharing"], [aria-label*="停止共享"], [aria-label*="Stop presenting"], [aria-label*="停止展示"]');
+        return stop ? 'sharing' : 'not_sharing';
+      })()`));
+      const sharing = status === "sharing";
+      this._isSharing = sharing; // sync the flag
+      return sharing;
+    } catch {
+      return false;
+    }
+  }
 
   /** Execute JavaScript on the presenting tab */
   async evaluateOnPresentingPage(code: string): Promise<any> {
