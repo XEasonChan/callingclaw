@@ -82,13 +82,12 @@ sessionManager.setDBSync((session) => {
   });
 });
 
-// Wire calendar auth error detection → EventBus + OpenClaw notification
+// Wire calendar auth error detection → auto-reconnect + notify user
 calendar.onAuthError = (error: string) => {
   console.warn(`[Calendar] Auth error detected: ${error}`);
-  eventBus.emit("calendar.auth_error", {
-    error,
-    message: "Google OAuth refresh token 已过期或被撤销，日历功能暂时不可用。请重新授权。",
-  });
+  eventBus.emit("calendar.auth_error", { error });
+  // Auto-trigger reconnect loop (retries every 5 min until reconnected)
+  calendar.startAutoReconnect();
 };
 
 // Load persisted tasks
@@ -977,6 +976,46 @@ eventBus.on("voice.started", () => { updateStageDocsContext(); });
 // #8: Refresh voice doc context when research adds a Working Document
 eventBus.on("research.completed", (data: any) => {
   if (data?.filePath && !data?.error) { updateStageDocsContext(); }
+});
+
+// ── Calendar + Scheduler Notifications (OpenClaw → Telegram) ──────────
+
+// Meeting created via Desktop App → notify user with Meet link
+eventBus.on("calendar.updated", (data: any) => {
+  if (data?.action !== "created") return;
+  // The actual Meet link comes from the API response, not this event.
+  // MeetingScheduler will pick it up on next poll and emit scheduler.meeting_scheduled.
+  console.log(`[CalendarNotify] Event created: ${data?.summary || "meeting"}`);
+});
+
+// Meeting detected on calendar → notify user with link and auto-join time
+eventBus.on("scheduler.meeting_scheduled", (data: any) => {
+  if (!openclawBridge.connected || !data?.meetUrl) return;
+  const lang = detectLanguage(data?.summary || "");
+  const topic = data?.summary || "Meeting";
+  const joinTime = data?.joinAt ? new Date(data.joinAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+  const msg = lang === "zh"
+    ? `📅 检测到会议「${topic}」\n🔗 ${data.meetUrl}\n⏰ 将在 ${joinTime} 自动加入`
+    : `📅 Meeting detected: "${topic}"\n🔗 ${data.meetUrl}\n⏰ Auto-joining at ${joinTime}`;
+  openclawBridge.sendTaskIsolated(
+    `CallingClaw detected an upcoming meeting and scheduled auto-join. ` +
+    `Send this to the user via Telegram:\n\n"${msg}"\n\nReply "sent" when done.`
+  ).catch((e: any) => {
+    console.warn("[CalendarNotify] Failed to notify:", e.message);
+  });
+});
+
+// Calendar disconnected → notify user so they can provide a Meet link manually
+eventBus.on("calendar.auth_error", (data: any) => {
+  if (!openclawBridge.connected) return;
+  openclawBridge.sendTaskIsolated(
+    `CallingClaw's Google Calendar connection was lost (token expired). ` +
+    `Send this to the user via Telegram:\n\n` +
+    `"⚠️ Calendar connection lost. Auto-reconnecting... If you need me to join a meeting, ` +
+    `send me the Google Meet link directly."\n\nReply "sent" when done.`
+  ).catch((e: any) => {
+    console.warn("[CalendarNotify] Failed to notify auth error:", e.message);
+  });
 });
 
 // Forward meeting action items to EventBus
