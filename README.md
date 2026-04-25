@@ -228,12 +228,52 @@ The [`plugins/callingclaw-events`](plugins/) bridge connects them via EventBus �
 
 ---
 
+## Use CallingClaw from any AI agent (MCP)
+
+CallingClaw ships with an MCP server — 25 tools that let any MCP-compatible agent join meetings, talk, share screen, and manage setup.
+
+```json
+{
+  "mcpServers": {
+    "callingclaw": {
+      "command": "npx",
+      "args": ["-y", "callingclaw-mcp"]
+    }
+  }
+}
+```
+
+Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, and any MCP client.
+
+**Zero-GUI onboarding:** The agent handles everything through conversation — API keys, Google OAuth, macOS permissions, readiness checks. No manual config needed.
+
+| Category | Tools |
+|----------|-------|
+| Meeting | `join_meeting`, `leave_meeting`, `speak`, `present_url`, `get_transcript`, `inject_context`, `send_chat_message`, `get_status`, `get_action_items`, `set_voice_provider` |
+| Setup | `check_ready`, `check_health`, `check_api_keys`, `set_api_keys`, `check_google_auth`, `setup_google_oauth`, `google_chrome_login`, `check_permissions`, `open_permissions`, `check_capabilities`, `check_audio`, `get_config`, `set_config` |
+| Calendar | `list_calendar_events`, `schedule_auto_join` |
+
+See [`mcp/README.md`](mcp/README.md) for full documentation.
+
+### Claude Code Plugin
+
+```bash
+/plugin marketplace add XEasonChan/callingclaw
+# or
+/plugin install callingclaw
+```
+
+---
+
 ## Project structure
 
 ```
 callingclaw/
 ├── callingclaw-backend/     # Bun backend (AI orchestration, voice, meeting lifecycle)
 ├── callingclaw-desktop/     # Electron app (UI, audio bridge, tray, onboarding)
+├── mcp/                     # MCP server — 25 tools for any AI agent
+├── .claude-plugin/          # Claude Code Plugin manifest
+├── skills/join-meeting/     # Agent skill (SKILL.md)
 ├── plugins/                 # Claude Code Channel plugin (EventBus → Telegram)
 ├── CLAUDE.md                # Agent guide — architecture, rules, gotchas
 ├── CHANGELOG.md             # Release history
