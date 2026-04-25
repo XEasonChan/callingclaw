@@ -16,6 +16,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
+    "test": "node --test dist/__tests__/tools.test.js",
+    "test:watch": "tsc --watch & node --test --watch dist/__tests__/tools.test.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

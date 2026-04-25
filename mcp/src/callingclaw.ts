@@ -32,6 +32,18 @@ import type {
   CalendarEventsResponse,
   ScheduleAutoJoinParams,
   SchedulerStatusResponse,
+  ValidateMeetingUrlParams,
+  ValidateMeetingUrlResponse,
+  GetMeetingSummaryParams,
+  MeetingSummary,
+  TalkLocallyResponse,
+  ListPromptsResponse,
+  UpdatePromptParams,
+  UpdatePromptResponse,
+  ResetPromptParams,
+  ResetPromptResponse,
+  RecoveryHealthResponse,
+  RecoveryResponse,
 } from "./types.js";
 
 const BASE_URL = "http://localhost:4000";
@@ -506,6 +518,110 @@ export class CallingClawClient {
    */
   async getSchedulerStatus(): Promise<SchedulerStatusResponse> {
     return this.request<SchedulerStatusResponse>("/api/scheduler/status");
+  }
+
+  // ============================================
+  // Additional Methods (v1.1.0)
+  // ============================================
+
+  /**
+   * Validate a meeting URL before attempting to join
+   */
+  async validateMeetingUrl(
+    params: ValidateMeetingUrlParams
+  ): Promise<ValidateMeetingUrlResponse> {
+    return this.request<ValidateMeetingUrlResponse>("/api/meeting/validate", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  /**
+   * Get a meeting summary (current or past meeting)
+   */
+  async getMeetingSummary(params: GetMeetingSummaryParams): Promise<MeetingSummary> {
+    if (params.meetingId) {
+      return this.request<MeetingSummary>(
+        `/api/meeting/summary/${params.meetingId}`
+      );
+    }
+    return this.request<MeetingSummary>("/api/meeting/summary", {
+      method: "POST",
+    });
+  }
+
+  /**
+   * Start local voice chat (no meeting join)
+   */
+  async startLocalVoice(): Promise<TalkLocallyResponse> {
+    return this.request<TalkLocallyResponse>("/api/meeting/talk-locally", {
+      method: "POST",
+      body: JSON.stringify({ action: "start" }),
+    });
+  }
+
+  /**
+   * Stop local voice chat
+   */
+  async stopLocalVoice(): Promise<TalkLocallyResponse> {
+    return this.request<TalkLocallyResponse>("/api/meeting/talk-locally/stop", {
+      method: "POST",
+    });
+  }
+
+  /**
+   * List all prompt templates
+   */
+  async listPrompts(): Promise<ListPromptsResponse> {
+    return this.request<ListPromptsResponse>("/api/prompts");
+  }
+
+  /**
+   * Update a prompt template
+   */
+  async updatePrompt(params: UpdatePromptParams): Promise<UpdatePromptResponse> {
+    return this.request<UpdatePromptResponse>(
+      `/api/prompts/${params.promptId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ content: params.content }),
+      }
+    );
+  }
+
+  /**
+   * Reset a prompt template to default
+   */
+  async resetPrompt(params: ResetPromptParams): Promise<ResetPromptResponse> {
+    return this.request<ResetPromptResponse>(
+      `/api/prompts/${params.promptId}/reset`,
+      { method: "POST" }
+    );
+  }
+
+  /**
+   * Get health status of all subsystems
+   */
+  async getRecoveryHealth(): Promise<RecoveryHealthResponse> {
+    return this.request<RecoveryHealthResponse>("/api/recovery/health");
+  }
+
+  /**
+   * Restart Playwright browser
+   */
+  async recoverBrowser(): Promise<RecoveryResponse> {
+    return this.request<RecoveryResponse>("/api/recovery/browser", {
+      method: "POST",
+    });
+  }
+
+  /**
+   * Restart voice session
+   */
+  async recoverVoice(): Promise<RecoveryResponse> {
+    return this.request<RecoveryResponse>("/api/recovery/voice", {
+      method: "POST",
+    });
   }
 }
 

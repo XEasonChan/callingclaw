@@ -395,6 +395,104 @@ export const toolDefinitions = [
       required: ["action"],
     },
   },
+
+  // ============================================
+  // Additional Tools (v1.1.0)
+  // ============================================
+
+  {
+    name: "validate_meeting_url",
+    description:
+      "Validate if a meeting URL is a valid Google Meet or Zoom link before attempting to join. Returns platform type and normalized URL. Use this to pre-check URLs before calling join_meeting.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        meetUrl: {
+          type: "string",
+          description:
+            "The meeting URL to validate (Google Meet or Zoom link).",
+        },
+      },
+      required: ["meetUrl"],
+    },
+  },
+  {
+    name: "get_meeting_summary",
+    description:
+      "Generate a formatted meeting summary with action items, decisions, and key topics. Can summarize the current meeting or retrieve a past meeting summary by ID.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        meetingId: {
+          type: "string",
+          description:
+            "Optional meeting ID to get a past meeting summary. If not provided, summarizes the current meeting.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "talk_locally",
+    description:
+      'Start or stop local voice chat without joining a meeting. Use for testing voice setup or quick AI conversations. Actions: "start" to begin local voice chat, "stop" to end it.',
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        action: {
+          type: "string",
+          enum: ["start", "stop"],
+          description:
+            '"start" to begin local voice chat, "stop" to end the session.',
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "manage_prompts",
+    description:
+      'Manage prompt templates for AI personality and meeting behavior. Actions: "list" to see all prompts, "update" to modify a prompt, "reset" to restore default. Lets users customize language, tone, and behavior.',
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "update", "reset"],
+          description:
+            '"list" to see all prompts, "update" to modify a prompt, "reset" to restore default.',
+        },
+        promptId: {
+          type: "string",
+          description:
+            "The prompt ID to update or reset (required for update/reset actions).",
+        },
+        content: {
+          type: "string",
+          description:
+            "The new prompt content (required for update action).",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "recover",
+    description:
+      'Recovery and self-healing operations. Actions: "health" to check all subsystems, "browser" to restart Playwright browser, "voice" to restart voice session. Use when things break during a meeting.',
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        action: {
+          type: "string",
+          enum: ["health", "browser", "voice"],
+          description:
+            '"health" to check subsystems, "browser" to restart browser, "voice" to restart voice session.',
+        },
+      },
+      required: ["action"],
+    },
+  },
 ];
 
 /**
@@ -1318,6 +1416,334 @@ export async function handleToolCall(
             {
               type: "text",
               text: '❌ Invalid action. Use "schedule" or "status".',
+            },
+          ],
+        };
+      }
+
+      // ============================================
+      // Additional Tool Handlers (v1.1.0)
+      // ============================================
+
+      case "validate_meeting_url": {
+        const meetUrl = args.meetUrl as string;
+        const result = await callingClaw.validateMeetingUrl({ meetUrl });
+
+        if (result.valid) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `✅ Valid ${result.platform === "google_meet" ? "Google Meet" : result.platform === "zoom" ? "Zoom" : "meeting"} URL\n\nNormalized URL: ${result.normalized}\nPlatform: ${result.platform}`,
+              },
+            ],
+          };
+        } else {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Invalid meeting URL: ${meetUrl}\n\nPlease provide a valid Google Meet (meet.google.com/xxx-xxxx-xxx) or Zoom (zoom.us/j/xxxxxxxxx) link.`,
+              },
+            ],
+          };
+        }
+      }
+
+      case "get_meeting_summary": {
+        const meetingId = args.meetingId as string | undefined;
+        const summary = await callingClaw.getMeetingSummary({ meetingId });
+
+        if (!summary.success) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ ${summary.error || "Failed to generate meeting summary"}`,
+              },
+            ],
+          };
+        }
+
+        let response = "📋 Meeting Summary\n\n";
+
+        if (summary.title) {
+          response += `**${summary.title}**\n\n`;
+        }
+
+        if (summary.duration) {
+          response += `Duration: ${summary.duration}\n\n`;
+        }
+
+        if (summary.keyTopics && summary.keyTopics.length > 0) {
+          response += "🎯 Key Topics:\n";
+          summary.keyTopics.forEach((topic, i) => {
+            response += `${i + 1}. ${topic}\n`;
+          });
+          response += "\n";
+        }
+
+        if (summary.decisions && summary.decisions.length > 0) {
+          response += "✅ Decisions:\n";
+          summary.decisions.forEach((decision, i) => {
+            response += `${i + 1}. ${decision}\n`;
+          });
+          response += "\n";
+        }
+
+        if (summary.actionItems && summary.actionItems.length > 0) {
+          response += "📌 Action Items:\n";
+          summary.actionItems.forEach((item, i) => {
+            response += `${i + 1}. ${item.task}`;
+            if (item.assignee) response += ` (${item.assignee})`;
+            if (item.dueDate) response += ` — Due: ${item.dueDate}`;
+            response += "\n";
+          });
+        }
+
+        return { content: [{ type: "text", text: response }] };
+      }
+
+      case "talk_locally": {
+        const action = args.action as "start" | "stop";
+
+        if (action === "start") {
+          const result = await callingClaw.startLocalVoice();
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "🎤 Local voice chat started!\n\nYou can now speak with the AI assistant without joining a meeting. Use 'speak' to send text, or speak directly through your microphone.\n\nRun talk_locally with action 'stop' to end the session.",
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to start local voice: ${result.error || "Unknown error"}\n\nPlease check audio permissions and device availability.`,
+                },
+              ],
+            };
+          }
+        } else if (action === "stop") {
+          const result = await callingClaw.stopLocalVoice();
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "🛑 Local voice chat stopped.\n\nThe voice session has been disconnected.",
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to stop local voice: ${result.error || "Unknown error"}`,
+                },
+              ],
+            };
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: '❌ Invalid action. Use "start" or "stop".',
+            },
+          ],
+        };
+      }
+
+      case "manage_prompts": {
+        const action = args.action as "list" | "update" | "reset";
+
+        if (action === "list") {
+          const prompts = await callingClaw.listPrompts();
+
+          let response = "📝 Prompt Templates:\n\n";
+          for (const prompt of prompts.prompts) {
+            response += `**${prompt.id}** — ${prompt.name}\n`;
+            response += `  ${prompt.description || ""}\n`;
+            response += `  Current: "${prompt.content.substring(0, 80)}${prompt.content.length > 80 ? "..." : ""}"\n\n`;
+          }
+
+          response += "Use manage_prompts with action 'update' to modify a prompt.";
+          return { content: [{ type: "text", text: response }] };
+        } else if (action === "update") {
+          const promptId = args.promptId as string | undefined;
+          const content = args.content as string | undefined;
+
+          if (!promptId || !content) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: '❌ Missing required parameters. For "update" action, provide both promptId and content.',
+                },
+              ],
+            };
+          }
+
+          const result = await callingClaw.updatePrompt({ promptId, content });
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `✅ Prompt "${promptId}" updated successfully!\n\n${result.message || "Changes will take effect in the next session."}`,
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to update prompt: ${result.error || "Unknown error"}`,
+                },
+              ],
+            };
+          }
+        } else if (action === "reset") {
+          const promptId = args.promptId as string | undefined;
+
+          if (!promptId) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: '❌ Missing promptId. For "reset" action, provide the prompt ID to reset.',
+                },
+              ],
+            };
+          }
+
+          const result = await callingClaw.resetPrompt({ promptId });
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `✅ Prompt "${promptId}" reset to default!\n\n${result.message || "Default content restored."}`,
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to reset prompt: ${result.error || "Unknown error"}`,
+                },
+              ],
+            };
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: '❌ Invalid action. Use "list", "update", or "reset".',
+            },
+          ],
+        };
+      }
+
+      case "recover": {
+        const action = args.action as "health" | "browser" | "voice";
+
+        if (action === "health") {
+          const health = await callingClaw.getRecoveryHealth();
+
+          let response = "🏥 System Health Check:\n\n";
+
+          const subsystems = [
+            { key: "browser", label: "Browser (Playwright)", data: health.browser },
+            { key: "voice", label: "Voice Session", data: health.voice },
+            { key: "sidecar", label: "Sidecar (OpenClaw)", data: health.sidecar },
+          ];
+
+          for (const sub of subsystems) {
+            const status = sub.data?.healthy ? "✅" : "❌";
+            response += `${status} ${sub.label}`;
+            if (sub.data?.message) {
+              response += ` — ${sub.data.message}`;
+            }
+            response += "\n";
+          }
+
+          const unhealthy = subsystems.filter((s) => !s.data?.healthy);
+          if (unhealthy.length > 0) {
+            response += `\n⚠️ ${unhealthy.length} subsystem(s) need attention.\n`;
+            response += 'Use recover with action "browser" or "voice" to restart components.';
+          } else {
+            response += "\n✅ All subsystems healthy!";
+          }
+
+          return { content: [{ type: "text", text: response }] };
+        } else if (action === "browser") {
+          const result = await callingClaw.recoverBrowser();
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `✅ Browser recovered successfully!\n\n${result.message || "Playwright browser has been restarted."}`,
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to recover browser: ${result.error || "Unknown error"}`,
+                },
+              ],
+            };
+          }
+        } else if (action === "voice") {
+          const result = await callingClaw.recoverVoice();
+
+          if (result.success) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `✅ Voice session recovered successfully!\n\n${result.message || "Voice session has been restarted."}`,
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `❌ Failed to recover voice session: ${result.error || "Unknown error"}`,
+                },
+              ],
+            };
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: '❌ Invalid action. Use "health", "browser", or "voice".',
             },
           ],
         };

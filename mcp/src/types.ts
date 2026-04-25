@@ -294,3 +294,89 @@ export interface SchedulerStatusResponse {
   scheduled: ScheduledMeeting[];
   nextJoin?: ScheduledMeeting;
 }
+
+// ============================================
+// Additional Types (v1.1.0)
+// ============================================
+
+export type MeetingPlatform = 'google_meet' | 'zoom' | 'unknown';
+
+export interface ValidateMeetingUrlParams {
+  meetUrl: string;
+}
+
+export interface ValidateMeetingUrlResponse {
+  valid: boolean;
+  platform: MeetingPlatform;
+  normalized: string;
+}
+
+export interface GetMeetingSummaryParams {
+  meetingId?: string;
+}
+
+export interface MeetingSummary {
+  success: boolean;
+  title?: string;
+  duration?: string;
+  keyTopics?: string[];
+  decisions?: string[];
+  actionItems?: ActionItem[];
+  error?: string;
+}
+
+export interface TalkLocallyResponse {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  isDefault?: boolean;
+}
+
+export interface ListPromptsResponse {
+  prompts: PromptTemplate[];
+}
+
+export interface UpdatePromptParams {
+  promptId: string;
+  content: string;
+}
+
+export interface UpdatePromptResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ResetPromptParams {
+  promptId: string;
+}
+
+export interface ResetPromptResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface SubsystemHealth {
+  healthy: boolean;
+  message?: string;
+}
+
+export interface RecoveryHealthResponse {
+  browser: SubsystemHealth;
+  voice: SubsystemHealth;
+  sidecar: SubsystemHealth;
+}
+
+export interface RecoveryResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
