@@ -93,19 +93,31 @@ calendar.onAuthError = (error: string) => {
 await taskStore.load();
 
 // ── 1b. ContextSync + Agent Adapter ─────────────────────────────
-// Detect agent platform: openclaw > claude-code > standalone
+// Detect agent platform: openclaw > claude-code > hermes > standalone
 const _detectedPlatform: AgentPlatform = (() => {
   const envPlatform = process.env.AGENT_PLATFORM;
-  if (envPlatform === "openclaw" || envPlatform === "claude-code" || envPlatform === "standalone") {
+  if (
+    envPlatform === "openclaw" ||
+    envPlatform === "claude-code" ||
+    envPlatform === "hermes" ||
+    envPlatform === "standalone"
+  ) {
     return envPlatform;
   }
-  // Auto-detect: prefer openclaw if config exists, then claude-code CLI
+  // Auto-detect: prefer openclaw if config exists, then claude-code CLI, then hermes
   try {
     if (require("fs").existsSync(`${process.env.HOME}/.openclaw/openclaw.json`)) return "openclaw";
   } catch {}
   try {
     require("child_process").execSync("which claude", { stdio: "ignore" });
     return "claude-code";
+  } catch {}
+  try {
+    if (require("fs").existsSync(`${process.env.HOME}/.hermes/config.yaml`)) return "hermes";
+  } catch {}
+  try {
+    require("child_process").execSync("which hermes", { stdio: "ignore" });
+    return "hermes";
   } catch {}
   return "standalone";
 })();

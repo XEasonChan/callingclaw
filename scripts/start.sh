@@ -43,6 +43,8 @@ if [[ -z "$AGENT_PLATFORM" ]]; then
     AGENT_PLATFORM="openclaw"
   elif command -v claude &>/dev/null; then
     AGENT_PLATFORM="claude-code"
+  elif [[ -f "$HOME/.hermes/config.yaml" ]] || command -v hermes &>/dev/null || [[ -x "$HOME/.local/bin/hermes" ]]; then
+    AGENT_PLATFORM="hermes"
   else
     AGENT_PLATFORM="standalone"
   fi
@@ -73,6 +75,14 @@ elif [[ "$AGENT_PLATFORM" == "claude-code" ]]; then
     ok "Agent platform: Claude Code ($(claude --version 2>/dev/null || echo 'unknown'))"
   else
     warn "Claude Code CLI not found — falling back to standalone"
+  fi
+elif [[ "$AGENT_PLATFORM" == "hermes" ]]; then
+  HERMES_CMD=""
+  if command -v hermes &>/dev/null; then HERMES_CMD="hermes"; elif [[ -x "$HOME/.local/bin/hermes" ]]; then HERMES_CMD="$HOME/.local/bin/hermes"; fi
+  if [[ -n "$HERMES_CMD" ]]; then
+    ok "Agent platform: Hermes ($("$HERMES_CMD" --version 2>/dev/null || echo 'unknown'))"
+  else
+    warn "Hermes CLI not found — run ./scripts/setup-hermes.sh (falling back to standalone)"
   fi
 else
   ok "Agent platform: standalone (voice, notes, screen — all work without external agent)"

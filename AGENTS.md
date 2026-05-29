@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## What is CallingClaw
 
@@ -132,7 +132,7 @@ OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-00
 
 ## Rules
 
-- **Bun, not Node.js** for all backend work. Use `Bun.serve()`, `bun:sqlite`, `Bun.file`, `Bun.$` — see `callingclaw-backend/CLAUDE.md` for full Bun API guidance
+- **Bun, not Node.js** for all backend work. Use `Bun.serve()`, `bun:sqlite`, `Bun.file`, `Bun.$` — see `callingclaw-backend/AGENTS.md` for full Bun API guidance
 - **Vanilla JS** in Electron renderer (no TypeScript in HTML files)
 - **Audio format**: always 24kHz PCM16 mono across all audio paths
 - **Context engineering**: follow the 5-layer model; never put tool definitions in prompt text
