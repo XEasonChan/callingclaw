@@ -152,8 +152,10 @@ export class BrowserCaptureProvider implements CaptureProvider {
   }
 
   /**
-   * Query CDP for page targets and return the WebSocket URL of the first one.
-   * Prefers non-about:blank pages; falls back to any page.
+   * Query CDP for page targets and return the WebSocket URL of the best one.
+   * During screen sharing, prefers the "CallingClaw Presenting" tab so that
+   * screenshots capture the presented content (not the Meet grid view).
+   * Falls back to the first non-blank page.
    */
   private async getPageWebSocketUrl(port: number): Promise<string | null> {
     try {
@@ -161,11 +163,20 @@ export class BrowserCaptureProvider implements CaptureProvider {
       const targets = await response.json() as Array<{
         type: string;
         url: string;
+        title: string;
         webSocketDebuggerUrl: string;
       }>;
 
-      // Prefer non-blank page
       const pages = targets.filter(t => t.type === "page");
+
+      // Priority 1: "CallingClaw Presenting" tab (active during screen share)
+      const presenting = pages.find(p => p.title === "CallingClaw Presenting");
+      if (presenting) {
+        console.log(`[BrowserCapture] Targeting presenting tab: ${presenting.url}`);
+        return presenting.webSocketDebuggerUrl;
+      }
+
+      // Priority 2: non-blank page (normal operation)
       const active = pages.find(p => !p.url.startsWith("about:")) || pages[0];
       return active?.webSocketDebuggerUrl || null;
     } catch (e: any) {
