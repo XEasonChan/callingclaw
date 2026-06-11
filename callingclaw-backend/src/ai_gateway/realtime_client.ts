@@ -84,7 +84,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   url: `${CONFIG.openai.realtimeUrl}?model=${CONFIG.openai.realtimeModel}`,
   headers: {
     Authorization: `Bearer ${CONFIG.openai.apiKey}`,
-    // GA API: no "OpenAI-Beta" header needed (removed for gpt-realtime-1.5)
+    // GA API: no "OpenAI-Beta" header needed (gpt-realtime-1.5 / -2)
   },
   // GA API event names → normalized (internal) names
   // The GA API renamed output events; map them back to names used by VoiceModule
@@ -136,14 +136,16 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   },
 };
 
-// ── OpenAI 1.5 GA Provider ─────────────────────────────────────────
-// gpt-realtime-1.5: GA API (no beta header), new event names, session.type required.
-// Key differences from legacy:
+// ── OpenAI Realtime GA Provider (gpt-realtime-2 default, 1.5 compatible) ──
+// GA API (no beta header), new event names, session.type required.
+// Key differences from legacy preview:
 //   - No "OpenAI-Beta: realtime=v1" header
 //   - session.update requires type: "realtime"
 //   - Event names changed: response.text.delta → response.output_text.delta, etc.
 //   - New features: semantic_vad, image input, MCP servers, async function calling
 //   - Transcription: gpt-4o-transcribe (better than whisper-1)
+// gpt-realtime-2 adds (over 1.5): 128K ctx, parallel tool calls, configurable
+// reasoning effort, spoken preambles. Wire format unchanged — model swap is drop-in.
 
 export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
   name: "openai15",
@@ -385,6 +387,11 @@ export class RealtimeClient {
   // Gemini session resumption handle (for reconnect without transcript replay)
   private _geminiSessionHandle: string | null = null;
 
+  // Greeting sent only on the FIRST session.updated of a session — every
+  // resume/reconnect also fires setupComplete, and re-prompting made the AI
+  // re-introduce itself to the meeting after each 15-min resumption.
+  private _geminiGreeted = false;
+
   get connected() {
     return this._connected;
   }
@@ -481,7 +488,12 @@ export class RealtimeClient {
       const connectTimeout = setTimeout(() => {
         console.error(`[Realtime] Connection timeout (15s) to ${provider.name}`);
         if (this.ws) {
-          try { this.ws.close(); } catch {}
+          // Detach BEFORE closing: the identity guard in onclose then ignores
+          // this socket, so a failed connect doesn't spawn a zombie reconnect
+          // loop for a session the caller was told never started.
+          const stale = this.ws;
+          this.ws = null as any;
+          try { stale.close(); } catch {}
         }
         reject(new Error(`Connection timeout to ${provider.name} Voice API`));
       }, 15000);
@@ -499,26 +511,30 @@ export class RealtimeClient {
           console.log(`[Realtime] Using ws (direct) for Gemini`);
         }
         const pws = new WsWebSocket(wsUrl, wsOpts);
-        // Create a thin wrapper that maps ws EventEmitter → Bun-style onXxx callbacks
-        this.ws = {
+        // Create a thin wrapper that maps ws EventEmitter → Bun-style onXxx
+        // callbacks. The pws handlers reference THIS wrapper (captured), not
+        // this.ws — dereferencing this.ws meant an old socket's close event
+        // invoked the NEW connection's close handler after a reconnect.
+        const wsWrapper: any = {
           send: (d: any) => pws.send(d),
           close: () => pws.close(),
           get readyState() { return pws.readyState; },
-        } as any;
-        pws.on("open", () => this.ws!.onopen?.(new Event("open") as any));
+        };
+        this.ws = wsWrapper;
+        pws.on("open", () => wsWrapper.onopen?.(new Event("open") as any));
         pws.on("message", (d: any) => {
           const str = d.toString();
           // Log first 200 chars of each raw message for debugging
           console.log(`[Realtime] RAW Gemini msg (${str.length} chars): ${str.substring(0, 200)}`);
-          this.ws!.onmessage?.({ data: str } as any);
+          wsWrapper.onmessage?.({ data: str } as any);
         });
         pws.on("close", (code: number, reason: any) => {
           console.log(`[Realtime] RAW Gemini close: ${code} ${reason?.toString?.() || ""}`);
-          this.ws!.onclose?.({ code, reason: reason?.toString?.() || "", wasClean: code === 1000 } as any);
+          wsWrapper.onclose?.({ code, reason: reason?.toString?.() || "", wasClean: code === 1000 } as any);
         });
         pws.on("error", (e: any) => {
           console.error(`[Realtime] RAW Gemini error:`, e.message || e);
-          this.ws!.onerror?.(e);
+          wsWrapper.onerror?.(e);
         });
       } else {
         // OpenAI / Grok: original Bun WebSocket (unchanged)
@@ -527,7 +543,13 @@ export class RealtimeClient {
         } as any);
       }
 
+      // Socket identity guard: handlers below belong to THIS socket. When a
+      // reconnect/timeout replaces this.ws, late events from the superseded
+      // socket must not flip _connected or schedule a second reconnect.
+      const sock = this.ws;
+
       this.ws.onopen = () => {
+        if (this.ws !== sock) return;
         clearTimeout(connectTimeout);
         console.log(`[Realtime] Connected to ${provider.name} Voice API`);
         this._connected = true;
@@ -565,6 +587,7 @@ export class RealtimeClient {
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
+        if (this.ws !== sock) return;
         try {
           const data = typeof event.data === "string" ? event.data : String(event.data);
 
@@ -594,12 +617,17 @@ export class RealtimeClient {
       };
 
       this.ws.onerror = (event) => {
+        if (this.ws !== sock) return;
         clearTimeout(connectTimeout);
         console.error(`[Realtime] WebSocket error (${provider.name}):`, event);
         reject(new Error(`${provider.name} WebSocket connection failed`));
       };
 
       this.ws.onclose = (event: CloseEvent) => {
+        if (this.ws !== sock) {
+          console.log(`[Realtime] Ignoring close from superseded ${provider.name} socket (code: ${event.code})`);
+          return;
+        }
         console.log(`[Realtime] Disconnected from ${provider.name} (code: ${event.code}, reason: ${event.reason || "none"}, wasClean: ${event.wasClean})`);
         this._connected = false;
 
@@ -656,13 +684,18 @@ export class RealtimeClient {
         this.injectContext(`[SYSTEM] ${deferred}`, "ctx_deferred_instr");
         console.log(`[Realtime] Injected deferred instruction (${deferred.length} chars)`);
       }
-      // Send greeting prompt so Gemini speaks first
-      setTimeout(() => {
-        if (this._connected) {
-          this.sendText("Please introduce yourself briefly and say hello.");
-          console.log(`[Realtime] Sent Gemini greeting prompt`);
-        }
-      }, 500);
+      // Send greeting prompt so Gemini speaks first — first connect ONLY.
+      // session.updated also fires on every 15-min resume/reconnect, and
+      // re-prompting made the AI re-introduce itself mid-meeting.
+      if (!this._geminiGreeted) {
+        this._geminiGreeted = true;
+        setTimeout(() => {
+          if (this._connected) {
+            this.sendText("Please introduce yourself briefly and say hello.");
+            console.log(`[Realtime] Sent Gemini greeting prompt`);
+          }
+        }, 500);
+      }
     }
 
     // Gemini session resumption handle
@@ -1097,7 +1130,10 @@ export class RealtimeClient {
       const match = entry.match(/^\[(\w+)\]\s(.+)/s);
       if (match) {
         const [, role, text] = match;
-        const mappedRole = role === "assistant" ? "assistant" : "user";
+        // system entries ([Tool Call]/[HEARD]/[Screen]) must replay as system
+        // items — replaying them as "user" made the model respond to its own
+        // logs as if the user had said them
+        const mappedRole = role === "assistant" ? "assistant" : role === "system" ? "system" : "user";
         this.sendEvent("conversation.item.create", {
           item: {
             type: "message",
@@ -1129,5 +1165,13 @@ export class RealtimeClient {
     }
     this.ws?.close();
     this._connected = false;
+    // A new session must not inherit the previous one's state: a stale
+    // resume handle made the next meeting try to resume the previous
+    // (expired) Gemini session, and an un-cleared queue replayed the
+    // previous meeting's context items after reconnect.
+    this._geminiSessionHandle = null;
+    this._geminiGreeted = false;
+    this._contextQueue = [];
+    this._transcriptContext = [];
   }
 }

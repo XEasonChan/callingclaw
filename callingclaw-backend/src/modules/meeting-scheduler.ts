@@ -176,11 +176,14 @@ export class MeetingScheduler {
           // Skip if already scheduled
           if (this.scheduled.has(eventId) || this._everScheduled.has(eventId)) continue;
 
-          // Skip if SessionManager already has a session for this meetUrl
+          // Skip if a session for this meetUrl is already LIVE (manual join).
+          // Only "active" counts: preparing/ready sessions are created by our
+          // own prep flow and must not block cron registration. ("pending"
+          // was never a real status — that branch never matched.)
           if (this.sessionManager) {
             const existingSessions = this.sessionManager.list();
             const hasMeetUrlSession = existingSessions.some(s =>
-              s.meetUrl === event.meetLink && (s.status === "active" || s.status === "pending")
+              s.meetUrl === event.meetLink && s.status === "active"
             );
             if (hasMeetUrlSession) {
               this._everScheduled.add(eventId);

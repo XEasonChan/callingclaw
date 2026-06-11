@@ -168,14 +168,16 @@ meetingPrepSkill.onPrepReady((brief, meetingId, filePath) => {
   // Rebuild file index so AutomationRouter can resolve prep file paths instantly
   transcriptAuditor.refreshPrepContext();
 
+  // Emit both `filePath` and `filepath` — the MCP plugin contract documents
+  // lowercase `filepath`; internal consumers historically read `filePath`.
   Bun.file(filePath).text().then((mdContent) => {
     eventBus.emit("meeting.prep_ready", {
-      meetingId, topic: brief.topic, filePath, mdContent,
+      meetingId, topic: brief.topic, filePath, filepath: filePath, mdContent,
     });
   }).catch(() => {
     // File was just written — emit without content, frontend will fetch via API
     eventBus.emit("meeting.prep_ready", {
-      meetingId, topic: brief.topic, filePath,
+      meetingId, topic: brief.topic, filePath, filepath: filePath,
     });
   });
 });
@@ -226,43 +228,45 @@ if (_detectedPlatform === "openclaw") {
 // Note: calendar.connect() is called later in section 6.
 // After calendar connects, start scheduler if adapter is also ready.
 
-// Periodically refresh MEMORY.md and push to live Voice session
+// Periodically refresh MEMORY.md and push to live Voice session.
+// NEVER while a meeting is active — updateInstructions issues session.update,
+// which causes audible breaks mid-meeting (5-layer context rule). The old
+// guard checked instructions for "MEETING PREP BRIEF", a string that no
+// longer exists since the Layer-2 refactor, so it always passed.
 setInterval(async () => {
   const changed = await contextSync.refreshIfChanged();
-  if (changed && voice.connected) {
+  if (changed && voice.connected && !context.inMeeting) {
     const brief = contextSync.getBrief().voice;
     if (brief) {
       const currentInstructions = voice.getLastInstructions();
-      // Only push if voice is in casual mode (not in a meeting with prep brief)
-      if (!currentInstructions.includes("MEETING PREP BRIEF")) {
-        voice.updateInstructions(
-          currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
-          `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
-        );
-        console.log("[ContextSync] Pushed updated memory to live Voice session");
-      }
+      voice.updateInstructions(
+        currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
+        `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
+      );
+      console.log("[ContextSync] Pushed updated memory to live Voice session");
     }
   }
 }, 60_000);
 
 // Wire ContextSync.onUpdate() — push to voice immediately when pin/note changes
+// (casual mode only; mid-meeting pin/note changes reach voice via Layer-3
+// conversation.item.create paths instead of session.update)
 contextSync.onUpdate(() => {
-  if (!voice.connected) return;
+  if (!voice.connected || context.inMeeting) return;
   const brief = contextSync.getBrief().voice;
   if (!brief) return;
   const currentInstructions = voice.getLastInstructions();
-  // Only push in casual mode (meeting mode uses MeetingPrepBrief instead)
-  if (!currentInstructions.includes("MEETING PREP BRIEF")) {
-    voice.updateInstructions(
-      currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
-      `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
-    );
-    console.log("[ContextSync] Pushed updated context to live Voice session (onUpdate)");
-  }
+  voice.updateInstructions(
+    currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
+    `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
+  );
+  console.log("[ContextSync] Pushed updated context to live Voice session (onUpdate)");
 });
 
 // Browser DOM context capture interval (started on meeting.started, cleared on meeting.ended)
 let _domContextInterval: ReturnType<typeof setInterval> | null = null;
+// 3-hour vision safety timer (armed on meeting.started, cleared on meeting.ended)
+let _visionSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Wire agent adapter activity events to EventBus for real-time visibility
 if (agentAdapter.onActivity) {
@@ -286,6 +290,13 @@ const browserCapture = new BrowserCaptureProvider();
 const desktopCapture = new DesktopCaptureProvider();
 // KeyFrameStore — persists meeting screenshots to disk for multimodal timeline
 const keyFrameStore = new KeyFrameStore();
+
+// Wire transcript events to KeyFrameStore ONCE at startup.
+// (Previously registered inside meeting.started — leaked one listener per
+// meeting, duplicating every timeline entry N times after N meetings.)
+context.on("transcript", (entry) => {
+  if (keyFrameStore.active) keyFrameStore.saveTranscript(entry);
+});
 
 const vision = new VisionModule({
   context,
@@ -350,13 +361,11 @@ eventBus.on("meeting.started", (data) => {
   resetContextInjectionState();
   // Reset transcript from previous meeting to prevent context leakage
   context.resetTranscript();
+  // Mark meeting active for consumers that must not infer it (ComputerUse model split)
+  context.setInMeeting(true);
   // Start KeyFrameStore for multimodal timeline (screenshots saved to disk)
   keyFrameStore.start(activeMeetingId).catch((e) => {
     console.error(`[Init] KeyFrameStore start failed: ${e.message}`);
-  });
-  // Wire transcript events to KeyFrameStore
-  context.on("transcript", (entry) => {
-    if (keyFrameStore.active) keyFrameStore.saveTranscript(entry);
   });
   if (!vision.isMeetingMode) {
     vision.startMeetingVision(1000);
@@ -402,7 +411,11 @@ eventBus.on("meeting.started", (data) => {
   }
 
   // ── Safety: auto-stop after 3 hours to prevent cost leakage ──
-  setTimeout(() => {
+  // Stored + cleared on meeting.ended so a stale timer from meeting A
+  // can't kill vision in the middle of meeting B.
+  if (_visionSafetyTimer) clearTimeout(_visionSafetyTimer);
+  _visionSafetyTimer = setTimeout(() => {
+    _visionSafetyTimer = null;
     if (vision.isMeetingMode) {
       console.warn("[Init] Meeting exceeded 3 hour limit — auto-stopping vision to prevent cost leakage");
       stopMeetingVisionAndFlush("3 hour safety limit reached");
@@ -557,7 +570,14 @@ eventBus.on("meeting.ended", async () => {
   }
 
   activeMeetingId = null;
+  context.setInMeeting(false);
   stopMeetingVisionAndFlush("Meeting ended");
+
+  // Clear the 3h vision safety timer so it can't fire into the next meeting
+  if (_visionSafetyTimer) {
+    clearTimeout(_visionSafetyTimer);
+    _visionSafetyTimer = null;
+  }
 
   // Stop DOM context capture
   if (_domContextInterval) {
@@ -655,10 +675,9 @@ async function autoLeaveMeeting() {
       autoDetected: true,
     };
 
-    eventBus.emit("meeting.ended", followUp);
-    eventBus.endCorrelation();
-
-    // Finalize key frame timeline for screenshot delivery
+    // Finalize key frame timeline BEFORE emitting meeting.ended — the
+    // meeting.ended handler also finalizes when keyFrameStore.active, so
+    // emitting first ran two concurrent finalize() + processTimeline() passes.
     let keyFrameResult: { htmlFile?: string; frameCount?: number } | null = null;
     let summaryHtmlPath: string | undefined;
     const meetingIdForHtml = activeMeetingId || `mtg_${Date.now()}`;
@@ -668,6 +687,22 @@ async function autoLeaveMeeting() {
       if (timeline) {
         keyFrameResult = { htmlFile: timeline.htmlFile, frameCount: timeline.frameCount };
         console.log(`[AutoLeave] Timeline: ${timeline.frameCount} frames → ${timeline.htmlFile}`);
+        // Dispatch timeline to agent here since the meeting.ended handler
+        // will skip its finalize block once the store is stopped below.
+        if (agentAdapter.connected) {
+          agentAdapter.processTimeline({
+            meetingId: timeline.meetingId,
+            meetingDir: timeline.meetingDir,
+            topic: summary.title || "Meeting",
+            duration: `${Math.round(timeline.durationMs / 60000)}min`,
+            frameCount: timeline.frameCount,
+            transcriptEntries: timeline.transcriptEntries,
+            priorityFrameCount: timeline.priorityFrameCount,
+            timelineFile: timeline.timelineFile,
+          }).catch((e: any) => {
+            console.warn(`[AutoLeave] Timeline processing failed: ${e.message}`);
+          });
+        }
       }
     }
 
@@ -696,6 +731,11 @@ async function autoLeaveMeeting() {
     if (keyFrameStore.active) {
       await keyFrameStore.stop();
     }
+
+    // Emit AFTER finalize+stop: the meeting.ended handler's keyFrameStore
+    // block is now a guaranteed no-op (active === false), no double finalize.
+    eventBus.emit("meeting.ended", followUp);
+    eventBus.endCorrelation();
 
     // Post-meeting delivery (now includes screenshots + summary HTML)
     const prepSummary = getPostMeetingSummary(meetingPrepSkill);
@@ -816,8 +856,14 @@ eventBus.on("retriever.searching", (data) => {
   if (voice.connected && now - _lastFillerTs > 30_000) {
     _lastFillerTs = now;
     const filler = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
-    voice.sendText(filler!);
-    console.log(`[Filler] Sent "${filler}" while searching for "${(data as any).topic?.slice(0, 30)}"`);
+    // System instruction, NOT sendText: a fabricated user message made the
+    // model reply TO the filler, polluted the transcript, and re-triggered
+    // the auditor/retriever pipelines on the system's own words.
+    voice.speakWithInstruction(
+      `You are currently looking up background material on "${(data as any).topic?.slice(0, 50) || "this topic"}". ` +
+      `Say one short filler sentence like "${filler}" in the conversation language, nothing else.`
+    );
+    console.log(`[Filler] Spoke filler while searching for "${(data as any).topic?.slice(0, 30)}"`);
   }
 });
 
@@ -1021,8 +1067,11 @@ startConfigServer({
 // Screenshots: screencapture CLI + Chrome CDP
 console.log("[Init] NativeBridge active (no Python sidecar)");
 
-process.on("SIGINT", async () => {
-  console.log("\n[Shutdown] Stopping CallingClaw...");
+let _shuttingDown = false;
+async function shutdown(signal: string) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.log(`\n[Shutdown] Stopping CallingClaw (${signal})...`);
 
   // Save meeting notes if recording
   if (meeting.getNotes().isRecording) {
@@ -1048,10 +1097,18 @@ process.on("SIGINT", async () => {
   bridge.stop();
   voice.stop();
   playwrightCli.stop();
-  chromeLauncher.close();
+  // Await Chrome teardown — exiting first leaves an orphan Chrome holding
+  // the profile's SingletonLock (forces crash-file scrubbing on next launch)
+  await Promise.race([
+    chromeLauncher.close(),
+    new Promise((r) => setTimeout(r, 5000)),
+  ]).catch(() => {});
   calendar.disconnect();
   process.exit(0);
-});
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 console.log(`
 ╔══════════════════════════════════════════════════════╗

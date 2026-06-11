@@ -849,10 +849,10 @@ export class ChromeLauncher {
 
     this._admissionInterval = setInterval(async () => {
       try {
-        // Check if meeting has ended
+        // Check if meeting has ended (3 consecutive ticks required)
         if (this._meetingEndCallback) {
           try {
-            const ended = await this._checkMeetingEndedLib();
+            const ended = await this._meetingEndConfirmed();
             if (ended) {
               console.log("[MeetAdmit] Meeting ended detected — triggering cleanup");
               const cb = this._meetingEndCallback;
@@ -997,9 +997,16 @@ export class ChromeLauncher {
     if (!this._page) return false;
     const result = await this._page.evaluate(`(() => {
       if (!location.hostname.includes('meet.google.com')) return 'ended';
-      var leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
-      var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var text = document.body.innerText || '';
+      // Waiting room / pre-join lobby: no Leave button, no call controls, no
+      // video grid — but the meeting has NOT ended. Without this check the
+      // structural fallback below declared 'ended' while waiting for admission.
+      var waitingSignals = [
+        'Asking to be let in', 'asking to be let in',
+        "when someone lets you in", 'Ready to join', 'Ask to join',
+        '请求加入', '等待加入', '准备加入', '有人允许后即可加入',
+      ];
+      if (waitingSignals.some(function(s) { return text.includes(s); })) return 'active';
       var endedSignals = [
         'This meeting has ended', '会议已结束', '會議已結束',
         'You were removed from the meeting', '您已被移出会议',
@@ -1007,15 +1014,46 @@ export class ChromeLauncher {
         'Return to home screen', '返回主屏幕',
         'The meeting has ended for everyone', '所有人的会议已结束',
         'You left the meeting', '你已退出会议', '您已離開會議',
-        'Rejoin', '重新加入',
       ];
       var hasEndedText = endedSignals.some(function(s) { return text.includes(s); });
       if (hasEndedText) return 'ended';
+      // 'Rejoin' only counts as an exact button label — a body-text substring
+      // match fired on any page that merely mentioned rejoining.
+      var rejoinBtn = Array.from(document.querySelectorAll('button, [role="button"]')).some(function(b) {
+        var t = (b.textContent || '').trim();
+        return t === 'Rejoin' || t === '重新加入';
+      });
+      if (rejoinBtn) return 'ended';
+      var leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
+      var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
       if (!leaveBtn && !callControls && !videoGrid) return 'ended';
       return 'active';
     })()`);
     return result === "ended";
+  }
+
+  private _endedTickCount = 0;
+
+  /**
+   * Require N consecutive 'ended' ticks (3s apart) before declaring the
+   * meeting over. Single-tick detection false-positived on transient DOM
+   * states (page loads, layout shifts) and triggered the full post-meeting
+   * pipeline — summary, delivery, voice teardown — on a live meeting.
+   */
+  private async _meetingEndConfirmed(consecutiveRequired = 3): Promise<boolean> {
+    const ended = await this._checkMeetingEndedLib();
+    if (!ended) {
+      this._endedTickCount = 0;
+      return false;
+    }
+    this._endedTickCount++;
+    if (this._endedTickCount < consecutiveRequired) {
+      console.log(`[MeetEnd] ended signal ${this._endedTickCount}/${consecutiveRequired} — waiting for confirmation`);
+      return false;
+    }
+    this._endedTickCount = 0;
+    return true;
   }
 
   private _recordAdmitted(text: string) {
@@ -1045,11 +1083,12 @@ export class ChromeLauncher {
 
   onMeetingEnd(callback: () => void): void {
     this._meetingEndCallback = callback;
+    this._endedTickCount = 0;
     if (!this._admissionInterval) {
       console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
       this._admissionInterval = setInterval(async () => {
         try {
-          const ended = await this._checkMeetingEndedLib();
+          const ended = await this._meetingEndConfirmed();
           if (ended) {
             console.log("[MeetEnd] Meeting ended detected — triggering cleanup");
             const cb = this._meetingEndCallback;

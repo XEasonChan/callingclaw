@@ -475,8 +475,20 @@ When user asks to join a meeting, check calendar, or do complex computer actions
 
   // ── Private: Inbound message parsers ──────────────────────────────
 
+  // True while a model turn is streaming — used to synthesize response.created
+  private _turnActive = false;
+
   private _parseServerContent(content: any): NormalizedEvent[] {
     const events: NormalizedEvent[] = [];
+
+    // Synthesize response.created on the FIRST content of a turn.
+    // Gemini has no native equivalent, but VoiceModule resets its heard-ratio
+    // counters and enters "thinking" ONLY on response.created — without this,
+    // interruption truncation never fired and waitForSpeechDone broke on Gemini.
+    if (!this._turnActive && (content.modelTurn?.parts?.length || content.outputTranscription?.text)) {
+      this._turnActive = true;
+      events.push({ type: "response.created" });
+    }
 
     // Model turn with audio/text parts
     if (content.modelTurn?.parts) {
@@ -500,6 +512,12 @@ When user asks to join a meeting, check calendar, or do complex computer actions
 
     // Turn complete
     if (content.turnComplete) {
+      this._turnActive = false;
+      // Flush the assistant transcript: the nested outputTranscription shape
+      // only ever emits deltas, so without a done event here the assistant's
+      // speech never reached SharedContext and the buffer grew unboundedly.
+      // (transcript: "" → VoiceModule falls back to its accumulated buffer.)
+      events.push({ type: "response.audio_transcript.done", transcript: "" });
       events.push({ type: "response.audio.done" });
       events.push({
         type: "response.done",
@@ -525,8 +543,16 @@ When user asks to join a meeting, check calendar, or do complex computer actions
 
     // Interrupted by user
     if (content.interrupted) {
+      this._turnActive = false;
       events.push({
         type: "input_audio_buffer.speech_started",
+      });
+      // Close out the aborted turn so VoiceModule's state machine doesn't
+      // linger in "interrupted" until the next audio delta
+      events.push({ type: "response.audio_transcript.done", transcript: "" });
+      events.push({
+        type: "response.done",
+        response: { status: "cancelled" },
       });
     }
 

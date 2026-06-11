@@ -115,16 +115,9 @@ export class TranscriptAuditor {
     // doesn't re-execute the same action that Realtime already handled.
     // Without this, user says "打开MCP文档" → Realtime calls open_file (200ms)
     // → Auditor classifies as search_and_open (1.5s later) → opens same file again.
-    this.eventBus.on("voice.tool_call", (data: any) => {
-      const tool = data?.tool || "";
-      const key = `realtime:${tool}:${JSON.stringify(data?.summary || data?.instruction || "").slice(0, 80)}`;
-      if (!this._recentActions.includes(key)) {
-        this._recentActions.push(key);
-        if (this._recentActions.length > 5) this._recentActions.shift();
-      }
-      this._lastExecutionTs = Date.now();
-      console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool}, suppressing auditor for ${this.COOLDOWN_MS}ms`);
-    });
+    // Stored as a field so deactivate() can unsubscribe (was leaking one
+    // listener per meeting).
+    this.eventBus.on("voice.tool_call", this._onVoiceToolCall);
 
     // Build file alias index with prep context so AutomationRouter can instantly
     // resolve file paths the voice AI references from the meeting prep brief
@@ -165,15 +158,27 @@ export class TranscriptAuditor {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = null;
     }
-    // Unsubscribe listener to prevent leaking handlers across meetings
+    // Unsubscribe listeners to prevent leaking handlers across meetings
     this.context.off("transcript", this._onTranscript);
+    this.eventBus.off("voice.tool_call", this._onVoiceToolCall);
     this.automationRouter.fileIndex.clear();
     this.voice = null;
     console.log("[TranscriptAuditor] Deactivated");
     this.eventBus.emit("auditor.deactivated", {});
   }
 
-  // ── Event handler (arrow fn to preserve `this`) ──
+  // ── Event handlers (arrow fns to preserve `this`) ──
+
+  private _onVoiceToolCall = (data: any) => {
+    const tool = data?.tool || "";
+    const key = `realtime:${tool}:${JSON.stringify(data?.summary || data?.instruction || "").slice(0, 80)}`;
+    if (!this._recentActions.includes(key)) {
+      this._recentActions.push(key);
+      if (this._recentActions.length > 5) this._recentActions.shift();
+    }
+    this._lastExecutionTs = Date.now();
+    console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool}, suppressing auditor for ${this.COOLDOWN_MS}ms`);
+  };
 
   private _onTranscript = (entry: TranscriptEntry) => {
     if (!this._active) return;
@@ -247,7 +252,9 @@ export class TranscriptAuditor {
         const result = await this.automationRouter.execute(text);
 
         if (result.success && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
-          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, result.result, this.eventBus);
+          // speak: auditor actions have no other narration path — the user
+          // otherwise stares at a changed screen with a silent assistant
+          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, result.result, this.eventBus, { speak: true });
         }
       }
 
@@ -820,7 +827,8 @@ Respond with JSON only:
           this.meetingPrepSkill,
           instruction,
           executionResult,
-          this.eventBus
+          this.eventBus,
+          { speak: true } // auditor-originated: no other narration path
         );
       }
 

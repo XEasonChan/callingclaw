@@ -306,17 +306,37 @@ export class ComputerUseModule {
     if (!this.isConfigured) {
       return { summary: "No API key configured", steps: [] };
     }
+    if (this._running) {
+      return { summary: "Another computer-use task is already running. Wait for it to finish or cancel it first.", steps: [] };
+    }
 
     this._running = true;
+    try {
+      return await this._executeLoop(instruction, maxSteps);
+    } finally {
+      this._running = false;
+    }
+  }
+
+  private async _executeLoop(instruction: string, maxSteps: number): Promise<{
+    summary: string;
+    steps: string[];
+  }> {
     const steps: string[] = [];
     const recentTranscript = this.context.getTranscriptText(15);
 
     // Use fast Haiku model during meetings (meetingAutomation config)
     // Falls back to standard model for non-meeting Computer Use
-    const isMeeting = this.context.transcript.length > 0; // Simple heuristic: has transcript = in meeting
-    const model = isMeeting
+    const isMeeting = this.context.inMeeting;
+    let model = isMeeting
       ? CONFIG.meetingAutomation.model
       : (this._mode === "openrouter" ? CONFIG.openrouter.model : CONFIG.anthropic.model);
+
+    // Meeting model is configured as an OpenRouter slug ("anthropic/claude-haiku-4-5");
+    // the direct Anthropic API needs the bare model id
+    if (this._mode === "anthropic") {
+      model = model.replace(/^anthropic\//, "");
+    }
 
     if (isMeeting) {
       console.log(`[ComputerUse] Using fast meeting model: ${model}`);
@@ -653,7 +673,6 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
       messages.push({ role: "user", content: toolResults });
     }
 
-    this._running = false;
     return { summary: "Max steps reached", steps };
   }
 

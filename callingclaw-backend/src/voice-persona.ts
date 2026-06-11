@@ -211,12 +211,14 @@ export function injectMeetingBrief(
 // 4. DYNAMIC CONTEXT PUSH (during meeting) — INCREMENTAL
 // ══════════════════════════════════════════════════════════════
 
-// Track the last injected liveNote index to avoid re-injecting old notes
-let _lastInjectedNoteIndex = -1;
+// Track injected liveNotes by content identity — an array index broke as
+// soon as TTL eviction spliced the array (new notes silently stopped
+// reaching the voice session after the first eviction, ~5 min in).
+let _injectedNotes = new Set<string>();
 
 /** Reset the injection tracker (call when a new meeting starts) */
 export function resetContextInjectionState() {
-  _lastInjectedNoteIndex = -1;
+  _injectedNotes = new Set<string>();
 }
 
 /**
@@ -245,21 +247,20 @@ export function pushContextUpdate(
   const notes = brief.liveNotes;
   if (notes.length === 0) return false;
 
-  // Only inject notes that haven't been injected yet
-  const startIdx = _lastInjectedNoteIndex + 1;
-  if (startIdx >= notes.length) return false; // No new notes
+  // Only inject notes that haven't been injected yet (identity-tracked —
+  // also dedups identical notes re-added by retriever cache hits)
+  const newNotes = notes.filter((n) => !_injectedNotes.has(n));
+  if (newNotes.length === 0) return false;
 
   let injected = 0;
-  for (let i = startIdx; i < notes.length; i++) {
-    const note = notes[i]!;
+  for (const note of newNotes) {
     const itemId = voiceModule.injectContext(note);
     if (itemId) {
+      _injectedNotes.add(note);
       injected++;
-      console.log(`[VoicePersona] Injected context #${i}: ${note.slice(0, 80)}...`);
+      console.log(`[VoicePersona] Injected context: ${note.slice(0, 80)}...`);
     }
   }
-
-  _lastInjectedNoteIndex = notes.length - 1;
 
   if (injected > 0) {
     eventBus?.emit("meeting.context_pushed", {
@@ -288,9 +289,20 @@ export function notifyTaskCompletion(
   task: string,
   result: string,
   eventBus?: EventBus,
+  opts?: { speak?: boolean },
 ): string {
   const entry = prepSkill.recordTaskCompletion(task, result);
   pushContextUpdate(voiceModule, prepSkill, eventBus);
+  // speak: actions executed autonomously (TranscriptAuditor) have no other
+  // narration path — without this the screen changes and the AI stays silent.
+  // Voice-originated tools must NOT set it (voice.ts already triggers a
+  // response on slow-tool completion).
+  if (opts?.speak) {
+    voiceModule.speakWithInstruction(
+      `You just completed an action for the participants: "${task.slice(0, 120)}" — result: ${result.slice(0, 200)}. ` +
+      `Briefly tell them what you did, one short sentence in the conversation language.`
+    );
+  }
   return entry;
 }
 

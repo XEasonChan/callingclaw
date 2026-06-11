@@ -77,6 +77,20 @@ export class SharedContext {
   private _currentScene: CurrentScene | null = null;
   private _stageDocuments = new Map<string, StageDocument>();
   private _listeners = new Map<string, Array<(data: any) => void>>();
+  private _inMeeting = false;
+
+  // ── Meeting flag ──
+  // Set by meeting.started / cleared by meeting.ended in callingclaw.ts.
+  // Consumers (ComputerUse model split, etc.) must use this instead of
+  // inferring from transcript length — transcript persists across sessions.
+
+  get inMeeting(): boolean {
+    return this._inMeeting;
+  }
+
+  setInMeeting(value: boolean) {
+    this._inMeeting = value;
+  }
 
   // ── Transcript ──
 

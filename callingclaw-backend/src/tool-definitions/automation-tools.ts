@@ -107,6 +107,42 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           required: ["query"],
         },
       },
+      // ── Presenting-page interaction ──
+      // Referenced by share_screen's tool result ("Use interact/scroll to navigate") —
+      // the handler existed but the definition was missing, so the model could
+      // never actually drive the page during presentations.
+      {
+        name: "interact",
+        description:
+          "Interact with the page currently being presented (screen-shared): click an element by its visible text, " +
+          "scroll, or navigate to a URL. Call with action='click' and no target to list clickable elements first.",
+        parameters: {
+          type: "object",
+          properties: {
+            action: {
+              type: "string",
+              enum: ["click", "scroll", "scroll_up", "scroll_down", "navigate"],
+              description: "Interaction to perform on the presenting page",
+            },
+            target: { type: "string", description: "Element text (click), 'up'/'down' (scroll), or URL (navigate)" },
+          },
+          required: ["action"],
+        },
+      },
+      // ── Shell command (atomic action for agent loop) ──
+      {
+        name: "exec",
+        description:
+          "Run a shell command on CallingClaw's Mac and return stdout/stderr. " +
+          "Use for quick lookups (ls, cat, grep, mdfind). Destructive commands are blocked.",
+        parameters: {
+          type: "object",
+          properties: {
+            command: { type: "string", description: "Shell command to run" },
+          },
+          required: ["command"],
+        },
+      },
       // ── Browser Automation (Playwright CLI) ──
       {
         name: "browser_action",

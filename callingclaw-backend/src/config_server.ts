@@ -1535,7 +1535,9 @@ export function startConfigServer(services: Services) {
           meetUrl: validated.url,
         });
         const meetingId = session.meetingId;
-        services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
+        // NOTE: markActive happens inside emitMeetingStarted() below — marking
+        // active before the join attempt left permanently-stuck "active"
+        // sessions whenever the join failed or admission was denied.
 
         // Step 1: Start voice session (if not already running)
         // Uses CORE_IDENTITY as system prompt; meeting context injected later via injectMeetingBrief()
@@ -1692,6 +1694,8 @@ export function startConfigServer(services: Services) {
 
         // Only emit meeting.started when ACTUALLY in the meeting (not waiting_room)
         const emitMeetingStarted = () => {
+          services.sessionManager?.markActive(meetingId, { meetUrl: validated.url });
+          registerAutoLeaveWatcher();
           services.meeting.startRecording();
           services.eventBus.startCorrelation("mtg");
           services.eventBus.emit("meeting.started", {
@@ -1753,6 +1757,10 @@ export function startConfigServer(services: Services) {
                 }
                 if (check.includes("rejected")) {
                   console.log("[Meeting] Rejected from waiting room");
+                  services.sessionManager?.markEnded(meetingId);
+                  if (services.chromeLauncher?.isAdmissionMonitoring) {
+                    services.chromeLauncher.stopAdmissionMonitor();
+                  }
                   break;
                 }
               } catch {
@@ -1785,8 +1793,13 @@ export function startConfigServer(services: Services) {
         }
 
         // ── Auto-leave: detect when meeting ends (host ended, kicked, left via Meet UI) ──
-        // Triggers the full leave flow: summary generation → file export → PostMeetingDelivery
-        if (services.chromeLauncher?.page) {
+        // Triggers the full leave flow: summary generation → file export → PostMeetingDelivery.
+        // Registered ONLY from emitMeetingStarted() — arming it on a failed or
+        // waiting_room join made the detector see the lobby/error page as
+        // "ended" and fire the whole post-meeting pipeline within seconds
+        // (garbage summary, Telegram spam, voice teardown).
+        function registerAutoLeaveWatcher() {
+          if (!services.chromeLauncher?.page) return;
           services.chromeLauncher.onMeetingEnd(async () => {
             console.log("[Meeting] Auto-leave: meeting ended detected by ChromeLauncher");
             try {
@@ -1795,11 +1808,8 @@ export function startConfigServer(services: Services) {
                 services.chromeLauncher.stopAdmissionMonitor();
               }
 
-              // Mark session ended
-              if (services.sessionManager) {
-                const active = services.sessionManager.list({ status: "active" });
-                if (active[0]) services.sessionManager.markEnded(active[0].meetingId);
-              }
+              // Mark THIS session ended — active[0] could be a different live session
+              services.sessionManager?.markEnded(meetingId);
 
               // Generate summary + export
               const autoSummary = await services.meeting.generateSummary();
@@ -1815,15 +1825,12 @@ export function startConfigServer(services: Services) {
                 );
               }
 
-              // Attach summary to session
+              // Attach summary to this session
               if (services.sessionManager && autoFilepath) {
-                const ended = services.sessionManager.list({ status: "ended" });
-                if (ended[0]) {
-                  try {
-                    const content = await Bun.file(autoFilepath).text();
-                    await services.sessionManager.attachSummary(ended[0].meetingId, content);
-                  } catch {}
-                }
+                try {
+                  const content = await Bun.file(autoFilepath).text();
+                  await services.sessionManager.attachSummary(meetingId, content);
+                } catch {}
               }
 
               // Emit meeting.ended
@@ -1831,16 +1838,16 @@ export function startConfigServer(services: Services) {
                 filepath: autoFilepath,
                 summary: autoSummary,
                 autoLeave: true,
+                meetingId,
               });
               services.eventBus.endCorrelation();
 
               // Trigger PostMeetingDelivery (OpenClaw → Telegram)
               if (services.postMeetingDelivery) {
-                const endedSession = services.sessionManager?.list({ status: "ended" })[0];
                 services.postMeetingDelivery.deliver({
                   summary: autoSummary,
                   notesFilePath: autoFilepath,
-                  meetingId: endedSession?.meetingId,
+                  meetingId,
                   prepSummary: services.meetingPrepSkill?.currentBrief ? {
                     topic: services.meetingPrepSkill.currentBrief.topic,
                     liveNotes: services.meetingPrepSkill.currentBrief.liveNotes || [],
@@ -1862,6 +1869,12 @@ export function startConfigServer(services: Services) {
             }
           });
           console.log("[Meeting] Auto-leave watcher registered (detects host-end, kicked, left via Meet)");
+        }
+
+        // Failed join: release the session so it can't be hijacked as active[0]
+        // by talk-locally or a later meeting's end handler
+        if (joinState === "failed") {
+          services.sessionManager?.markEnded(meetingId);
         }
 
         // ── Pre-meeting agenda: emit for user confirmation ──

@@ -225,7 +225,13 @@ export class ContextRetriever {
 
   private scheduleAnalysis() {
     const elapsed = Date.now() - this._lastAnalysisTs;
-    if (elapsed < this.MIN_INTERVAL_MS) return;
+    if (elapsed < this.MIN_INTERVAL_MS) {
+      // Re-arm instead of dropping: a question asked right after an analysis
+      // and followed by silence was previously never serviced at all.
+      if (this._debounceTimer) clearTimeout(this._debounceTimer);
+      this._debounceTimer = setTimeout(() => this.runAnalysis(), this.MIN_INTERVAL_MS - elapsed + 100);
+      return;
+    }
 
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this.runAnalysis(), this.DEBOUNCE_MS);
@@ -557,8 +563,8 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
   private async semanticSearch(queries: string[]): Promise<RetrievedContext[]> {
     // Path 0: Check prep brief sections first (instant, no API cost)
     const brief = this.meetingPrepSkill.currentBrief;
+    const prepResults: RetrievedContext[] = [];
     if (brief) {
-      const prepResults: RetrievedContext[] = [];
       const remainingQueries: string[] = [];
       const sections = [
         brief.architectureDecisions?.map((d) => `${d.decision}: ${d.rationale}`).join("\n") || "",
@@ -593,6 +599,9 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
       queries = remainingQueries;
     }
 
+    // Keep the instant prep-brief answers regardless of how the agentic
+    // search goes — the old mixed-branch spread started from [] and threw
+    // the already-computed prep results away.
     try {
       const agenticResults = await Promise.race([
         this.agenticSearch(queries),
@@ -600,10 +609,10 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
           setTimeout(() => reject(new Error("agentic search timeout")), ContextRetriever.AGENT_TIMEOUT_MS)
         ),
       ]);
-      return brief ? [...([] as RetrievedContext[]), ...agenticResults] : agenticResults;
+      return [...prepResults, ...agenticResults];
     } catch (err: any) {
       console.warn(`[ContextRetriever] Agentic search failed: ${err.message}, trying keyword fallback`);
-      return this.keywordFallback(queries);
+      return [...prepResults, ...(await this.keywordFallback(queries))];
     }
   }
 

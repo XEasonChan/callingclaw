@@ -351,13 +351,14 @@ ${body}
     if (!this._meetingDir) return;
     const line = JSON.stringify(entry) + "\n";
     const path = `${this._meetingDir}/timeline.jsonl`;
-    // Append synchronously to avoid write ordering issues
+    // appendFileSync: Bun.write has no append mode — `{mode:"append"}` threw
+    // synchronously, so timeline.jsonl was never written and cleanup() (which
+    // gates on its existence) never deleted old frame dirs → unbounded disk.
     try {
-      Bun.write(path, line, { mode: "append" } as any).catch(() => {
-        // Fallback: use Bun.$ for atomic append
-        Bun.$`echo ${line.trim()} >> ${path}`.quiet().catch(() => {});
-      });
-    } catch {}
+      require("fs").appendFileSync(path, line);
+    } catch (e: any) {
+      console.warn(`[KeyFrameStore] timeline.jsonl append failed: ${e.message}`);
+    }
   }
 
   /** Simple Jaccard similarity on character bigrams */
