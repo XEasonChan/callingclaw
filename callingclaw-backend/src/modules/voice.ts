@@ -571,11 +571,14 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    * Uses conversation.item.create instead of session.update to avoid audio breaks.
    *
    * @param text - Context text (e.g., "[CONTEXT] PRD目标是..." or "[DONE] 已打开文件")
+   * @param id - Optional stable item id (enables replace-by-removeContext);
+   *             previously dropped, which made removeContext("ctx_stage_docs")
+   *             a no-op and stage-doc items accumulate
    * @returns The item ID if sent, false if not connected
    */
-  injectContext(text: string): string | false {
+  injectContext(text: string, id?: string): string | false {
     if (!this.client.connected) return false;
-    return this.client.injectContext(text);
+    return this.client.injectContext(text, id);
   }
 
   /**

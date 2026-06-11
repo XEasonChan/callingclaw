@@ -299,7 +299,11 @@ export class ComputerUseModule {
   // Main execute loop
   // ══════════════════════════════════════════════════════════════
 
-  async execute(instruction: string, maxSteps = 15): Promise<{
+  async execute(
+    instruction: string,
+    maxSteps = 15,
+    opts?: { signal?: AbortSignal; onStep?: (desc: string) => void },
+  ): Promise<{
     summary: string;
     steps: string[];
   }> {
@@ -312,13 +316,17 @@ export class ComputerUseModule {
 
     this._running = true;
     try {
-      return await this._executeLoop(instruction, maxSteps);
+      return await this._executeLoop(instruction, maxSteps, opts);
     } finally {
       this._running = false;
     }
   }
 
-  private async _executeLoop(instruction: string, maxSteps: number): Promise<{
+  private async _executeLoop(
+    instruction: string,
+    maxSteps: number,
+    opts?: { signal?: AbortSignal; onStep?: (desc: string) => void },
+  ): Promise<{
     summary: string;
     steps: string[];
   }> {
@@ -460,8 +468,15 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
     this.emitActivity("ai.step", `Starting: "${instruction.slice(0, 60)}"`);
 
     for (let step = 0; step < maxSteps && this._running; step++) {
+      // Cooperative cancellation: voice interruption ("停/stop") aborts via
+      // the orchestrator's AbortSignal — checked between every step
+      if (opts?.signal?.aborted) {
+        console.log(`[ComputerUse] Aborted at step ${step + 1}: ${opts.signal.reason?.message || "cancelled"}`);
+        return { summary: `Cancelled after ${step} step(s).`, steps };
+      }
       console.log(`[ComputerUse] Step ${step + 1}...`);
       this.emitActivity("ai.step", `Step ${step + 1}/${maxSteps}`);
+      opts?.onStep?.(`step ${step + 1}/${maxSteps}`);
 
       // Prune old images from conversation to prevent token explosion
       this.pruneOldImages(messages);
@@ -488,6 +503,7 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
             } else if (block.type === "tool_use") {
               const params = JSON.stringify(block.input || {}).slice(0, 80);
               this.emitActivity("ai.tool_call", `${block.name} → ${params}`, JSON.stringify(block.input, null, 2));
+              opts?.onStep?.(`${block.name} ${params.slice(0, 50)}`);
             }
           });
 
@@ -509,6 +525,7 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
             } else if (block.type === "tool_use") {
               const params = JSON.stringify(block.input || {}).slice(0, 80);
               this.emitActivity("ai.tool_call", `${block.name} → ${params}`, JSON.stringify(block.input, null, 2));
+              opts?.onStep?.(`${block.name} ${params.slice(0, 50)}`);
             }
           }
         }

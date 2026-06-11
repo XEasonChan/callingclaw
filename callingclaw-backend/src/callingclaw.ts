@@ -10,7 +10,7 @@ if (CONFIG.audio.sampleRate !== 24000) {
 }
 
 import { NativeBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ActionOrchestrator, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { ChromeLauncher } from "./chrome-launcher";
@@ -800,6 +800,58 @@ const peekaboo = new PeekabooClient();
 const zoomSkill = new ZoomSkill(bridge);
 const automationRouter = new AutomationRouter(bridge, eventBus, playwrightCli, peekaboo);
 
+// ── ActionOrchestrator: the single "hand" ──
+// Every screen/browser action (voice tool, auditor lane, HTTP) is serialized
+// through this queue: one active task, duplicate instructions coalesced,
+// AbortSignal threaded into ComputerUse, progress visible to the voice layer.
+const orchestrator = new ActionOrchestrator(context, eventBus);
+
+// Task visibility for the mouth: keep one [ACTING] Layer-3 item alive while
+// a hand action runs (replaced on each progress beat, removed on completion)
+// so the voice model can answer "你在干嘛" and narrate progress.
+const ACTIVE_TASK_CTX_ID = "ctx_active_task";
+function refreshActingContext() {
+  if (!voice.connected) return;
+  const prompt = context.getActiveTaskPrompt();
+  voice.removeContext(ACTIVE_TASK_CTX_ID);
+  if (prompt) voice.injectContext(prompt, ACTIVE_TASK_CTX_ID);
+}
+eventBus.on("task.started", () => refreshActingContext());
+eventBus.on("task.progress", (data: any) => {
+  refreshActingContext();
+  // Long-running task (>15s): let the AI give a one-line spoken progress
+  // update so the room isn't watching a silent screen
+  if (voice.connected && data.runtimeMs > 15_000 && data.runtimeMs % 30_000 < 7_000) {
+    voice.speakWithInstruction(
+      `You are still working on "${data.instruction}" (step: ${data.step}). If the conversation is idle, give a ONE-line progress note; if people are talking, stay silent.`
+    );
+  }
+});
+eventBus.on("task.completed", () => refreshActingContext());
+eventBus.on("task.failed", () => refreshActingContext());
+eventBus.on("task.cancelled", (data: any) => {
+  refreshActingContext();
+  if (voice.connected) {
+    voice.injectContext(`[TASK CANCELLED] "${(data as any).instruction}" was stopped at the user's request. Do not narrate its result.`);
+  }
+});
+
+// Stop-intent: the mouth can stop the hand. When the user says a cancel
+// phrase while a task is running, abort it (cooperatively — ComputerUse
+// checks the signal between steps).
+const STOP_INTENT = /^(停|停下|停止|算了|别弄了|别动了|取消|不用了|stop( it)?|cancel( that| it)?|never ?mind|forget it)[\s!！。.~]*$|(取消|停止|stop|cancel)\s*(这个|那个|当前)?\s*(任务|操作|action|task)/i;
+context.on("transcript", (entry: any) => {
+  if (entry.role !== "user" || !orchestrator.activeTask) return;
+  const text = (entry.text || "").trim();
+  if (text.length > 30 || !STOP_INTENT.test(text)) return;
+  const inst = orchestrator.activeTask.instruction.slice(0, 80);
+  console.log(`[Orchestrator] Stop-intent detected: "${text}" → aborting "${inst}"`);
+  orchestrator.abortActive(`user said: ${text.slice(0, 30)}`);
+  if (voice.connected) {
+    voice.speakWithInstruction(`You just stopped the in-progress action ("${inst}") because the user asked. Confirm in ONE short sentence.`);
+  }
+});
+
 // Layer 2 (Playwright CLI) — lazy start, only launches Chrome when first needed
 // ChromeLauncher.launch() is called before first playwright-cli use (in meeting join)
 console.log("[Init] Layer 2 (Playwright + ChromeLauncher) ready (lazy start)");
@@ -826,6 +878,7 @@ const transcriptAuditor = new TranscriptAuditor({
   meetingPrepSkill,
   meetJoiner,
   chromeLauncher,
+  orchestrator,
 });
 
 // ── 2e. ContextRetriever (Event-Driven Knowledge Gap Fill) ──────
@@ -892,6 +945,7 @@ const toolDeps = {
   contextRetriever,
   context,
   automationRouter,
+  orchestrator,
   computerUse,
   bridge,
   zoomSkill,

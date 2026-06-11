@@ -58,6 +58,7 @@ export class TranscriptAuditor {
   private meetJoiner: MeetJoiner;
   private chromeLauncher: any = null; // ChromeLauncher instance for presenting tab operations
   private voice: VoiceModule | null = null;
+  private orchestrator: import("./action-orchestrator").ActionOrchestrator | null = null;
 
   private _active = false;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -83,6 +84,7 @@ export class TranscriptAuditor {
     meetingPrepSkill: MeetingPrepSkill;
     meetJoiner: MeetJoiner;
     chromeLauncher?: any;
+    orchestrator?: import("./action-orchestrator").ActionOrchestrator;
   }) {
     this.context = opts.context;
     this.eventBus = opts.eventBus;
@@ -91,6 +93,7 @@ export class TranscriptAuditor {
     this.meetingPrepSkill = opts.meetingPrepSkill;
     this.meetJoiner = opts.meetJoiner;
     this.chromeLauncher = opts.chromeLauncher || null;
+    this.orchestrator = opts.orchestrator || null;
   }
 
   get active() {
@@ -248,13 +251,22 @@ export class TranscriptAuditor {
           targetTab: "presenting",
         });
       } else {
-        // Route through AutomationRouter for other actions (meet shortcuts, tab management, etc.)
-        const result = await this.automationRouter.execute(text);
+        // Route through AutomationRouter for other actions (meet shortcuts,
+        // tab management, etc.) — serialized via the orchestrator so the fast
+        // lane can't race a running ComputerUse loop, and an identical
+        // voice-originated instruction coalesces instead of double-executing
+        const runRouter = async () => {
+          const r = await this.automationRouter.execute(text);
+          return r.success ? r.result : `Error: ${r.result}`;
+        };
+        const summary = this.orchestrator
+          ? await this.orchestrator.submit("auditor", text, runRouter)
+          : await runRouter();
 
-        if (result.success && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
+        if (!summary.startsWith("Error:") && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
           // speak: auditor actions have no other narration path — the user
           // otherwise stares at a changed screen with a silent assistant
-          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, result.result, this.eventBus, { speak: true });
+          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, summary, this.eventBus, { speak: true });
         }
       }
 
@@ -568,6 +580,10 @@ Respond with JSON only:
     let executionResult = "";
 
     try {
+      // Auditor medium-lane actions run through the ActionOrchestrator so
+      // they serialize against voice-originated computer_action / HTTP tasks
+      // (and get an AbortSignal slot for cooperative cancellation).
+      const runSwitch = async (task?: import("./action-orchestrator").ActionTask) => {
       switch (action) {
         // ── File search + open (fuzzy name) ──
         case "search_and_open": {
@@ -795,12 +811,16 @@ Respond with JSON only:
           if (r.success) {
             executionResult = r.result;
           } else if (this.computerUse.isConfigured) {
-            // L4 fallback: full Computer Use agent loop
+            // L4 fallback: full Computer Use agent loop (abortable when
+            // running under the orchestrator)
             this.eventBus.emit("computer.task_started", {
               instruction,
               source: "auditor_l4",
             });
-            const cuResult = await this.computerUse.execute(instruction);
+            const cuResult = await this.computerUse.execute(instruction, 15, task ? {
+              signal: task.abort.signal,
+              onStep: (d) => this.orchestrator?.progress(task.id, d),
+            } : undefined);
             executionResult = cuResult.summary;
           } else {
             executionResult =
@@ -808,6 +828,18 @@ Respond with JSON only:
           }
           break;
         }
+      }
+      return executionResult;
+      };
+
+      if (this.orchestrator) {
+        executionResult = await this.orchestrator.submit(
+          "auditor",
+          `${action}: ${JSON.stringify(params).slice(0, 100)}`,
+          (task) => runSwitch(task),
+        );
+      } else {
+        executionResult = await runSwitch();
       }
 
       this.eventBus.emit("computer.task_done", {

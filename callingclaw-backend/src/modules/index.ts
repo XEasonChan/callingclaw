@@ -11,6 +11,7 @@ export { MeetingModule } from "./meeting";
 export { EventBus } from "./event-bus";
 export { TaskStore } from "./task-store";
 export { AutomationRouter } from "./automation-router";
+export { ActionOrchestrator, type ActionTask, type TaskExecutor } from "./action-orchestrator";
 export { ContextSync } from "./context-sync";
 export { TranscriptAuditor, AUDITOR_MANAGED_TOOLS } from "./transcript-auditor";
 export { BrowserActionLoop } from "./browser-action-loop";

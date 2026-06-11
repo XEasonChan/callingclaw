@@ -3,6 +3,7 @@
 
 import type { ToolModule } from "./types";
 import type { AutomationRouter } from "../modules/automation-router";
+import type { ActionOrchestrator } from "../modules/action-orchestrator";
 import type { ComputerUseModule } from "../modules/computer-use";
 import type { EventBus } from "../modules/event-bus";
 import type { SharedContext } from "../modules/shared-context";
@@ -15,6 +16,8 @@ import { notifyTaskCompletion } from "../voice-persona";
 
 export interface AutomationToolDeps {
   automationRouter: AutomationRouter;
+  /** Serializes all hand actions; optional for legacy test harnesses */
+  orchestrator?: ActionOrchestrator;
   computerUse: ComputerUseModule;
   eventBus: EventBus;
   context: SharedContext;
@@ -173,36 +176,51 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
       switch (name) {
         case "computer_action": {
           eventBus.emit("voice.tool_call", { tool: "computer_action", instruction: (args.instruction as string).slice(0, 80) });
-          // Route through the 4-layer automation router first
           eventBus.emit("computer.task_started", { instruction: args.instruction });
-          const routerResult = await automationRouter.execute(args.instruction);
 
-          // If the router handled it (Layer 1-3), return immediately
-          if (routerResult.success) {
-            eventBus.emit("computer.task_done", {
-              instruction: args.instruction,
-              summary: routerResult.result,
-              layer: routerResult.layer,
-              durationMs: routerResult.durationMs,
-            });
-            // Notify Voice AI of task completion during meetings (persistent live note)
-            if (meetingPrepSkill.currentBrief) {
-              notifyTaskCompletion(deps.voice, meetingPrepSkill, args.instruction, routerResult.result, eventBus);
+          // Router (L1-3) → ComputerUse (L4) fallback, executed as ONE task.
+          // The orchestrator serializes it against every other hand action
+          // (auditor lanes, HTTP) and threads an AbortSignal so voice
+          // interruption can stop a multi-step ComputerUse loop mid-flight.
+          const runChain = async (task?: import("../modules/action-orchestrator").ActionTask): Promise<{ summary: string; layer: string; durationMs?: number }> => {
+            const routerResult = await automationRouter.execute(args.instruction);
+            if (routerResult.success) {
+              return {
+                summary: `[${routerResult.layer}${routerResult.fallback ? " (fallback)" : ""}, ${routerResult.durationMs}ms] ${routerResult.result}`,
+                layer: routerResult.layer,
+                durationMs: routerResult.durationMs,
+              };
             }
-            return `[${routerResult.layer}${routerResult.fallback ? " (fallback)" : ""}, ${routerResult.durationMs}ms] ${routerResult.result}`;
+            if (!computerUse.isConfigured) {
+              return { summary: "No automation layer could handle this. Computer Use requires an API key.", layer: "none" };
+            }
+            const cuResult = await computerUse.execute(args.instruction, 15, task ? {
+              signal: task.abort.signal,
+              onStep: (d) => deps.orchestrator!.progress(task.id, d),
+            } : undefined);
+            return { summary: cuResult.summary, layer: "computer_use" };
+          };
+
+          let summary: string;
+          let layer = "orchestrator";
+          if (deps.orchestrator) {
+            summary = await deps.orchestrator.submit("voice", args.instruction, async (task) => {
+              const r = await runChain(task);
+              layer = r.layer;
+              return r.summary;
+            });
+          } else {
+            const r = await runChain();
+            summary = r.summary;
+            layer = r.layer;
           }
 
-          // Layer 4 fallback: Computer Use (vision-based)
-          if (!computerUse.isConfigured) {
-            return "No automation layer could handle this. Computer Use requires an API key.";
-          }
-          const cuResult = await computerUse.execute(args.instruction);
-          eventBus.emit("computer.task_done", { instruction: args.instruction, summary: cuResult.summary, layer: "computer_use" });
-          // Notify Voice AI of task completion during meetings
+          eventBus.emit("computer.task_done", { instruction: args.instruction, summary, layer });
+          // Notify Voice AI of task completion during meetings (persistent live note)
           if (meetingPrepSkill.currentBrief) {
-            notifyTaskCompletion(deps.voice, meetingPrepSkill, args.instruction, cuResult.summary, eventBus);
+            notifyTaskCompletion(deps.voice, meetingPrepSkill, args.instruction, summary, eventBus);
           }
-          return cuResult.summary;
+          return summary;
         }
         case "take_screenshot": {
           eventBus.emit("voice.tool_call", { tool: "take_screenshot" });
