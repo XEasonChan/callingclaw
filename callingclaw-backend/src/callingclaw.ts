@@ -130,7 +130,7 @@ const dispatcher = new OpenClawDispatcher(openclawBridge);
 // Job fire handler: when internal timer fires, auto-join the meeting
 const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
   console.log(`[JobScheduler] Firing: "${job.name}" → joining ${job.payload.meetUrl}`);
-  fetch("http://localhost:4000/api/meeting/join", {
+  fetch(`http://localhost:${CONFIG.port}/api/meeting/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: job.payload.meetUrl }),
@@ -799,6 +799,17 @@ computerUse.desktopCapture = desktopCapture;
 // Provides --remote-debugging-port so playwright-cli can connect in Phase 2.
 const chromeLauncher = new ChromeLauncher({
   profileDir: CONFIG.playwright.userDataDir || undefined,
+});
+
+// Chrome crash / manual quit mid-meeting → run the auto-leave pipeline
+// (summary from whatever transcript exists, session markEnded, voice/vision
+// teardown) instead of leaving zombies running until the 3h safety cap.
+chromeLauncher.onDisconnected(() => {
+  eventBus.emit("chrome.disconnected", { timestamp: Date.now() });
+  if (meeting.getNotes().isRecording || activeMeetingId) {
+    console.warn("[Init] Chrome died mid-meeting — triggering auto-leave cleanup");
+    autoLeaveMeeting().catch((e) => console.error("[Init] Crash cleanup failed:", e.message));
+  }
 });
 
 const playwrightCli = new PlaywrightCLIClient({

@@ -604,7 +604,7 @@ Respond with JSON only:
           if (!shareResult.success) {
             // Fallback: try direct share API with file search
             try {
-              const resp = await fetch("http://localhost:4000/api/screen/share", {
+              const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: undefined }), // will trigger file search in shareScreen
               });
@@ -622,7 +622,7 @@ Respond with JSON only:
           const shareUrl = params.url || "";
           instruction = `share URL: ${shareUrl}`;
           try {
-            const resp = await fetch("http://localhost:4000/api/screen/share", {
+            const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: shareUrl }),
             });
@@ -663,7 +663,7 @@ Respond with JSON only:
           instruction = "start screen sharing";
           const shareUrl = params.url || undefined;
           try {
-            const resp = await fetch("http://localhost:4000/api/screen/share", {
+            const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: shareUrl }),
@@ -681,7 +681,7 @@ Respond with JSON only:
         case "stop_sharing": {
           instruction = "stop screen sharing";
           try {
-            await fetch("http://localhost:4000/api/screen/stop", { method: "POST" });
+            await fetch(`http://localhost:${CONFIG.port}/api/screen/stop`, { method: "POST" });
             executionResult = "Screen sharing stopped";
           } catch {
             await this.meetJoiner.stopSharing();

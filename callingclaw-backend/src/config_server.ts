@@ -259,6 +259,11 @@ export function startConfigServer(services: Services) {
 
   const server = Bun.serve({
     port: CONFIG.port,
+    // Bind loopback by default: the control API is unauthenticated (join
+    // meetings, run automation, register webhooks) — 0.0.0.0 exposed it to
+    // the whole LAN with a hot mic. Set BIND_HOST=0.0.0.0 to expose
+    // intentionally (e.g. remote agents on a trusted network).
+    hostname: process.env.BIND_HOST || "127.0.0.1",
 
     // ── WebSocket handler (multiplexed: EventBus + Voice Test + Audio Bridge) ──
     websocket: {
@@ -1456,7 +1461,10 @@ export function startConfigServer(services: Services) {
           );
         }
 
-        services.eventBus.emit("meeting.ended", {
+        // meeting.exported, NOT meeting.ended — exporting notes mid-meeting
+        // previously fired the full teardown handler (keyframe finalize,
+        // vision stop, auditor deactivation) while the bot was still in call
+        services.eventBus.emit("meeting.exported", {
           filepath,
           summary,
           taskCount: summary.actionItems?.length || 0,
@@ -2570,6 +2578,12 @@ STEP-BY-STEP FLOW:
         const summary = await services.meeting.generateSummary();
         const filepath = await services.meeting.exportToMarkdown(summary);
         services.meeting.stopRecording();
+        // Leave via ChromeLauncher first (the actual Meet tab when joined via
+        // Playwright — previously only the legacy osascript path ran and the
+        // Chrome tab silently STAYED in the call after "leaving")
+        if (services.chromeLauncher?.page) {
+          await services.chromeLauncher.leaveMeeting().catch(() => {});
+        }
         await services.meetJoiner.leaveMeeting();
 
         let createdTasks: any[] = [];

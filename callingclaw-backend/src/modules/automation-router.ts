@@ -24,6 +24,7 @@
 
 import type { PythonBridge } from "../bridge";
 import type { EventBus } from "./event-bus";
+import { CONFIG } from "../config";
 import { ZoomSkill, type ZoomAction } from "../skills/zoom";
 import { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import { PeekabooClient } from "../mcp_client/peekaboo";
@@ -438,10 +439,10 @@ export class AutomationRouter {
           // Serve via localhost if it's in the public dir, otherwise file://
           const isPublic = filePath.includes("/public/");
           const serveUrl = isPublic
-            ? `http://localhost:4000/${filePath.split("/public/").pop()}`
+            ? `http://localhost:${CONFIG.port}/${filePath.split("/public/").pop()}`
             : `file://${filePath}`;
           try {
-            const resp = await fetch("http://localhost:4000/api/screen/share", {
+            const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: serveUrl }),
@@ -455,7 +456,7 @@ export class AutomationRouter {
       }
       // Direct URL share
       try {
-        const resp = await fetch("http://localhost:4000/api/screen/share", {
+        const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: url || undefined }),
@@ -470,7 +471,7 @@ export class AutomationRouter {
     // Stop sharing
     if (action === "stop_sharing") {
       try {
-        await fetch("http://localhost:4000/api/screen/stop", { method: "POST" });
+        await fetch(`http://localhost:${CONFIG.port}/api/screen/stop`, { method: "POST" });
         return "Stopped presenting";
       } catch { return "Stop sharing failed"; }
     }

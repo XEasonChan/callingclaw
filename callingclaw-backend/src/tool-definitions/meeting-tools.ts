@@ -469,13 +469,21 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             : `Failed: ${session.error}`;
         }
         case "leave_meeting": {
-          // Stop meeting-end watcher + admission monitor
+          // Stop meeting-end watcher + admission monitor (BOTH drivers — the
+          // ChromeLauncher interval previously kept running, clicking any
+          // "Admit/准许" button on whatever page Chrome showed next)
           playwrightCli.clearMeetingEndCallback();
           const _waitingRoomAbort = getWaitingRoomAbort();
           if (_waitingRoomAbort) { _waitingRoomAbort.abort(); setWaitingRoomAbort(null); }
           if (playwrightCli.isAdmissionMonitoring) {
             const admitted = playwrightCli.stopAdmissionMonitor();
             if (admitted.length > 0) {
+              meetingPrepSkill.addLiveNote(`[ADMIT] Admitted attendees: ${admitted.join(", ")}`);
+            }
+          }
+          if (deps.chromeLauncher?.isAdmissionMonitoring) {
+            const admitted = deps.chromeLauncher.stopAdmissionMonitor();
+            if (admitted?.length > 0) {
               meetingPrepSkill.addLiveNote(`[ADMIT] Admitted attendees: ${admitted.join(", ")}`);
             }
           }
@@ -525,6 +533,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           // User confirms → deep research + sub-agent execution per todo
           const activeSession = deps.sessionManager?.list({ status: "active" })[0]
             || deps.sessionManager?.list({ status: "ended" })[0];
+          // Mark the session ended — this teardown path previously left it
+          // "active" forever, hijacking talk-locally and later end handlers
+          if (activeSession && activeSession.status === "active") {
+            try { deps.sessionManager?.markEnded(activeSession.meetingId); } catch {}
+          }
           postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,

@@ -21,7 +21,7 @@
 //   Chrome (with init script)
 //     ├── getUserMedia → returns virtual MediaStreamDestination (AI audio out)
 //     ├── RTCPeerConnection → captures remote tracks (meeting audio in)
-//     └── WebSocket ws://localhost:4000/ws/voice-test
+//     └── WebSocket ws://localhost:' + (window.__CC_PORT || 4000) + '/ws/voice-test
 //           ├── sends: captured meeting audio (PCM16 24kHz base64)
 //           └── receives: AI response audio (PCM16 24kHz base64)
 
@@ -109,7 +109,7 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   var cc = window.__cc;
   if (!cc || !cc.outputDest) { console.log('[CC-Audio] No init state'); return 'no_init'; }
 
-  var BACKEND_WS = 'ws://localhost:4000/ws/voice-test';
+  var BACKEND_WS = 'ws://localhost:${CONFIG.port}/ws/voice-test';
   var SAMPLE_RATE = 24000;
 
   // ── Playback worklet (ring buffer, Blob URL) ──
@@ -537,8 +537,29 @@ export class ChromeLauncher {
     this._context = context;
     this._page = page;
 
+    // Crash/quit detection: without this, a dead Chrome left voice, vision
+    // and recording running as zombies (every 3s page.evaluate just threw
+    // into catch{} forever and end-detection could never fire).
+    this._intentionalContextClose = false;
+    context.on("close", () => {
+      this._page = null as any;
+      this._context = null as any;
+      if (this._admissionInterval) this.stopAdmissionMonitor();
+      if (this._intentionalContextClose) return;
+      console.warn("[ChromeLauncher] Chrome context closed unexpectedly (crash or manual quit)");
+      this._onDisconnected?.();
+    });
+
     console.log(`[ChromeLauncher] Chrome ready on port ${port}. playwright-cli can connect now.`);
     return { port };
+  }
+
+  private _onDisconnected: (() => void) | null = null;
+  private _intentionalContextClose = false;
+
+  /** Register a handler for unexpected Chrome death (crash / manual quit). */
+  onDisconnected(cb: () => void): void {
+    this._onDisconnected = cb;
   }
 
   /**
@@ -1525,6 +1546,7 @@ export class ChromeLauncher {
   /** Clean shutdown */
   async close(): Promise<void> {
     if (this._context) {
+      this._intentionalContextClose = true; // suppress crash-detection callback
       await this._context.close().catch(() => {});
       this._context = null;
       this._page = null;

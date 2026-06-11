@@ -27,7 +27,7 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LOOKAHEAD_MS = 2 * 60 * 60 * 1000; // 2 hours ahead
 const PREP_LEAD_MS = 2 * 60 * 1000; // Join 2 min before meeting start
 const PREP_STALE_MS = 12 * 60 * 1000; // 12 min — after OpenClaw's 10-min timeout, safe to retry
-const CALLINGCLAW_API = "http://localhost:4000";
+const CALLINGCLAW_API = `http://localhost:${process.env.PORT || 4000}`;
 const SCHEDULED_CACHE_PATH = resolve(homedir(), ".callingclaw", "scheduled-meetings.json");
 
 interface ScheduledMeeting {
@@ -454,7 +454,8 @@ export class MeetingScheduler {
       // Or Case A's text check rejected it (< 50 chars) but it's still valid
       try {
         const recheckFile = Bun.file(prepPath);
-        if (await recheckFile.exists() && (await recheckFile.size()) > 100) {
+        // .size is a property — calling it threw and disabled this guard
+        if (await recheckFile.exists() && recheckFile.size > 100) {
           console.log(`[PrepRecovery] Skipping regeneration — file appeared on disk: "${s.topic}" (${s.meetingId})`);
           // Mark as ready since file exists
           if (this.sessionManager) {
