@@ -284,7 +284,7 @@ export class ContextRetriever {
           const lastUserText = entries.filter(e => e.role === "user").pop()?.text || "";
           const cacheHits = this.searchCache(cached, lastUserText);
           if (cacheHits.length > 0) {
-            this.injectIntoVoice(cacheHits);
+            this.injectIntoVoice(cacheHits, { answeredQuestion: true });
             console.log(`[ContextRetriever] Cache hit: ${cacheHits.length} results for question in "${this._currentTopic.slice(0, 30)}" (<1ms)`);
             this.eventBus.emit("retriever.cache_hit", {
               topic: this._currentTopic,
@@ -345,7 +345,7 @@ export class ContextRetriever {
       // ── P1: Cache results under current topic for follow-up questions ──
       this.cacheForTopic(topicResult.topic, results);
 
-      this.injectIntoVoice(results);
+      this.injectIntoVoice(results, { answeredQuestion: hadQuestion });
 
       const totalMs = Date.now() - startTs;
       console.log(
@@ -947,7 +947,7 @@ RULES:
   // Step 5: Inject into Voice AI
   // ══════════════════════════════════════════════════════════════
 
-  private injectIntoVoice(newContexts: RetrievedContext[]) {
+  private injectIntoVoice(newContexts: RetrievedContext[], opts?: { answeredQuestion?: boolean }) {
     if (!this.voice?.connected || !this.meetingPrepSkill.currentBrief) return;
 
     // Inject context data as persistent liveNotes (these stay in context)
@@ -957,14 +957,24 @@ RULES:
     }
     pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
 
-    // One-shot conversational hint — injected directly via conversation.item.create.
-    // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
-    // once and can naturally weave it into conversation if relevant.
     const topicSummary = newContexts.map((c) => c.query).join(", ");
-    const hint = `[CONTEXT_HINT] You just learned relevant information about: ${topicSummary}. If this connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的..." or "that reminds me, we discussed...". If it's not relevant right now, ignore this hint.`;
-    this.voice.injectContext(hint);
 
-    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts + conversational hint into Voice AI`);
+    if (opts?.answeredQuestion && typeof (this.voice as any).speakWithInstruction === "function") {
+      // Late-answer speak-back: retrieval takes 6-13s, so by the time results
+      // land the model has usually already answered ("I'm not sure"). Trigger
+      // a one-turn follow-up instead of letting the retrieval go to waste.
+      (this.voice as any).speakWithInstruction(
+        `You now have background information about: ${topicSummary}. If a question on this was just asked and you answered vaguely or said you'd check, follow up NOW with the concrete answer in one or two sentences. If your earlier answer was already complete, stay silent.`
+      );
+    } else {
+      // One-shot conversational hint — injected directly via conversation.item.create.
+      // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
+      // once and can naturally weave it into conversation if relevant.
+      const hint = `[CONTEXT_HINT] You just learned relevant information about: ${topicSummary}. If this connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的..." or "that reminds me, we discussed...". If it's not relevant right now, ignore this hint.`;
+      this.voice.injectContext(hint);
+    }
+
+    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI${opts?.answeredQuestion ? " (question follow-up requested)" : ""}`);
   }
 
   // ══════════════════════════════════════════════════════════════

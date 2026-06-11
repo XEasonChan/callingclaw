@@ -321,14 +321,27 @@ const RECONNECT_DELAY_MS = 3000;       // 3s between retries
 const RECONNECT_CONTEXT_ENTRIES = 20;   // Replay last 20 transcript entries
 
 // ── Incremental Context Injection ────────────────────────────────
+//
+// Layer 3 is TOKEN-budgeted (~3000 tokens per CONTEXT-ENGINEERING.md), with
+// images in a separate small slot pool. The old 15-ITEM FIFO let 5s-cadence
+// screenshots evict retrieved [CONTEXT] text within ~75 seconds.
 
-/** Max context items before FIFO eviction kicks in */
-const MAX_CONTEXT_ITEMS = 15;
+/** Layer-3 text budget in estimated tokens */
+const MAX_CONTEXT_TOKENS_L3 = 3000;
+/** Images kept in the conversation at once (token-expensive) */
+const MAX_IMAGE_ITEMS = 2;
+
+/** Rough token estimate for mixed zh/en text (zh ≈ 1-2 chars/token, en ≈ 4) */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3);
+}
 
 export interface ContextItem {
   id: string;
   text: string;
   injectedAt: number;
+  kind?: "text" | "image";
+  tokens?: number;
 }
 
 // ── Token Budget Tracking ────────────────────────────────────────
@@ -1013,16 +1026,24 @@ export class RealtimeClient {
 
     if (!sent) return false;
 
-    this._contextQueue.push({ id: itemId, text, injectedAt: Date.now() });
-
-    // FIFO eviction — delete oldest items when over limit
-    while (this._contextQueue.length > MAX_CONTEXT_ITEMS) {
-      const oldest = this._contextQueue.shift()!;
-      this.sendEvent("conversation.item.delete", { item_id: oldest.id });
-      console.log(`[Realtime] Context evicted: ${oldest.id} (queue full, max ${MAX_CONTEXT_ITEMS})`);
-    }
+    this._contextQueue.push({ id: itemId, text, injectedAt: Date.now(), kind: "text", tokens: estimateTokens(text) });
+    this._evictTextOverBudget();
 
     return itemId;
+  }
+
+  /** Evict oldest TEXT items while the Layer-3 text budget is exceeded */
+  private _evictTextOverBudget() {
+    const textTokens = () => this._contextQueue
+      .filter((c) => c.kind !== "image")
+      .reduce((sum, c) => sum + (c.tokens ?? estimateTokens(c.text)), 0);
+    while (textTokens() > MAX_CONTEXT_TOKENS_L3) {
+      const idx = this._contextQueue.findIndex((c) => c.kind !== "image");
+      if (idx === -1) break;
+      const oldest = this._contextQueue.splice(idx, 1)[0]!;
+      this.sendEvent("conversation.item.delete", { item_id: oldest.id });
+      console.log(`[Realtime] Context evicted: ${oldest.id} (text budget ${MAX_CONTEXT_TOKENS_L3} tokens)`);
+    }
   }
 
   /**
@@ -1062,13 +1083,18 @@ export class RealtimeClient {
 
     if (!sent) return false;
 
-    this._contextQueue.push({ id: itemId, text: `[IMAGE] ${caption || "screenshot"}`, injectedAt: Date.now() });
+    this._contextQueue.push({ id: itemId, text: `[IMAGE] ${caption || "screenshot"}`, injectedAt: Date.now(), kind: "image" });
 
-    // FIFO eviction — images are token-expensive, evict aggressively
-    while (this._contextQueue.length > MAX_CONTEXT_ITEMS) {
-      const oldest = this._contextQueue.shift()!;
+    // Images live in their own slot pool — they no longer evict retrieved
+    // text context (screenshot spam was flushing [CONTEXT] items in ~75s)
+    const images = this._contextQueue.filter((c) => c.kind === "image");
+    let excess = images.length - MAX_IMAGE_ITEMS;
+    while (excess-- > 0) {
+      const idx = this._contextQueue.findIndex((c) => c.kind === "image");
+      if (idx === -1) break;
+      const oldest = this._contextQueue.splice(idx, 1)[0]!;
       this.sendEvent("conversation.item.delete", { item_id: oldest.id });
-      console.log(`[Realtime] Context evicted: ${oldest.id} (queue full)`);
+      console.log(`[Realtime] Image evicted: ${oldest.id} (max ${MAX_IMAGE_ITEMS} images)`);
     }
 
     console.log(`[Realtime] Injected image ${itemId} (${Math.round(base64Jpeg.length / 1024)}KB${caption ? `, caption: ${caption.slice(0, 60)}` : ""})`);
@@ -1104,6 +1130,9 @@ export class RealtimeClient {
 
     console.log(`[Realtime] Replaying ${this._contextQueue.length} context items after reconnect`);
     for (const item of this._contextQueue) {
+      // Image payloads aren't retained — replaying "[IMAGE] caption" as text
+      // would mislead the model about what it can currently see
+      if (item.kind === "image") continue;
       this.sendEvent("conversation.item.create", {
         item: {
           id: item.id,

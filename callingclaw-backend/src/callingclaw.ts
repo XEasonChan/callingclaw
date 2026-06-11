@@ -284,6 +284,10 @@ openclawBridge.onActivity((kind, summary, detail) => {
 // Accumulated screen descriptions for periodic OpenClaw push
 let _meetingVisionBuffer: string[] = [];
 
+// Voice screenshot injection throttle state (was on globalThis)
+let _lastVoiceScreenshotTs = 0;
+let _lastVoiceScreenKey = "";
+
 // ── Browser Capture Provider (CDP) — used by VisionModule for 1s screenshots ──
 const browserCapture = new BrowserCaptureProvider();
 // Desktop Capture Provider (screencapture CLI) — used by ComputerUseModule
@@ -307,12 +311,18 @@ const vision = new VisionModule({
       keyFrameStore.saveFrame(image, metadata).catch(() => {});
     }
     // Inject screenshot into voice session so AI can see the screen during conversation.
-    // Throttled to 1 frame per 5s to avoid token flooding (~25 tokens/sec for audio alone).
-    // Works for OpenAI 1.5 (input_image), Gemini 3.1 (realtimeInput.video), text fallback for others.
+    // Event-driven: only when the page actually changed (title/url) or 30s
+    // elapsed — the old fixed 5s cadence churned the Layer-3 queue and evicted
+    // retrieved context. Post-action screenshots still arrive separately via
+    // the VISUAL_TOOLS feedback path.
     if (voice.connected && keyFrameStore.active && image) {
       const now = Date.now();
-      if (!globalThis._lastVoiceScreenshotTs || now - globalThis._lastVoiceScreenshotTs > 5000) {
-        globalThis._lastVoiceScreenshotTs = now;
+      const screenKey = `${metadata.url || ""}|${metadata.title || ""}`;
+      const changed = screenKey !== _lastVoiceScreenKey;
+      const elapsed = now - _lastVoiceScreenshotTs;
+      if ((changed && elapsed > 5000) || elapsed > 30_000) {
+        _lastVoiceScreenshotTs = now;
+        _lastVoiceScreenKey = screenKey;
         const caption = metadata.title ? `[Screen: ${metadata.title}]` : undefined;
         voice.injectScreenshot(image, caption);
       }
