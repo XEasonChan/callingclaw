@@ -24,7 +24,7 @@ describe("OpenAI Realtime Voice Session", () => {
 
   test("config has correct Realtime API settings", () => {
     expect(CONFIG.openai.realtimeUrl).toBe("wss://api.openai.com/v1/realtime");
-    expect(CONFIG.openai.realtimeModel).toMatch(/^gpt-4o-realtime/);
+    expect(CONFIG.openai.realtimeModel).toMatch(/^gpt-realtime/);
     expect(CONFIG.openai.voice).toBeTruthy();
   });
 

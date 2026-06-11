@@ -63,3 +63,14 @@ callingclaw-desktop/resources/bun/bun
 
 callingclaw_repo
 callingclaw-landing/
+
+# ── Local working state (not source) ──
+worktrees/
+outputs/
+design-review-screenshots/
+.obsidian/
+
+# ── iCloud sync-conflict duplicates ("name 2.ext") ──
+* 2.*
+* 2/
+* 2

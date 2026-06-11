@@ -55,25 +55,26 @@ export const CONFIG = {
   // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
   voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "openai15" | "grok" | "gemini",
 
-  // OpenAI (Realtime GA — gpt-realtime-1.5, upgraded from legacy preview)
+  // OpenAI (Realtime GA — gpt-realtime-2, GPT-5-class voice flagship)
   // Uses GA API: no beta header, new event names, session.type required.
   // Override with OPENAI_REALTIME_MODEL env var to pin a specific version.
   openai: {
     apiKey: process.env.OPENAI_API_KEY || "",
-    realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-1.5",
+    realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
     realtimeUrl: "wss://api.openai.com/v1/realtime",
     voice: "marin",
   },
 
-  // OpenAI 1.5 GA (gpt-realtime-1.5 — flagship, Feb 2026)
-  // Same pricing as legacy ($32/$64 audio), but better instruction following,
-  // function calling (+34%), and BigBench Audio accuracy (+26%).
-  // GA API: no beta header, new event names, session.type required.
+  // OpenAI Realtime 2 (gpt-realtime-2 — GPT-5-class reasoning, 128K ctx)
+  // vs 1.5: 128K context (was 32K), 32K max output (was 4K), parallel tool calls,
+  // configurable reasoning effort (minimal/low/medium/high/xhigh), spoken preambles,
+  // +15.2% Big Bench Audio, +13.8% Audio MultiChallenge instruction following.
+  // Pricing: audio same ($32/$64); text output up $16→$24 per 1M.
   openai15: {
     apiKey: process.env.OPENAI_API_KEY || "",
-    realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-1.5",
+    realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
     realtimeUrl: "wss://api.openai.com/v1/realtime",
-    voice: "marin",  // New voices: marin, cedar
+    voice: "marin",  // Voices: marin, cedar
   },
 
   // Grok (xAI Voice Agent — A/B test alternative)

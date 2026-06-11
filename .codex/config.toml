@@ -1,0 +1,3 @@
+[mcp_servers.callingclaw-events]
+args = ["plugins/callingclaw-events/index.ts"]
+command = "bun"

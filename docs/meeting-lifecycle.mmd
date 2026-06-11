@@ -1,0 +1,39 @@
+graph LR
+    subgraph Before
+        A["💬 User Request"] --> B["📅 Calendar + Invites"]
+        B --> C["🧠 Research"]
+        C --> D["📋 Prep Brief"]
+    end
+
+    subgraph During["During (dual-brain)"]
+        E["⏰ Auto-Join"] --> F["🎙 Voice ~300ms"]
+        E --> G["👁 Vision 1s"]
+        E --> H["🖥 Screen Share"]
+        G --> F
+        J["🔍 S2 Memory"] --> F
+        F --> I["📌 Action Items"]
+    end
+
+    subgraph After
+        K["📊 Summary → Telegram"] --> L["✅ Tasks"]
+        L --> M["⚡ Follow-ups"]
+        M --> N["🔄 Memory → Next Meeting"]
+    end
+
+    D --> E
+    I --> K
+
+    style A fill:#f9f7f4,stroke:#333,color:#333
+    style B fill:#e8e4df,stroke:#333,color:#333
+    style C fill:#e8e4df,stroke:#333,color:#333
+    style D fill:#e8e4df,stroke:#333,color:#333
+    style E fill:#5e6ad2,stroke:#333,color:#fff
+    style F fill:#5e6ad2,stroke:#333,color:#fff
+    style G fill:#5e6ad2,stroke:#333,color:#fff
+    style H fill:#5e6ad2,stroke:#333,color:#fff
+    style I fill:#5e6ad2,stroke:#333,color:#fff
+    style J fill:#7c3aed,stroke:#333,color:#fff
+    style K fill:#16a34a,stroke:#333,color:#fff
+    style L fill:#16a34a,stroke:#333,color:#fff
+    style M fill:#16a34a,stroke:#333,color:#fff
+    style N fill:#16a34a,stroke:#333,color:#fff

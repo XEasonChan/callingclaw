@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CallingClaw 竞品调研 - Meeting Agents</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5f6b76;
+      --line: #d7dde3;
+      --paper: #fbfcfd;
+      --band: #eef4f6;
+      --blue: #2563eb;
+      --green: #0f766e;
+      --amber: #b45309;
+      --red: #b42318;
+      --violet: #6d28d9;
+      --chip: #e7eef8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .hero {
+      padding: 34px 0 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 20px 0 8px;
+      font-size: 18px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    section {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-band {
+      background: var(--band);
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .summary-box {
+      border-left: 4px solid var(--green);
+      background: #fff;
+      padding: 16px 18px;
+    }
+
+    .metric {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+      min-height: 154px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--ink);
+      font-size: 17px;
+    }
+
+    .tag {
+      display: inline-block;
+      margin: 4px 4px 0 0;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: #24466b;
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f3f6f8;
+      font-weight: 650;
+    }
+
+    .status {
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .status.high {
+      color: var(--red);
+    }
+
+    .status.mid {
+      color: var(--amber);
+    }
+
+    .status.low {
+      color: var(--green);
+    }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+      margin: 16px 0 8px;
+    }
+
+    .node {
+      position: relative;
+      min-height: 122px;
+      padding: 13px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .node::after {
+      content: "";
+      position: absolute;
+      right: -11px;
+      top: 50%;
+      width: 10px;
+      height: 2px;
+      background: var(--line);
+    }
+
+    .node:last-child::after {
+      display: none;
+    }
+
+    .node b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .node span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .node.current {
+      border-color: var(--green);
+      box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.16);
+    }
+
+    .node.risk {
+      border-color: var(--amber);
+      box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.16);
+    }
+
+    .note-list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .note-list li {
+      margin: 0 0 8px;
+    }
+
+    .source-list {
+      columns: 2;
+      column-gap: 34px;
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .source-list li {
+      break-inside: avoid;
+      margin: 0 0 8px;
+    }
+
+    .daily-log {
+      border-left: 3px solid var(--violet);
+      background: #fff;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+    }
+
+    .daily-log time {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    footer {
+      padding: 24px 0 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-3,
+      .grid-2,
+      .roadmap {
+        grid-template-columns: 1fr;
+      }
+
+      .node::after {
+        display: none;
+      }
+
+      .source-list {
+        columns: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap hero">
+      <h1>Meeting Agent 竞品调研</h1>
+      <p>跟踪 Pika meeting agent / Pika Skills、Runway Characters Meet、Runway Agent 的迭代方向、社区反馈和未满足需求，服务 CallingClaw 产品判断。</p>
+      <div class="meta">
+        <span class="pill">最近更新：2026-06-11</span>
+        <span class="pill">更新节奏：每天 08:00 America/Los_Angeles</span>
+        <span class="pill">维护对象：CallingClaw</span>
+        <span class="pill">重点：可靠入会、实时语音、上下文、行动项、成本体验</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="wrap">
+      <h2>当前判断</h2>
+      <div class="summary-box">
+        <p>到 2026-06-11 为止，Pika 的最新公开方向仍然不是单独强化 meeting bot，而是继续把 meeting 入口并入“Pika Agent + Pika MCP + Pika-Plugins / companion skills”分发体系，并进一步往 wallet/skills monetization 方向靠。官网、dev 页面和 MCP 页面仍同时强调 persistent memory、creative presence、把 Pika 带进 Claude Code / Codex 等 agent client；5 月 26 日的 Pika Experiments 与 5 月 28 日 Founder Starter Kit 继续代表它最近一次公开加速点。与之相对，meeting skill 的 GitHub 公开面在 6 月 11 日看起来没有变得更稳，反而 open issues 已到 8 个，除 #12 的 DevKey/Auth 分叉之外，6 月 9 日又新增了 #14「POST /proxy/realtime/meeting-session returns HTTP 522 from all regions」，说明 Pika 仍在先扩 agent 创作和分发生态，而不是公开补 meeting worker 的入会、音频和可用区可靠性。</p>
+        <p>Runway 仍需拆成两条线看：Runway Characters Meet 继续是 developer sample 和 avatar infra，6 月 11 日官方公开面依旧保留“60 秒 setup”、新账号 600 free credits 约 30 分钟、单 session 最长 5 分钟，以及与其他视频模型共享并发限制等边界；帮助中心、API 文档和 sample repo 说明它在补 Characters 的 visual workflow 能力，但并没有把 meeting sample 升级成官方长会议产品。Runway Agent 的最近公开方向仍是“Agent + Aleph 2.0/Edit Studio + MCP”的更重创作工作流：官方最近的连续节点仍是 5 月 13 日 Agent、5 月 21 日 Aleph 2.0/Edit Studio、5 月 27 日 MCP。问题在于社区反馈还在持续验证同一类痛点，最近公开讨论依旧集中在 credit burn、默认 credit mode、generic output、黑箱修改成本和 99% 卡住仍消耗预算。对 CallingClaw 的含义更明确了：优先级仍应放在长会议可靠性、状态可见性、失败成本保护、人工接管与行动闭环，而不是先追 avatar 炫技或分发外壳。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-band">
+    <div class="wrap">
+      <h2>竞品快照</h2>
+      <div class="grid grid-3">
+        <article class="metric">
+          <strong>Pika meeting agent</strong>
+          <p>PikaStream 1.0 仍然是 Pika 公开 agent 叙事里最“wow”的能力，但最新站点、dev/MCP 页面、5 月 26 日 Pika Experiments、5 月 28 日 Founder Starter Kit 和 4 月 10 日 AI Self monetization X 贴，都继续把它放进更大的 Pika Agent 体系里。站点现在同时强调 companion skills 安装、Pika Agent Wallet 计费和可跨外部 agent 分发；而 meeting skill 的开源仓库公开面到 6 月 11 日仍然很薄，GitHub 仍只有 5 commits、8 个 open issues、无 release，且除了 #12 的 DevKey/Auth 分叉，又新增 #14 的跨区域 HTTP 522 报错，说明它更像拉新入口，而不是公开持续打磨的核心产品面。</p>
+          <span class="tag">Google Meet</span>
+          <span class="tag">PikaStream 1.0</span>
+          <span class="tag">Pika Skills</span>
+          <span class="tag">Pika MCP</span>
+        </article>
+        <article class="metric">
+          <strong>Runway Characters Meet</strong>
+          <p>Runway Characters Meet 仍是 developer-first sample：可把 Character 送进 Zoom、Meet、Teams，但核心价值在 Characters API 本身，而不是 sample app。6 月 11 日的公开 meeting guide 仍主推“60 秒 setup + web app + source code”，sample repo 也仍只是 16 commits、1 个 open issue、3 个 PR；再叠加 600 free credits 约 30 分钟、单 session 最长 5 分钟、与视频模型共享并发限制，说明它更像 avatar infra sample，而不是长会议产品面。</p>
+          <span class="tag">Zoom</span>
+          <span class="tag">Google Meet</span>
+          <span class="tag">Teams</span>
+        </article>
+        <article class="metric">
+          <strong>Runway Agent</strong>
+          <p>Runway Agent 明确不是 meeting agent，而是 conversation-first 的 finished-video creative partner。5 月 13 日上线后，Runway 先在 5 月 21 日用 Aleph 2.0 + Edit Studio 补强“生成后可手动接管”，又在 5 月 27 日推出 Runway MCP 把 Agent 接进外部工作流；但到 6 月 11 日，公开社区反馈仍围绕 generic、难控、烧 credits 展开，而且最近还能看到“默认 credit mode”“2 小时只换来 30 秒 usable footage”“99% 卡住仍烧 credits”的抱怨，说明其核心挑战不是模型覆盖面，而是 agent workflow 是否真比手动更省时、更可控。</p>
+          <span class="tag">Creative Agent</span>
+          <span class="tag">Multi-shot video</span>
+          <span class="tag">Credits</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>迭代 Roadmap 流程图</h2>
+
+      <h3>Pika meeting agent / Skills / MCP：从 viral meeting demo 走向 creative-agent 平台</h3>
+      <div class="roadmap" aria-label="Pika roadmap">
+        <div class="node"><b>2026-04 launch</b><span>PikaStream 1.0 + open-source meeting skill；Google Meet avatar 演示在 X/Reddit 获得高传播。</span></div>
+        <div class="node risk"><b>基础可用性暴露</b><span>公开 issues 集中在 DevKey/Auth、worker disconnected、bot 入会但不说话、语言控制、失败仍消耗成本；6 月 9 日又出现跨区域 HTTP 522，说明连 session 创建入口也还不稳。</span></div>
+        <div class="node current"><b>叙事中心转移</b><span>官网和 FAQ 把重点放到 Pika Agent、Pika MCP、Pika-Plugins；meeting 成为“take your agent everywhere”的一项能力。</span></div>
+        <div class="node"><b>创作能力聚合</b><span>Pika MCP Server v0.4.0 继续强调 creative toolkit；站点把 marketplace plugin、companion skills 与多模型编排放在更前面，meeting 能力被进一步包进分发层。</span></div>
+        <div class="node"><b>公开实验化</b><span>5 月 26 日 Pika Experiments 开始公开 rough prototypes，并明确要求通过 Pika MCP 参与，说明它在把新能力以前台实验和分发层先推出。</span></div>
+        <div class="node"><b>技能包垂直化</b><span>5 月 28 日 Founder Starter Kit 继续沿着 MCP + Skills plugin 路线推出 build-a-brand、app screenshots、sizzle video 等 bundle，说明 Pika 重点在扩 agent 创作场景，不在公开修补会议可靠性。</span></div>
+        <div class="node current"><b>平台化 + monetization</b><span>dev/MCP 页和 4 月 10 日官方 X 贴把 companion skills、Pika Agent Wallet、AI Self/skills 赚钱能力一起推到台前，说明 Pika 正把 meeting 能力进一步下沉为 agent 分发与变现层的一部分。</span></div>
+        <div class="node"><b>可能下一步</b><span>继续扩展更多 agent client、把 wallet/skills 分发绑得更紧，并决定是否真的补齐跨平台 meeting 可靠性，而不只是保留 viral demo。</span></div>
+      </div>
+
+      <h3>Runway Characters Meet：从 Characters API capability sample 走向 avatar infra</h3>
+      <div class="roadmap" aria-label="Runway Characters Meet roadmap">
+        <div class="node"><b>2026-03 Characters</b><span>发布 Characters API，强调单图 avatar、knowledge base、custom voice、actions。</span></div>
+        <div class="node current"><b>Meeting sample 落地</b><span>官方 sample 支持 Zoom、Meet、Teams；公开文档直接教开发者把 Character 送进会议。</span></div>
+        <div class="node"><b>能力继续补齐</b><span>4 月后继续公开 embedded widget、custom voices、screen share、tool history、LiveKit agents 等周边能力，meeting app 文档也更完整。</span></div>
+        <div class="node risk"><b>生产边界清晰</b><span>meeting app 虽强调 60 秒 setup，但新账号约 30 分钟免费、单 session 最长 5 分钟，且 Characters 与视频模型共享 tier/concurrency；长会、多并发、企业稳定性仍需额外路径。</span></div>
+        <div class="node"><b>可能下一步</b><span>企业并发保障、更长 session、更多工具调用 best practice，以及把“sample app + docs + source code”升级成更完整的官方 agent surface。</span></div>
+      </div>
+
+      <h3>Runway Agent：从聊天式创作入口走向 edit-heavy studio</h3>
+      <div class="roadmap" aria-label="Runway Agent roadmap">
+        <div class="node"><b>2026-05 launch</b><span>Runway changelog 与官方 announcement 把 Agent 定位成 AI creative partner，一次对话产出完整 finished video。</span></div>
+        <div class="node current"><b>Outline + timeline + edit takeover</b><span>官方 help 已强调可编辑 summary、story beats、visual refs，并在生成后进入 timeline；5 月 21 日 Aleph 2.0 + Edit Studio 进一步强化人工接管。</span></div>
+        <div class="node risk"><b>用户摩擦提前出现</b><span>Reddit 反馈集中在 generic story beats、不听修改、花 2 小时只得到 30 秒视频、重复 frame 像 slideshow、credits 很快烧完。</span></div>
+        <div class="node"><b>与 workflow 汇合</b><span>Runway 5 月 21 日推出 Aleph 2.0 + Edit Studio，5 月 27 日再推 Runway MCP，说明 Agent 正在向“可接管编辑 + 可嵌入外部工作流”靠拢。</span></div>
+        <div class="node"><b>可能下一步</b><span>更强 controllability、分镜级修订、预算可见性，以及 Agent / MCP / Edit Studio / model hub 的更深整合；同时需要解决 MCP 与 Agent 路径里的 credits 可预期性。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-band">
+    <div class="wrap">
+      <h2>未满足需求</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>需求</th>
+            <th>Pika 暴露的问题</th>
+            <th>Runway Characters Meet 暴露的问题</th>
+            <th>Runway Agent 暴露的问题</th>
+            <th>CallingClaw 可抢占点</th>
+            <th>优先级</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>稳定入会与 admission</td>
+            <td>多条 issue 指向 join 失败、worker disconnected、ready 后不工作；最新还出现 `/proxy/realtime/meeting-session` 全区域 HTTP 522。</td>
+            <td>meeting sample 依赖 Recall.ai bot 和 LiveKit；稳定性受第三方链路影响。</td>
+            <td>不适用，Runway Agent 不是会议产品。</td>
+            <td>端到端 admission monitor、失败重试、会议平台差异化适配。</td>
+            <td class="status high">高</td>
+          </tr>
+          <tr>
+            <td>实时音频健康检查</td>
+            <td>bot 入会但不听不说，缺少可见 session health/status。</td>
+            <td>官方强调实时，但 meeting sample 没有把音频诊断、speaker health 做成显式产品面。</td>
+            <td>不适用，Runway Agent 的问题不在实时音频，而在产出控制。</td>
+            <td>入会后自动检测非零振幅、active speaker、音频路径和静默原因。</td>
+            <td class="status high">高</td>
+          </tr>
+          <tr>
+            <td>失败成本保护</td>
+            <td>失败尝试仍扣 credits；dev/MCP 页把费用挂到 Pika Agent Wallet，但公开 issue 仍显示失败入会/worker error 也会消耗成本。</td>
+            <td>新账号虽有约 30 分钟免费额度，但后续仍是 credit 模型；长会和多并发成本明显。</td>
+            <td>Reddit 讨论已把 credits 当第一反应，早期用户担心试几次就烧完预算；MCP 讨论里也已出现默认走 credit mode 的摩擦。</td>
+            <td>失败不计费或明确失败阶段；每场会议成本预测和上限。</td>
+            <td class="status high">高</td>
+          </tr>
+          <tr>
+            <td>开发者路径清晰</td>
+            <td>DevKey/AgentKey、agent_id、dashboard flow 仍不清楚；新增 issue #12 说明 stock DevKey 流程也可能卡在 multipart/agent_id 鉴权分叉。</td>
+            <td>Characters Meet 是 sample；真正上线要理解 API、tiers、Recall、LiveKit、voice/tool 配置。</td>
+            <td>Agent 本身是面向创作者，不是开发者；但“聊天就能做成片”与可控编辑之间仍有学习成本。</td>
+            <td>一键安装、单 env、健康检查命令、清晰 MCP/API surface，减少“plugin + MCP + skill bundle + bot + tunnel + third-party”拼装负担。</td>
+            <td class="status high">高</td>
+          </tr>
+          <tr>
+            <td>多语言与口音稳定</td>
+            <td>早期仅能听英文，中文/日文输入支持不完整。</td>
+            <td>公开 issue 显示加入 realtime tools 后会影响自定义 pt-BR voice 的 accent/prosody。</td>
+            <td>Agent 主要是生成视频内容，多语言问题更多表现为 voice/style consistency。</td>
+            <td>中英会议 first-class；语言检测、口音/voice profile 回归测试。</td>
+            <td class="status mid">中</td>
+          </tr>
+          <tr>
+            <td>会议原生行动能力</td>
+            <td>宣传可执行任务，但公开问题集中在基础入会/说话。</td>
+            <td>Characters 强在 avatar、voice、knowledge、actions API，但 sample 仍偏“会说话的参会者”。</td>
+            <td>Agent 是创作工作流，不是会议行动流。</td>
+            <td>会议记录、action items、日程、打开文件、屏幕共享、电脑控制。</td>
+            <td class="status high">高</td>
+          </tr>
+          <tr>
+            <td>人类可控与审计</td>
+            <td>状态不可见会放大“不知道它在干嘛”的不信任。</td>
+            <td>sample 控制面较薄，用户更像“发出一个会加入的角色”，而不是可接管的 meeting worker。</td>
+            <td>Reddit 反馈集中在黑箱生成、generic outline、反复修正后仍偏离目标，甚至出现重复 frame 伪装成多镜头的抱怨。</td>
+            <td>实时状态面板、事件流、可暂停/静音/接管、执行前确认。</td>
+            <td class="status high">高</td>
+          </tr>
+          <tr>
+            <td>长期会议与企业部署</td>
+            <td>按分钟付费，社区觉得只适合 quick test。</td>
+            <td>Characters Web demo 小于 2 分钟；API session 最长 5 分钟；新账号约 30 分钟；保证并发与更高 limits 需要 enterprise 路径。</td>
+            <td>Agent 更适合内容生产，不直接解决企业会议生命周期和合规问题。</td>
+            <td>长会议生命周期、企业权限、隐私边界、离线/本地状态。</td>
+            <td class="status mid">中</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>每日观察清单</h2>
+      <div class="grid grid-3">
+        <div>
+          <h3>Pika 每日看点</h3>
+          <ul class="note-list">
+            <li>Pika-Skills / Pika-Plugins 是否新增 skill、release、commit、closed issue，尤其 #14 的 HTTP 522 是否被修复。</li>
+            <li>pika.me / MCP 文档是否继续把 meeting 能力下沉为 Pika Agent 的一个场景，而不是主入口。</li>
+            <li>Pika 是否继续把 wallet、creator payout、AI Self monetization 与 meeting/video skill 绑定在一起。</li>
+            <li>X/Reddit 是否从“好酷”转向“能稳定用吗、多少钱、怎么接入”。</li>
+            <li>是否出现 Google Meet 以外平台、中文输入、企业场景或 refund/计费说明。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Runway Characters Meet 每日看点</h3>
+          <ul class="note-list">
+            <li>runway-characters-meet 是否修复 tools/voice、Teams/Meet/Zoom 稳定性。</li>
+            <li>Characters API 是否放宽时长、并发、价格或上线官方 meeting 产品。</li>
+            <li>Runway Developers / Runway 官方是否继续宣传 widget、screen share、tool calling、custom voices。</li>
+            <li>更多用户是否开始质疑 sample 的第三方依赖、企业并发和部署复杂度。</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Runway Agent 每日看点</h3>
+          <ul class="note-list">
+            <li>Runway Agent 是否改善 scene repetition、outline 控制、timeline 接管和 credit 消耗，尤其是否摆脱默认 credit mode 摩擦。</li>
+            <li>Runway MCP、Edit Studio、Aleph/Gen 模型是否变成更完整的 agent workflow。</li>
+            <li>社区反馈是否从“很酷”快速转成“手动更快、agent 太黑箱”。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-band">
+    <div class="wrap">
+      <h2>更新日志</h2>
+      <div class="daily-log">
+        <time datetime="2026-06-11">2026-06-11 最新刷新</time>
+        <p>今天没有看到 Pika meeting agent、Runway Characters Meet 或 Runway Agent 出现新的官方大版本发布，但公开面又把三条路线的真实重心确认得更清楚。Pika 这边，最近一次官方公开加速点仍然停留在 5 月 26 日的 Pika Experiments 和 5 月 28 日的 Founder Starter Kit，说明它仍在沿着 “Pika Agent + Pika MCP + companion skills + wallet/monetization” 的平台化路径走；而 meeting 这条线到 6 月 11 日没有公开变稳，反而 GitHub open issues 已到 8 个，除了 DevKey/Auth 分叉外，6 月 9 日又新增了 `POST /proxy/realtime/meeting-session returns HTTP 522 from all regions`，这让 Pika 的公开风险从“入会后不稳定”扩展到了“连 session 创建入口都可能不稳”。Runway Characters Meet 这边没有出现把 sample 升级为长会议产品的信号，官方 meeting guide、usage tiers 和 help 仍把它限定在 avatar infra / developer sample：60 秒 setup、新账号约 30 分钟免费、单 session 5 分钟、与视频模型共享并发。Runway Agent 这边，官方最近的连续节点仍是 5 月 13 日 Agent、5 月 21 日 Aleph 2.0/Edit Studio、5 月 27 日 MCP，但社区反馈到今天仍主要是 credit burn、默认 credit mode、generic outline 和 99% 卡死仍烧预算。对 CallingClaw 的含义更直接了：继续优先做可靠入会、实时音频健康、失败成本保护、人工接管、事件审计和行动闭环；如果以后做更强人格化或 MCP 分发层，也要建立在“会议 worker 先可生产信任”这个前提上，而不是先堆分发外壳。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-09">2026-06-09 最新刷新</time>
+        <p>今天没有看到 Pika meeting agent 或 Runway Characters Meet 出现新的公开可靠性修复，但两家的“真实迭代重心”又更清楚了一层。Pika 这边，最新值得保留的增量不是 meeting 能力本身，而是平台化信号继续增强：主页、dev 页面和 MCP 页面都在强调 companion skills、Pika Agent Wallet 和外部 agent 接入；4 月 10 日的官方 X 贴还把 AI Self/skills monetization 放到台前。与此同时，Pika-Labs/Pika-Skills 的公开面并没有向“可生产信任的会议 worker”靠近，repo 现在是 5 commits、7 个 open issues，且新增 #12 直接暴露 stock DevKey 无法顺畅完成入会路径，说明它更像 agent 分发/拉新 surface。Runway 这边依旧必须拆成两条线：Runway Characters Meet 公开链路还是 60 秒 setup、600 free credits 约 30 分钟、5 分钟 session 上限、Recall.ai + LiveKit 依赖，本质仍是 avatar infra sample；Runway Agent 则继续沿着 Agent + Aleph 2.0/Edit Studio + MCP 走向更重的创作工作流，但社区反馈没有变好，除了 generic 和难控，现在还出现了 MCP 只能跑 credit mode、两小时往返只得到 30 秒 usable footage、99% 卡住仍烧 credits 的更强抱怨。对 CallingClaw 的含义更聚焦了：继续把长会议可靠性、实时音频健康、失败不白烧成本、人工接管、事件审计和行动闭环做成基础盘；如果要补分发层或人格化包装，也要避免走进“能力分发越来越多，但真实会议可靠性没有先被做透”的路径。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-08">2026-06-08 最新刷新</time>
+        <p>今天没有看到 Pika meeting agent 或 Runway Characters Meet 出现新的公开可靠性修复，June 8 的增量主要仍然是“方向确认”而不是“问题解决”。Pika 这边，官网 FAQ 仍写着 video call 目前主要支持 Google Meet、Zoom 和 FaceTime “very soon”，而 5 月 26 日的 Pika Experiments 又进一步说明它在把 Pika MCP 当成新能力分发入口：先公开 rough prototypes，再让外部 agent 通过 MCP 与 Skills plugin 去调用。这让 Pika 的真实迭代方向更清晰了：meeting agent 更像创意人格 agent 的 showcase，而不是独立 harden 的会议 worker。Runway Characters Meet 这边，帮助中心与开发文档把边界写得更清楚了：web app 适合初测、developer platform 5 分钟、API integration 30 分钟，screen sharing 和 knowledge base 等能力在 API 层更完整，但这仍是 avatar infra / visual workflow，而不是长会议托管产品。Runway Agent 这边，除了 credit mode 摩擦，过去 24 小时公开 Reddit 讨论又把 pain point 说得更具体了一层：不仅是 generic、难控，还包括“重复 frame 像 slideshow、花更久纠正 agent 反而不如手动做”。对 CallingClaw 的含义更聚焦了：优先把长会可靠性、实时音频健康、失败不白烧成本、人工接管、事件审计与行动闭环做成不可替代的基础盘；如果之后补视觉人格层，也应该建立在这些生产可置信能力之上，而不是反过来。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-07">2026-06-07 最新刷新</time>
+        <p>今天没有看到 Pika meeting agent 或 Runway Characters Meet 出现新的公开可靠性修复，但两家的迭代方向又更清楚了一格。Pika 这边，除了首页与 MCP 页面继续把重心放在 “Pika Agent + Pika MCP + Pika-Plugins / companion skills” 这个创作分发体系上，5 月 28 日的 Founder Starter Kit blog 还把 build-a-brand、app screenshots、sizzle video 等 skill bundle 推到台前，说明它现在更像是在扩展“任何外部 agent 都能带着 Pika creative stack 工作”的分发生态，而不是公开补 meeting worker 的入会、音频和计费信任问题；公开 GitHub 仍只有 4 commits、5 个 open issues，也支持这个判断。Runway Characters Meet 这边，meeting guide、help 和 sample repo 公开面没有出现新突破，核心边界仍是 600 free credits 约 30 分钟、web demo 更短、developer 平台 5 分钟、API 集成 30 分钟，加上 Recall.ai + LiveKit 依赖，仍更像 avatar infra sample。Runway Agent 这边，最新值得保留的方向信号仍是 “Agent + Aleph 2.0 / Edit Studio + MCP” 这一条可编辑工作流链路；与此同时，Reddit 上对 Agent 本体的 generic output、改不动、烧 credits 抱怨还在延续，MCP 讨论里也已经出现默认 credit mode 的摩擦。对 CallingClaw 的含义不变但更聚焦：优先把长会议可靠性、音频健康可视化、失败成本保护、人工接管、审计事件流和会议行动闭环做成稳定产品面；MCP/插件接入要服务这些核心能力，而不是把分发层本身做成新的复杂度来源。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-06">2026-06-06 最新刷新</time>
+        <p>今天没有看到 Pika meeting agent 或 Runway Characters Meet 出现新的公开可靠性修复，但方向信号比昨天更清楚。Pika 这边，官方首页与 MCP 页面仍把重心放在 “Pika Agent + Pika MCP + marketplace plugin / companion skills” 这个创作分发体系上，meeting 继续被包装成其中一个可展示人格化与 persistent memory 的场景；同时公开 GitHub 仍只有 4 commits、5 个 open issues，说明入会、音频、计费信任问题还没有被公开产品化消化。Runway Characters Meet 这边，meeting guide 继续主打 60 秒 setup、600 free credits 约 30 分钟、支持 Zoom/Meet/Teams，但底层仍是 Recall.ai + LiveKit + source-code sample，这更像文档完善的 sample app，而不是长会议 worker。Runway Agent 这边，除了 Aleph 2.0 + Edit Studio，5 月 27 日的 Runway MCP 是本轮最值得补进来的新方向信号：Runway 不只是做一个黑箱创意 agent，而是在把它并回到更大的模型与工作流入口里。不过社区抱怨并未同步消失，仍主要集中在 generic output、修改不听话和 credits 烧得快。对 CallingClaw 的含义是：继续把可靠入会、音频健康可视化、失败成本保护、人工接管和会议行动闭环做成真正稳定的产品面，同时把 MCP/插件接入保持精简可控，避免陷入“能力很多但生产环境难以信任”的竞品路径。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-05">2026-06-05 最新刷新</time>
+        <p>Pika 今天最值得记录的新信号，不是 meeting bot 本身有新公开修复，而是官网与 MCP 页面继续把重心推向 portable creative agent：Pika MCP Server 已公开到 v0.4.0，写明 Claude Code 已可接、ChatGPT/Hermes/OpenClaw 仍在 “soon”，并要求安装 companion Pika-Plugins 技能包。这说明 Pika 正在把 meeting 能力下沉为更大 agent 分发体系的一部分；但公开 GitHub 仍停留在 5 commits、7 个 open issues，join/auth/audio/计费痛点并未被公开消化。Runway Characters Meet 这边，官方文档今天读下来更清楚地暴露了产品边界：meeting sample 依赖 Recall.ai + LiveKit + tunnel，web demo 只建议 2 分钟内，API session 最长 5 分钟，因此它更像 avatar infra sample 而不是可长期托管会议的 worker。Runway Agent 这边，5 月 13 日上线后 5 月 21 日就用 Aleph 2.0 + Edit Studio 补强 edit-heavy workflow，侧面说明官方也意识到纯 chat-to-finished-video 仍然太黑箱。对 CallingClaw 的含义没有变，但优先级更明确了：先把长会议可靠性、实时音频健康检查、失败不白烧成本、状态可见性、人工接管与行动闭环做深，再决定是否需要更强 avatar 表达层。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-04">2026-06-04 最新刷新</time>
+        <p>Pika 当前公开迭代方向已经不是单独强化 meeting bot，而是把 PikaStream、Pika Skills、Pika MCP 都纳入 Pika Agent 的创作平台叙事里；公开 repo 最近一次 push 仍停在 2026-04-24，open issues 继续集中在 auth、worker disconnected、silent bot 和语言设置。Runway Characters Meet 仍是 Characters API 的 developer sample，官方最近继续补 widget、custom voices、screen sharing、LiveKit 等 avatar infra；但公开 usage tier 显示 Characters 与视频模型共享并发限制，低 tier 和长会场景天然受限。Runway Agent 上线后很快出现“generic、难控、烧 credits”的社区反馈，说明其下一步大概率要靠更强 edit studio 和人工接管能力来减少黑箱感。对 CallingClaw 的含义是：优先级应放在稳定入会、实时音频健康检查、失败成本保护、状态可见性、会议行动闭环，而不是把资源优先押在更拟人的 avatar 展示。</p>
+      </div>
+      <div class="daily-log">
+        <time datetime="2026-06-04">2026-06-04 初始建档</time>
+        <p>建立 Pika / Runway meeting agent 竞品研究页。当前结论：Pika 的公开反馈集中在基础可靠性和开发者路径；Runway Characters 的 API 化程度更高但 meeting sample 仍轻，Runway Agent 的创作工作流在 Reddit 上出现成本、控制感和效率质疑。</p>
+      </div>
+      <p>后续每天 08:00 自动调研后，在这里追加当天变化，并同步更新 Roadmap 与未满足需求。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>来源</h2>
+      <ul class="source-list">
+        <li><a href="https://pika.art/">Pika homepage</a></li>
+        <li><a href="https://www.pika.me/">Pika Agent web app</a></li>
+        <li><a href="https://www.pika.me/dev/">Pika dev page</a></li>
+        <li><a href="https://www.pika.me/mcp">Pika MCP page</a></li>
+        <li><a href="https://mcp.pika.me/">Pika MCP Server v0.4.0</a></li>
+        <li><a href="https://www.pika.me/blog/pika-experiments">Pika blog: Pika Experiments</a></li>
+        <li><a href="https://www.pika.me/blog/founder-starter-kit">Pika blog: Founder Starter Kit for Pika MCP</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills">Pika-Labs/Pika-Skills</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues">Pika issues list (current open issues)</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/14">Pika issue #14: HTTP 522 from all regions</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/12">Pika issue #12: DevKey multipart auth failure</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/9">Pika issue #9: invalid API balance</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/7">Pika issue #7: worker disconnected on join</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/6">Pika issue #6: worker disconnected on repeated join</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/3">Pika issue #3: joins but does not speak/respond</a></li>
+        <li><a href="https://github.com/Pika-Labs/Pika-Skills/issues/2">Pika issue #2: default Chinese/Japanese audio language</a></li>
+        <li><a href="https://x.com/i/trending/2039858338775912473">X summary: Pika Labs launches beta for AI agents in video calls</a></li>
+        <li><a href="https://x.com/i/trending/2039927029982982515">X summary: PikaStream 1.0 beta and Zoom soon discussion</a></li>
+        <li><a href="https://x.com/pika_labs/status/2042656212685328799">Pika X post: AI Self/skills monetization</a></li>
+        <li><a href="https://runwayml.com/news/introducing-runway-characters">Runway Characters announcement</a></li>
+        <li><a href="https://runwayml.com/news/building-runway-characters">Runway Characters build/update article</a></li>
+        <li><a href="https://runwayml.com/product/characters">Runway Characters product page</a></li>
+        <li><a href="https://docs.dev.runwayml.com/characters/video-meeting/">Runway Characters meeting guide</a></li>
+        <li><a href="https://docs.dev.runwayml.com/characters/">Runway Characters docs overview</a></li>
+        <li><a href="https://docs.dev.runwayml.com/characters/concepts/">Runway Characters concepts: 5-minute session limit</a></li>
+        <li><a href="https://docs.dev.runwayml.com/characters/custom-voice/">Runway custom voices docs</a></li>
+        <li><a href="https://docs.dev.runwayml.com/characters/screens/">Runway screen sharing docs</a></li>
+        <li><a href="https://docs.dev.runwayml.com/usage/tiers/">Runway API usage tiers</a></li>
+        <li><a href="https://github.com/runwayml/runway-characters-meet">runwayml/runway-characters-meet</a></li>
+        <li><a href="https://github.com/runwayml/runway-characters-meet/issues/2">Runway Characters Meet issue #2: custom voice accent/prosody</a></li>
+        <li><a href="https://help.runwayml.com/hc/en-us/articles/49557780326163-Runway-Characters">Runway Characters help</a></li>
+        <li><a href="https://x.com/c_valenzuelab/status/2041947331080175988">Runway X post: custom voices for Characters</a></li>
+        <li><a href="https://x.com/IXITimmyIXI/status/2039132331198361835">X post quoting Runway Developers: embedded Characters</a></li>
+        <li><a href="https://x.com/runwayml/status/2038983401982619653">Runway X post: Builders program for generative video and real-time conversational AI startups</a></li>
+        <li><a href="https://runwayml.com/news/introducing-runway-agent">Runway Agent announcement</a></li>
+        <li><a href="https://runwayml.com/news/introducing-aleph-2-and-edit-studio">Runway Aleph 2.0 and Edit Studio announcement</a></li>
+        <li><a href="https://runwayml.com/news/mcp">Runway MCP announcement</a></li>
+        <li><a href="https://help.runwayml.com/hc/en-us/articles/51601639579667-Creating-with-Runway-Agent">Runway Agent help</a></li>
+        <li><a href="https://www.reddit.com/r/openclaw/comments/1sbufwl/your_ai_agent_can_now_join_google_meet_calls_face/">Pika Reddit discussion: r/openclaw</a></li>
+        <li><a href="https://www.reddit.com/r/accelerate/comments/1sb9pco/pika_just_dropped_realtime_video_chat_for_ai/">Pika Reddit discussion: r/accelerate</a></li>
+        <li><a href="https://runwayml.com/changelog">Runway changelog</a></li>
+        <li><a href="https://www.reddit.com/r/runwayml/comments/1rp3jh5/runway_characters_are_here/">Runway Characters Reddit announcement</a></li>
+        <li><a href="https://www.reddit.com/r/runwayml/comments/1tc4biy/meet_runway_agent/">Runway Agent Reddit announcement</a></li>
+        <li><a href="https://www.reddit.com/r/runwayml/comments/1tp78ws/introducing_runway_mcp/">Runway MCP Reddit discussion</a></li>
+        <li><a href="https://www.reddit.com/r/generativeAI/comments/1tkx6as/runway_agent_is_terrible_wasted_2_hours_got_30/">Runway Agent Reddit user feedback</a></li>
+        <li><a href="https://www.reddit.com/r/generativeAI/comments/1u0ge8q/runway_bad_experience_and_burning_credits_for/">Runway Reddit feedback: 99% stuck generations and credits burn</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <p>维护原则：每天只写入验证过的变化；保留来源链接和日期；区分 Pika meeting agent、Runway Characters Meet、Runway Agent，避免把 creative agent 与 meeting agent 混为一谈。</p>
+    </div>
+  </footer>
+</body>
+</html>
