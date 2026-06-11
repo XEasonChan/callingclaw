@@ -677,7 +677,7 @@ export class ChromeLauncher {
         var btns = Array.from(document.querySelectorAll('button'));
         var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
 
-        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
+        if (document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -1045,7 +1045,7 @@ export class ChromeLauncher {
         return t === 'Rejoin' || t === '重新加入';
       });
       if (rejoinBtn) return 'ended';
-      var leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
+      var leaveBtn = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
       var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
       if (!leaveBtn && !callControls && !videoGrid) return 'ended';
@@ -1135,24 +1135,34 @@ export class ChromeLauncher {
     const page = this._page;
 
     try {
-      const left = await page.evaluate(() => {
-        // Find the Leave/Hangup button
-        const selectors = [
-          '[aria-label*="Leave call"]',
+      // Find the Leave/Hangup button.
+      // Current Meet UI labels it "End call" (结束通话); older UI used
+      // "Leave call" (退出通话) — match both, case-insensitively.
+      // String-form eval: this runs in the page, where DOM globals exist.
+      const left = await page.evaluate(`(() => {
+        var selectors = [
+          '[aria-label*="Leave call" i]',
+          '[aria-label*="End call" i]',
           '[aria-label*="退出通话"]',
+          '[aria-label*="结束通话"]',
           '[aria-label*="離開通話"]',
-          '[data-tooltip*="Leave call"]',
+          '[aria-label*="結束通話"]',
+          '[data-tooltip*="Leave call" i]',
+          '[data-tooltip*="End call" i]',
           '[data-tooltip*="退出通话"]',
+          '[data-tooltip*="结束通话"]',
         ];
-        for (const sel of selectors) {
-          const btn = document.querySelector(sel) as HTMLElement | null;
-          if (btn) {
-            btn.click();
-            return true;
-          }
+        for (var i = 0; i < selectors.length; i++) {
+          var btn = document.querySelector(selectors[i]);
+          if (btn) { btn.click(); return true; }
         }
+        // Last resort: the red hangup is the only control containing the
+        // call_end font-icon text
+        var all = Array.from(document.querySelectorAll("button, [role='button']"));
+        var iconBtn = all.find(function (b) { return (b.textContent || "").includes("call_end"); });
+        if (iconBtn) { iconBtn.click(); return true; }
         return false;
-      });
+      })()`) as boolean;
 
       if (left) {
         console.log("[ChromeLauncher] Leave button clicked");

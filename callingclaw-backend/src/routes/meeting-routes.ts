@@ -337,7 +337,7 @@ export function meetingRoutes(services: Services): RouteHandler {
               await new Promise(r => setTimeout(r, 5000));
               try {
                 const evalFn = `(() => {
-                  var leave = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
+                  var leave = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
                   var controls = document.querySelector('[aria-label="Call controls"]');
                   if (leave || controls) return 'in_meeting';
                   var text = document.body.innerText;

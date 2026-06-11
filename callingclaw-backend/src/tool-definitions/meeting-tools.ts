@@ -404,7 +404,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
                 if (signal.aborted) return;
                 try {
                   const check = await playwrightCli.evaluate(`() => {
-                    const leave = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
+                    const leave = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
                     const controls = document.querySelector('[aria-label="Call controls"]');
                     if (leave || controls) return 'in_meeting';
                     const text = document.body.innerText;

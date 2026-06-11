@@ -73,11 +73,23 @@ export class ComputerUseModule {
 
     // Prefer direct Anthropic API (full beta support).
     // OpenRouter fallback uses raw HTTP with x-anthropic-beta header passthrough.
-    if (CONFIG.anthropic.apiKey) {
-      this.client = new Anthropic({ apiKey: CONFIG.anthropic.apiKey });
+    // Validate the key SHAPE: an OpenRouter key (sk-or-…) pasted into
+    // ANTHROPIC_API_KEY previously selected direct-Anthropic mode and got
+    // 401 on every single call.
+    const antKey = CONFIG.anthropic.apiKey;
+    const isRealAnthropicKey = !!antKey && antKey.startsWith("sk-ant-");
+    if (antKey && !isRealAnthropicKey) {
+      console.warn(`[ComputerUse] ANTHROPIC_API_KEY does not look like an Anthropic key (expected sk-ant-…, got ${antKey.slice(0, 6)}…) — falling back to OpenRouter mode`);
+    }
+    if (isRealAnthropicKey) {
+      this.client = new Anthropic({ apiKey: antKey });
       this._mode = "anthropic";
       console.log("[ComputerUse] Using direct Anthropic API");
-    } else if (CONFIG.openrouter.apiKey) {
+    } else if (CONFIG.openrouter.apiKey || (antKey && antKey.startsWith("sk-or-"))) {
+      // A misplaced sk-or- key still works — it IS an OpenRouter key
+      if (!CONFIG.openrouter.apiKey && antKey) {
+        (CONFIG.openrouter as any).apiKey = antKey;
+      }
       this._mode = "openrouter";
       console.log("[ComputerUse] Using OpenRouter gateway (raw HTTP with beta header passthrough)");
     } else {
