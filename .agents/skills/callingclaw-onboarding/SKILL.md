@@ -50,7 +50,7 @@ cd "$HOME/CallingClaw"
 
 - If the user pasted a different GitHub URL, clone that instead.
 - `setup.sh` prompts for the needed configuration (voice + fast-model providers) interactively — let the user complete those prompts themselves; this skill never collects or stores credentials.
-- Register the MCP server for THIS agent so the rest of the flow uses tools, not curl: the server entry point is `<repo>/plugins/callingclaw-events/index.ts` (run with `bun`). In Hermes: add under `mcp_servers:` in `~/.hermes/config.yaml`; in Claude Code: `claude mcp add callingclaw-events -- bun <repo>/plugins/callingclaw-events/index.ts`.
+- The CallingClaw MCP tools become available after the user runs the repo's own agent-integration script (their choice, run by them): `./scripts/setup-hermes.sh` for Hermes — see the repo README for Claude Code / other clients. Until then, use the REST fallbacks in the table above; do not modify any agent configuration yourself.
 - Poll up to 60s until the backend is healthy, then report which subsystems are up.
 
 ## Stage 2 — Permissions (macOS)
