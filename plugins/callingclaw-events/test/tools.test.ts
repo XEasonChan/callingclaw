@@ -51,6 +51,10 @@ test("exposes the expected universal tools", () => {
     "callingclaw_summary",
     "callingclaw_recent_events",
     "callingclaw_join_meeting",
+    "callingclaw_create_meeting",
+    "callingclaw_onboarding_status",
+    "callingclaw_request_auth",
+    "callingclaw_scan_claude_projects",
     "callingclaw_prepare_meeting",
     "callingclaw_list_calendar",
   ]);

@@ -74,14 +74,18 @@ function textOf(result: any): string {
   return (result.content || []).map((c: any) => c.text || "").join("");
 }
 
-test("tools/list exposes all 7 universal CallingClaw tools", async () => {
+test("tools/list exposes all 11 universal CallingClaw tools", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   expect(names).toEqual([
+    "callingclaw_create_meeting",
     "callingclaw_join_meeting",
     "callingclaw_list_calendar",
+    "callingclaw_onboarding_status",
     "callingclaw_prepare_meeting",
     "callingclaw_recent_events",
+    "callingclaw_request_auth",
+    "callingclaw_scan_claude_projects",
     "callingclaw_status",
     "callingclaw_summary",
     "callingclaw_transcript",

@@ -44,8 +44,64 @@ export const TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         url: { type: "string", description: "The Google Meet / Zoom meeting URL to join." },
+        topic: { type: "string", description: "Optional meeting topic (shapes the voice persona + prep)." },
+        instructions: {
+          type: "string",
+          description: "Optional persona instructions for this meeting (e.g. onboarding self-introduction).",
+        },
       },
       required: ["url"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "callingclaw_create_meeting",
+    description:
+      "Create a Google Calendar event with a Meet link (requires calendar auth). Returns the event including the meet link — pair with callingclaw_join_meeting to start an instant meeting.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "Meeting title." },
+        start: { type: "string", description: "Start time, ISO 8601 with timezone (default: now)." },
+        end: { type: "string", description: "End time, ISO 8601 (default: start + 30min)." },
+        description: { type: "string" },
+        attendees: { type: "array", items: { type: "string" }, description: "Attendee emails." },
+      },
+      required: ["summary"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "callingclaw_onboarding_status",
+    description:
+      "One-call onboarding readiness check: backend health, macOS permissions (screen recording / accessibility), and Google auth (calendar + Chrome login). Use before offering an onboarding meeting.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "callingclaw_request_auth",
+    description:
+      "Kick off an authorization step the user must complete: open a macOS privacy pane (`panel`: screenRecording|accessibility|microphone|camera) or open Chrome's Google sign-in (`panel`: googleLogin). Re-check with callingclaw_onboarding_status afterwards.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        panel: {
+          type: "string",
+          enum: ["screenRecording", "accessibility", "microphone", "camera", "googleLogin"],
+        },
+      },
+      required: ["panel"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "callingclaw_scan_claude_projects",
+    description:
+      "Work-memory-lite: shallow scan of the user's local Claude Code projects (~/.claude/projects — project paths, session counts, recent session openers; NO code or file contents) and pin the result into CallingClaw's shared context so the voice AI can personalize conversations. Ask the user before running.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        maxProjects: { type: "number", description: "Max projects to include (default 5)." },
+      },
       additionalProperties: false,
     },
   },
@@ -98,7 +154,59 @@ export async function handleToolCall(
     }
     case "callingclaw_join_meeting": {
       if (!a.url || typeof a.url !== "string") throw new Error("`url` is required");
-      return callingclaw.joinMeeting(a.url);
+      return callingclaw.joinMeeting(a.url, { topic: a.topic, instructions: a.instructions });
+    }
+    case "callingclaw_create_meeting": {
+      if (!a.summary || typeof a.summary !== "string") throw new Error("`summary` is required");
+      const start = a.start || new Date().toISOString();
+      const end = a.end || new Date(new Date(start).getTime() + 30 * 60_000).toISOString();
+      return callingclaw.createMeeting({
+        summary: a.summary, start, end,
+        ...(a.description ? { description: a.description } : {}),
+        ...(a.attendees ? { attendees: a.attendees } : {}),
+      });
+    }
+    case "callingclaw_onboarding_status": {
+      const [status, permissions, google] = await Promise.allSettled([
+        callingclaw.status(),
+        callingclaw.permissions(),
+        callingclaw.googleAuthStatus(),
+      ]);
+      const val = (r: PromiseSettledResult<any>) =>
+        r.status === "fulfilled" ? r.value : { error: String(r.reason) };
+      return { backend: val(status), permissions: val(permissions), google: val(google) };
+    }
+    case "callingclaw_request_auth": {
+      if (!a.panel) throw new Error("`panel` is required");
+      if (a.panel === "googleLogin") return callingclaw.googleChromeLogin();
+      return callingclaw.openPermissionPane(a.panel);
+    }
+    case "callingclaw_scan_claude_projects": {
+      // The MCP server runs on the same machine from <repo>/plugins/callingclaw-events,
+      // so the scan script lives two levels up. Scan writes the context file,
+      // then we pin it so the voice AI sees it during the onboarding meeting.
+      // fileURLToPath, not .pathname — the repo lives under iCloud and the
+      // URL-encoded spaces (%20) in .pathname break module resolution
+      const { fileURLToPath } = await import("node:url");
+      const scriptPath = fileURLToPath(new URL("../../scripts/onboarding-scan-claude-projects.ts", import.meta.url));
+      const max = typeof a.maxProjects === "number" ? String(a.maxProjects) : "5";
+      const proc = Bun.spawn(["bun", scriptPath, "--max-projects", max], {
+        stdout: "pipe", stderr: "pipe",
+      });
+      const [out, err] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+      const code = await proc.exited;
+      if (code !== 0) throw new Error(`scan failed (exit ${code}): ${(err || out).slice(0, 300)}`);
+      const home = process.env.HOME || "";
+      const contextPath = `${home}/.callingclaw/shared/onboarding-context.md`;
+      let pinned = false;
+      try {
+        await callingclaw.pinContext(contextPath, "User recent Claude Code projects (onboarding personalization)");
+        pinned = true;
+      } catch {}
+      return { scan: out.trim(), contextPath, pinned };
     }
     case "callingclaw_prepare_meeting": {
       if (!a.topic && !a.eventId) throw new Error("Provide `topic` or `eventId`");
