@@ -314,7 +314,7 @@
       <h2>当前判断</h2>
       <div class="summary-box">
         <p>到 2026-06-11 为止，Pika 的最新公开方向仍然不是单独强化 meeting bot，而是继续把 meeting 入口并入“Pika Agent + Pika MCP + Pika-Plugins / companion skills”分发体系，并进一步往 wallet/skills monetization 方向靠。官网、dev 页面和 MCP 页面仍同时强调 persistent memory、creative presence、把 Pika 带进 Claude Code / Codex 等 agent client；5 月 26 日的 Pika Experiments 与 5 月 28 日 Founder Starter Kit 继续代表它最近一次公开加速点。与之相对，meeting skill 的 GitHub 公开面在 6 月 11 日看起来没有变得更稳，反而 open issues 已到 8 个，除 #12 的 DevKey/Auth 分叉之外，6 月 9 日又新增了 #14「POST /proxy/realtime/meeting-session returns HTTP 522 from all regions」，说明 Pika 仍在先扩 agent 创作和分发生态，而不是公开补 meeting worker 的入会、音频和可用区可靠性。</p>
-        <p>Runway 仍需拆成两条线看：Runway Characters Meet 继续是 developer sample 和 avatar infra，6 月 11 日官方公开面依旧保留“60 秒 setup”、新账号 600 free credits 约 30 分钟、单 session 最长 5 分钟，以及与其他视频模型共享并发限制等边界；帮助中心、API 文档和 sample repo 说明它在补 Characters 的 visual workflow 能力，但并没有把 meeting sample 升级成官方长会议产品。Runway Agent 的最近公开方向仍是“Agent + Aleph 2.0/Edit Studio + MCP”的更重创作工作流：官方最近的连续节点仍是 5 月 13 日 Agent、5 月 21 日 Aleph 2.0/Edit Studio、5 月 27 日 MCP。问题在于社区反馈还在持续验证同一类痛点，最近公开讨论依旧集中在 credit burn、默认 credit mode、generic output、黑箱修改成本和 99% 卡住仍消耗预算。对 CallingClaw 的含义更明确了：优先级仍应放在长会议可靠性、状态可见性、失败成本保护、人工接管与行动闭环，而不是先追 avatar 炫技或分发外壳。</p>
+        <p>Runway 仍需拆成两条线看：Runway Characters Meet 继续是 developer sample 和 avatar infra，6 月 11 日官方公开面依旧保留“60 秒 setup”、新账号 600 free credits 约 30 分钟、web app 2 分钟 / developer platform 5 分钟 / API integration 30 分钟的分层边界，以及与其他视频模型共享并发限制；帮助中心、API 文档和 sample repo 说明它在补 Characters 的 visual workflow 能力，但并没有把 meeting sample 升级成官方长会议产品。Runway Agent 的最近公开方向仍是“Agent + Aleph 2.0/Edit Studio + MCP”的更重创作工作流：官方最近的连续节点仍是 5 月 13 日 Agent、5 月 21 日 Aleph 2.0/Edit Studio、5 月 27 日 MCP，而 6 月 11 日复查 Runway changelog 也没有出现更新的 Agent / Characters 节点。问题在于社区反馈还在持续验证同一类痛点，最近公开讨论依旧集中在 credit burn、默认 credit mode、generic output、黑箱修改成本和 99% 卡住仍消耗预算。对 CallingClaw 的含义更明确了：优先级仍应放在长会议可靠性、状态可见性、失败成本保护、人工接管与行动闭环，而不是先追 avatar 炫技或分发外壳。</p>
       </div>
     </div>
   </section>
@@ -333,7 +333,7 @@
         </article>
         <article class="metric">
           <strong>Runway Characters Meet</strong>
-          <p>Runway Characters Meet 仍是 developer-first sample：可把 Character 送进 Zoom、Meet、Teams，但核心价值在 Characters API 本身，而不是 sample app。6 月 11 日的公开 meeting guide 仍主推“60 秒 setup + web app + source code”，sample repo 也仍只是 16 commits、1 个 open issue、3 个 PR；再叠加 600 free credits 约 30 分钟、单 session 最长 5 分钟、与视频模型共享并发限制，说明它更像 avatar infra sample，而不是长会议产品面。</p>
+          <p>Runway Characters Meet 仍是 developer-first sample：可把 Character 送进 Zoom、Meet、Teams，但核心价值在 Characters API 本身，而不是 sample app。6 月 11 日的公开 meeting guide 仍主推“60 秒 setup + web app + source code”，sample repo 也仍只是 16 commits、1 个 open issue、3 个 PR；帮助中心还把使用边界写得更清楚：web app 适合 2 分钟初测、developer platform 5 分钟、API integration 30 分钟，再叠加 600 free credits 约 30 分钟、与视频模型共享并发限制，说明它更像 avatar infra sample，而不是长会议产品面。</p>
           <span class="tag">Zoom</span>
           <span class="tag">Google Meet</span>
           <span class="tag">Teams</span>
@@ -370,7 +370,7 @@
         <div class="node"><b>2026-03 Characters</b><span>发布 Characters API，强调单图 avatar、knowledge base、custom voice、actions。</span></div>
         <div class="node current"><b>Meeting sample 落地</b><span>官方 sample 支持 Zoom、Meet、Teams；公开文档直接教开发者把 Character 送进会议。</span></div>
         <div class="node"><b>能力继续补齐</b><span>4 月后继续公开 embedded widget、custom voices、screen share、tool history、LiveKit agents 等周边能力，meeting app 文档也更完整。</span></div>
-        <div class="node risk"><b>生产边界清晰</b><span>meeting app 虽强调 60 秒 setup，但新账号约 30 分钟免费、单 session 最长 5 分钟，且 Characters 与视频模型共享 tier/concurrency；长会、多并发、企业稳定性仍需额外路径。</span></div>
+        <div class="node risk"><b>生产边界清晰</b><span>meeting app 虽强调 60 秒 setup，但帮助中心已写明 web app 2 分钟、developer platform 5 分钟、API integration 30 分钟；再叠加新账号约 30 分钟免费、Characters 与视频模型共享 tier/concurrency，长会、多并发、企业稳定性仍需额外路径。</span></div>
         <div class="node"><b>可能下一步</b><span>企业并发保障、更长 session、更多工具调用 best practice，以及把“sample app + docs + source code”升级成更完整的官方 agent surface。</span></div>
       </div>
 
@@ -459,7 +459,7 @@
           <tr>
             <td>长期会议与企业部署</td>
             <td>按分钟付费，社区觉得只适合 quick test。</td>
-            <td>Characters Web demo 小于 2 分钟；API session 最长 5 分钟；新账号约 30 分钟；保证并发与更高 limits 需要 enterprise 路径。</td>
+            <td>帮助中心已明确分层上限：web app 2 分钟、developer platform 5 分钟、API integration 30 分钟；新账号约 30 分钟，保证并发与更高 limits 仍需要 enterprise 路径。</td>
             <td>Agent 更适合内容生产，不直接解决企业会议生命周期和合规问题。</td>
             <td>长会议生命周期、企业权限、隐私边界、离线/本地状态。</td>
             <td class="status mid">中</td>
@@ -487,7 +487,7 @@
           <h3>Runway Characters Meet 每日看点</h3>
           <ul class="note-list">
             <li>runway-characters-meet 是否修复 tools/voice、Teams/Meet/Zoom 稳定性。</li>
-            <li>Characters API 是否放宽时长、并发、价格或上线官方 meeting 产品。</li>
+            <li>Characters API / help / changelog 是否放宽 2 分钟 / 5 分钟 / 30 分钟时长边界、并发或价格，或把 sample 升级为更正式的 meeting 产品。</li>
             <li>Runway Developers / Runway 官方是否继续宣传 widget、screen share、tool calling、custom voices。</li>
             <li>更多用户是否开始质疑 sample 的第三方依赖、企业并发和部署复杂度。</li>
           </ul>
@@ -507,6 +507,10 @@
   <section class="section-band">
     <div class="wrap">
       <h2>更新日志</h2>
+      <div class="daily-log">
+        <time datetime="2026-06-11">2026-06-11 午间复查</time>
+        <p>今天 2026-06-11 的二次复查仍然没有看到三家出现比上午更晚的新公开发布，但公开边界又清楚了一层。Pika 这边没有新的 commit、release 或 issue 修复，公开面仍是 5 commits、8 个 open issues，说明 meeting worker 可靠性依旧没有追上它对 Pika Agent、Pika MCP、companion skills 和 persistent memory 的平台化叙事。Runway Characters Meet 这边，最新值得保留的不是“新功能”，而是官方把边界写得更死：meeting guide 继续强调 60 秒 setup 与 600 free credits 约 30 分钟，而帮助中心则把 web app 2 分钟、developer platform 5 分钟、API integration 30 分钟写成清晰梯度；这更像 avatar infra/sample 的商业包装，而不是 ready-made 长会议托管面。Runway Agent 这边，Runway changelog 到今天仍然只把 Agent、Aleph 2.0/Edit Studio 放在 5 月 13 日和 5 月 21 日的最近更新位，说明 6 月以来公开重点更多是让用户消化既有工作流，而不是快速补新一轮产品面；与此同时，Reddit 上关于 Runway MCP “默认 Credit mode”、以及 Runway Agent “两小时只换来 30 秒 usable footage / 重复 frame 像 slideshow”的抱怨仍在。对 CallingClaw 的启发没有变，但应更坚决：把长会时长、入会状态、音频健康、失败成本保护、人工接管和事件审计做成第一性价值，不要把 sample 级 persona / MCP 分发感误判成生产级会议能力。</p>
+      </div>
       <div class="daily-log">
         <time datetime="2026-06-11">2026-06-11 最新刷新</time>
         <p>今天没有看到 Pika meeting agent、Runway Characters Meet 或 Runway Agent 出现新的官方大版本发布，但公开面又把三条路线的真实重心确认得更清楚。Pika 这边，最近一次官方公开加速点仍然停留在 5 月 26 日的 Pika Experiments 和 5 月 28 日的 Founder Starter Kit，说明它仍在沿着 “Pika Agent + Pika MCP + companion skills + wallet/monetization” 的平台化路径走；而 meeting 这条线到 6 月 11 日没有公开变稳，反而 GitHub open issues 已到 8 个，除了 DevKey/Auth 分叉外，6 月 9 日又新增了 `POST /proxy/realtime/meeting-session returns HTTP 522 from all regions`，这让 Pika 的公开风险从“入会后不稳定”扩展到了“连 session 创建入口都可能不稳”。Runway Characters Meet 这边没有出现把 sample 升级为长会议产品的信号，官方 meeting guide、usage tiers 和 help 仍把它限定在 avatar infra / developer sample：60 秒 setup、新账号约 30 分钟免费、单 session 5 分钟、与视频模型共享并发。Runway Agent 这边，官方最近的连续节点仍是 5 月 13 日 Agent、5 月 21 日 Aleph 2.0/Edit Studio、5 月 27 日 MCP，但社区反馈到今天仍主要是 credit burn、默认 credit mode、generic outline 和 99% 卡死仍烧预算。对 CallingClaw 的含义更直接了：继续优先做可靠入会、实时音频健康、失败成本保护、人工接管、事件审计和行动闭环；如果以后做更强人格化或 MCP 分发层，也要建立在“会议 worker 先可生产信任”这个前提上，而不是先堆分发外壳。</p>
