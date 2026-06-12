@@ -407,7 +407,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
                 if (signal.aborted) return;
                 try {
                   const check = await playwrightCli.evaluate(`() => {
-                    const leave = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"]');
+                    const leave = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
                     const controls = document.querySelector('[aria-label="Call controls"]');
                     if (leave || controls) return 'in_meeting';
                     const text = document.body.innerText;
@@ -477,13 +477,21 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           if (meetingAge < 30000) {
             return "Meeting just started. I won't leave yet. If you want to end the meeting, please say so clearly.";
           }
-          // Stop meeting-end watcher + admission monitor
+          // Stop meeting-end watcher + admission monitor (BOTH drivers — the
+          // ChromeLauncher interval previously kept running, clicking any
+          // "Admit/准许" button on whatever page Chrome showed next)
           playwrightCli.clearMeetingEndCallback();
           const _waitingRoomAbort = getWaitingRoomAbort();
           if (_waitingRoomAbort) { _waitingRoomAbort.abort(); setWaitingRoomAbort(null); }
           if (playwrightCli.isAdmissionMonitoring) {
             const admitted = playwrightCli.stopAdmissionMonitor();
             if (admitted.length > 0) {
+              meetingPrepSkill.addLiveNote(`[ADMIT] Admitted attendees: ${admitted.join(", ")}`);
+            }
+          }
+          if (deps.chromeLauncher?.isAdmissionMonitoring) {
+            const admitted = deps.chromeLauncher.stopAdmissionMonitor();
+            if (admitted?.length > 0) {
               meetingPrepSkill.addLiveNote(`[ADMIT] Admitted attendees: ${admitted.join(", ")}`);
             }
           }
@@ -533,6 +541,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
           // User confirms → deep research + sub-agent execution per todo
           const activeSession = deps.sessionManager?.list({ status: "active" })[0]
             || deps.sessionManager?.list({ status: "ended" })[0];
+          // Mark the session ended — this teardown path previously left it
+          // "active" forever, hijacking talk-locally and later end handlers
+          if (activeSession && activeSession.status === "active") {
+            try { deps.sessionManager?.markEnded(activeSession.meetingId); } catch {}
+          }
           postMeetingDelivery.deliver({
             summary,
             notesFilePath: filepath,

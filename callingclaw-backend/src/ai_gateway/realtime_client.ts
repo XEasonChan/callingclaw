@@ -84,7 +84,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   url: `${CONFIG.openai.realtimeUrl}?model=${CONFIG.openai.realtimeModel}`,
   headers: {
     Authorization: `Bearer ${CONFIG.openai.apiKey}`,
-    // GA API: no "OpenAI-Beta" header needed (removed for gpt-realtime-1.5)
+    // GA API: no "OpenAI-Beta" header needed (gpt-realtime-1.5 / -2)
   },
   // GA API event names → normalized (internal) names
   // The GA API renamed output events; map them back to names used by VoiceModule
@@ -136,14 +136,16 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
   },
 };
 
-// ── OpenAI 1.5 GA Provider ─────────────────────────────────────────
-// gpt-realtime-1.5: GA API (no beta header), new event names, session.type required.
-// Key differences from legacy:
+// ── OpenAI Realtime GA Provider (gpt-realtime-2 default, 1.5 compatible) ──
+// GA API (no beta header), new event names, session.type required.
+// Key differences from legacy preview:
 //   - No "OpenAI-Beta: realtime=v1" header
 //   - session.update requires type: "realtime"
 //   - Event names changed: response.text.delta → response.output_text.delta, etc.
 //   - New features: semantic_vad, image input, MCP servers, async function calling
 //   - Transcription: gpt-4o-transcribe with language hint (prevents zh→foreign misrecognition)
+// gpt-realtime-2 adds (over 1.5): 128K ctx, parallel tool calls, configurable
+// reasoning effort, spoken preambles. Wire format unchanged — model swap is drop-in.
 
 export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
   name: "openai15",
@@ -319,14 +321,27 @@ const RECONNECT_DELAY_MS = 3000;       // 3s between retries
 const RECONNECT_CONTEXT_ENTRIES = 20;   // Replay last 20 transcript entries
 
 // ── Incremental Context Injection ────────────────────────────────
+//
+// Layer 3 is TOKEN-budgeted (~3000 tokens per CONTEXT-ENGINEERING.md), with
+// images in a separate small slot pool. The old 15-ITEM FIFO let 5s-cadence
+// screenshots evict retrieved [CONTEXT] text within ~75 seconds.
 
-/** Max context items before FIFO eviction kicks in */
-const MAX_CONTEXT_ITEMS = 15;
+/** Layer-3 text budget in estimated tokens */
+const MAX_CONTEXT_TOKENS_L3 = 3000;
+/** Images kept in the conversation at once (token-expensive) */
+const MAX_IMAGE_ITEMS = 2;
+
+/** Rough token estimate for mixed zh/en text (zh ≈ 1-2 chars/token, en ≈ 4) */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3);
+}
 
 export interface ContextItem {
   id: string;
   text: string;
   injectedAt: number;
+  kind?: "text" | "image";
+  tokens?: number;
 }
 
 // ── Token Budget Tracking ────────────────────────────────────────
@@ -384,6 +399,11 @@ export class RealtimeClient {
 
   // Gemini session resumption handle (for reconnect without transcript replay)
   private _geminiSessionHandle: string | null = null;
+
+  // Greeting sent only on the FIRST session.updated of a session — every
+  // resume/reconnect also fires setupComplete, and re-prompting made the AI
+  // re-introduce itself to the meeting after each 15-min resumption.
+  private _geminiGreeted = false;
 
   get connected() {
     return this._connected;
@@ -481,7 +501,12 @@ export class RealtimeClient {
       const connectTimeout = setTimeout(() => {
         console.error(`[Realtime] Connection timeout (15s) to ${provider.name}`);
         if (this.ws) {
-          try { this.ws.close(); } catch {}
+          // Detach BEFORE closing: the identity guard in onclose then ignores
+          // this socket, so a failed connect doesn't spawn a zombie reconnect
+          // loop for a session the caller was told never started.
+          const stale = this.ws;
+          this.ws = null as any;
+          try { stale.close(); } catch {}
         }
         reject(new Error(`Connection timeout to ${provider.name} Voice API`));
       }, 15000);
@@ -499,26 +524,30 @@ export class RealtimeClient {
           console.log(`[Realtime] Using ws (direct) for Gemini`);
         }
         const pws = new WsWebSocket(wsUrl, wsOpts);
-        // Create a thin wrapper that maps ws EventEmitter → Bun-style onXxx callbacks
-        this.ws = {
+        // Create a thin wrapper that maps ws EventEmitter → Bun-style onXxx
+        // callbacks. The pws handlers reference THIS wrapper (captured), not
+        // this.ws — dereferencing this.ws meant an old socket's close event
+        // invoked the NEW connection's close handler after a reconnect.
+        const wsWrapper: any = {
           send: (d: any) => pws.send(d),
           close: () => pws.close(),
           get readyState() { return pws.readyState; },
-        } as any;
-        pws.on("open", () => this.ws!.onopen?.(new Event("open") as any));
+        };
+        this.ws = wsWrapper;
+        pws.on("open", () => wsWrapper.onopen?.(new Event("open") as any));
         pws.on("message", (d: any) => {
           const str = d.toString();
           // Log first 200 chars of each raw message for debugging
           console.log(`[Realtime] RAW Gemini msg (${str.length} chars): ${str.substring(0, 200)}`);
-          this.ws!.onmessage?.({ data: str } as any);
+          wsWrapper.onmessage?.({ data: str } as any);
         });
         pws.on("close", (code: number, reason: any) => {
           console.log(`[Realtime] RAW Gemini close: ${code} ${reason?.toString?.() || ""}`);
-          this.ws!.onclose?.({ code, reason: reason?.toString?.() || "", wasClean: code === 1000 } as any);
+          wsWrapper.onclose?.({ code, reason: reason?.toString?.() || "", wasClean: code === 1000 } as any);
         });
         pws.on("error", (e: any) => {
           console.error(`[Realtime] RAW Gemini error:`, e.message || e);
-          this.ws!.onerror?.(e);
+          wsWrapper.onerror?.(e);
         });
       } else {
         // OpenAI / Grok: original Bun WebSocket (unchanged)
@@ -527,7 +556,13 @@ export class RealtimeClient {
         } as any);
       }
 
+      // Socket identity guard: handlers below belong to THIS socket. When a
+      // reconnect/timeout replaces this.ws, late events from the superseded
+      // socket must not flip _connected or schedule a second reconnect.
+      const sock = this.ws;
+
       this.ws.onopen = () => {
+        if (this.ws !== sock) return;
         clearTimeout(connectTimeout);
         console.log(`[Realtime] Connected to ${provider.name} Voice API`);
         this._connected = true;
@@ -565,6 +600,7 @@ export class RealtimeClient {
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
+        if (this.ws !== sock) return;
         try {
           const data = typeof event.data === "string" ? event.data : String(event.data);
 
@@ -594,12 +630,17 @@ export class RealtimeClient {
       };
 
       this.ws.onerror = (event) => {
+        if (this.ws !== sock) return;
         clearTimeout(connectTimeout);
         console.error(`[Realtime] WebSocket error (${provider.name}):`, event);
         reject(new Error(`${provider.name} WebSocket connection failed`));
       };
 
       this.ws.onclose = (event: CloseEvent) => {
+        if (this.ws !== sock) {
+          console.log(`[Realtime] Ignoring close from superseded ${provider.name} socket (code: ${event.code})`);
+          return;
+        }
         console.log(`[Realtime] Disconnected from ${provider.name} (code: ${event.code}, reason: ${event.reason || "none"}, wasClean: ${event.wasClean})`);
         this._connected = false;
 
@@ -656,13 +697,18 @@ export class RealtimeClient {
         this.injectContext(`[SYSTEM] ${deferred}`, "ctx_deferred_instr");
         console.log(`[Realtime] Injected deferred instruction (${deferred.length} chars)`);
       }
-      // Send greeting prompt so Gemini speaks first
-      setTimeout(() => {
-        if (this._connected) {
-          this.sendText("Please introduce yourself briefly and say hello.");
-          console.log(`[Realtime] Sent Gemini greeting prompt`);
-        }
-      }, 500);
+      // Send greeting prompt so Gemini speaks first — first connect ONLY.
+      // session.updated also fires on every 15-min resume/reconnect, and
+      // re-prompting made the AI re-introduce itself mid-meeting.
+      if (!this._geminiGreeted) {
+        this._geminiGreeted = true;
+        setTimeout(() => {
+          if (this._connected) {
+            this.sendText("Please introduce yourself briefly and say hello.");
+            console.log(`[Realtime] Sent Gemini greeting prompt`);
+          }
+        }, 500);
+      }
     }
 
     // Gemini session resumption handle
@@ -1021,16 +1067,24 @@ export class RealtimeClient {
 
     if (!sent) return false;
 
-    this._contextQueue.push({ id: itemId, text, injectedAt: Date.now() });
-
-    // FIFO eviction — delete oldest items when over limit
-    while (this._contextQueue.length > MAX_CONTEXT_ITEMS) {
-      const oldest = this._contextQueue.shift()!;
-      this.sendEvent("conversation.item.delete", { item_id: oldest.id });
-      console.log(`[Realtime] Context evicted: ${oldest.id} (queue full, max ${MAX_CONTEXT_ITEMS})`);
-    }
+    this._contextQueue.push({ id: itemId, text, injectedAt: Date.now(), kind: "text", tokens: estimateTokens(text) });
+    this._evictTextOverBudget();
 
     return itemId;
+  }
+
+  /** Evict oldest TEXT items while the Layer-3 text budget is exceeded */
+  private _evictTextOverBudget() {
+    const textTokens = () => this._contextQueue
+      .filter((c) => c.kind !== "image")
+      .reduce((sum, c) => sum + (c.tokens ?? estimateTokens(c.text)), 0);
+    while (textTokens() > MAX_CONTEXT_TOKENS_L3) {
+      const idx = this._contextQueue.findIndex((c) => c.kind !== "image");
+      if (idx === -1) break;
+      const oldest = this._contextQueue.splice(idx, 1)[0]!;
+      this.sendEvent("conversation.item.delete", { item_id: oldest.id });
+      console.log(`[Realtime] Context evicted: ${oldest.id} (text budget ${MAX_CONTEXT_TOKENS_L3} tokens)`);
+    }
   }
 
   /**
@@ -1070,13 +1124,18 @@ export class RealtimeClient {
 
     if (!sent) return false;
 
-    this._contextQueue.push({ id: itemId, text: `[IMAGE] ${caption || "screenshot"}`, injectedAt: Date.now() });
+    this._contextQueue.push({ id: itemId, text: `[IMAGE] ${caption || "screenshot"}`, injectedAt: Date.now(), kind: "image" });
 
-    // FIFO eviction — images are token-expensive, evict aggressively
-    while (this._contextQueue.length > MAX_CONTEXT_ITEMS) {
-      const oldest = this._contextQueue.shift()!;
+    // Images live in their own slot pool — they no longer evict retrieved
+    // text context (screenshot spam was flushing [CONTEXT] items in ~75s)
+    const images = this._contextQueue.filter((c) => c.kind === "image");
+    let excess = images.length - MAX_IMAGE_ITEMS;
+    while (excess-- > 0) {
+      const idx = this._contextQueue.findIndex((c) => c.kind === "image");
+      if (idx === -1) break;
+      const oldest = this._contextQueue.splice(idx, 1)[0]!;
       this.sendEvent("conversation.item.delete", { item_id: oldest.id });
-      console.log(`[Realtime] Context evicted: ${oldest.id} (queue full)`);
+      console.log(`[Realtime] Image evicted: ${oldest.id} (max ${MAX_IMAGE_ITEMS} images)`);
     }
 
     console.log(`[Realtime] Injected image ${itemId} (${Math.round(base64Jpeg.length / 1024)}KB${caption ? `, caption: ${caption.slice(0, 60)}` : ""})`);
@@ -1112,6 +1171,9 @@ export class RealtimeClient {
 
     console.log(`[Realtime] Replaying ${this._contextQueue.length} context items after reconnect`);
     for (const item of this._contextQueue) {
+      // Image payloads aren't retained — replaying "[IMAGE] caption" as text
+      // would mislead the model about what it can currently see
+      if (item.kind === "image") continue;
       this.sendEvent("conversation.item.create", {
         item: {
           id: item.id,
@@ -1138,7 +1200,10 @@ export class RealtimeClient {
       const match = entry.match(/^\[(\w+)\]\s(.+)/s);
       if (match) {
         const [, role, text] = match;
-        const mappedRole = role === "assistant" ? "assistant" : "user";
+        // system entries ([Tool Call]/[HEARD]/[Screen]) must replay as system
+        // items — replaying them as "user" made the model respond to its own
+        // logs as if the user had said them
+        const mappedRole = role === "assistant" ? "assistant" : role === "system" ? "system" : "user";
         this.sendEvent("conversation.item.create", {
           item: {
             type: "message",
@@ -1170,5 +1235,13 @@ export class RealtimeClient {
     }
     this.ws?.close();
     this._connected = false;
+    // A new session must not inherit the previous one's state: a stale
+    // resume handle made the next meeting try to resume the previous
+    // (expired) Gemini session, and an un-cleared queue replayed the
+    // previous meeting's context items after reconnect.
+    this._geminiSessionHandle = null;
+    this._geminiGreeted = false;
+    this._contextQueue = [];
+    this._transcriptContext = [];
   }
 }

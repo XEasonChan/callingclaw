@@ -225,7 +225,13 @@ export class ContextRetriever {
 
   private scheduleAnalysis() {
     const elapsed = Date.now() - this._lastAnalysisTs;
-    if (elapsed < this.MIN_INTERVAL_MS) return;
+    if (elapsed < this.MIN_INTERVAL_MS) {
+      // Re-arm instead of dropping: a question asked right after an analysis
+      // and followed by silence was previously never serviced at all.
+      if (this._debounceTimer) clearTimeout(this._debounceTimer);
+      this._debounceTimer = setTimeout(() => this.runAnalysis(), this.MIN_INTERVAL_MS - elapsed + 100);
+      return;
+    }
 
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this.runAnalysis(), this.DEBOUNCE_MS);
@@ -278,7 +284,7 @@ export class ContextRetriever {
           const lastUserText = entries.filter(e => e.role === "user").pop()?.text || "";
           const cacheHits = this.searchCache(cached, lastUserText);
           if (cacheHits.length > 0) {
-            this.injectIntoVoice(cacheHits);
+            this.injectIntoVoice(cacheHits, { answeredQuestion: true });
             console.log(`[ContextRetriever] Cache hit: ${cacheHits.length} results for question in "${this._currentTopic.slice(0, 30)}" (<1ms)`);
             this.eventBus.emit("retriever.cache_hit", {
               topic: this._currentTopic,
@@ -339,7 +345,7 @@ export class ContextRetriever {
       // ── P1: Cache results under current topic for follow-up questions ──
       this.cacheForTopic(topicResult.topic, results);
 
-      this.injectIntoVoice(results);
+      this.injectIntoVoice(results, { answeredQuestion: hadQuestion });
 
       const totalMs = Date.now() - startTs;
       console.log(
@@ -561,8 +567,8 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
   private async semanticSearch(queries: string[]): Promise<RetrievedContext[]> {
     // Path 0: Check prep brief sections first (instant, no API cost)
     const brief = this.meetingPrepSkill.currentBrief;
+    const prepResults: RetrievedContext[] = [];
     if (brief) {
-      const prepResults: RetrievedContext[] = [];
       const remainingQueries: string[] = [];
       const sections = [
         brief.architectureDecisions?.map((d) => `${d.decision}: ${d.rationale}`).join("\n") || "",
@@ -597,6 +603,9 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
       queries = remainingQueries;
     }
 
+    // Keep the instant prep-brief answers regardless of how the agentic
+    // search goes — the old mixed-branch spread started from [] and threw
+    // the already-computed prep results away.
     try {
       const agenticResults = await Promise.race([
         this.agenticSearch(queries),
@@ -604,10 +613,10 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
           setTimeout(() => reject(new Error("agentic search timeout")), ContextRetriever.AGENT_TIMEOUT_MS)
         ),
       ]);
-      return brief ? [...([] as RetrievedContext[]), ...agenticResults] : agenticResults;
+      return [...prepResults, ...agenticResults];
     } catch (err: any) {
       console.warn(`[ContextRetriever] Agentic search failed: ${err.message}, trying keyword fallback`);
-      return this.keywordFallback(queries);
+      return [...prepResults, ...(await this.keywordFallback(queries))];
     }
   }
 
@@ -956,7 +965,7 @@ RULES:
   // Step 5: Inject into Voice AI
   // ══════════════════════════════════════════════════════════════
 
-  private injectIntoVoice(newContexts: RetrievedContext[]) {
+  private injectIntoVoice(newContexts: RetrievedContext[], opts?: { answeredQuestion?: boolean }) {
     if (!this.voice?.connected || !this.meetingPrepSkill.currentBrief) return;
 
     // Inject context data as persistent liveNotes (these stay in context)
@@ -974,14 +983,24 @@ RULES:
       }
     }
 
-    // One-shot conversational hint — injected directly via conversation.item.create.
-    // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
-    // once and can naturally weave it into conversation if relevant.
     const topicSummary = newContexts.map((c) => c.query).join(", ");
-    const hint = `[CONTEXT_HINT] You just learned relevant information about: ${topicSummary}. If this connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的..." or "that reminds me, we discussed...". If it's not relevant right now, ignore this hint.`;
-    this.voice.injectContext(hint);
 
-    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts + conversational hint into Voice AI`);
+    if (opts?.answeredQuestion && typeof (this.voice as any).speakWithInstruction === "function") {
+      // Late-answer speak-back: retrieval takes 6-13s, so by the time results
+      // land the model has usually already answered ("I'm not sure"). Trigger
+      // a one-turn follow-up instead of letting the retrieval go to waste.
+      (this.voice as any).speakWithInstruction(
+        `You now have background information about: ${topicSummary}. If a question on this was just asked and you answered vaguely or said you'd check, follow up NOW with the concrete answer in one or two sentences. If your earlier answer was already complete, stay silent.`
+      );
+    } else {
+      // One-shot conversational hint — injected directly via conversation.item.create.
+      // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
+      // once and can naturally weave it into conversation if relevant.
+      const hint = `[CONTEXT_HINT] You just learned relevant information about: ${topicSummary}. If this connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的..." or "that reminds me, we discussed...". If it's not relevant right now, ignore this hint.`;
+      this.voice.injectContext(hint);
+    }
+
+    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI${opts?.answeredQuestion ? " (question follow-up requested)" : ""}`);
   }
 
   // ══════════════════════════════════════════════════════════════

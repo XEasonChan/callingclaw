@@ -10,7 +10,7 @@ if (CONFIG.audio.sampleRate !== 24000) {
 }
 
 import { NativeBridge } from "./bridge";
-import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
+import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ActionOrchestrator, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { ChromeLauncher } from "./chrome-launcher";
@@ -94,19 +94,31 @@ calendar.onAuthError = (error: string) => {
 await taskStore.load();
 
 // ── 1b. ContextSync + Agent Adapter ─────────────────────────────
-// Detect agent platform: openclaw > claude-code > standalone
+// Detect agent platform: openclaw > claude-code > hermes > standalone
 const _detectedPlatform: AgentPlatform = (() => {
   const envPlatform = process.env.AGENT_PLATFORM;
-  if (envPlatform === "openclaw" || envPlatform === "claude-code" || envPlatform === "standalone") {
+  if (
+    envPlatform === "openclaw" ||
+    envPlatform === "claude-code" ||
+    envPlatform === "hermes" ||
+    envPlatform === "standalone"
+  ) {
     return envPlatform;
   }
-  // Auto-detect: prefer openclaw if config exists, then claude-code CLI
+  // Auto-detect: prefer openclaw if config exists, then claude-code CLI, then hermes
   try {
     if (require("fs").existsSync(`${process.env.HOME}/.openclaw/openclaw.json`)) return "openclaw";
   } catch {}
   try {
     require("child_process").execSync("which claude", { stdio: "ignore" });
     return "claude-code";
+  } catch {}
+  try {
+    if (require("fs").existsSync(`${process.env.HOME}/.hermes/config.yaml`)) return "hermes";
+  } catch {}
+  try {
+    require("child_process").execSync("which hermes", { stdio: "ignore" });
+    return "hermes";
   } catch {}
   return "standalone";
 })();
@@ -120,7 +132,7 @@ const noShowDetector = new NoShowDetector({ eventBus, context, openclawBridge })
 // Job fire handler: when internal timer fires, auto-join the meeting
 const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
   console.log(`[JobScheduler] Firing: "${job.name}" → joining ${job.payload.meetUrl}`);
-  fetch("http://localhost:4000/api/meeting/join", {
+  fetch(`http://localhost:${CONFIG.port}/api/meeting/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: job.payload.meetUrl, topic: job.payload.summary }),
@@ -158,14 +170,16 @@ meetingPrepSkill.onPrepReady((brief, meetingId, filePath) => {
   // Rebuild file index so AutomationRouter can resolve prep file paths instantly
   transcriptAuditor.refreshPrepContext();
 
+  // Emit both `filePath` and `filepath` — the MCP plugin contract documents
+  // lowercase `filepath`; internal consumers historically read `filePath`.
   Bun.file(filePath).text().then((mdContent) => {
     eventBus.emit("meeting.prep_ready", {
-      meetingId, topic: brief.topic, filePath, mdContent,
+      meetingId, topic: brief.topic, filePath, filepath: filePath, mdContent,
     });
   }).catch(() => {
     // File was just written — emit without content, frontend will fetch via API
     eventBus.emit("meeting.prep_ready", {
-      meetingId, topic: brief.topic, filePath,
+      meetingId, topic: brief.topic, filePath, filepath: filePath,
     });
   });
 });
@@ -216,43 +230,45 @@ if (_detectedPlatform === "openclaw") {
 // Note: calendar.connect() is called later in section 6.
 // After calendar connects, start scheduler if adapter is also ready.
 
-// Periodically refresh MEMORY.md and push to live Voice session
+// Periodically refresh MEMORY.md and push to live Voice session.
+// NEVER while a meeting is active — updateInstructions issues session.update,
+// which causes audible breaks mid-meeting (5-layer context rule). The old
+// guard checked instructions for "MEETING PREP BRIEF", a string that no
+// longer exists since the Layer-2 refactor, so it always passed.
 setInterval(async () => {
   const changed = await contextSync.refreshIfChanged();
-  if (changed && voice.connected) {
+  if (changed && voice.connected && !context.inMeeting) {
     const brief = contextSync.getBrief().voice;
     if (brief) {
       const currentInstructions = voice.getLastInstructions();
-      // Only push if voice is in casual mode (not in a meeting with prep brief)
-      if (!currentInstructions.includes("MEETING PREP BRIEF")) {
-        voice.updateInstructions(
-          currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
-          `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
-        );
-        console.log("[ContextSync] Pushed updated memory to live Voice session");
-      }
+      voice.updateInstructions(
+        currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
+        `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
+      );
+      console.log("[ContextSync] Pushed updated memory to live Voice session");
     }
   }
 }, 60_000);
 
 // Wire ContextSync.onUpdate() — push to voice immediately when pin/note changes
+// (casual mode only; mid-meeting pin/note changes reach voice via Layer-3
+// conversation.item.create paths instead of session.update)
 contextSync.onUpdate(() => {
-  if (!voice.connected) return;
+  if (!voice.connected || context.inMeeting) return;
   const brief = contextSync.getBrief().voice;
   if (!brief) return;
   const currentInstructions = voice.getLastInstructions();
-  // Only push in casual mode (meeting mode uses MeetingPrepBrief instead)
-  if (!currentInstructions.includes("MEETING PREP BRIEF")) {
-    voice.updateInstructions(
-      currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
-      `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
-    );
-    console.log("[ContextSync] Pushed updated context to live Voice session (onUpdate)");
-  }
+  voice.updateInstructions(
+    currentInstructions.split("\n═══ BACKGROUND CONTEXT")[0] +
+    `\n═══ BACKGROUND CONTEXT (from OpenClaw memory) ═══\n${brief}`
+  );
+  console.log("[ContextSync] Pushed updated context to live Voice session (onUpdate)");
 });
 
 // Browser DOM context capture interval (started on meeting.started, cleared on meeting.ended)
 let _domContextInterval: ReturnType<typeof setInterval> | null = null;
+// 3-hour vision safety timer (armed on meeting.started, cleared on meeting.ended)
+let _visionSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Wire agent adapter activity events to EventBus for real-time visibility
 if (agentAdapter.onActivity) {
@@ -270,12 +286,23 @@ openclawBridge.onActivity((kind, summary, detail) => {
 // Accumulated screen descriptions for periodic OpenClaw push
 let _meetingVisionBuffer: string[] = [];
 
+// Voice screenshot injection throttle state (was on globalThis)
+let _lastVoiceScreenshotTs = 0;
+let _lastVoiceScreenKey = "";
+
 // ── Browser Capture Provider (CDP) — used by VisionModule for 1s screenshots ──
 const browserCapture = new BrowserCaptureProvider();
 // Desktop Capture Provider (screencapture CLI) — used by ComputerUseModule
 const desktopCapture = new DesktopCaptureProvider();
 // KeyFrameStore — persists meeting screenshots to disk for multimodal timeline
 const keyFrameStore = new KeyFrameStore();
+
+// Wire transcript events to KeyFrameStore ONCE at startup.
+// (Previously registered inside meeting.started — leaked one listener per
+// meeting, duplicating every timeline entry N times after N meetings.)
+context.on("transcript", (entry) => {
+  if (keyFrameStore.active) keyFrameStore.saveTranscript(entry);
+});
 
 const vision = new VisionModule({
   context,
@@ -286,12 +313,18 @@ const vision = new VisionModule({
       keyFrameStore.saveFrame(image, metadata).catch(() => {});
     }
     // Inject screenshot into voice session so AI can see the screen during conversation.
-    // Throttled to 1 frame per 5s to avoid token flooding (~25 tokens/sec for audio alone).
-    // Works for OpenAI 1.5 (input_image), Gemini 3.1 (realtimeInput.video), text fallback for others.
+    // Event-driven: only when the page actually changed (title/url) or 30s
+    // elapsed — the old fixed 5s cadence churned the Layer-3 queue and evicted
+    // retrieved context. Post-action screenshots still arrive separately via
+    // the VISUAL_TOOLS feedback path.
     if (voice.connected && keyFrameStore.active && image) {
       const now = Date.now();
-      if (!globalThis._lastVoiceScreenshotTs || now - globalThis._lastVoiceScreenshotTs > 5000) {
-        globalThis._lastVoiceScreenshotTs = now;
+      const screenKey = `${metadata.url || ""}|${metadata.title || ""}`;
+      const changed = screenKey !== _lastVoiceScreenKey;
+      const elapsed = now - _lastVoiceScreenshotTs;
+      if ((changed && elapsed > 5000) || elapsed > 30_000) {
+        _lastVoiceScreenshotTs = now;
+        _lastVoiceScreenKey = screenKey;
         const caption = metadata.title ? `[Screen: ${metadata.title}]` : undefined;
         voice.injectScreenshot(image, caption);
       }
@@ -356,13 +389,11 @@ eventBus.on("meeting.started", (data) => {
   } else {
     console.log(`[Init] Transcript preserved (${context.transcript.length} entries, same meeting)`);
   }
+  // Mark meeting active for consumers that must not infer it (ComputerUse model split)
+  context.setInMeeting(true);
   // Start KeyFrameStore for multimodal timeline (screenshots saved to disk)
   keyFrameStore.start(activeMeetingId).catch((e) => {
     console.error(`[Init] KeyFrameStore start failed: ${e.message}`);
-  });
-  // Wire transcript events to KeyFrameStore
-  context.on("transcript", (entry) => {
-    if (keyFrameStore.active) keyFrameStore.saveTranscript(entry);
   });
   if (!vision.isMeetingMode) {
     vision.startMeetingVision(1000);
@@ -408,7 +439,11 @@ eventBus.on("meeting.started", (data) => {
   }
 
   // ── Safety: auto-stop after 3 hours to prevent cost leakage ──
-  setTimeout(() => {
+  // Stored + cleared on meeting.ended so a stale timer from meeting A
+  // can't kill vision in the middle of meeting B.
+  if (_visionSafetyTimer) clearTimeout(_visionSafetyTimer);
+  _visionSafetyTimer = setTimeout(() => {
+    _visionSafetyTimer = null;
     if (vision.isMeetingMode) {
       console.warn("[Init] Meeting exceeded 3 hour limit — auto-stopping vision to prevent cost leakage");
       stopMeetingVisionAndFlush("3 hour safety limit reached");
@@ -597,7 +632,14 @@ eventBus.on("meeting.ended", async () => {
   }
 
   activeMeetingId = null;
+  context.setInMeeting(false);
   stopMeetingVisionAndFlush("Meeting ended");
+
+  // Clear the 3h vision safety timer so it can't fire into the next meeting
+  if (_visionSafetyTimer) {
+    clearTimeout(_visionSafetyTimer);
+    _visionSafetyTimer = null;
+  }
 
   // Stop DOM context capture
   if (_domContextInterval) {
@@ -702,10 +744,9 @@ async function autoLeaveMeeting() {
       autoDetected: true,
     };
 
-    eventBus.emit("meeting.ended", followUp);
-    eventBus.endCorrelation();
-
-    // Finalize key frame timeline for screenshot delivery
+    // Finalize key frame timeline BEFORE emitting meeting.ended — the
+    // meeting.ended handler also finalizes when keyFrameStore.active, so
+    // emitting first ran two concurrent finalize() + processTimeline() passes.
     let keyFrameResult: { htmlFile?: string; frameCount?: number } | null = null;
     let summaryHtmlPath: string | undefined;
     const meetingIdForHtml = activeMeetingId || `mtg_${Date.now()}`;
@@ -715,6 +756,22 @@ async function autoLeaveMeeting() {
       if (timeline) {
         keyFrameResult = { htmlFile: timeline.htmlFile, frameCount: timeline.frameCount };
         console.log(`[AutoLeave] Timeline: ${timeline.frameCount} frames → ${timeline.htmlFile}`);
+        // Dispatch timeline to agent here since the meeting.ended handler
+        // will skip its finalize block once the store is stopped below.
+        if (agentAdapter.connected) {
+          agentAdapter.processTimeline({
+            meetingId: timeline.meetingId,
+            meetingDir: timeline.meetingDir,
+            topic: summary.title || "Meeting",
+            duration: `${Math.round(timeline.durationMs / 60000)}min`,
+            frameCount: timeline.frameCount,
+            transcriptEntries: timeline.transcriptEntries,
+            priorityFrameCount: timeline.priorityFrameCount,
+            timelineFile: timeline.timelineFile,
+          }).catch((e: any) => {
+            console.warn(`[AutoLeave] Timeline processing failed: ${e.message}`);
+          });
+        }
       }
     }
 
@@ -743,6 +800,11 @@ async function autoLeaveMeeting() {
     if (keyFrameStore.active) {
       await keyFrameStore.stop();
     }
+
+    // Emit AFTER finalize+stop: the meeting.ended handler's keyFrameStore
+    // block is now a guaranteed no-op (active === false), no double finalize.
+    eventBus.emit("meeting.ended", followUp);
+    eventBus.endCorrelation();
 
     // Post-meeting delivery (now includes screenshots + summary HTML)
     const prepSummary = getPostMeetingSummary(meetingPrepSkill);
@@ -798,6 +860,17 @@ const chromeLauncher = new ChromeLauncher({
   profileDir: CONFIG.playwright.userDataDir || undefined,
 });
 
+// Chrome crash / manual quit mid-meeting → run the auto-leave pipeline
+// (summary from whatever transcript exists, session markEnded, voice/vision
+// teardown) instead of leaving zombies running until the 3h safety cap.
+chromeLauncher.onDisconnected(() => {
+  eventBus.emit("chrome.disconnected", { timestamp: Date.now() });
+  if (meeting.getNotes().isRecording || activeMeetingId) {
+    console.warn("[Init] Chrome died mid-meeting — triggering auto-leave cleanup");
+    autoLeaveMeeting().catch((e) => console.error("[Init] Crash cleanup failed:", e.message));
+  }
+});
+
 const playwrightCli = new PlaywrightCLIClient({
   headless: CONFIG.playwright.headless,
   profileDir: CONFIG.playwright.userDataDir || undefined,
@@ -806,6 +879,58 @@ const playwrightCli = new PlaywrightCLIClient({
 const peekaboo = new PeekabooClient();
 const zoomSkill = new ZoomSkill(bridge);
 const automationRouter = new AutomationRouter(bridge, eventBus, playwrightCli, peekaboo);
+
+// ── ActionOrchestrator: the single "hand" ──
+// Every screen/browser action (voice tool, auditor lane, HTTP) is serialized
+// through this queue: one active task, duplicate instructions coalesced,
+// AbortSignal threaded into ComputerUse, progress visible to the voice layer.
+const orchestrator = new ActionOrchestrator(context, eventBus);
+
+// Task visibility for the mouth: keep one [ACTING] Layer-3 item alive while
+// a hand action runs (replaced on each progress beat, removed on completion)
+// so the voice model can answer "你在干嘛" and narrate progress.
+const ACTIVE_TASK_CTX_ID = "ctx_active_task";
+function refreshActingContext() {
+  if (!voice.connected) return;
+  const prompt = context.getActiveTaskPrompt();
+  voice.removeContext(ACTIVE_TASK_CTX_ID);
+  if (prompt) voice.injectContext(prompt, ACTIVE_TASK_CTX_ID);
+}
+eventBus.on("task.started", () => refreshActingContext());
+eventBus.on("task.progress", (data: any) => {
+  refreshActingContext();
+  // Long-running task (>15s): let the AI give a one-line spoken progress
+  // update so the room isn't watching a silent screen
+  if (voice.connected && data.runtimeMs > 15_000 && data.runtimeMs % 30_000 < 7_000) {
+    voice.speakWithInstruction(
+      `You are still working on "${data.instruction}" (step: ${data.step}). If the conversation is idle, give a ONE-line progress note; if people are talking, stay silent.`
+    );
+  }
+});
+eventBus.on("task.completed", () => refreshActingContext());
+eventBus.on("task.failed", () => refreshActingContext());
+eventBus.on("task.cancelled", (data: any) => {
+  refreshActingContext();
+  if (voice.connected) {
+    voice.injectContext(`[TASK CANCELLED] "${(data as any).instruction}" was stopped at the user's request. Do not narrate its result.`);
+  }
+});
+
+// Stop-intent: the mouth can stop the hand. When the user says a cancel
+// phrase while a task is running, abort it (cooperatively — ComputerUse
+// checks the signal between steps).
+const STOP_INTENT = /^(停|停下|停止|算了|别弄了|别动了|取消|不用了|stop( it)?|cancel( that| it)?|never ?mind|forget it)[\s!！。.~]*$|(取消|停止|stop|cancel)\s*(这个|那个|当前)?\s*(任务|操作|action|task)/i;
+context.on("transcript", (entry: any) => {
+  if (entry.role !== "user" || !orchestrator.activeTask) return;
+  const text = (entry.text || "").trim();
+  if (text.length > 30 || !STOP_INTENT.test(text)) return;
+  const inst = orchestrator.activeTask.instruction.slice(0, 80);
+  console.log(`[Orchestrator] Stop-intent detected: "${text}" → aborting "${inst}"`);
+  orchestrator.abortActive(`user said: ${text.slice(0, 30)}`);
+  if (voice.connected) {
+    voice.speakWithInstruction(`You just stopped the in-progress action ("${inst}") because the user asked. Confirm in ONE short sentence.`);
+  }
+});
 
 // Layer 2 (Playwright CLI) — lazy start, only launches Chrome when first needed
 // ChromeLauncher.launch() is called before first playwright-cli use (in meeting join)
@@ -833,6 +958,7 @@ const transcriptAuditor = new TranscriptAuditor({
   meetingPrepSkill,
   meetJoiner,
   chromeLauncher,
+  orchestrator,
   agentAdapter,
 });
 
@@ -892,6 +1018,7 @@ const toolDeps = {
   contextRetriever,
   context,
   automationRouter,
+  orchestrator,
   computerUse,
   bridge,
   zoomSkill,
@@ -1135,8 +1262,11 @@ cleanupSharedDirectory().then(({ removedOrphans, purgedSessions }) => {
 // Screenshots: screencapture CLI + Chrome CDP
 console.log("[Init] NativeBridge active (no Python sidecar)");
 
-process.on("SIGINT", async () => {
-  console.log("\n[Shutdown] Stopping CallingClaw...");
+let _shuttingDown = false;
+async function shutdown(signal: string) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.log(`\n[Shutdown] Stopping CallingClaw (${signal})...`);
 
   // Save meeting notes if recording
   if (meeting.getNotes().isRecording) {
@@ -1162,10 +1292,18 @@ process.on("SIGINT", async () => {
   bridge.stop();
   voice.stop();
   playwrightCli.stop();
-  chromeLauncher.close();
+  // Await Chrome teardown — exiting first leaves an orphan Chrome holding
+  // the profile's SingletonLock (forces crash-file scrubbing on next launch)
+  await Promise.race([
+    chromeLauncher.close(),
+    new Promise((r) => setTimeout(r, 5000)),
+  ]).catch(() => {});
   calendar.disconnect();
   process.exit(0);
-});
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 console.log(`
 ╔══════════════════════════════════════════════════════╗

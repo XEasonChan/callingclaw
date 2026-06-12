@@ -37,6 +37,12 @@ Single `.env` file at project root (symlinked into `callingclaw-backend/`). See 
 
 OpenClaw has its own config at `~/.openclaw/openclaw.json` — manage it via `openclaw configure`.
 
+### Agent platform (cognitive backend)
+
+`AGENT_PLATFORM` selects the agentic backend: `openclaw | claude-code | hermes | standalone` (auto-detected if unset). Each is an `AgentAdapter` (`src/agent-adapter.ts` + `src/adapters/`). To converse with CallingClaw / launch meetings *from* an agent, the agent registers the universal MCP server `plugins/callingclaw-events` (tools: status, transcript, summary, recent_events, join_meeting, prepare_meeting, list_calendar) — works with any MCP client (Hermes, Claude Code, opencode, Cursor).
+
+- **Hermes** (NousResearch): `./scripts/setup-hermes.sh` installs Hermes, wires OpenRouter, registers the MCP server in `~/.hermes/config.yaml`. Adapter shells out to `hermes -z "<prompt>" -m <model> --provider openrouter`. Talk to it via `./scripts/start-hermes.sh`. Live E2E: `bun scripts/e2e-hermes.ts`. Design + gotchas: `docs/superpowers/specs/2026-05-28-hermes-agent-integration-design.md`.
+
 ## Architecture
 
 ```

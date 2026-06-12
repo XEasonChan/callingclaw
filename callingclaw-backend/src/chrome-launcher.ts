@@ -21,7 +21,7 @@
 //   Chrome (with init script)
 //     ├── getUserMedia → returns virtual MediaStreamDestination (AI audio out)
 //     ├── RTCPeerConnection → captures remote tracks (meeting audio in)
-//     └── WebSocket ws://localhost:4000/ws/voice-test
+//     └── WebSocket ws://localhost:' + (window.__CC_PORT || 4000) + '/ws/voice-test
 //           ├── sends: captured meeting audio (PCM16 24kHz base64)
 //           └── receives: AI response audio (PCM16 24kHz base64)
 
@@ -193,7 +193,7 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     console.log('[CC-Audio] Created output dest manually (platform did not call getUserMedia)');
   }
 
-  var BACKEND_WS = 'ws://localhost:4000/ws/voice-test';
+  var BACKEND_WS = 'ws://localhost:${CONFIG.port}/ws/voice-test';
   var SAMPLE_RATE = 24000;
 
   // ── Playback worklet (ring buffer, Blob URL) ──
@@ -754,8 +754,29 @@ export class ChromeLauncher {
     this._context = context;
     this._page = page;
 
+    // Crash/quit detection: without this, a dead Chrome left voice, vision
+    // and recording running as zombies (every 3s page.evaluate just threw
+    // into catch{} forever and end-detection could never fire).
+    this._intentionalContextClose = false;
+    context.on("close", () => {
+      this._page = null as any;
+      this._context = null as any;
+      if (this._admissionInterval) this.stopAdmissionMonitor();
+      if (this._intentionalContextClose) return;
+      console.warn("[ChromeLauncher] Chrome context closed unexpectedly (crash or manual quit)");
+      this._onDisconnected?.();
+    });
+
     console.log(`[ChromeLauncher] Chrome ready on port ${port}. playwright-cli can connect now.`);
     return { port };
+  }
+
+  private _onDisconnected: (() => void) | null = null;
+  private _intentionalContextClose = false;
+
+  /** Register a handler for unexpected Chrome death (crash / manual quit). */
+  onDisconnected(cb: () => void): void {
+    this._onDisconnected = cb;
   }
 
   /**
@@ -908,7 +929,7 @@ export class ChromeLauncher {
         var btns = Array.from(document.querySelectorAll('button'));
         var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
 
-        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"], [aria-label*="Leave"], [aria-label*="End"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]') || document.querySelector('.meeting-app')) {
+        if (document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]') || document.querySelector('.meeting-app')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -1162,10 +1183,10 @@ export class ChromeLauncher {
 
     this._admissionInterval = setInterval(async () => {
       try {
-        // Check if meeting has ended
+        // Check if meeting has ended (3 consecutive ticks required)
         if (this._meetingEndCallback) {
           try {
-            const ended = await this._checkMeetingEndedLib();
+            const ended = await this._meetingEndConfirmed();
             if (ended) {
               this._consecutiveEndedChecks++;
               if (this._consecutiveEndedChecks >= ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED) {
@@ -1335,9 +1356,16 @@ export class ChromeLauncher {
     if (!this._page) return false;
     const result = await this._page.evaluate(`(() => {
       if (!location.hostname.includes('meet.google.com') && !location.hostname.includes('zoom.us')) return 'ended';
-      var leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
-      var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var text = document.body.innerText || '';
+      // Waiting room / pre-join lobby: no Leave button, no call controls, no
+      // video grid — but the meeting has NOT ended. Without this check the
+      // structural fallback below declared 'ended' while waiting for admission.
+      var waitingSignals = [
+        'Asking to be let in', 'asking to be let in',
+        "when someone lets you in", 'Ready to join', 'Ask to join',
+        '请求加入', '等待加入', '准备加入', '有人允许后即可加入',
+      ];
+      if (waitingSignals.some(function(s) { return text.includes(s); })) return 'active';
       var endedSignals = [
         'This meeting has ended', '会议已结束', '會議已結束',
         'You were removed from the meeting', '您已被移出会议',
@@ -1345,10 +1373,18 @@ export class ChromeLauncher {
         'Return to home screen', '返回主屏幕',
         'The meeting has ended for everyone', '所有人的会议已结束',
         'You left the meeting', '你已退出会议', '您已離開會議',
-        'Rejoin', '重新加入',
       ];
       var hasEndedText = endedSignals.some(function(s) { return text.includes(s); });
       if (hasEndedText) return 'ended';
+      // 'Rejoin' only counts as an exact button label — a body-text substring
+      // match fired on any page that merely mentioned rejoining.
+      var rejoinBtn = Array.from(document.querySelectorAll('button, [role="button"]')).some(function(b) {
+        var t = (b.textContent || '').trim();
+        return t === 'Rejoin' || t === '重新加入';
+      });
+      if (rejoinBtn) return 'ended';
+      var leaveBtn = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
+      var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
       // Zoom: check for meeting-end indicators
       if (location.hostname.includes('zoom.us')) {
@@ -1363,6 +1399,29 @@ export class ChromeLauncher {
       return 'active';
     })()`);
     return result === "ended";
+  }
+
+  private _endedTickCount = 0;
+
+  /**
+   * Require N consecutive 'ended' ticks (3s apart) before declaring the
+   * meeting over. Single-tick detection false-positived on transient DOM
+   * states (page loads, layout shifts) and triggered the full post-meeting
+   * pipeline — summary, delivery, voice teardown — on a live meeting.
+   */
+  private async _meetingEndConfirmed(consecutiveRequired = 3): Promise<boolean> {
+    const ended = await this._checkMeetingEndedLib();
+    if (!ended) {
+      this._endedTickCount = 0;
+      return false;
+    }
+    this._endedTickCount++;
+    if (this._endedTickCount < consecutiveRequired) {
+      console.log(`[MeetEnd] ended signal ${this._endedTickCount}/${consecutiveRequired} — waiting for confirmation`);
+      return false;
+    }
+    this._endedTickCount = 0;
+    return true;
   }
 
   private _recordAdmitted(text: string) {
@@ -1393,13 +1452,14 @@ export class ChromeLauncher {
 
   onMeetingEnd(callback: () => void): void {
     this._meetingEndCallback = callback;
+    this._endedTickCount = 0;
     if (!this._admissionInterval) {
       console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
       this._endCheckFailures = 0;
       this._consecutiveEndedChecks = 0;
       this._admissionInterval = setInterval(async () => {
         try {
-          const ended = await this._checkMeetingEndedLib();
+          const ended = await this._meetingEndConfirmed();
           if (ended) {
             this._consecutiveEndedChecks++;
             if (this._consecutiveEndedChecks >= ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED) {
@@ -1447,24 +1507,34 @@ export class ChromeLauncher {
     const page = this._page;
 
     try {
-      const left = await page.evaluate(() => {
-        // Find the Leave/Hangup button
-        const selectors = [
-          '[aria-label*="Leave call"]',
+      // Find the Leave/Hangup button.
+      // Current Meet UI labels it "End call" (结束通话); older UI used
+      // "Leave call" (退出通话) — match both, case-insensitively.
+      // String-form eval: this runs in the page, where DOM globals exist.
+      const left = await page.evaluate(`(() => {
+        var selectors = [
+          '[aria-label*="Leave call" i]',
+          '[aria-label*="End call" i]',
           '[aria-label*="退出通话"]',
+          '[aria-label*="结束通话"]',
           '[aria-label*="離開通話"]',
-          '[data-tooltip*="Leave call"]',
+          '[aria-label*="結束通話"]',
+          '[data-tooltip*="Leave call" i]',
+          '[data-tooltip*="End call" i]',
           '[data-tooltip*="退出通话"]',
+          '[data-tooltip*="结束通话"]',
         ];
-        for (const sel of selectors) {
-          const btn = document.querySelector(sel) as HTMLElement | null;
-          if (btn) {
-            btn.click();
-            return true;
-          }
+        for (var i = 0; i < selectors.length; i++) {
+          var btn = document.querySelector(selectors[i]);
+          if (btn) { btn.click(); return true; }
         }
+        // Last resort: the red hangup is the only control containing the
+        // call_end font-icon text
+        var all = Array.from(document.querySelectorAll("button, [role='button']"));
+        var iconBtn = all.find(function (b) { return (b.textContent || "").includes("call_end"); });
+        if (iconBtn) { iconBtn.click(); return true; }
         return false;
-      });
+      })()`) as boolean;
 
       if (left) {
         console.log("[ChromeLauncher] Leave button clicked");
@@ -1928,6 +1998,7 @@ export class ChromeLauncher {
   /** Clean shutdown */
   async close(): Promise<void> {
     if (this._context) {
+      this._intentionalContextClose = true; // suppress crash-detection callback
       await this._context.close().catch(() => {});
       this._context = null;
       this._page = null;

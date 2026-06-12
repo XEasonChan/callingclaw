@@ -232,7 +232,7 @@ export class PlaywrightCLIClient {
         const btns = [...document.querySelectorAll('button')];
         const btnTexts = btns.map(b => b.textContent.trim());
 
-        if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
+        if (document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -350,7 +350,7 @@ export class PlaywrightCLIClient {
 
       for (let attempt = 0; attempt < 6; attempt++) {
         const state = await this.evaluate(`() => {
-          if (document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) return 'in_meeting';
+          if (document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) return 'in_meeting';
           const t = document.body.innerText;
           if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
           return 'loading';
@@ -663,7 +663,7 @@ export class PlaywrightCLIClient {
       if (!location.hostname.includes('meet.google.com')) return 'ended';
 
       // 2. DOM signal: Leave call button missing = no longer in meeting
-      const leaveBtn = document.querySelector('[aria-label*="Leave call"], [aria-label*="退出通话"], [aria-label*="離開通話"]');
+      const leaveBtn = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
       const callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
 
       // 3. Text-based signals (post-meeting screen)

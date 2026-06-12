@@ -95,11 +95,23 @@ export class ComputerUseModule {
 
     // Prefer direct Anthropic API (full beta support).
     // OpenRouter fallback uses raw HTTP with x-anthropic-beta header passthrough.
-    if (CONFIG.anthropic.apiKey) {
-      this.client = new Anthropic({ apiKey: CONFIG.anthropic.apiKey });
+    // Validate the key SHAPE: an OpenRouter key (sk-or-…) pasted into
+    // ANTHROPIC_API_KEY previously selected direct-Anthropic mode and got
+    // 401 on every single call.
+    const antKey = CONFIG.anthropic.apiKey;
+    const isRealAnthropicKey = !!antKey && antKey.startsWith("sk-ant-");
+    if (antKey && !isRealAnthropicKey) {
+      console.warn(`[ComputerUse] ANTHROPIC_API_KEY does not look like an Anthropic key (expected sk-ant-…, got ${antKey.slice(0, 6)}…) — falling back to OpenRouter mode`);
+    }
+    if (isRealAnthropicKey) {
+      this.client = new Anthropic({ apiKey: antKey });
       this._mode = "anthropic";
       console.log("[ComputerUse] Using direct Anthropic API");
-    } else if (CONFIG.openrouter.apiKey) {
+    } else if (CONFIG.openrouter.apiKey || (antKey && antKey.startsWith("sk-or-"))) {
+      // A misplaced sk-or- key still works — it IS an OpenRouter key
+      if (!CONFIG.openrouter.apiKey && antKey) {
+        (CONFIG.openrouter as any).apiKey = antKey;
+      }
       this._mode = "openrouter";
       console.log("[ComputerUse] Using OpenRouter gateway (raw HTTP with beta header passthrough)");
     } else {
@@ -321,24 +333,52 @@ export class ComputerUseModule {
   // Main execute loop
   // ══════════════════════════════════════════════════════════════
 
-  async execute(instruction: string, maxSteps = 15): Promise<{
+  async execute(
+    instruction: string,
+    maxSteps = 15,
+    opts?: { signal?: AbortSignal; onStep?: (desc: string) => void },
+  ): Promise<{
     summary: string;
     steps: string[];
   }> {
     if (!this.isConfigured) {
       return { summary: "No API key configured", steps: [] };
     }
+    if (this._running) {
+      return { summary: "Another computer-use task is already running. Wait for it to finish or cancel it first.", steps: [] };
+    }
 
     this._running = true;
+    try {
+      return await this._executeLoop(instruction, maxSteps, opts);
+    } finally {
+      this._running = false;
+    }
+  }
+
+  private async _executeLoop(
+    instruction: string,
+    maxSteps: number,
+    opts?: { signal?: AbortSignal; onStep?: (desc: string) => void },
+  ): Promise<{
+    summary: string;
+    steps: string[];
+  }> {
     const steps: string[] = [];
     const recentTranscript = this.context.getTranscriptText(15);
 
     // Use fast Haiku model during meetings (meetingAutomation config)
     // Falls back to standard model for non-meeting Computer Use
-    const isMeeting = this.context.transcript.length > 0; // Simple heuristic: has transcript = in meeting
-    const model = isMeeting
+    const isMeeting = this.context.inMeeting;
+    let model = isMeeting
       ? CONFIG.meetingAutomation.model
       : (this._mode === "openrouter" ? CONFIG.openrouter.model : CONFIG.anthropic.model);
+
+    // Meeting model is configured as an OpenRouter slug ("anthropic/claude-haiku-4-5");
+    // the direct Anthropic API needs the bare model id
+    if (this._mode === "anthropic") {
+      model = model.replace(/^anthropic\//, "");
+    }
 
     if (isMeeting) {
       console.log(`[ComputerUse] Using fast meeting model: ${model}`);
@@ -474,8 +514,15 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
     this.emitActivity("ai.step", `Starting: "${instruction.slice(0, 60)}"`);
 
     for (let step = 0; step < maxSteps && this._running; step++) {
+      // Cooperative cancellation: voice interruption ("停/stop") aborts via
+      // the orchestrator's AbortSignal — checked between every step
+      if (opts?.signal?.aborted) {
+        console.log(`[ComputerUse] Aborted at step ${step + 1}: ${opts.signal.reason?.message || "cancelled"}`);
+        return { summary: `Cancelled after ${step} step(s).`, steps };
+      }
       console.log(`[ComputerUse] Step ${step + 1}...`);
       this.emitActivity("ai.step", `Step ${step + 1}/${maxSteps}`);
+      opts?.onStep?.(`step ${step + 1}/${maxSteps}`);
 
       // Prune old images from conversation to prevent token explosion
       this.pruneOldImages(messages);
@@ -502,6 +549,7 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
             } else if (block.type === "tool_use") {
               const params = JSON.stringify(block.input || {}).slice(0, 80);
               this.emitActivity("ai.tool_call", `${block.name} → ${params}`, JSON.stringify(block.input, null, 2));
+              opts?.onStep?.(`${block.name} ${params.slice(0, 50)}`);
             }
           });
 
@@ -523,6 +571,7 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
             } else if (block.type === "tool_use") {
               const params = JSON.stringify(block.input || {}).slice(0, 80);
               this.emitActivity("ai.tool_call", `${block.name} → ${params}`, JSON.stringify(block.input, null, 2));
+              opts?.onStep?.(`${block.name} ${params.slice(0, 50)}`);
             }
           }
         }
@@ -690,7 +739,7 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
       messages.push({ role: "user", content: toolResults });
     }
 
-    this._running = false;
+    // _running reset happens in execute()'s finally
     const summary = "Max steps reached";
     // Record interaction for history window
     this._interactionHistory.push({ instruction, result: summary, ts: Date.now() });

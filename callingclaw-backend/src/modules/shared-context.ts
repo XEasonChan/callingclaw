@@ -59,6 +59,15 @@ export interface StageDocument {
   addedAt: number;
 }
 
+/** In-flight hand action — set by ActionOrchestrator, read by voice Layer 3 */
+export interface ActiveTaskInfo {
+  id: string;
+  source: "voice" | "auditor" | "http" | "agent";
+  instruction: string;
+  startedAt: number;
+  lastStep?: string;
+}
+
 /** Active presentation scene — updated by PresentationEngine, read by TranscriptAuditor */
 export interface CurrentScene {
   index: number;
@@ -77,6 +86,41 @@ export class SharedContext {
   private _currentScene: CurrentScene | null = null;
   private _stageDocuments = new Map<string, StageDocument>();
   private _listeners = new Map<string, Array<(data: any) => void>>();
+  private _inMeeting = false;
+
+  // ── Meeting flag ──
+  // Set by meeting.started / cleared by meeting.ended in callingclaw.ts.
+  // Consumers (ComputerUse model split, etc.) must use this instead of
+  // inferring from transcript length — transcript persists across sessions.
+
+  get inMeeting(): boolean {
+    return this._inMeeting;
+  }
+
+  setInMeeting(value: boolean) {
+    this._inMeeting = value;
+  }
+
+  // ── Active task (the "hand" — single in-flight action) ──
+
+  private _activeTask: ActiveTaskInfo | null = null;
+
+  get activeTask(): ActiveTaskInfo | null {
+    return this._activeTask;
+  }
+
+  setActiveTask(task: ActiveTaskInfo | null) {
+    this._activeTask = task;
+    this.emit("active_task", task);
+  }
+
+  /** One-line Layer-3 rendering of the in-flight action for the voice model */
+  getActiveTaskPrompt(): string {
+    if (!this._activeTask) return "";
+    const elapsed = Math.round((Date.now() - this._activeTask.startedAt) / 1000);
+    const step = this._activeTask.lastStep ? ` (${this._activeTask.lastStep})` : "";
+    return `[ACTING] ${this._activeTask.instruction} — running ${elapsed}s${step}. If asked, say you're working on it; keep replies short until it finishes.`;
+  }
 
   // ── Transcript ──
 

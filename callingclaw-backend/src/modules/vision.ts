@@ -258,17 +258,20 @@ export class VisionModule {
 
     this._analyzing = true;
     this._lastAnalysisAt = Date.now();
-    try {
-      const recentTranscript = this.context.getTranscriptText(5);
-      const prevDescription = this._lastDescription
-        ? `Previous screen state: ${this._lastDescription.slice(0, 200)}`
-        : "No previous screen state.";
 
-      // Context enrichment: extract meeting topic from recent transcript if visible
-      const topicMatch = recentTranscript.match(/主题[是为]「(.+?)」|topic.*?[":]\s*"?(.+?)[".\n]/i);
-      const topicLine = topicMatch ? `Meeting topic: ${topicMatch[1] || topicMatch[2]}` : "";
+    // Built outside the try — the gpt-4o-mini fallback in the catch block
+    // needs these (referencing try-scoped consts threw ReferenceError and
+    // killed the fallback exactly when the primary call failed).
+    const recentTranscript = this.context.getTranscriptText(5);
+    const prevDescription = this._lastDescription
+      ? `Previous screen state: ${this._lastDescription.slice(0, 200)}`
+      : "No previous screen state.";
 
-      const systemPrompt = meetingMode
+    // Context enrichment: extract meeting topic from recent transcript if visible
+    const topicMatch = recentTranscript.match(/主题[是为]「(.+?)」|topic.*?[":]\s*"?(.+?)[".\n]/i);
+    const topicLine = topicMatch ? `Meeting topic: ${topicMatch[1] || topicMatch[2]}` : "";
+
+    const systemPrompt = meetingMode
         ? `You are analyzing a meeting screen capture. Focus on NEW and CHANGED content only.
 
 Rules:
@@ -293,11 +296,12 @@ ${prevDescription}
 Recent conversation context:
 ${recentTranscript}`;
 
-      const userText = question
-        || (meetingMode
-          ? "What's currently shown on the meeting screen? Focus on any shared/presented content."
-          : "Describe what's currently on screen. What app is active? What's the user doing?");
+    const userText = question
+      || (meetingMode
+        ? "What's currently shown on the meeting screen? Focus on any shared/presented content."
+        : "Describe what's currently on screen. What app is active? What's the user doing?");
 
+    try {
       const response = await this.visionClient.chat.completions.create({
         model: this.visionModel,
         max_tokens: meetingMode ? 300 : 500,

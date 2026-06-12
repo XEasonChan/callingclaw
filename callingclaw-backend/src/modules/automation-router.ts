@@ -24,6 +24,7 @@
 
 import type { PythonBridge } from "../bridge";
 import type { EventBus } from "./event-bus";
+import { CONFIG } from "../config";
 import { ZoomSkill, type ZoomAction } from "../skills/zoom";
 import { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import { PeekabooClient } from "../mcp_client/peekaboo";
@@ -262,6 +263,16 @@ export class AutomationRouter {
     const intent = this.classify(instruction);
     const start = performance.now();
 
+    // Low-confidence pattern matches must not execute a guess. The catch-all
+    // patterns (e.g. "open X" at 0.4) exist so ambiguous voice instructions
+    // fall through to Computer Use — enforce that here instead of executing.
+    if (intent.confidence < 0.6 && intent.layer !== "computer_use") {
+      intent.reason = `Low confidence (${intent.confidence}) for ${intent.layer}:${intent.action} — delegating to Computer Use`;
+      intent.layer = "computer_use";
+      intent.action = "generic";
+      intent.params = { instruction };
+    }
+
     this.eventBus?.emit("automation.routed", {
       layer: intent.layer,
       action: intent.action,
@@ -373,16 +384,24 @@ export class AutomationRouter {
       throw new Error(`Unknown meet action: ${action}`);
     }
 
-    // Open app
+    // Open app — check the exit code: a silent failure here previously
+    // returned success, blocking the Computer Use fallback and making the
+    // voice AI claim completion for an action that did nothing.
     if (action === "open_app") {
       const app = params.app;
-      await Bun.$`open -a ${app}`.quiet().nothrow();
+      const res = await Bun.$`open -a ${app}`.quiet().nothrow();
+      if (res.exitCode !== 0) {
+        throw new Error(`open -a "${app}" failed: ${res.stderr.toString().trim() || `exit ${res.exitCode}`}`);
+      }
       return `Opened ${app}`;
     }
 
     // Open URL
     if (action === "open_url") {
-      await Bun.$`open ${params.url}`.quiet().nothrow();
+      const res = await Bun.$`open ${params.url}`.quiet().nothrow();
+      if (res.exitCode !== 0) {
+        throw new Error(`open "${params.url}" failed: ${res.stderr.toString().trim() || `exit ${res.exitCode}`}`);
+      }
       return `Opened ${params.url}`;
     }
 
@@ -396,12 +415,16 @@ export class AutomationRouter {
         if (!filePath) throw new Error(`File not found: "${query}"`);
       }
       const app = params.app || "browser";
+      let openRes;
       if (app === "browser" || filePath.endsWith(".html") || filePath.endsWith(".htm")) {
-        await Bun.$`open -a "Google Chrome" ${filePath}`.quiet().nothrow();
+        openRes = await Bun.$`open -a "Google Chrome" ${filePath}`.quiet().nothrow();
       } else if (app === "vscode") {
-        await Bun.$`code ${filePath}`.quiet().nothrow();
+        openRes = await Bun.$`code ${filePath}`.quiet().nothrow();
       } else {
-        await Bun.$`open ${filePath}`.quiet().nothrow();
+        openRes = await Bun.$`open ${filePath}`.quiet().nothrow();
+      }
+      if (openRes.exitCode !== 0) {
+        throw new Error(`open "${filePath}" failed: ${openRes.stderr.toString().trim() || `exit ${openRes.exitCode}`}`);
       }
       return `Opened ${filePath}`;
     }
@@ -416,10 +439,10 @@ export class AutomationRouter {
           // Serve via localhost if it's in the public dir, otherwise file://
           const isPublic = filePath.includes("/public/");
           const serveUrl = isPublic
-            ? `http://localhost:4000/${filePath.split("/public/").pop()}`
+            ? `http://localhost:${CONFIG.port}/${filePath.split("/public/").pop()}`
             : `file://${filePath}`;
           try {
-            const resp = await fetch("http://localhost:4000/api/screen/share", {
+            const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: serveUrl }),
@@ -433,7 +456,7 @@ export class AutomationRouter {
       }
       // Direct URL share
       try {
-        const resp = await fetch("http://localhost:4000/api/screen/share", {
+        const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: url || undefined }),
@@ -448,7 +471,7 @@ export class AutomationRouter {
     // Stop sharing
     if (action === "stop_sharing") {
       try {
-        await fetch("http://localhost:4000/api/screen/stop", { method: "POST" });
+        await fetch(`http://localhost:${CONFIG.port}/api/screen/stop`, { method: "POST" });
         return "Stopped presenting";
       } catch { return "Stop sharing failed"; }
     }

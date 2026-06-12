@@ -6,23 +6,47 @@
 import { CONFIG } from "../config";
 
 export interface LLMCallOptions {
+  /** Model id, or the alias "fast" for the configured fast analysis model */
   model?: string;
   maxTokens?: number;
+  system?: string;
+  temperature?: number;
+  /** Abort the request after this many ms (default 10s). A hung OpenRouter
+   * socket previously froze the auditor/retriever for the rest of a meeting. */
+  timeoutMs?: number;
 }
 
 /**
  * Call a fast model via OpenRouter or Anthropic direct API.
  * Returns the raw text response.
+ *
+ * Accepts either `callModel(prompt, opts)` or a single options object
+ * `callModel({ prompt, system, model, ... })` — both forms are in use.
  */
 export async function callModel(
-  prompt: string,
+  promptOrOpts: string | (LLMCallOptions & { prompt: string }),
   opts: LLMCallOptions = {},
 ): Promise<string> {
-  const model = opts.model || CONFIG.analysis.searchModel || CONFIG.analysis.model;
+  let prompt: string;
+  if (typeof promptOrOpts === "string") {
+    prompt = promptOrOpts;
+  } else {
+    prompt = promptOrOpts.prompt;
+    opts = { ...promptOrOpts, ...opts };
+  }
+
+  const model = (!opts.model || opts.model === "fast")
+    ? (CONFIG.analysis.searchModel || CONFIG.analysis.model)
+    : opts.model;
   const maxTokens = opts.maxTokens || 512;
+  const signal = AbortSignal.timeout(opts.timeoutMs ?? 10_000);
 
   // Prefer OpenRouter (supports all models uniformly)
   if (CONFIG.openrouter.apiKey) {
+    const messages: Array<{ role: string; content: string }> = [];
+    if (opts.system) messages.push({ role: "system", content: opts.system });
+    messages.push({ role: "user", content: prompt });
+
     const resp = await fetch(`${CONFIG.openrouter.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -32,8 +56,10 @@ export async function callModel(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
+        ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+        messages,
       }),
+      signal,
     });
     if (!resp.ok) throw new Error(`OpenRouter ${resp.status}: ${await resp.text()}`);
     const data = (await resp.json()) as any;
@@ -53,8 +79,11 @@ export async function callModel(
       body: JSON.stringify({
         model: anthropicModel,
         max_tokens: maxTokens,
+        ...(opts.system ? { system: opts.system } : {}),
+        ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
         messages: [{ role: "user", content: prompt }],
       }),
+      signal,
     });
     if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
     const data = (await resp.json()) as any;

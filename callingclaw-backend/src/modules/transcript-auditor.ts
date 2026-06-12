@@ -59,6 +59,7 @@ export class TranscriptAuditor {
   private meetJoiner: MeetJoiner;
   private chromeLauncher: any = null; // ChromeLauncher instance for presenting tab operations
   private voice: VoiceModule | null = null;
+  private orchestrator: import("./action-orchestrator").ActionOrchestrator | null = null;
   private agentAdapter: any = null; // AgentAdapter for research_task delegation
 
   private _active = false;
@@ -87,6 +88,7 @@ export class TranscriptAuditor {
     meetingPrepSkill: MeetingPrepSkill;
     meetJoiner: MeetJoiner;
     chromeLauncher?: any;
+    orchestrator?: import("./action-orchestrator").ActionOrchestrator;
     agentAdapter?: any;
   }) {
     this.context = opts.context;
@@ -96,6 +98,7 @@ export class TranscriptAuditor {
     this.meetingPrepSkill = opts.meetingPrepSkill;
     this.meetJoiner = opts.meetJoiner;
     this.chromeLauncher = opts.chromeLauncher || null;
+    this.orchestrator = opts.orchestrator || null;
     this.agentAdapter = opts.agentAdapter || null;
   }
 
@@ -121,17 +124,9 @@ export class TranscriptAuditor {
     // doesn't re-execute the same action that Realtime already handled.
     // Without this, user says "打开MCP文档" → Realtime calls open_file (200ms)
     // → Auditor classifies as search_and_open (1.5s later) → opens same file again.
-    this.eventBus.on("voice.tool_call", (data: any) => {
-      const tool = data?.tool || "";
-      const key = `realtime:${tool}:${JSON.stringify(data?.summary || data?.instruction || "").slice(0, 80)}`;
-      if (!this._recentActions.includes(key)) {
-        this._recentActions.push(key);
-        if (this._recentActions.length > 5) this._recentActions.shift();
-      }
-      // Don't set global cooldown here — ring buffer handles dedup for same actions.
-      // Global cooldown would block DIFFERENT actions (e.g., "open PRD" → "open Pika")
-      console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool} — added to ring buffer`);
-    });
+    // Stored as a field so deactivate() can unsubscribe (was leaking one
+    // listener per meeting).
+    this.eventBus.on("voice.tool_call", this._onVoiceToolCall);
 
     // Build file alias index with prep context so AutomationRouter can instantly
     // resolve file paths the voice AI references from the meeting prep brief
@@ -172,8 +167,9 @@ export class TranscriptAuditor {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = null;
     }
-    // Unsubscribe listener to prevent leaking handlers across meetings
+    // Unsubscribe listeners to prevent leaking handlers across meetings
     this.context.off("transcript", this._onTranscript);
+    this.eventBus.off("voice.tool_call", this._onVoiceToolCall);
     this.automationRouter.fileIndex.clear();
     this._researchGeneration++; // Cancel any in-flight research callbacks from this meeting
     this._activeResearch.clear();
@@ -182,7 +178,19 @@ export class TranscriptAuditor {
     this.eventBus.emit("auditor.deactivated", {});
   }
 
-  // ── Event handler (arrow fn to preserve `this`) ──
+  // ── Event handlers (arrow fns to preserve `this`) ──
+
+  private _onVoiceToolCall = (data: any) => {
+    const tool = data?.tool || "";
+    const key = `realtime:${tool}:${JSON.stringify(data?.summary || data?.instruction || "").slice(0, 80)}`;
+    if (!this._recentActions.includes(key)) {
+      this._recentActions.push(key);
+      if (this._recentActions.length > 5) this._recentActions.shift();
+    }
+    // Don't set global cooldown here — ring buffer handles dedup for same actions.
+    // Global cooldown would block DIFFERENT actions (e.g., "open PRD" → "open Pika")
+    console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool} — added to ring buffer`);
+  };
 
   private _onTranscript = (entry: TranscriptEntry) => {
     if (!this._active) return;
@@ -262,11 +270,22 @@ export class TranscriptAuditor {
           targetTab: "presenting",
         });
       } else {
-        // Route through AutomationRouter for other actions (meet shortcuts, tab management, etc.)
-        const result = await this.automationRouter.execute(text);
+        // Route through AutomationRouter for other actions (meet shortcuts,
+        // tab management, etc.) — serialized via the orchestrator so the fast
+        // lane can't race a running ComputerUse loop, and an identical
+        // voice-originated instruction coalesces instead of double-executing
+        const runRouter = async () => {
+          const r = await this.automationRouter.execute(text);
+          return r.success ? r.result : `Error: ${r.result}`;
+        };
+        const summary = this.orchestrator
+          ? await this.orchestrator.submit("auditor", text, runRouter)
+          : await runRouter();
 
-        if (result.success && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
-          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, result.result, this.eventBus);
+        if (!summary.startsWith("Error:") && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
+          // 方向A: silent injection only — the model picks up the [DONE] note on
+          // its next natural turn instead of interrupting mid-sentence
+          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, summary, this.eventBus);
         }
       }
 
@@ -612,6 +631,10 @@ Respond with JSON only:
     let executionResult = "";
 
     try {
+      // Auditor medium-lane actions run through the ActionOrchestrator so
+      // they serialize against voice-originated computer_action / HTTP tasks
+      // (and get an AbortSignal slot for cooperative cancellation).
+      const runSwitch = async (task?: import("./action-orchestrator").ActionTask) => {
       switch (action) {
         // ── File search + open (fuzzy name) ──
         case "search_and_open": {
@@ -636,7 +659,7 @@ Respond with JSON only:
           if (!shareResult.success) {
             // Fallback: try direct share API with file search
             try {
-              const resp = await fetch("http://localhost:4000/api/screen/share", {
+              const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: undefined }), // will trigger file search in shareScreen
               });
@@ -654,7 +677,7 @@ Respond with JSON only:
           const shareUrl = params.url || "";
           instruction = `share URL: ${shareUrl}`;
           try {
-            const resp = await fetch("http://localhost:4000/api/screen/share", {
+            const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: shareUrl }),
             });
@@ -705,7 +728,7 @@ Respond with JSON only:
           instruction = "start screen sharing";
           const shareUrl = params.url || undefined;
           try {
-            const resp = await fetch("http://localhost:4000/api/screen/share", {
+            const resp = await fetch(`http://localhost:${CONFIG.port}/api/screen/share`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: shareUrl }),
@@ -723,7 +746,7 @@ Respond with JSON only:
         case "stop_sharing": {
           instruction = "stop screen sharing";
           try {
-            await fetch("http://localhost:4000/api/screen/stop", { method: "POST" });
+            await fetch(`http://localhost:${CONFIG.port}/api/screen/stop`, { method: "POST" });
             executionResult = "Screen sharing stopped";
           } catch {
             await this.meetJoiner.stopSharing();
@@ -952,12 +975,16 @@ Respond with JSON only:
           if (r.success) {
             executionResult = r.result;
           } else if (this.computerUse.isConfigured) {
-            // L4 fallback: full Computer Use agent loop
+            // L4 fallback: full Computer Use agent loop (abortable when
+            // running under the orchestrator)
             this.eventBus.emit("computer.task_started", {
               instruction,
               source: "auditor_l4",
             });
-            const cuResult = await this.computerUse.execute(instruction);
+            const cuResult = await this.computerUse.execute(instruction, 15, task ? {
+              signal: task.abort.signal,
+              onStep: (d) => this.orchestrator?.progress(task.id, d),
+            } : undefined);
             executionResult = cuResult.summary;
           } else {
             executionResult =
@@ -965,6 +992,18 @@ Respond with JSON only:
           }
           break;
         }
+      }
+      return executionResult;
+      };
+
+      if (this.orchestrator) {
+        executionResult = await this.orchestrator.submit(
+          "auditor",
+          `${action}: ${JSON.stringify(params).slice(0, 100)}`,
+          (task) => runSwitch(task),
+        );
+      } else {
+        executionResult = await runSwitch();
       }
 
       this.eventBus.emit("computer.task_done", {

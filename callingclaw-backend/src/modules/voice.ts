@@ -30,6 +30,13 @@ const SLOW_TOOLS = new Set([
   // for OpenAI/Grok but must be async for Gemini to keep audio flowing.
   "recall_context",
   "save_meeting_notes",
+  // The longest operations in the product (20-60s): awaiting these inline
+  // produced total dead silence with no acknowledgment.
+  "join_meeting",
+  "create_and_join_meeting",
+  "leave_meeting",
+  "search_files",
+  "prepare_meeting",
 ]);
 
 export interface VoiceModuleOptions {
@@ -58,6 +65,13 @@ export class VoiceModule {
   private _responseDone = false;   // response.done received (generation complete)
   private _audioDone = false;      // response.audio.done received (playback complete)
   private _responseHadAudio = false; // did this response produce any audio.delta?
+
+  // Response gate: serializes response.create. Concurrent creates (filler vs
+  // tool completion vs presentSlide) made the provider reject with
+  // "conversation_already_has_active_response" and the tool result was
+  // silently never spoken.
+  private _responseActive = false;
+  private _pendingResponseCreate: any | null = null;
 
   // Heard transcript tracking (interruption truncation)
   private _currentResponseAudioSamples = 0;  // Total samples received from provider
@@ -142,6 +156,39 @@ export class VoiceModule {
       this.client.setSpeaking(state === "speaking");
       console.log(`[Voice] Audio state: ${prev} → ${state}`);
     }
+  }
+
+  /**
+   * Gated response.create: defers while a response is active instead of
+   * colliding with it (provider rejects concurrent creates and the trigger
+   * is lost — the most common cause of "did the action, said nothing").
+   * Only the latest deferred payload is kept; it flushes on response.done.
+   */
+  private _requestResponse(payload: any = {}) {
+    if (!this.client.connected) return;
+    if (this._responseActive) {
+      this._pendingResponseCreate = payload;
+      console.log("[Voice] response.create deferred (response active)");
+      return;
+    }
+    this.client.sendEvent("response.create", payload);
+  }
+
+  /**
+   * Inject a system instruction and trigger the AI to speak it.
+   * Use for fillers and task narration — unlike sendText() this does NOT
+   * fabricate a user message (which polluted the transcript and re-triggered
+   * the auditor/retriever pipelines on the system's own filler).
+   */
+  speakWithInstruction(instruction: string): boolean {
+    if (!this.client.connected) return false;
+    if (this.client.providerName === "gemini") {
+      // Gemini auto-responds to injected context; response.create is a no-op
+      this.client.injectContext(`[SYSTEM] ${instruction}`);
+      return true;
+    }
+    this._requestResponse({ response: { instructions: instruction } });
+    return true;
   }
 
   constructor(options: VoiceModuleOptions) {
@@ -256,6 +303,7 @@ export class VoiceModule {
 
     // ── Audio State: Response created → thinking ──
     this.client.on("response.created", () => {
+      this._responseActive = true;
       this._setAudioState("thinking");
       this._tracer.mark('modelFirstToken');
       // Reset completion flags for new response
@@ -308,6 +356,19 @@ export class VoiceModule {
       // Only go to listening if we're not already idle (disconnected)
       if (this._audioState !== "idle") {
         this._setAudioState("listening");
+      }
+      // Response gate: flush the deferred response.create, if any
+      this._responseActive = false;
+      if (this._pendingResponseCreate !== null && this.client.connected) {
+        const payload = this._pendingResponseCreate;
+        this._pendingResponseCreate = null;
+        // Small delay so the provider settles the finished response first
+        setTimeout(() => {
+          if (this.client.connected && !this._responseActive) {
+            this.client.sendEvent("response.create", payload);
+            console.log("[Voice] Flushed deferred response.create");
+          }
+        }, 50);
       }
       // Mark response generation as done — flush only when BOTH response.done AND audio.done
       this._responseDone = true;
@@ -362,7 +423,11 @@ export class VoiceModule {
       try {
         args = JSON.parse(argsStr);
       } catch {
-        args = {};
+        // Submit an error result the model can repair instead of silently
+        // executing the tool with empty arguments (e.g. open_file({}))
+        console.warn(`[Voice] Tool ${name} arguments unparseable: ${String(argsStr).slice(0, 120)}`);
+        this.client.submitToolResult(call_id, `Error: malformed tool arguments (invalid JSON). Retry the ${name} call with valid arguments.`);
+        return;
       }
 
       console.log(`[Voice] Tool call: ${name}`, args);
@@ -407,20 +472,25 @@ export class VoiceModule {
           // The model will see this on its next turn (after current speech finishes or user speaks)
           this.injectContext(`[WORKING] Running "${name}"...`);
 
-          // 3. Execute async — inject result silently, NO response.create
-          // Model picks up context on next natural turn (user speech or presentSlide)
+          // 3. Execute async — inject result when ready (1500-char cap: a 200-char
+          // slice destroyed multi-line results like open_file's candidate list).
           if (this.onToolCall) {
-            this.onToolCall(name, args, call_id).then((result) => {
-              this.injectContext(`[DONE] ${name}: ${result.slice(0, 200)}`);
+            this.onToolCall(name, args, call_id).then(async (result) => {
+              const capped = result.length > 1500 ? result.slice(0, 1500) + "\n…(truncated)" : result;
+              this.injectContext(`[DONE] ${name}: ${capped}`);
               this.context.addTranscript({
                 role: "system",
                 text: `[Tool Result] ${name}: ${result.slice(0, 200)}`,
                 ts: Date.now(),
               });
-              this._feedbackScreenshot(name).catch(() => {});
+              // Perception-action loop: screenshot BEFORE triggering the response
+              // so the model narrates what the screen actually shows now —
+              // unawaited, the image only informed the NEXT turn.
+              await this._feedbackScreenshot(name).catch(() => {});
               // Trigger model to process the result and decide next action.
               // Without this, the model sees the context but won't speak or call another tool.
-              this.client.sendEvent("response.create", {});
+              // This is what closes the agent loop for slow tools.
+              this._requestResponse({});
               console.log(`[Voice] Slow tool ${name} completed async → triggered response`);
             }).catch((e: any) => {
               this.injectContext(`[ERROR] ${name} failed: ${e.message}`);
@@ -429,7 +499,7 @@ export class VoiceModule {
                 text: `[Tool Result] ${name}: Error: ${e.message}`,
                 ts: Date.now(),
               });
-              this.client.sendEvent("response.create", {});
+              this._requestResponse({});
               console.error(`[Voice] Slow tool ${name} failed → triggered response:`, e.message);
             });
           }
@@ -549,11 +619,14 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    * Uses conversation.item.create instead of session.update to avoid audio breaks.
    *
    * @param text - Context text (e.g., "[CONTEXT] PRD目标是..." or "[DONE] 已打开文件")
+   * @param id - Optional stable item id (enables replace-by-removeContext);
+   *             previously dropped, which made removeContext("ctx_stage_docs")
+   *             a no-op and stage-doc items accumulate
    * @returns The item ID if sent, false if not connected
    */
-  injectContext(text: string): string | false {
+  injectContext(text: string, id?: string): string | false {
     if (!this.client.connected) return false;
-    return this.client.injectContext(text);
+    return this.client.injectContext(text, id);
   }
 
   /**
@@ -686,7 +759,7 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
       `[PRESENT NOW] ${sectionTitle ? sectionTitle + "\n\n" : ""}${text}`,
       "ctx_current_slide"
     );
-    this.client.sendEvent("response.create", {});
+    this._requestResponse({});
   }
 
   /**
@@ -771,6 +844,9 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   private static VISUAL_TOOLS = new Set([
     "interact", "browser_action", "share_screen", "open_file",
     "scroll_page", "click_element", "navigate", "exec",
+    // The most screen-mutating tool of all was missing — multi-step computer
+    // use completed with zero visual feedback to the voice model
+    "computer_action",
   ]);
 
   /** Auto-inject screenshot after a visual tool completes */

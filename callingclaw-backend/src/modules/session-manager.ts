@@ -189,8 +189,17 @@ export class SessionManager {
       const hasStaleGenericTopic = existing.topic === "Meeting" || existing.topic.startsWith("Meeting at ");
       if (hasRealTopic && hasStaleGenericTopic) {
         console.log(`[SessionManager] Updating stale topic: "${existing.topic}" → "${opts.topic.slice(0, 40)}"`);
+        // Mutate within a fresh read of the index — mutating `existing` and
+        // then saving a separate _read() silently discarded the update
         existing.topic = opts.topic;
-        this._save(this._read()); // persist the update
+        const index = this._read();
+        const stored = index.sessions.find(s => s.meetingId === existing.meetingId);
+        if (stored) {
+          stored.topic = opts.topic;
+          stored.updatedAt = isoNow();
+          this._save(index);
+          this._syncDB(stored);
+        }
       }
       console.log(`[SessionManager] Found existing: ${existing.meetingId} for ${(existing.topic || opts.topic).slice(0, 40)}`);
       return existing;
@@ -247,7 +256,9 @@ export class SessionManager {
     // Guard: don't overwrite existing non-empty prep (recovery retry race condition)
     try {
       const existing = Bun.file(filePath);
-      if (await existing.exists() && (await existing.size()) > 100) {
+      // .size is a property, not a method — calling it threw and the catch
+      // below silently disabled this overwrite guard entirely
+      if (await existing.exists() && existing.size > 100) {
         console.log(`[SessionManager] Prep already exists, skipping overwrite: ${meetingId}`);
         this._mergeFile(meetingId, "prep", filename);
         const session = this.get(meetingId);
