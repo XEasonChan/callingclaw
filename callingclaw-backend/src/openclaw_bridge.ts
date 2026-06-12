@@ -142,11 +142,18 @@ export class OpenClawBridge {
   private sendConnectRequest() {
     const auth = this.token ? { token: this.token } : undefined;
     this.request("connect", {
+      // Advertise 3–4: OpenClaw ≥2026.6.x gateways negotiate protocol 4
+      // (they reject max=3 with "protocol mismatch expected=4"); older
+      // gateways still pick 3 from the range.
       minProtocol: 3,
-      maxProtocol: 3,
+      maxProtocol: 4,
       client: {
-        id: "openclaw-tui",
-        version: "2026.4.11",
+        // "gateway-client", NOT "openclaw-tui": protocol 4 classifies
+        // tui/control-ui ids as operator UIs and demands device identity;
+        // programmatic clients (gateway-client/cli/node-host) authenticate
+        // with the gateway token alone.
+        id: "gateway-client",
+        version: "2026.6.5",
         platform: "darwin",
         mode: "backend",
       },
