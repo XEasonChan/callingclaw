@@ -243,7 +243,7 @@ CallingClaw ships with an MCP server — 25 tools that let any MCP-compatible ag
 }
 ```
 
-Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, and any MCP client.
+Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, **Hermes**, and any MCP client.
 
 **Zero-GUI onboarding:** The agent handles everything through conversation — API keys, Google OAuth, macOS permissions, readiness checks. No manual config needed.
 
@@ -263,6 +263,29 @@ See [`mcp/README.md`](mcp/README.md) for full documentation.
 /plugin install callingclaw
 ```
 
+### Event stream for long-running agents
+
+Besides the control-surface MCP above, [`plugins/callingclaw-events`](plugins/callingclaw-events) is a second, event-oriented MCP server (11 tools) for agents that *live alongside* CallingClaw — it buffers meeting lifecycle events (`meeting.started/ended/summary_ready/prep_ready`) so a chat agent can poll `callingclaw_recent_events` and proactively notify you, plus onboarding tools (`callingclaw_onboarding_status`, `callingclaw_request_auth`, `callingclaw_create_meeting`, `callingclaw_scan_claude_projects`).
+
+```bash
+bun <repo>/plugins/callingclaw-events/index.ts   # stdio MCP server
+```
+
+### Hermes (Telegram-native agent)
+
+[Hermes](https://github.com/NousResearch/Hermes-Agent) users get a full conversational surface — talk to CallingClaw from Telegram:
+
+```bash
+./scripts/setup-hermes.sh    # installs Hermes, wires OpenRouter, registers the events MCP server
+./scripts/start-hermes.sh    # interactive session ("join my 3pm meeting", "any summaries?")
+```
+
+**One-link onboarding:** paste this into Hermes and it installs CallingClaw, walks macOS permissions + Google auth, and offers a live onboarding meeting where the digital human introduces itself (it can even reference your recent Claude Code projects, with consent):
+
+```bash
+hermes skills install https://raw.githubusercontent.com/XEasonChan/callingclaw/main/.agents/skills/callingclaw-onboarding/SKILL.md
+```
+
 ---
 
 ## Project structure
@@ -274,7 +297,8 @@ callingclaw/
 ├── mcp/                     # MCP server — 25 tools for any AI agent
 ├── .claude-plugin/          # Claude Code Plugin manifest
 ├── skills/join-meeting/     # Agent skill (SKILL.md)
-├── plugins/                 # Claude Code Channel plugin (EventBus → Telegram)
+├── .agents/skills/          # Cross-platform skills (callingclaw-onboarding, meeting-summary)
+├── plugins/                 # callingclaw-events MCP server (event stream + onboarding tools)
 ├── CLAUDE.md                # Agent guide — architecture, rules, gotchas
 ├── CHANGELOG.md             # Release history
 └── VERSION                  # 2.9.2
