@@ -4,6 +4,7 @@
 
 import type { ToolModule } from "./types";
 import { CONFIG } from "../config";
+import { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
 import type { GoogleCalendarClient, CalendarAttendee } from "../mcp_client/google_cal";
 import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { ChromeLauncher } from "../chrome-launcher";
@@ -108,7 +109,7 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       },
       {
         name: "leave_meeting",
-        description: "Leave the current Google Meet meeting. Automatically saves meeting notes and creates tasks from action items.",
+        description: "Leave the current meeting. ONLY call this when the user EXPLICITLY says goodbye, ends the meeting, or says words like '退出会议/结束/bye/let's wrap up'. NEVER call this for 'start/begin/开始/继续'. When in doubt, do NOT leave.",
         parameters: { type: "object", properties: {} },
       },
       {
@@ -125,12 +126,14 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
       {
         name: "share_screen",
         description:
-          "Share CallingClaw's screen in the current Google Meet call. Use target 'iframe' to load local content into the Meeting Stage's slide frame without leaving the stage view. Omit target to share the full Meeting Stage (default).",
+          "Share a page in the Google Meet call. Pass what the user said as the url — " +
+          "your agent will resolve it to a real URL. Examples: url='CallingClaw 官网', url='PRD 文档', url='Google'. " +
+          "Use target='iframe' for local files to load into the Meeting Stage slide frame.",
         parameters: {
           type: "object",
           properties: {
-            url: { type: "string", description: "URL or file path to present. Omit to show default Meeting Stage." },
-            target: { type: "string", description: "Where to load: 'iframe' loads into stage slide frame (local content only), omit for full page." },
+            url: { type: "string", description: "What to share — can be a natural language description (e.g. '官网', 'PRD', 'Google') or a real URL. Your agent resolves it." },
+            target: { type: "string", description: "'iframe' = load into Meeting Stage slide frame (localhost only). Omit for full page share." },
           },
         },
       },
@@ -469,6 +472,11 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             : `Failed: ${session.error}`;
         }
         case "leave_meeting": {
+          // Guard: prevent accidental leave within first 30s of meeting
+          const meetingAge = Date.now() - (meeting.startedAt || 0);
+          if (meetingAge < 30000) {
+            return "Meeting just started. I won't leave yet. If you want to end the meeting, please say so clearly.";
+          }
           // Stop meeting-end watcher + admission monitor (BOTH drivers — the
           // ChromeLauncher interval previously kept running, clicking any
           // "Admit/准许" button on whatever page Chrome showed next)
@@ -613,56 +621,277 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             }
           }
 
-          // Default: share screen with full page (opens Meeting Stage if no URL)
-          // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
-          if (deps.chromeLauncher) {
-            await deps.chromeLauncher.shareScreen(shareUrl || undefined);
-          } else {
-            await meetJoiner.shareScreen();
+          // ── Resolve natural language → URL ──
+          // Voice model passes user intent ("官网", "PRD", "Google manus"), agent resolves to real URL
+          let resolvedShareUrl = shareUrl;
+          if (resolvedShareUrl && !resolvedShareUrl.startsWith("http") && !resolvedShareUrl.startsWith("/") && !resolvedShareUrl.startsWith("file:")) {
+            // Natural language → URL resolution
+            const query = resolvedShareUrl.toLowerCase();
+            const brief = meetingPrepSkill?.currentBrief;
+
+            // 1. Check prep brief's known URLs/files
+            const knownUrl = brief?.browserUrls?.find(u =>
+              query.split(/\s+/).some(w => u.description.toLowerCase().includes(w) || u.url.toLowerCase().includes(w))
+            );
+            const knownFile = brief?.filePaths?.find(f =>
+              query.split(/\s+/).some(w => f.description.toLowerCase().includes(w) || f.path.toLowerCase().includes(w))
+            );
+
+            if (knownUrl) {
+              resolvedShareUrl = knownUrl.url;
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep URLs)`);
+            } else if (knownFile) {
+              // Markdown files → use renderer for CallingClaw-styled display
+              if (/\.md$/i.test(knownFile.path)) {
+                resolvedShareUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(knownFile.path)}`;
+              } else {
+                resolvedShareUrl = knownFile.path.startsWith("/")
+                  ? `http://localhost:${CONFIG.port}${knownFile.path}` : knownFile.path;
+              }
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from prep files)`);
+            } else {
+              // 3. Search localhost public HTML files by fuzzy name match
+              try {
+                const fs = require("fs");
+                const publicDir = require("path").resolve(import.meta.dir, "../../public");
+                const htmlFiles = fs.readdirSync(publicDir).filter((f: string) => f.endsWith(".html") && !f.startsWith("stage-"));
+                const queryWords = query.split(/[\s\-_]+/).filter((w: string) => w.length > 2);
+                // Score each file: count matching query words
+                const scored = htmlFiles.map((f: string) => {
+                  const fLower = f.toLowerCase();
+                  const hits = queryWords.filter((w: string) => fLower.includes(w.toLowerCase())).length;
+                  return { file: f, hits };
+                }).filter(s => s.hits > 0).sort((a, b) => b.hits - a.hits);
+                const matched = scored[0]?.file;
+                if (matched) {
+                  resolvedShareUrl = `http://localhost:${CONFIG.port}/${matched}`;
+                  console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (from public/ files)`);
+                }
+              } catch {}
+            }
+
+            // 4. Google search pattern
+            if (resolvedShareUrl === shareUrl && /google/i.test(query)) {
+              const searchTerms = query.replace(/google|搜索|搜一下|search/gi, "").trim();
+              resolvedShareUrl = searchTerms
+                ? `https://www.google.com/search?q=${encodeURIComponent(searchTerms)}`
+                : "https://www.google.com";
+              console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (Google search)`);
+            }
+
+            // 5. Last resort: if it looks like a URL path (has dots or slashes), prepend https://
+            // BUG-029: MUST validate ASCII-only before constructing domain (no Chinese chars in URLs)
+            if (resolvedShareUrl === shareUrl) {
+              const cleaned = query.replace(/官网|网站|首页|homepage|文档|document|PRD/gi, "").trim();
+              const asciiOnly = cleaned.replace(/[^\x20-\x7E]/g, "").trim(); // strip non-ASCII
+              if (!asciiOnly || asciiOnly.length < 3) {
+                // Not a valid domain candidate — skip URL guessing
+                console.log(`[share_screen] "${shareUrl}" has no valid ASCII domain, skipping guess`);
+              } else if (asciiOnly.includes(".") || asciiOnly.includes("/")) {
+                resolvedShareUrl = asciiOnly.startsWith("www.") ? `https://${asciiOnly}` : `https://www.${asciiOnly}`;
+                console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
+              } else if (/^[a-z0-9\-]+$/i.test(asciiOnly.replace(/\s+/g, ""))) {
+                resolvedShareUrl = `https://www.${asciiOnly.replace(/\s+/g, "")}.com`;
+                console.log(`[share_screen] Resolved "${shareUrl}" → ${resolvedShareUrl} (guessed domain)`);
+              } else {
+                console.log(`[share_screen] "${shareUrl}" not a valid domain candidate`);
+              }
+            }
           }
 
-          // Native voice-driven presentation: inject narrative plan + screenshot
-          // Voice model sees the screen and drives naturally using interact/scroll tools
+          // ── If presenting tab exists, navigate it then ensure Meet is sharing ──
+          if (resolvedShareUrl && deps.chromeLauncher?.presentingPage) {
+            try {
+              // If presenting tab is on /stage, load content into iframe (preferred)
+              const currentUrl = String(deps.chromeLauncher.presentingPage.url());
+              const isOnStage = currentUrl.includes("/stage");
+              const isLocalContent = resolvedShareUrl.startsWith("http://localhost") || resolvedShareUrl.startsWith("/");
+
+              if (isOnStage && isLocalContent) {
+                // Load into Stage iframe — keeps the Meeting Stage layout with dual panels
+                const loaded = await deps.chromeLauncher.loadSlideFrame(resolvedShareUrl);
+                if (loaded) {
+                  console.log(`[share_screen] Loaded into Stage iframe: ${resolvedShareUrl}`);
+                  // Emit so BrowserCapture reconnects to presenting tab
+                  eventBus.emit("presentation.started", { mode: "iframe", url: resolvedShareUrl });
+                  // Extract DOM from IFRAME for voice context
+                  await new Promise(r => setTimeout(r, 1500));
+                  try {
+                    const raw = await deps.chromeLauncher.evaluateOnSlideFrame(`
+                      var body = document.body;
+                      return body ? body.innerText.slice(0, 2000) : '';
+                    `);
+                    if (raw && deps.voice) {
+                      deps.voice.replaceContext(`[PAGE] Stage iframe content:\n${String(raw).slice(0, 1500)}`, PAGE_CONTEXT_ID);
+                      console.log(`[share_screen] Stage iframe DOM injected to voice`);
+                    }
+                  } catch (domErr: any) {
+                    console.warn(`[share_screen] Stage iframe DOM extraction failed: ${domErr.message}`);
+                  }
+                  if (deps.voice) deps.voice.presentationMode = true;
+                  return `Loaded into Meeting Stage: ${resolvedShareUrl}. The document is showing in the left panel. Describe what you see.`;
+                }
+                // loadSlideFrame failed — fall through to navigate
+                console.warn(`[share_screen] loadSlideFrame failed, falling through to navigate`);
+              }
+
+              // Navigate the presenting tab directly (for external URLs or when Stage isn't active)
+              await deps.chromeLauncher.navigatePresentingPage(resolvedShareUrl);
+              console.log(`[share_screen] Navigated presenting tab to ${resolvedShareUrl} (reused tab)`);
+
+              // If Meet isn't sharing yet, start sharing now (presenting tab already has content)
+              if (!deps.chromeLauncher.isSharing) {
+                console.log(`[share_screen] Meet not sharing yet — clicking Share in Meet`);
+                // shareScreen will reuse existing presenting page since it already exists
+                const startResult = await deps.chromeLauncher.shareScreen(resolvedShareUrl);
+                if (!startResult.success) {
+                  return `Navigated to ${resolvedShareUrl} but screen share failed: ${startResult.message}`;
+                }
+              }
+
+              // Emit presentation.started so BrowserCapture reconnects to presenting tab
+              eventBus.emit("presentation.started", { mode: "navigate", url: resolvedShareUrl });
+
+              // Re-extract DOM to verify page loaded + give voice context
+              await new Promise(r => setTimeout(r, 1500)); // wait for page render
+              const { PAGE_EXTRACT_JS, formatPageContext, PAGE_CONTEXT_ID } = await import("../utils/page-extract");
+              try {
+                const raw = await deps.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+                const pageCtx = formatPageContext(raw);
+                if (pageCtx && deps.voice) {
+                  deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+                  console.log(`[share_screen] DOM context injected to voice (${pageCtx.length} chars)`);
+                }
+              } catch (domErr: any) {
+                console.warn(`[share_screen] DOM extraction failed after navigate: ${domErr.message}`);
+              }
+              if (deps.voice) deps.voice.presentationMode = true;
+              return `Now presenting: ${resolvedShareUrl}. The page is now visible to all participants. Look at the [PAGE] context to see what's on screen and describe the actual content — headings, features, text you can see. Don't talk about the meeting agenda, describe what the page shows.`;
+            } catch (e: any) {
+              console.warn(`[share_screen] Navigate failed, falling through to new share: ${e.message}`);
+            }
+          }
+
+          // Check for pre-generated custom Stage HTML (iframe src already baked in)
+          if (!resolvedShareUrl && deps.chromeLauncher) {
+            const stageFile = (() => {
+              try {
+                const fs = require("fs");
+                const publicDir = require("path").resolve(import.meta.dir, "../../public");
+                const files = fs.readdirSync(publicDir)
+                  .filter((f: string) => f.startsWith("stage-") && f.endsWith(".html") && f !== "stage.html")
+                  .map((f: string) => ({ name: f, mtime: fs.statSync(`${publicDir}/${f}`).mtimeMs }))
+                  .sort((a: any, b: any) => b.mtime - a.mtime);
+                return files[0] ? `http://localhost:${CONFIG.port}/${files[0].name}` : null;
+              } catch { return null; }
+            })();
+
+            if (stageFile) {
+              resolvedShareUrl = stageFile;
+              console.log(`[share_screen] Using pre-generated Stage: ${stageFile}`);
+            }
+          }
+
+          if (!resolvedShareUrl && deps.chromeLauncher) {
+            // Fallback: try to find presentable content from prep brief
+            const brief = meetingPrepSkill?.currentBrief;
+
+            // 1. Check scenes[] for a URL (presentation.json scenes)
+            const sceneUrl = brief?.scenes?.find(s => s.url)?.url;
+            // 2. Check filePaths[] for a local .html file
+            const htmlFile = brief?.filePaths?.find(f => /\.html?$/i.test(f.path));
+
+            if (sceneUrl) {
+              // Scene URL found — load it into Stage iframe, then share the Stage
+              const sceneResolved = sceneUrl.startsWith("/")
+                ? `http://localhost:${CONFIG.port}${sceneUrl}` : sceneUrl;
+              await deps.chromeLauncher.loadSlideFrame(sceneResolved);
+              // Share the Stage (which now has content in its iframe)
+              resolvedShareUrl = "";  // will become /stage via shareScreen() default
+            } else if (htmlFile) {
+              // Local HTML file — load it into Stage iframe, then share the Stage
+              const htmlResolved = htmlFile.path.startsWith("/")
+                ? `http://localhost:${CONFIG.port}${htmlFile.path}` : htmlFile.path;
+              await deps.chromeLauncher.loadSlideFrame(htmlResolved);
+              resolvedShareUrl = "";  // will become /stage via shareScreen() default
+            } else {
+              // No content available — refuse to share an empty stage
+              return "No content to present. Specify a URL or prepare presentation materials first.";
+            }
+          }
+
+          // Always prefer ChromeLauncher (Playwright library) — it manages the actual Meet page.
+          let shareResult: { success: boolean; message: string } = { success: false, message: "No launcher" };
+          if (deps.chromeLauncher) {
+            shareResult = await deps.chromeLauncher.shareScreen(resolvedShareUrl || undefined);
+          } else {
+            const ok = await meetJoiner.shareScreen();
+            shareResult = { success: ok, message: ok ? "Sharing (legacy)" : "Failed (legacy)" };
+          }
+
+          // If share failed, tell the voice model immediately — don't proceed as if it worked
+          if (!shareResult.success) {
+            return `Screen share failed: ${shareResult.message}. Try again or check screen recording permission.`;
+          }
+
+          // ── Presentation mode: sync voice with screen actions ──
+          if (deps.voice) deps.voice.presentationMode = true;
+
+          // Native voice-driven presentation: inject narrative plan + live DOM context
           const brief = meetingPrepSkill?.currentBrief;
           const cl = deps.chromeLauncher;
-          if (brief && cl && deps.voice) {
-            // Take screenshot of the shared content
+          if (cl && deps.voice) {
+            // Screenshot (best-effort, works for OpenAI 1.5 with image support)
             try {
               const page = cl.presentingPage;
               if (page) {
                 const buf = await page.screenshot({ type: "jpeg", quality: 60 });
-                const screenshot = buf.toString("base64");
-                deps.voice.injectScreenshot(screenshot, `[PRESENTING] ${shareUrl || "screen"}`);
+                deps.voice.injectScreenshot(buf.toString("base64"), `[PRESENTING] ${shareUrl || "screen"}`);
               }
             } catch {}
 
-            // Inject narrative plan so voice knows what to present
+            // DOM extraction: voice AI sees actual page content (Page Agent approach)
+            // Uses fixed ID so each update REPLACES the previous, not accumulates
+            try {
+              const raw = await cl.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+              const pageCtx = formatPageContext(raw);
+              if (pageCtx) deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+            } catch {}
+
+            // Narrative plan from prep brief
             const narrativeParts: string[] = [];
-            if (brief.goal) narrativeParts.push(`Goal: ${brief.goal}`);
-            if (brief.keyPoints?.length) {
+            if (brief?.goal) narrativeParts.push(`Goal: ${brief.goal}`);
+            if (brief?.keyPoints?.length) {
               narrativeParts.push(`Key points:\n${brief.keyPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}`);
             }
-            if (brief.speakingPlan?.length) {
+            if (brief?.speakingPlan?.length) {
               const phases = brief.speakingPlan.map((p: any) => `- ${p.phase}: ${p.points}`).join("\n");
               narrativeParts.push(`Speaking plan:\n${phases}`);
             }
-            if (brief.browserUrls?.length) {
+            if (brief?.scenes?.length) {
+              const sceneGuide = brief.scenes.map((s: any, i: number) =>
+                `Scene ${i + 1}: ${s.url}${s.scrollTarget ? " → " + s.scrollTarget : ""}\n  Say: ${s.talkingPoints}`
+              ).join("\n");
+              narrativeParts.push(`Presentation scenes (use interact tool to navigate):\n${sceneGuide}`);
+            }
+            if (brief?.browserUrls?.length) {
               const urls = brief.browserUrls.map((u: any) => `- ${u.url}: ${u.description}`).join("\n");
               narrativeParts.push(`Materials to show:\n${urls}`);
             }
 
             if (narrativeParts.length > 0) {
               deps.voice.injectContext(
-                `[PRESENTATION MODE] You are now presenting to the meeting. Present naturally — scroll, click, and navigate using your tools. Here is your narrative guide:\n\n${narrativeParts.join("\n\n")}`
+                `[PRESENTATION MODE] You are presenting to the meeting. Describe what you see on the page, scroll to show key sections, and click links to navigate. Use interact tool.\n\n${narrativeParts.join("\n\n")}`
               );
             }
             eventBus.emit("presentation.started", { mode: "native" });
-            return `Screen sharing started. You can see the content — present it naturally. Use interact/scroll to navigate the page.`;
+            return `Screen sharing started. You can see the page content — present it naturally using interact to scroll and click.`;
           }
 
           return "Screen sharing started.";
         }
         case "stop_sharing": {
+          if (deps.voice) deps.voice.presentationMode = false;
           await meetJoiner.stopSharing();
           eventBus.emit("presentation.done", { mode: "native" });
           return "Screen sharing stopped.";
@@ -770,15 +999,57 @@ export function meetingTools(deps: MeetingToolDeps): ToolModule {
             return `File not found: "${queryPath}". Try different keywords or check the file name.`;
           }
 
-          // Open the resolved file
-          const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
-          console.log(`[open_file] Opening: ${resolvedPath} in ${app}`);
+          // Open the resolved file — if presenting, load into presenting tab (not new tab/VSCode)
+          console.log(`[open_file] Opening: ${resolvedPath}`);
 
-          if (app === "browser" && deps.chromeLauncher) {
-            // Open in ChromeLauncher's presenting tab for potential screen share
-            const fileUrl = resolvedPath.startsWith("http") ? resolvedPath : `file://${resolvedPath}`;
-            await deps.chromeLauncher.shareScreen(fileUrl);
+          if (deps.chromeLauncher?.presentingPage) {
+            // Currently presenting → load file into presenting tab (visible in Meet)
+            let presentUrl: string;
+            if (/\.md$/i.test(resolvedPath)) {
+              // Markdown → use renderer for styled display
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            } else if (/\.html?$/i.test(resolvedPath)) {
+              // HTML → serve directly if in public/, otherwise render
+              const fileName = resolvedPath.split("/").pop() || "";
+              const publicPath = require("path").resolve(import.meta.dir, "../../public", fileName);
+              presentUrl = require("fs").existsSync(publicPath)
+                ? `http://localhost:${CONFIG.port}/${fileName}`
+                : `file://${resolvedPath}`;
+            } else {
+              // Other files → use renderer with raw content
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            }
+
+            // Navigate presenting tab (stays in Meet share)
+            try {
+              await deps.chromeLauncher.navigatePresentingPage(presentUrl);
+              console.log(`[open_file] Loaded into presenting tab: ${presentUrl}`);
+            } catch {
+              // Fallback: open in new tab via shareScreen
+              await deps.chromeLauncher.shareScreen(presentUrl);
+            }
+          } else if (deps.chromeLauncher?.context) {
+            // Not presenting but Playwright Chrome is running → open via shareScreen
+            // so it becomes the presenting tab AND starts screen share in one step.
+            let presentUrl: string;
+            if (/\.md$/i.test(resolvedPath)) {
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            } else if (/\.html?$/i.test(resolvedPath)) {
+              const fileName = resolvedPath.split("/").pop() || "";
+              const publicPath = require("path").resolve(import.meta.dir, "../../public", fileName);
+              presentUrl = require("fs").existsSync(publicPath)
+                ? `http://localhost:${CONFIG.port}/${fileName}`
+                : `file://${resolvedPath}`;
+            } else {
+              presentUrl = `http://localhost:${CONFIG.port}/render.html?file=${encodeURIComponent(resolvedPath)}`;
+            }
+            // Use shareScreen to open + start sharing in one step.
+            // This creates the presenting tab, sets title, and clicks Meet share button.
+            const shareResult = await deps.chromeLauncher.shareScreen(presentUrl);
+            console.log(`[open_file] Opened + shared via shareScreen: ${presentUrl} (${shareResult.success ? "✅" : "❌"})`);
           } else {
+            // No Playwright Chrome → open in system default app
+            const app = args.app || (resolvedPath.endsWith(".html") ? "browser" : "vscode");
             await meetJoiner.openFile(resolvedPath, app);
           }
 

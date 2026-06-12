@@ -185,7 +185,13 @@ export class MeetingScheduler {
             const hasMeetUrlSession = existingSessions.some(s =>
               s.meetUrl === event.meetLink && s.status === "active"
             );
-            if (hasMeetUrlSession) {
+            // Also check recently-ended sessions (within last 30 min) to prevent
+            // re-scheduling a meeting that just finished
+            const hasRecentlyEnded = existingSessions.some(s =>
+              s.meetUrl === event.meetLink && s.status === "ended" &&
+              s.updatedAt && (Date.now() - new Date(s.updatedAt).getTime()) < 30 * 60 * 1000
+            );
+            if (hasMeetUrlSession || hasRecentlyEnded) {
               this._everScheduled.add(eventId);
               continue;
             }

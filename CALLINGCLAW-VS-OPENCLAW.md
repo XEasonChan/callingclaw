@@ -9,7 +9,7 @@ CallingClaw 可以独立创建 Google Calendar 会议，不依赖 OpenClaw。日
 | 创建日历事件 + Meet 链接 | `calendar.createEvent()` 直接调 Google API | 无需模型 |
 | 加入 Google Meet | ChromeLauncher (Playwright library) | 无需模型 |
 | 实时语音对话 | VoiceModule → RealtimeClient | OpenAI Realtime / Gemini Live |
-| 屏幕截图分析 | VisionModule (每 ~40s) | Gemini Flash (OpenRouter) |
+| 屏幕截图分析 | VisionModule (1s 截图, ~3s 分析) | Gemini Flash (OpenRouter) |
 | 实时意图分类 | TranscriptAuditor (每句话) | Haiku (OpenRouter) |
 | 上下文主动搜索 | ContextRetriever (每 ~500 字) | Haiku (OpenRouter) |
 | 电脑控制 | ComputerUseModule | Haiku/Sonnet (Anthropic API) |

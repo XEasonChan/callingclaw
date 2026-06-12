@@ -390,11 +390,15 @@ export class ContextRetriever {
     const screenLine = screen.description
       ? `[screen] ${screen.description}${screen.url ? ` (${screen.url})` : ""}`
       : "";
+    // Context enrichment: add prep topic so retriever knows the meeting's purpose
+    const prepTopic = this.meetingPrepSkill?.currentBrief?.topic || "";
+    const prepLine = prepTopic ? `[meeting prep: ${prepTopic}]` : "";
 
     const prompt = `What specific topic is being discussed RIGHT NOW in this meeting conversation?
 
 ${transcriptText}
 ${screenLine}
+${prepLine}
 
 Previous topic: "${this._currentTopic || "none"}"
 
@@ -649,15 +653,27 @@ RULES:
       }
 
       // Execute each tool call
-      const toolResults: Array<{ type: "tool_result"; tool_use_id: string; content: string }> = [];
+      const toolResults: Array<{ role: string; tool_call_id: string; content: string }> = [];
       for (const tc of toolCalls) {
         const result = await this.executeTool(tc.name, tc.input);
-        toolResults.push({ type: "tool_result", tool_use_id: tc.id, content: result });
+        toolResults.push({ role: "tool", tool_call_id: tc.id, content: result });
       }
 
       // Add assistant response + tool results to messages for next round
-      messages.push({ role: "assistant", content: response.rawContent });
-      messages.push({ role: "user", content: toolResults });
+      // OpenRouter uses OpenAI format: assistant with tool_calls, then role:"tool" messages
+      // Anthropic direct uses native format: assistant content, then user with tool_result
+      if (CONFIG.openrouter.apiKey) {
+        messages.push({ role: "assistant", content: response.rawContent });
+        for (const tr of toolResults) messages.push(tr as any);
+      } else {
+        messages.push({ role: "assistant", content: response.rawContent });
+        messages.push({
+          role: "user",
+          content: toolResults.map(tr => ({
+            type: "tool_result", tool_use_id: tr.tool_call_id, content: tr.content,
+          })),
+        });
+      }
     }
 
     // Max rounds reached — try to extract whatever we have
@@ -682,8 +698,10 @@ RULES:
         body: JSON.stringify({
           model,
           max_tokens: 1024,
-          system,
-          messages,
+          messages: [
+            { role: "system", content: system },
+            ...messages,
+          ],
           tools: ContextRetriever.SEARCH_TOOLS.map((t) => ({
             type: "function",
             function: { name: t.name, description: t.description, parameters: t.input_schema },
@@ -956,6 +974,14 @@ RULES:
       this.meetingPrepSkill.addLiveNote(note);
     }
     pushContextUpdate(this.voice, this.meetingPrepSkill, this.eventBus);
+
+    // Register found files as stage documents (reduces re-search on next mention)
+    for (const ctx of newContexts) {
+      const pathMatch = ctx.content.match(/(?:^|\s)(\/\S+\.(?:md|json|html|txt|ts|js))/);
+      if (pathMatch && this.context) {
+        this.context.addStageDocument(pathMatch[1], "new");
+      }
+    }
 
     const topicSummary = newContexts.map((c) => c.query).join(", ");
 

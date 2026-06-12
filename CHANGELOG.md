@@ -3,6 +3,54 @@
 All notable changes to CallingClaw are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.9.0] - 2026-04-07
+
+### Added
+- **Meeting Stage pre-generation** — per-meeting Stage HTML with iframe content baked in. No more "Your AI is preparing..." placeholder. Markdown files rendered via `render.html` with CallingClaw branding (white bg, coral red accent)
+- **`read_prep` tool** — zero-cost local query of meeting prep sections (resources, decisions, questions, history, scenes). Voice model reads prep on demand without API calls
+- **`interact` tool** — click, scroll, navigate on presenting page. Section-aware scroll finds next heading. Returns scroll position percentage
+- **Dual-system Stage panels** — System One (Voice: transcript + tool calls) and System Two (Agent: intent classification + file search + action execution). Replaces noisy EventBus dump
+- **AutoEval framework** — business scenario eval with 5-dimensional scoring (system health, tool accuracy, content quality, fluency, accuracy). Pipeline health monitoring: audio, STT, transcript, Chrome status per step
+- **Audio diagnostic** — `GET /api/audio/status` returns pipeline health (capture, playback, echo, VAD stats)
+- **Markdown renderer** — `render.html` universal CallingClaw-branded markdown renderer for any `.md` file in iframe
+
+### Fixed
+- **Whisper Chinese recognition** — `language: "zh"` hint via `TRANSCRIPTION_LANGUAGE` config. Chinese no longer misrecognized as Russian/Korean/Polish
+- **Voice session isolation** — `resetForNewMeeting()` on meeting.ended clears context queue + refreshes instructions. No more old conversation leaking into new meetings
+- **Transcript preservation** — same-URL re-join no longer clears transcript history
+- **Share screen failure detection** — voice model now knows when share fails (was silently continuing)
+- **Empty Stage prevention** — share_screen uses pre-generated Stage HTML, never opens blank `/stage`
+- **iframe scroll** — uses `contentWindow.scrollBy()` (works for both body and documentElement scroll containers)
+- **Natural language URL resolution** — "投屏官网" → resolved from prep brief's URLs/files. Google search pattern: "Google manus" → google.com/search?q=manus
+- **Tab reuse** — navigate within presenting tab instead of opening new tabs
+- **response.create spam** — echo debounce + audioState check prevents AI from repeating itself
+- **PRESENTER persona** — delivers section-by-section, pauses for user questions, doesn't ask "需要我介绍吗" every sentence
+- **Vision fallback** — gpt-4o-mini when OpenRouter/Gemini Flash unavailable
+- **REST API proxy** — `NO_PROXY` includes api.openai.com + openrouter.ai
+
+### Experiments
+- **EXP-7B**: Text simulation eval (6 runs, gpt-realtime-1.5 text mode)
+- **EXP-7C**: Multi-turn injection — primer message eliminates hallucination
+- **EXP-7D**: Agent pipeline — intent classification 75% accuracy
+
+## [2.8.13] - 2026-04-06
+
+### Added
+- **Claude Code Channels integration** — replace OpenClaw dispatch with Anthropic's first-party Telegram channel. CallingClaw events (meeting.ended, prep.ready) bridged into Claude Code sessions via custom MCP channel plugin. One-command setup: `./scripts/setup-claude-channels.sh`
+- **Page Agent DOM extraction** (`page-extract.ts`) — extracts page title, visible content, interactive elements with indices, and scroll position as compact text for voice AI. Replaces screenshot-based perception for presenting pages
+- **Presentation pipeline** — voice AI now sees live DOM content during screen sharing, uses `interact` tool to scroll/click/navigate while narrating. `presentationMode` synchronizes voice with screen actions
+- **OC-001 scenes/speakingPlan** — meeting prep now generates presentation outline with URL navigation order and talking points
+
+### Fixed
+- **VisionModule wrong tab** — `BrowserCaptureProvider` now prefers "CallingClaw Presenting" tab during screen sharing (was always capturing Meet grid view)
+- **ChromeLauncher tab focus** — `shareScreen()` switches focus to presenting tab after sharing starts (humans look at what they present, not the meeting room)
+- **BrowserCapture reconnect on presentation events** — EventBus `presentation.started/done` triggers CDP reconnect to correct tab
+- **Silent context handling** — Layer 0 system prompt now describes all context prefixes ([PAGE], [Screen], [CONTEXT], [DONE]) so voice AI absorbs them as background knowledge instead of reading aloud
+- **Context accumulation** — DOM injections use fixed ID (`replaceContext`) to replace previous state instead of filling the FIFO queue
+
+### Changed
+- **OpenClaw config** — removed expired OAuth subscription profile (`anthropic:manual`), set OpenRouter Opus 4.6 as default primary model
+
 ## [2.8.12] - 2026-04-04
 
 ### Added

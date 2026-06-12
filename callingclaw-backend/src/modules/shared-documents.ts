@@ -535,3 +535,67 @@ export async function listPrepFiles(): Promise<string[]> {
   } catch {}
   return files.sort().reverse();
 }
+
+/**
+ * Clean up stale/orphan files in the shared directory.
+ * Removes:
+ *   - _prep.json / _presentation.json files not referenced by any session (orphans from tests)
+ *   - Session files older than 7 days with status "ended"
+ * Call at startup to prevent test data contamination.
+ */
+export async function cleanupSharedDirectory(): Promise<{ removedOrphans: number; purgedSessions: number }> {
+  const { unlinkSync, statSync } = require("fs");
+  let removedOrphans = 0;
+  let purgedSessions = 0;
+
+  try {
+    const index = readSessions();
+    const knownMeetingIds = new Set(index.sessions.map(s => s.meetingId));
+    const referencedFiles = new Set<string>();
+    for (const s of index.sessions) {
+      if (s.files) {
+        for (const f of Object.values(s.files)) {
+          if (f) referencedFiles.add(f);
+        }
+      }
+    }
+
+    // Remove orphan _prep.json and _presentation.json files
+    // These are files that exist on disk but aren't referenced by any session
+    const jsonFiles = readdirSync(SHARED_DIR)
+      .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"));
+    for (const fname of jsonFiles) {
+      // Check if any session references this file or if the meetingId prefix matches a known session
+      const matchesSession = [...knownMeetingIds].some(id => fname.startsWith(id));
+      if (!matchesSession && !referencedFiles.has(fname)) {
+        try {
+          unlinkSync(resolve(SHARED_DIR, fname));
+          removedOrphans++;
+          console.log(`[Cleanup] Removed orphan: ${fname}`);
+        } catch {}
+      }
+    }
+
+    // Purge ended sessions older than 7 days
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const toRemove: string[] = [];
+    for (const s of index.sessions) {
+      if (s.status === "ended") {
+        const updated = new Date(s.updatedAt).getTime();
+        if (!isNaN(updated) && updated < sevenDaysAgo) {
+          toRemove.push(s.meetingId);
+        }
+      }
+    }
+    if (toRemove.length > 0) {
+      index.sessions = index.sessions.filter(s => !toRemove.includes(s.meetingId));
+      saveSessions(index);
+      purgedSessions = toRemove.length;
+      console.log(`[Cleanup] Purged ${purgedSessions} ended sessions older than 7 days`);
+    }
+  } catch (e: any) {
+    console.warn(`[Cleanup] Shared directory cleanup failed: ${e.message}`);
+  }
+
+  return { removedOrphans, purgedSessions };
+}

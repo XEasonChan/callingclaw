@@ -1,0 +1,52 @@
+{
+  "model": "2.9.1",
+  "results": [
+    {
+      "id": "CR-E2E-01",
+      "category": "context_recall",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15101,
+      "toolsCalled": [],
+      "aiResponse": "Personal 视频的分镜脚本一共有 23 帧。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-02",
+      "category": "context_recall",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15099,
+      "toolsCalled": [],
+      "aiResponse": "Pika 的定价是每月 19.99 美元，采用订阅制，并且是云端服务，主打视频生成。我们 CallingClaw 的差异在于一次性 19.99 美元购买本地 Mac 应用，侧重实时会议助手功能，强调隐私安全和流畅体验。",
+      "log": "[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-03",
+      "category": "context_recall",
+      "score": 63,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 50
+      },
+      "latencyMs": 15101,
+      "toolsCalled": [],
+      "aiResponse": "CallingClaw 的核心定位是作为一款本地运行的 Mac 会议智能助手，一次性购买即可拥有，帮助用户在会议中实时记录、整理和跟进，强调隐私安全和流畅体验，帮助提升会议效率和效果。",
+      "log": "[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    }
+  ],
+  "avgScore": 54,
+  "duration": 45
+}

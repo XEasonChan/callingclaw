@@ -1,7 +1,5 @@
 # CallingClaw 权限清单
 
-> **v2.7.12 更新：** BlackHole 虚拟音频驱动已移除。音频注入现在通过 Playwright `addInitScript` 在浏览器级别完成，不需要安装任何音频驱动。以下文档中的 BlackHole 相关内容仅供历史参考。
-
 CallingClaw 需要以下 macOS 权限才能正常运行。所有权限在 Onboarding 引导流程中检查。
 
 ---
@@ -12,10 +10,10 @@ CallingClaw 需要以下 macOS 权限才能正常运行。所有权限在 Onboar
 
 | 项目 | 说明 |
 |------|------|
-| **用途** | `getUserMedia()` 采集音频输入（BlackHole 16ch 或真实麦克风） |
-| **两种模式都需要** | 是 — macOS TCC 不区分虚拟设备和真实麦克风，`getUserMedia()` 一律触发权限检查 |
+| **用途** | Direct 模式下 `getUserMedia()` 采集真实麦克风输入 |
+| **Meet 模式需要吗** | 不需要 — Meet 音频通过 Playwright `addInitScript` 在浏览器级别注入，不经过 Electron |
 | **可否自动弹窗** | 可以 — `systemPreferences.askForMediaAccess('microphone')` |
-| **拒绝后果** | `_setupCapture()` 失败，AI 听不到会议音频（Meet Bridge）或用户语音（Direct） |
+| **拒绝后果** | Direct 模式语音对话无法使用（Meet 模式不受影响） |
 | **设置路径** | 系统设置 → 隐私与安全性 → 麦克风 |
 | **Info.plist** | `NSMicrophoneUsageDescription`: "CallingClaw needs microphone access for AI voice meetings" |
 
@@ -46,37 +44,44 @@ CallingClaw 需要以下 macOS 权限才能正常运行。所有权限在 Onboar
 | **用途** | 视频会议（当前未使用，预留） |
 | **可否自动弹窗** | 可以 — `systemPreferences.askForMediaAccess('camera')` |
 | **当前状态** | Entitlement 已声明，Info.plist 已配置，代码未调用 |
-| **Info.plist** | `NSCameraUsageDescription`: "CallingClaw needs camera access for video meetings" |
 
 ---
 
-## 二、虚拟音频设备（用户手动安装）
+## 二、音频架构（v2.7.12+）
 
-### BlackHole 2ch
+CallingClaw 使用 **Playwright `addInitScript()` 浏览器级音频注入**，不需要任何虚拟音频驱动。
 
-| 项目 | 说明 |
-|------|------|
-| **用途** | AI 语音输出 → Meet/Zoom 麦克风输入 |
-| **安装** | `brew install blackhole-2ch` |
-| **角色** | AudioBridge 的 `setSinkId()` 目标设备（playback output） |
-| **缺失后果** | 回退到 Direct 模式，AI 语音只从本机扬声器播放，Meet 中听不到 |
+### Meet Bridge 模式（加入会议）
 
-### BlackHole 16ch
+```
+Meet 参与者说话
+  → RTCPeerConnection audio track (选择 muted=false 的 track)
+    → AudioWorklet capture → PCM16 24kHz
+      → WebSocket → Backend → Voice AI (OpenAI Realtime / Gemini Live)
 
-| 项目 | 说明 |
-|------|------|
-| **用途** | Meet/Zoom 扬声器 → AI 音频输入（让 AI 听到会议中其他人说话） |
-| **安装** | `brew install blackhole-16ch` |
-| **角色** | AudioBridge 的 `getUserMedia({ deviceId })` 输入源（capture input） |
-| **缺失后果** | 回退到 Direct 模式，AI 无法听到会议中其他参与者的声音 |
-
-### 检测方式
-
-```bash
-system_profiler SPAudioDataType | grep BlackHole
+AI 语音回复
+  → Backend → WebSocket → base64 audio chunks
+    → Ring Buffer AudioWorklet → replaceTrack() on RTCPeerConnection
+      → Meet 参与者听到 AI 发言
 ```
 
-代码中通过 `findBlackHoleDevices()` 枚举音频设备自动检测（`audio-bridge.js:120`）。
+关键实现文件：
+- `callingclaw-backend/public/meet-audio-inject.js` — 音频注入编排
+- `callingclaw-backend/public/playback-worklet.js` — Ring buffer worklet
+- `callingclaw-backend/src/chrome-launcher.ts` — 通过 `addInitScript()` 预加载注入
+
+### Direct 模式（非会议语音对话）
+
+```
+真实麦克风
+  → getUserMedia()                       ← 需要麦克风 TCC 权限
+    → AudioWorklet → WebSocket → Backend → Voice AI
+
+AI 语音响应
+  → Backend → WebSocket
+    → AudioWorklet ring buffer
+      → 系统默认扬声器
+```
 
 ---
 
@@ -95,34 +100,14 @@ system_profiler SPAudioDataType | grep BlackHole
 
 ---
 
-## 四、音频链路与权限的关系
+## 四、Bundle ID 与权限
 
-```
-Meet Bridge 模式:
+| 环境 | Bundle ID | 说明 |
+|------|-----------|------|
+| 开发 | `com.github.electron` | `npm start` 启动时使用 |
+| 生产 | `com.tanka.callingclaw` | DMG 安装后使用 |
 
-  Meet 音频输出
-    → BlackHole 16ch (虚拟扬声器)        ← 需安装 BlackHole 16ch
-      → getUserMedia({ deviceId: bh16ch }) ← 需要麦克风 TCC 权限
-        → AudioWorklet (PCM16 24kHz)
-          → WebSocket → Backend → Grok/OpenAI Realtime API
-
-  AI 语音响应
-    → Backend → WebSocket audio_playback
-      → AudioWorklet ring buffer
-        → setSinkId(BlackHole 2ch)         ← 需安装 BlackHole 2ch
-          → Meet 麦克风输入
-
-Direct 模式:
-
-  真实麦克风
-    → getUserMedia()                       ← 需要麦克风 TCC 权限
-      → AudioWorklet → WebSocket → Backend → Grok/OpenAI
-
-  AI 语音响应
-    → Backend → WebSocket
-      → AudioWorklet ring buffer
-        → 系统默认扬声器
-```
+**重要：** TCC 权限绑定 Bundle ID，开发和生产环境的权限不互通。切换环境后需要重新授权。
 
 ---
 
@@ -133,9 +118,6 @@ Direct 模式:
 | 1 | 屏幕录制 | `getMediaAccessStatus('screen')` | 不能，打开系统设置 |
 | 2 | 辅助功能 | osascript 测试执行 | 不能，打开系统设置 |
 | 3 | 麦克风 | `getMediaAccessStatus('microphone')` | 能，`askForMediaAccess('microphone')` |
-| 4 | BlackHole 设备 | `findBlackHoleDevices()` | — 需用户手动安装 |
-
-> **注意：** 当前代码中 `permission-checker.js` 的 `checkAll()` 未包含麦克风检查（注释声称虚拟设备不需要），这是一个 bug — `getUserMedia()` 对虚拟设备同样触发 TCC 检查。需要将麦克风加入 `checkAll()`。
 
 ---
 
@@ -143,9 +125,9 @@ Direct 模式:
 
 | 现象 | 可能原因 | 排查 |
 |------|---------|------|
-| AI 加入会议但不说话 | BlackHole 2ch 未安装或 `setSinkId()` 失败 | 检查 `[AudioBridge] Output device:` 日志 |
-| AI 说话但 Meet 中听不到 | BlackHole 2ch 未设为 Meet 麦克风 | Meet 设置 → 音频 → 麦克风选 BlackHole 2ch |
-| AI 听不到会议内容 | 麦克风权限被拒 或 BlackHole 16ch 未安装 | `[AudioBridge] Capture failed` 日志 |
-| 截屏分析无内容 | 屏幕录制权限未授予 | 系统设置 → 屏幕录制 → 勾选 CallingClaw |
-| 无法控制鼠标键盘 | 辅助功能权限未授予 | 系统设置 → 辅助功能 → 勾选 CallingClaw |
-| `setSinkId()` 静默失败 | `setSinkId()` 在 `getUserMedia()` 之后调用 | Electron bug #40704，检查调用顺序 |
+| AI 加入会议但不说话 | replaceTrack 失败 | 检查 `[AudioInject]` 日志 |
+| AI 听不到会议内容 | 选中了 muted=true 的 track | 检查日志是否有 `muted=false` track 被选中 |
+| 截屏分析无内容 | 屏幕录制权限被拒 | 系统设置 → 屏幕录制 → 勾选 CallingClaw |
+| 无法控制鼠标键盘 | 辅助功能权限被拒 | 系统设置 → 辅助功能 → 勾选 CallingClaw |
+| 直连模式无声音 | 麦克风权限被拒 | 系统设置 → 麦克风 → 勾选 CallingClaw |
+| `setSinkId()` 静默失败 | 调用顺序错误 | `setSinkId()` 必须在 `getUserMedia()` 之前调用 (Electron bug #40704) |

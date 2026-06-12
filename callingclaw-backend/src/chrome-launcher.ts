@@ -29,6 +29,7 @@ import { resolve } from "path";
 import { homedir } from "os";
 import { existsSync, mkdirSync, rmSync } from "fs";
 import { CONFIG } from "./config";
+import { CURSOR_INJECT_JS } from "./utils/page-extract";
 
 // Always use dedicated CallingClaw profile (lightweight, fast startup).
 // Google cookies are imported from the user's main Chrome on first launch.
@@ -43,8 +44,9 @@ const DEFAULT_PORT = 0; // 0 = random free port
 
 const AUDIO_INIT_SCRIPT = `
 (function() {
-  // Skip non-Meet pages
-  if (!location.hostname.includes('meet.google.com') && location.hostname !== 'about:blank') return;
+  // Skip pages that aren't meeting platforms
+  var isMeeting = location.hostname.includes('meet.google.com') || location.hostname.includes('zoom.us') || location.hostname === 'about:blank';
+  if (!isMeeting) return;
 
   window.__cc = {
     gumCalls: 0,
@@ -84,7 +86,37 @@ const AUDIO_INIT_SCRIPT = `
     return origGUM(constraints);
   };
 
-  // ── Wrap RTCPeerConnection ──
+  // ── Wrap AudioContext to capture Zoom's remote audio output ──
+  // Zoom uses WASM + AudioContext for speaker output (not RTC receivers).
+  // We patch AudioContext.prototype.destination to intercept ALL audio going to speakers.
+  var OrigAudioContext = window.AudioContext || window.webkitAudioContext;
+  if (OrigAudioContext) {
+    var origCreateMediaStreamDest = OrigAudioContext.prototype.createMediaStreamDestination;
+
+    // Patch connect() on AudioNode prototype to tap audio going to destination
+    var origConnect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function(dest) {
+      var cc = window.__cc;
+      // When ANY node connects to an AudioDestinationNode (speakers), also route to our capture
+      if (dest instanceof AudioDestinationNode && cc && !cc._destTapped) {
+        try {
+          // Create a capture tap: source → splitter → destination + our capture stream
+          var ctx = this.context;
+          var captureDest = ctx.createMediaStreamDestination();
+          origConnect.call(this, captureDest); // parallel tap
+          cc._zoomCaptureStream = captureDest.stream;
+          cc._zoomCaptureCtx = ctx;
+          cc._destTapped = true;
+          console.log('[CC-Init] Tapped AudioContext.destination for remote audio capture (' + ctx.sampleRate + 'Hz)');
+        } catch(e) {
+          console.warn('[CC-Init] Destination tap failed:', e.message);
+        }
+      }
+      return origConnect.apply(this, arguments);
+    };
+  }
+
+  // ── Wrap RTCPeerConnection constructor ──
   window.RTCPeerConnection = function() {
     var pc = new (Function.prototype.bind.apply(OrigPC, [null].concat(Array.prototype.slice.call(arguments))))();
     window.__cc.pcs.push(pc);
@@ -99,6 +131,43 @@ const AUDIO_INIT_SCRIPT = `
   if (window.webkitRTCPeerConnection) {
     window.webkitRTCPeerConnection = window.RTCPeerConnection;
   }
+
+  // ── Patch addTrack on prototype (catches PCs created BEFORE our constructor wrap) ──
+  // When Zoom/other platforms add an audio track to a PC, swap it with our virtual mic.
+  var origAddTrack = OrigPC.prototype.addTrack;
+  OrigPC.prototype.addTrack = function(track) {
+    var cc = window.__cc;
+    // Track this PC if not already tracked
+    if (cc.pcs.indexOf(this) === -1) cc.pcs.push(this);
+    // Swap audio track with virtual mic (if available)
+    if (track && track.kind === 'audio' && cc.outputTrack) {
+      console.log('[CC-Init] Swapped audio sender track with virtual mic');
+      return origAddTrack.apply(this, [cc.outputTrack].concat(Array.prototype.slice.call(arguments, 1)));
+    }
+    return origAddTrack.apply(this, arguments);
+  };
+
+  // ── Patch ontrack to capture remote audio from ANY PC ──
+  var origOnTrackDesc = Object.getOwnPropertyDescriptor(OrigPC.prototype, 'ontrack');
+  if (origOnTrackDesc && origOnTrackDesc.set) {
+    var origOnTrackSet = origOnTrackDesc.set;
+    Object.defineProperty(OrigPC.prototype, 'ontrack', {
+      set: function(handler) {
+        var cc = window.__cc;
+        if (cc.pcs.indexOf(this) === -1) cc.pcs.push(this);
+        var wrappedHandler = function(event) {
+          // Auto-capture audio tracks from remote participants
+          if (event.track && event.track.kind === 'audio' && !cc.captureActive) {
+            console.log('[CC-Init] Remote audio track detected via ontrack');
+          }
+          if (handler) handler.call(this, event);
+        };
+        origOnTrackSet.call(this, wrappedHandler);
+      },
+      get: origOnTrackDesc.get,
+      configurable: true,
+    });
+  }
 })();
 `;
 
@@ -107,7 +176,22 @@ const AUDIO_INIT_SCRIPT = `
 
 const AUDIO_PIPELINE_SCRIPT = `(async function() {
   var cc = window.__cc;
-  if (!cc || !cc.outputDest) { console.log('[CC-Audio] No init state'); return 'no_init'; }
+  // If init script didn't intercept getUserMedia (e.g., Zoom doesn't call it),
+  // bootstrap __cc manually so the audio pipeline can still work.
+  if (!cc) {
+    cc = window.__cc = {
+      gumCalls: 0, pcs: [], outputDest: null, outputCtx: null, outputTrack: null,
+      captureActive: false, captureChunks: 0, captureMaxAmp: 0, triedReceiverIdx: 0,
+      captureSource: null, captureWorklet: null, isPlaying: false, echoSuppressed: 0,
+    };
+  }
+  if (!cc.outputDest) {
+    // Create output destination manually (Zoom path — getUserMedia was never intercepted)
+    cc.outputCtx = new AudioContext({ sampleRate: 24000 });
+    cc.outputDest = cc.outputCtx.createMediaStreamDestination();
+    cc.outputTrack = cc.outputDest.stream.getAudioTracks()[0];
+    console.log('[CC-Audio] Created output dest manually (platform did not call getUserMedia)');
+  }
 
   var BACKEND_WS = 'ws://localhost:${CONFIG.port}/ws/voice-test';
   var SAMPLE_RATE = 24000;
@@ -116,7 +200,8 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   var outputCtx = cc.outputCtx;
   if (outputCtx.state === 'suspended') await outputCtx.resume();
 
-  var PB_CODE = 'class P extends AudioWorkletProcessor{constructor(){super();this._b=new Float32Array(24000*10);this._w=0;this._r=0;this.port.onmessage=e=>{if(e.data==="clear"){this._w=0;this._r=0;return}var s=e.data;for(var i=0;i<s.length;i++){this._b[this._w%this._b.length]=s[i];this._w++}}}process(i,o){var out=o[0][0];if(!out)return true;for(var i=0;i<out.length;i++){if(this._r<this._w){out[i]=this._b[this._r%this._b.length];this._r++}else out[i]=0}return true}}registerProcessor("playback-processor",P);';
+  // Playback ring buffer: 30 seconds (was 10s — long AI responses overflowed and caused audio glitches)
+  var PB_CODE = 'class P extends AudioWorkletProcessor{constructor(){super();this._b=new Float32Array(24000*30);this._w=0;this._r=0;this.port.onmessage=e=>{if(e.data==="clear"){this._w=0;this._r=0;return}var s=e.data;for(var i=0;i<s.length;i++){this._b[this._w%this._b.length]=s[i];this._w++}}}process(i,o){var out=o[0][0];if(!out)return true;for(var i=0;i<out.length;i++){if(this._r<this._w){out[i]=this._b[this._r%this._b.length];this._r++}else out[i]=0}return true}}registerProcessor("playback-processor",P);';
   var pbBlob = new Blob([PB_CODE], { type: 'application/javascript' });
   var pbUrl = URL.createObjectURL(pbBlob);
   await outputCtx.audioWorklet.addModule(pbUrl);
@@ -174,17 +259,31 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   }
 
   // Pipeline A: getReceivers approach
+  // cc._triedTrackIds tracks which receiver tracks we already tried (to avoid re-picking muted ones)
+  cc._triedTrackIds = cc._triedTrackIds || new Set();
+  cc._lastNonZeroAt = Date.now();
+  cc._cycleCount = 0;
+
   function setupCapture(pc) {
     if (cc.captureActive) return;
     var receivers = pc.getReceivers();
     var audioRecvs = receivers.filter(function(r) { return r.track && r.track.kind === 'audio' && r.track.readyState === 'live'; });
     if (audioRecvs.length === 0) return;
 
-    // Prefer unmuted receiver
-    var audioRecv = audioRecvs.find(function(r) { return !r.track.muted; }) || audioRecvs[0];
+    // Prefer unmuted receiver that we haven't already tried (on retry)
+    var audioRecv = audioRecvs.find(function(r) { return !r.track.muted && !cc._triedTrackIds.has(r.track.id); })
+      || audioRecvs.find(function(r) { return !r.track.muted; })
+      || audioRecvs.find(function(r) { return !cc._triedTrackIds.has(r.track.id); })
+      || audioRecvs[0];
     var track = audioRecv.track;
+    cc._triedTrackIds.add(track.id);
 
-    console.log('[CC-Audio] Receivers: ' + audioRecvs.length + ', using: ' + track.id.substring(0, 10) + ' muted=' + track.muted);
+    // Reset tried set if we've exhausted all receivers (allow full re-scan)
+    if (cc._triedTrackIds.size >= audioRecvs.length) {
+      cc._triedTrackIds.clear();
+    }
+
+    console.log('[CC-Audio] Receivers: ' + audioRecvs.length + ', using: ' + track.id.substring(0, 10) + ' muted=' + track.muted + ' cycle#' + cc._cycleCount);
 
     if (cc.captureSource) { try { cc.captureSource.disconnect(); } catch(e) {} }
     if (cc.captureWorklet) { try { cc.captureWorklet.disconnect(); } catch(e) {} }
@@ -212,9 +311,18 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       sendAudioChunk(int16);
     };
 
-    track.onmute = function() { console.log('[CC-Audio] Track MUTED'); };
+    track.onmute = function() {
+      console.log('[CC-Audio] Track MUTED — forcing receiver cycle');
+      cc.captureActive = false;
+      cc._cycleCount++;
+      // Next 2s interval will call setupCapture with a different receiver
+    };
     track.onunmute = function() { console.log('[CC-Audio] Track UNMUTED'); };
-    track.onended = function() { console.log('[CC-Audio] Track ENDED — will retry'); cc.captureActive = false; };
+    track.onended = function() {
+      console.log('[CC-Audio] Track ENDED — will retry');
+      cc.captureActive = false;
+      cc._cycleCount++;
+    };
 
     cc.captureActive = true;
     console.log('[CC-Audio] Pipeline A active (track: ' + track.id.substring(0, 10) + ')');
@@ -235,9 +343,10 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
           // ── Echo suppression: mark AI as speaking ──
           cc.isPlaying = true;
           if (cc._playingTimer) clearTimeout(cc._playingTimer);
-          // Tail guard: keep suppression for 500ms after last audio chunk
-          // to catch echo propagation delay through Meet's SFU
-          cc._playingTimer = setTimeout(function() { cc.isPlaying = false; }, 500);
+          // Tail guard: keep suppression after last audio chunk
+          // Meet SFU: ~300ms echo delay. Zoom SFU: ~1000-2000ms echo delay.
+          var tailMs = location.hostname.includes('zoom.us') ? 2500 : 500;
+          cc._playingTimer = setTimeout(function() { cc.isPlaying = false; }, tailMs);
 
           var raw = atob(data.audio);
           var bytes = new Uint8Array(raw.length);
@@ -272,6 +381,63 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       }
     }
   }, 2000);
+
+  // ── Audio health check: detect silent capture and auto-cycle receiver ──
+  // Meet may switch the active audio receiver mid-meeting (new participant joins,
+  // network reconnect, SFU migration). When this happens, the old track goes
+  // muted but doesn't always fire onmute. This watchdog catches silent capture
+  // and forces a receiver cycle.
+  setInterval(function() {
+    if (!cc.captureActive) return;
+    // Check if we've seen non-zero amplitude recently
+    if (cc.captureMaxAmp > 100) {
+      cc._lastNonZeroAt = Date.now();
+      cc.captureMaxAmp = 0; // reset for next window
+      return;
+    }
+    var silentMs = Date.now() - (cc._lastNonZeroAt || 0);
+    if (silentMs > 30000) {
+      cc._cycleCount++;
+      console.log('[CC-Audio] SILENT for ' + Math.round(silentMs / 1000) + 's — cycling receiver (cycle#' + cc._cycleCount + ')');
+      cc.captureActive = false;
+      cc.captureMaxAmp = 0;
+      cc._lastNonZeroAt = Date.now(); // prevent rapid re-trigger
+      // Next 2s interval will call setupCapture with a different receiver
+    }
+  }, 15000);
+
+  // ── Pipeline C: Zoom fallback — capture from AudioContext.destination tap ──
+  // Zoom uses WASM+DataChannels, not RTC receivers. The init script patches
+  // AudioNode.connect to tap audio going to destination (speakers).
+  // If RTC capture doesn't activate within 5s, try the Zoom tap.
+  setTimeout(function() {
+    if (cc.captureActive) return; // RTC capture already working
+    if (!cc._zoomCaptureStream) {
+      console.log('[CC-Audio] Pipeline C: no Zoom destination tap available');
+      return;
+    }
+    console.log('[CC-Audio] Pipeline C: using Zoom AudioContext.destination tap for capture');
+    try {
+      var zoomStream = cc._zoomCaptureStream;
+      var zoomSrc = captureCtx.createMediaStreamSource(zoomStream);
+      var zoomWorklet = new AudioWorkletNode(captureCtx, 'pcm-processor');
+      zoomSrc.connect(zoomWorklet);
+      zoomWorklet.port.onmessage = function(e) {
+        cc.captureChunks++;
+        var d = e.data;
+        for (var i = 0; i < d.length; i++) {
+          var amp = Math.abs(d[i]);
+          if (amp > cc.captureMaxAmp) cc.captureMaxAmp = amp;
+        }
+        sendAudioChunk(d);
+      };
+      cc.captureActive = true;
+      cc.captureSource = 'zoom_destination_tap';
+      console.log('[CC-Audio] Pipeline C active — capturing Zoom remote audio from destination tap');
+    } catch(e) {
+      console.log('[CC-Audio] Pipeline C failed: ' + e.message);
+    }
+  }, 5000);
 
   // ── Pipeline B: ontrack event listener (dual-capture redundancy) ──
   // Catches new audio tracks as they appear — covers cases where
@@ -420,6 +586,36 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     captureMaxAmp: function() { return cc.captureMaxAmp; },
   };
 
+  // ── Zoom fallback: inject audio into existing PeerConnection senders ──
+  // If getUserMedia wasn't intercepted (Zoom), find the active PC and replace its audio track
+  // with our virtual mic track so Zoom sends AI audio to other participants.
+  if (cc.gumCalls === 0 && cc.outputTrack) {
+    console.log('[CC-Audio] Zoom path: replacing sender tracks on existing PeerConnections...');
+    // Find all PeerConnections (wrapped by init script, or scan global)
+    var allPCs = cc.pcs.length > 0 ? cc.pcs : [];
+    if (allPCs.length === 0) {
+      // Init script didn't wrap PCs (Zoom loaded before script). Try finding them via global state.
+      // Zoom stores PCs internally, but we can find audio senders on any RTCPeerConnection
+      console.log('[CC-Audio] No wrapped PCs found — Zoom may have created them before init script');
+    }
+    var replaced = 0;
+    for (var i = 0; i < allPCs.length; i++) {
+      try {
+        var senders = allPCs[i].getSenders();
+        for (var j = 0; j < senders.length; j++) {
+          if (senders[j].track && senders[j].track.kind === 'audio') {
+            senders[j].replaceTrack(cc.outputTrack);
+            replaced++;
+            console.log('[CC-Audio] Replaced audio sender track on PC #' + i);
+          }
+        }
+      } catch(e) { console.warn('[CC-Audio] PC sender replace failed:', e); }
+    }
+    if (replaced === 0) {
+      console.log('[CC-Audio] No audio senders found to replace — AI audio may not reach Zoom participants');
+    }
+  }
+
   return 'pipeline_ready';
 })()`;
 
@@ -431,6 +627,8 @@ export class ChromeLauncher {
   private _context: any = null;
   private _page: any = null;
   private _googleLoginCache: { loggedIn: boolean; email: string | null; checkedAt: number } | null = null;
+  /** Mutex: if a launch is in progress, subsequent callers await the same promise */
+  private _launchPromise: Promise<{ port: number }> | null = null;
 
   constructor(opts?: { profileDir?: string }) {
     this.profileDir = opts?.profileDir || DEFAULT_PROFILE;
@@ -445,6 +643,12 @@ export class ChromeLauncher {
    * (it will reconnect to the existing Chrome via the port)
    */
   async launch(): Promise<{ port: number }> {
+    // Mutex: if another launch is already in progress, wait for it instead of racing
+    if (this._launchPromise) {
+      console.log("[ChromeLauncher] Launch already in progress, waiting for existing launch...");
+      return this._launchPromise;
+    }
+
     // If already launched, verify browser is still alive before reusing
     if (this._context && this._page) {
       try {
@@ -457,6 +661,17 @@ export class ChromeLauncher {
         this._page = null;
       }
     }
+
+    // Set the mutex — all concurrent callers will await this same promise
+    this._launchPromise = this._launchInternal();
+    try {
+      return await this._launchPromise;
+    } finally {
+      this._launchPromise = null;
+    }
+  }
+
+  private async _launchInternal(): Promise<{ port: number }> {
 
     // Dynamic import to avoid loading playwright-core at module level
     const { chromium } = await import("playwright-core");
@@ -493,6 +708,7 @@ export class ChromeLauncher {
     const context = await chromium.launchPersistentContext(this.profileDir, {
       headless: false,
       channel: "chrome",
+      viewport: null,  // Use full window size — allows user to resize/maximize for presentation
       args: [
         "--autoplay-policy=no-user-gesture-required",
         "--disable-infobars",
@@ -501,8 +717,9 @@ export class ChromeLauncher {
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
         "--restore-last-session=false",             // Don't restore previous session tabs
-        "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab/window matching this title
+        "--auto-select-desktop-capture-source=CallingClaw Presenting",  // Auto-select tab titled "CallingClaw Presenting" (zero-click share)
         "--enable-usermedia-screen-capturing",    // Enable screen capture API
+        "--start-maximized",                      // Start Chrome maximized for presentation
         `--remote-debugging-port=${port}`,
       ],
       permissions: ["microphone", "camera"],
@@ -660,6 +877,41 @@ export class ChromeLauncher {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
       await page.waitForTimeout(2000);
 
+      // Step 1b: Zoom — navigate directly to web client (skip landing page)
+      const isZoom = url.includes("zoom.us");
+      if (isZoom) {
+        log("Zoom detected — navigating to web client...");
+        // Extract meeting ID and password from URL, then go straight to web client
+        const zoomMatch = url.match(/\/j\/(\d+)/);
+        const pwdMatch = url.match(/pwd=([^&]+)/);
+        if (zoomMatch) {
+          const meetingId = zoomMatch[1];
+          const pwd = pwdMatch ? pwdMatch[1] : "";
+          const webClientUrl = `https://app.zoom.us/wc/join/${meetingId}${pwd ? `?pwd=${pwd}` : ""}`;
+          log(`Navigating to Zoom Web Client: ${webClientUrl}`);
+          await page.goto(webClientUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+          await page.waitForTimeout(8000); // Zoom web client loads slowly (JS bundle + WebRTC init)
+        } else {
+          // Can't parse URL — try the landing page approach
+          await page.waitForTimeout(3000);
+          const zoomLanding = await page.evaluate(`(() => {
+            var els = document.querySelectorAll('a, button, [role="button"]');
+            for (var i = 0; i < els.length; i++) {
+              var t = (els[i].textContent || '').trim().toLowerCase();
+              if (t.includes('join from your browser') || t.includes('join from browser')) {
+                els[i].click();
+                return 'clicked_browser_join';
+              }
+            }
+            return 'no_browser_join_found';
+          })()`);
+          log(`Zoom landing: ${zoomLanding}`);
+          if (String(zoomLanding).includes("clicked")) {
+            await page.waitForTimeout(5000);
+          }
+        }
+      }
+
       // Step 2: Dismiss + detect + configure
       log("Detecting + configuring...");
       const configResult = await page.evaluate(`(() => {
@@ -677,7 +929,7 @@ export class ChromeLauncher {
         var btns = Array.from(document.querySelectorAll('button'));
         var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
 
-        if (document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]')) {
+        if (document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]') || document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]') || document.querySelector('.meeting-app')) {
           R.state = 'already_in'; return JSON.stringify(R);
         }
         if (body.includes('This meeting has ended') || body.includes('会议已结束')) {
@@ -691,32 +943,67 @@ export class ChromeLauncher {
         var switchBtn = btns.find(function(b) { return ['Switch here', '切换到这里'].indexOf(b.textContent.trim()) !== -1; });
         if (switchBtn) { switchBtn.click(); R.state = 'switch_here'; return JSON.stringify(R); }
 
-        // 4. Camera OFF
+        // 4. Camera OFF (Meet aria-label selectors + Zoom text-based fallback)
         ${muteCamera ? `
-        var camOff = document.querySelector('[aria-label="Turn off camera"], [aria-label="关闭摄像头"]');
+        var camOff = document.querySelector(
+          '[aria-label="Turn off camera"], [aria-label="关闭摄像头"],' +
+          '[aria-label*="Stop Video"], [aria-label*="stop video"]'
+        );
+        if (!camOff) {
+          // Zoom fallback: find button by text content "Stop Video"
+          var allBtns = document.querySelectorAll('button, [role="button"]');
+          for (var i = 0; i < allBtns.length; i++) {
+            var txt = (allBtns[i].textContent || '').trim();
+            if (txt === 'Stop Video' || txt === 'Stop Camera' || txt === '停止视频') {
+              camOff = allBtns[i]; break;
+            }
+          }
+        }
         if (camOff) { camOff.click(); R.config.push('cam:off'); }
         else R.config.push('cam:already_off');
         ` : `R.config.push('cam:skip');`}
 
-        // 5. Mic
+        // 5. Mic — leave unmuted for audio injection
         ${muteMic ? `
-        var micOff = document.querySelector('[aria-label="Turn off microphone"], [aria-label="关闭麦克风"]');
+        var micOff = document.querySelector(
+          '[aria-label="Turn off microphone"], [aria-label="关闭麦克风"],' +
+          '[aria-label*="Mute"], [aria-label*="mute my audio"]'
+        );
         if (micOff) { micOff.click(); R.config.push('mic:muted'); }
         ` : `
-        var micOn = document.querySelector('[aria-label="Turn on microphone"], [aria-label="打开麦克风"]');
-        if (micOn) { micOn.click(); R.config.push('mic:on'); }
-        else R.config.push('mic:already_on');
+        R.config.push('mic:already_on');
         `}
 
-        // 6. Set display name
-        var nameInput = document.querySelector('input[aria-label="Your name"], input[placeholder*="name"]');
-        if (nameInput && (!nameInput.value || nameInput.value === 'Guest')) {
-          var s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-          if (s && s.set) { s.set.call(nameInput, ${JSON.stringify(displayName)}); nameInput.dispatchEvent(new Event('input', {bubbles:true})); R.config.push('name:set'); }
+        // 6. Set display name (Meet + Zoom)
+        // Try multiple selectors: aria-label, placeholder, then any visible input near "Your Name" text
+        var nameInput = document.querySelector(
+          'input[aria-label="Your name"], input[placeholder*="name" i],' +
+          'input#inputname, input[aria-label*="name" i]'
+        );
+        if (!nameInput) {
+          // Zoom fallback: find input near "Your Name" or "Enter Meeting Info" text
+          var inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+          for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].offsetWidth > 0) { nameInput = inputs[i]; break; }
+          }
+        }
+        if (nameInput && (!nameInput.value || nameInput.value === 'Guest' || nameInput.value.trim() === '')) {
+          nameInput.focus();
+          var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          if (nativeSetter && nativeSetter.set) {
+            nativeSetter.set.call(nameInput, ${JSON.stringify(displayName)});
+          } else {
+            nameInput.value = ${JSON.stringify(displayName)};
+          }
+          nameInput.dispatchEvent(new Event('input', {bubbles:true}));
+          nameInput.dispatchEvent(new Event('change', {bubbles:true}));
+          R.config.push('name:set');
+        } else if (nameInput) {
+          R.config.push('name:already_set');
         }
 
         // 7. Check if join button exists
-        var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
+        var joinTargets = ['Join now', 'Ask to join', 'Join', 'Join Meeting', 'Join Audio by Computer', '加入会议', '请求加入', '立即加入', '加入音频'];
         for (var i = 0; i < btns.length; i++) {
           if (joinTargets.indexOf(btns[i].textContent.trim()) !== -1) { R.hasJoinBtn = true; break; }
         }
@@ -741,18 +1028,38 @@ export class ChromeLauncher {
 
       // Retry if loading
       if (parsed.state === "loading" || parsed.state === "no_join_button") {
-        log("Page loading — retrying in 2s...");
-        await page.waitForTimeout(2000);
+        log("Page loading — retrying in 4s...");
+        await page.waitForTimeout(4000);
         const retry = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
           for (var i = 0; i < btns.length; i++) {
-            if (['Join now','Ask to join','Join','加入会议','请求加入','立即加入'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
+            if (['Join now','Ask to join','Join','Join Meeting','Join Audio by Computer','加入会议','请求加入','立即加入','加入音频'].indexOf(btns[i].textContent.trim()) !== -1) return 'found';
           }
           return 'still_no_button';
         })()`);
         log(`Retry: ${retry}`);
         if (String(retry).includes("still_no_button")) {
-          return { success: false, summary: "Join button not found after retry", steps, state: "failed" };
+          // Agentic fallback: use DOM extraction to find ANY clickable join-like button
+          log("Hardcoded selectors failed — trying agentic DOM scan...");
+          const agenticResult = await page.evaluate(`(() => {
+            var btns = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+            var joinPatterns = /join|enter|start|connect|participate|加入|进入|开始/i;
+            var excludePatterns = /zoom.*app|workplace|download|install|open zoom/i;
+            for (var i = 0; i < btns.length; i++) {
+              var t = (btns[i].textContent || '').trim();
+              var label = btns[i].getAttribute('aria-label') || '';
+              if (excludePatterns.test(t)) continue; // Skip "Join from Zoom app" etc.
+              if (t.length > 1 && t.length < 40 && (joinPatterns.test(t) || joinPatterns.test(label))) {
+                btns[i].click();
+                return 'agentic_clicked:' + t;
+              }
+            }
+            return 'agentic_no_match';
+          })()`);
+          log(`Agentic: ${agenticResult}`);
+          if (String(agenticResult).includes("agentic_no_match")) {
+            return { success: false, summary: "Join button not found (hardcoded + agentic)", steps, state: "failed" };
+          }
         }
       }
 
@@ -761,7 +1068,7 @@ export class ChromeLauncher {
         log("Clicking join...");
         const joinResult = await page.evaluate(`(() => {
           var btns = Array.from(document.querySelectorAll('button'));
-          var joinTargets = ['Join now', 'Ask to join', 'Join', '加入会议', '请求加入', '立即加入'];
+          var joinTargets = ['Join now', 'Ask to join', 'Join', 'Join Meeting', 'Join Audio by Computer', '加入会议', '请求加入', '立即加入', '加入音频'];
           for (var i = 0; i < btns.length; i++) {
             var t = btns[i].textContent.trim();
             if (joinTargets.indexOf(t) !== -1) {
@@ -784,13 +1091,15 @@ export class ChromeLauncher {
 
       for (let attempt = 0; attempt < 6; attempt++) {
         const state = await page.evaluate(`(() => {
-          // Language-agnostic: check for call_end icon (Material icon), any leave button, or control bar
-          var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"]');
+          // Language-agnostic: check for leave button or control bar (Meet + Zoom)
+          var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"],[aria-label*="End Meeting"],[aria-label*="End"]');
           var callEnd = document.querySelector('[aria-label*="call_end"],[aria-label*="Call controls"],[aria-label*="通话控件"]');
-          // Also check: does the page have a bottom control bar with mic/camera buttons?
-          var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"]');
-          var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"]');
-          var hasControls = micBtn && camBtn;
+          // Zoom web client: footer toolbar with meeting controls
+          var zoomToolbar = document.querySelector('.meeting-info-container,.footer__inner,.meeting-client');
+          // Generic: does the page have mic+camera buttons?
+          var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"],[aria-label*="Mute"],[aria-label*="mute"]');
+          var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"],[aria-label*="Start Video"],[aria-label*="Stop Video"]');
+          var hasControls = (micBtn && camBtn) || zoomToolbar;
           if (leaveBtn || callEnd || hasControls) return 'in_meeting';
           var t = document.body.innerText;
           if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
@@ -848,6 +1157,10 @@ export class ChromeLauncher {
   private _admissionInterval: ReturnType<typeof setInterval> | null = null;
   private _admittedSet = new Set<string>();
   private _meetingEndCallback: (() => void) | null = null;
+  private _endCheckFailures = 0;
+  private _consecutiveEndedChecks = 0;
+  private static readonly MAX_END_CHECK_FAILURES = 20; // 20 × 3s = 60s of consecutive failures → force trigger
+  private static readonly CONSECUTIVE_END_CHECKS_REQUIRED = 3; // 3 × 3s = 9s of confirmed "ended" before leaving
 
   /**
    * Monitor for attendee admission requests in Google Meet.
@@ -875,14 +1188,39 @@ export class ChromeLauncher {
           try {
             const ended = await this._meetingEndConfirmed();
             if (ended) {
-              console.log("[MeetAdmit] Meeting ended detected — triggering cleanup");
+              this._consecutiveEndedChecks++;
+              if (this._consecutiveEndedChecks >= ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED) {
+                console.log(`[MeetAdmit] Meeting ended (confirmed after ${this._consecutiveEndedChecks} consecutive checks) — triggering cleanup`);
+                this._consecutiveEndedChecks = 0;
+                this._endCheckFailures = 0;
+                const cb = this._meetingEndCallback;
+                this._meetingEndCallback = null;
+                this.stopAdmissionMonitor();
+                cb();
+                return;
+              }
+              console.log(`[MeetAdmit] Meeting may have ended (${this._consecutiveEndedChecks}/${ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED}) — waiting to confirm`);
+            } else {
+              if (this._consecutiveEndedChecks > 0) {
+                console.log(`[MeetAdmit] Meeting-end signal cleared (was ${this._consecutiveEndedChecks}/${ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED}) — false positive`);
+              }
+              this._consecutiveEndedChecks = 0;
+              this._endCheckFailures = 0;
+            }
+          } catch (e: any) {
+            this._consecutiveEndedChecks = 0;
+            this._endCheckFailures++;
+            console.warn(`[MeetAdmit] Meeting-end check failed (${this._endCheckFailures}/${ChromeLauncher.MAX_END_CHECK_FAILURES}): ${e.message}`);
+            if (this._endCheckFailures >= ChromeLauncher.MAX_END_CHECK_FAILURES) {
+              console.error("[MeetAdmit] Too many consecutive failures — force-triggering meeting end");
+              this._endCheckFailures = 0;
               const cb = this._meetingEndCallback;
               this._meetingEndCallback = null;
               this.stopAdmissionMonitor();
-              cb();
+              if (cb) cb();
               return;
             }
-          } catch {}
+          }
         }
 
         // L1: Pure JS eval
@@ -1017,7 +1355,7 @@ export class ChromeLauncher {
   private async _checkMeetingEndedLib(): Promise<boolean> {
     if (!this._page) return false;
     const result = await this._page.evaluate(`(() => {
-      if (!location.hostname.includes('meet.google.com')) return 'ended';
+      if (!location.hostname.includes('meet.google.com') && !location.hostname.includes('zoom.us')) return 'ended';
       var text = document.body.innerText || '';
       // Waiting room / pre-join lobby: no Leave button, no call controls, no
       // video grid — but the meeting has NOT ended. Without this check the
@@ -1048,6 +1386,15 @@ export class ChromeLauncher {
       var leaveBtn = document.querySelector('[aria-label*="Leave call" i], [aria-label*="End call" i], [aria-label*="退出通话"], [aria-label*="结束通话"], [aria-label*="離開通話"], [aria-label*="結束通話"]');
       var callControls = document.querySelector('[aria-label="Call controls"], [aria-label="通话控件"]');
       var videoGrid = document.querySelector('[data-allocation-index], [data-requested-participant-id]');
+      // Zoom: check for meeting-end indicators
+      if (location.hostname.includes('zoom.us')) {
+        var zoomText = document.body.innerText || '';
+        if (zoomText.includes('This meeting has been ended') || zoomText.includes('The host has ended this meeting')) return 'ended';
+        // Zoom is active if the meeting client container exists
+        var zoomActive = document.querySelector('.meeting-client, .meeting-app, [class*="meeting"]');
+        if (zoomActive) return 'active';
+        return 'active'; // Default to active for Zoom (avoid false positives)
+      }
       if (!leaveBtn && !callControls && !videoGrid) return 'ended';
       return 'active';
     })()`);
@@ -1093,6 +1440,7 @@ export class ChromeLauncher {
       this._admissionInterval = null;
     }
     this._meetingEndCallback = null;
+    this._endCheckFailures = 0;
     const admitted = [...this._admittedSet];
     console.log(`[MeetAdmit] Monitor stopped. Admitted ${admitted.length} attendees.`);
     return admitted;
@@ -1107,17 +1455,41 @@ export class ChromeLauncher {
     this._endedTickCount = 0;
     if (!this._admissionInterval) {
       console.log("[MeetEnd] Starting standalone meeting-end watcher (3s interval)");
+      this._endCheckFailures = 0;
+      this._consecutiveEndedChecks = 0;
       this._admissionInterval = setInterval(async () => {
         try {
           const ended = await this._meetingEndConfirmed();
           if (ended) {
-            console.log("[MeetEnd] Meeting ended detected — triggering cleanup");
+            this._consecutiveEndedChecks++;
+            if (this._consecutiveEndedChecks >= ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED) {
+              console.log(`[MeetEnd] Meeting ended (confirmed after ${this._consecutiveEndedChecks} checks) — triggering cleanup`);
+              this._consecutiveEndedChecks = 0;
+              this._endCheckFailures = 0;
+              const cb = this._meetingEndCallback;
+              this._meetingEndCallback = null;
+              this.stopAdmissionMonitor();
+              if (cb) cb();
+            } else {
+              console.log(`[MeetEnd] Meeting may have ended (${this._consecutiveEndedChecks}/${ChromeLauncher.CONSECUTIVE_END_CHECKS_REQUIRED}) — waiting to confirm`);
+            }
+          } else {
+            this._consecutiveEndedChecks = 0;
+            this._endCheckFailures = 0;
+          }
+        } catch (e: any) {
+          this._consecutiveEndedChecks = 0;
+          this._endCheckFailures++;
+          console.warn(`[MeetEnd] Detection failed (${this._endCheckFailures}/${ChromeLauncher.MAX_END_CHECK_FAILURES}): ${e.message}`);
+          if (this._endCheckFailures >= ChromeLauncher.MAX_END_CHECK_FAILURES) {
+            console.error("[MeetEnd] Too many consecutive failures — force-triggering meeting end");
+            this._endCheckFailures = 0;
             const cb = this._meetingEndCallback;
             this._meetingEndCallback = null;
             this.stopAdmissionMonitor();
             if (cb) cb();
           }
-        } catch {}
+        }
       }, 3000);
     }
   }
@@ -1181,6 +1553,25 @@ export class ChromeLauncher {
       // Last resort: navigate away
       try { await page.goto("about:blank"); } catch {}
       return false;
+    } finally {
+      // Clean up orphaned pages (presenting tab, stale blank tabs)
+      if (this._presentingPage) {
+        try { await this._presentingPage.close(); } catch {}
+        this._presentingPage = null;
+      }
+      if (this._context) {
+        const pages = this._context.pages();
+        const mainPage = this._page;
+        for (const p of pages) {
+          if (p === mainPage) continue;
+          try {
+            const url = p.url();
+            if (url === "about:blank" || url === "") {
+              await p.close();
+            }
+          } catch {}
+        }
+      }
     }
   }
 
@@ -1190,6 +1581,7 @@ export class ChromeLauncher {
 
   // The presenting tab — kept alive for screen sharing
   private _presentingPage: any = null;
+  private _isSharing = false;  // True when Meet is actively screen sharing
 
   /**
    * Share a URL or the current screen in Google Meet.
@@ -1212,14 +1604,23 @@ export class ChromeLauncher {
 
       // Step 1: Open target URL in a "presenting" tab
       if (presentUrl) {
-        // Close previous presenting tab if any
+        // Close previous presenting tab if still alive
         if (this._presentingPage) {
-          try { await this._presentingPage.close(); } catch {}
+          try {
+            // Verify page is still alive before closing
+            await this._presentingPage.evaluate("1");
+            await this._presentingPage.close();
+          } catch {
+            // Page already dead, just clear the reference
+          }
+          this._presentingPage = null;
         }
         this._presentingPage = await this._context.newPage();
         await this._presentingPage.goto(presentUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
         // Rename tab title to match Chrome's auto-select flag
         await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+        // Inject virtual cursor overlay for click effects (must be AFTER title set)
+        await this._presentingPage.evaluate(CURSOR_INJECT_JS);
         console.log(`[ShareScreen] Opened presenting tab: ${presentUrl}`);
 
         // Switch back to Meet
@@ -1259,6 +1660,7 @@ export class ChromeLauncher {
       })()`));
 
       const success = status !== "not_sharing";
+      this._isSharing = success;
       console.log(`[ShareScreen] Status: ${status} (${success ? "✅" : "❌"})`);
 
       // After sharing starts, switch focus to the presenting tab.
@@ -1294,10 +1696,15 @@ export class ChromeLauncher {
         if (btn) { btn.click(); return 'stopped'; }
         return 'no_button';
       })()`));
-      // Close presenting tab
+      // Close presenting tab and wait for Meet to settle
+      this._isSharing = false;
       if (this._presentingPage) {
         try { await this._presentingPage.close(); } catch {}
         this._presentingPage = null;
+      }
+      // Wait for Meet to process the stop (dismiss "You stopped presenting" banner)
+      if (result === "stopped") {
+        await this._page.waitForTimeout(1500);
       }
       console.log(`[ShareScreen] Stop: ${result}`);
       return { success: result === "stopped" || result === "no_button" };
@@ -1312,6 +1719,23 @@ export class ChromeLauncher {
 
   /** Get the presenting page (the tab showing shared content) */
   get presentingPage(): any { return this._presentingPage; }
+  get isSharing(): boolean { return this._isSharing; }
+
+  /** Check Meet's actual sharing state by querying the DOM (not the stale _isSharing flag) */
+  async checkSharingStatus(): Promise<boolean> {
+    if (!this._page) return false;
+    try {
+      const status = String(await this._page.evaluate(`(() => {
+        var stop = document.querySelector('[aria-label*="Stop sharing"], [aria-label*="停止共享"], [aria-label*="Stop presenting"], [aria-label*="停止展示"]');
+        return stop ? 'sharing' : 'not_sharing';
+      })()`));
+      const sharing = status === "sharing";
+      this._isSharing = sharing; // sync the flag
+      return sharing;
+    } catch {
+      return false;
+    }
+  }
 
   /** Execute JavaScript on the presenting tab */
   async evaluateOnPresentingPage(code: string): Promise<any> {
@@ -1334,18 +1758,33 @@ export class ChromeLauncher {
 
   /** Navigate presenting page to a new URL */
   async navigatePresentingPage(url: string): Promise<boolean> {
+    if (!this._context) return false;
     if (!this._presentingPage) {
-      // Create presenting page if it doesn't exist
-      if (this._context) {
-        this._presentingPage = await this._context.newPage();
-      } else return false;
+      this._presentingPage = await this._context.newPage();
     }
     try {
       await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
       await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+      // Re-inject virtual cursor overlay (destroyed by navigation)
+      await this._presentingPage.evaluate(CURSOR_INJECT_JS);
       return true;
     } catch (e: any) {
       console.warn("[ChromeLauncher] Presenting page navigate failed:", e.message);
+      // Close the failed page before retrying (prevents orphaned blank tabs)
+      try { await this._presentingPage?.close(); } catch {}
+      this._presentingPage = null;
+      // Try once more with a fresh page
+      try {
+        this._presentingPage = await this._context.newPage();
+        await this._presentingPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await this._presentingPage.evaluate(`document.title = "CallingClaw Presenting"`);
+        console.log("[ChromeLauncher] Presenting page recreated successfully");
+        return true;
+      } catch (e2: any) {
+        console.warn("[ChromeLauncher] Presenting page recreate also failed:", e2.message);
+        try { await this._presentingPage?.close(); } catch {}
+        this._presentingPage = null;
+      }
       return false;
     }
   }
@@ -1394,9 +1833,12 @@ export class ChromeLauncher {
     if (!this._isOnStage()) {
       const ok = await this.navigatePresentingPage(`http://localhost:${CONFIG.port}/stage`);
       if (!ok) return false;
-      await this._presentingPage.waitForTimeout(1000);
+      // Wait for the stage page to fully render the iframe element
+      await this._presentingPage.waitForTimeout(2000);
     }
     try {
+      // Ensure the iframe element exists before trying to set its src
+      await this._presentingPage.waitForSelector('#slideFrame', { timeout: 5000 });
       await this._presentingPage.evaluate(`(() => {
         var frame = document.getElementById('slideFrame');
         var placeholder = document.getElementById('slidePlaceholder');
@@ -1566,6 +2008,7 @@ export class ChromeLauncher {
 
   get debuggingPort(): number { return this.port; }
   get page(): any { return this._page; }
+  get context(): any { return this._context; }
 
   /**
    * Import Google cookies from the user's main Chrome profile into the CallingClaw profile.

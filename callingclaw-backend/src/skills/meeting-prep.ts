@@ -137,6 +137,16 @@ export class MeetingPrepSkill {
     return this._currentBrief;
   }
 
+  /** Set the brief directly (e.g., loaded from a prep JSON file on disk) */
+  setBrief(brief: MeetingPrepBrief | null) {
+    this._currentBrief = brief;
+    if (!brief) {
+      console.log(`[MeetingPrep] Brief cleared`);
+      return;
+    }
+    console.log(`[MeetingPrep] Brief set: "${brief.topic}" (${brief.speakingPlan?.length || 0} phases, ${brief.scenes?.length || 0} scenes)`);
+  }
+
   /**
    * Generate a Meeting Prep Brief by delegating to OpenClaw.
    * OpenClaw will read its MEMORY.md + relevant files and produce the brief.

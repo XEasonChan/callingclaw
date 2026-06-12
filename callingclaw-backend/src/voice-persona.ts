@@ -37,6 +37,9 @@ import type { VoiceModule } from "./modules/voice";
 import type { MeetingPrepSkill, MeetingPrepBrief } from "./skills/meeting-prep";
 import type { CalendarAttendee } from "./mcp_client/google_cal";
 import type { EventBus } from "./modules/event-bus";
+import type { SessionManager, MeetingSession } from "./modules/session-manager";
+import { topicSimilarity } from "./modules/session-manager";
+import { SHARED_DIR } from "./config";
 import {
   CORE_IDENTITY,
   MISSION_CONTEXT_PREFIX,
@@ -82,6 +85,138 @@ export function buildVoiceInstructions(_brief?: MeetingPrepBrief | null): string
 }
 
 /**
+ * Build engagement bids from a prep brief.
+ * These are pre-computed topics the AI should proactively raise during conversation.
+ * Inspired by GBrain's bid system — never say "anything else?", bring up the next topic.
+ *
+ * Sources (priority order):
+ * 1. Expected questions from prep (highest signal — things that SHOULD be discussed)
+ * 2. Past lessons / warnings from key points (⚠️ prefixed)
+ * 3. Unresolved items from previous meetings
+ * 4. Decision points that need resolution
+ * 5. Key points not yet covered
+ *
+ * Returns up to 8 bids. Each is a single actionable sentence.
+ */
+export interface AgendaBid {
+  text: string;         // "Ask: Will this impact performance?"
+  type: "ask" | "flag" | "followup" | "decide" | "raise";
+  docUrl?: string;      // URL to show on Stage when discussing this topic
+  scrollTarget?: string; // section to scroll to within the doc
+}
+
+/**
+ * Build engagement bids from a prep brief, each optionally linked to a document.
+ * The AI cycles through these to drive conversation. The Stage shows progress.
+ * When an agenda item has a docUrl, advancing to it auto-navigates the presentation.
+ */
+export function buildEngagementBids(brief: MeetingPrepBrief): AgendaBid[] {
+  const bids: AgendaBid[] = [];
+  const MAX_BIDS = 8;
+
+  // Build a keyword → URL index from brief's filePaths + browserUrls for matching
+  const docIndex: Array<{ keywords: string[]; url: string }> = [];
+  for (const f of (brief.filePaths || [])) {
+    const name = f.path.split("/").pop() || f.path;
+    docIndex.push({
+      keywords: [name.toLowerCase(), f.description?.toLowerCase() || ""].filter(Boolean),
+      url: f.path.startsWith("http") ? f.path : `http://localhost:4000/render.html?file=${encodeURIComponent(f.path)}`,
+    });
+  }
+  for (const u of (brief.browserUrls || [])) {
+    docIndex.push({
+      keywords: [u.url.toLowerCase(), u.description?.toLowerCase() || ""].filter(Boolean),
+      url: u.url,
+    });
+  }
+  // Also index scenes if available
+  for (const s of (brief.scenes || [])) {
+    if (s.url) {
+      docIndex.push({
+        keywords: [s.talkingPoints?.toLowerCase() || "", s.scrollTarget?.toLowerCase() || ""].filter(Boolean),
+        url: s.url,
+      });
+    }
+  }
+
+  function matchDoc(text: string): { url?: string; scrollTarget?: string } {
+    const lower = text.toLowerCase();
+    for (const doc of docIndex) {
+      if (doc.keywords.some(k => k && (lower.includes(k.slice(0, 15)) || k.includes(lower.slice(0, 15))))) {
+        return { url: doc.url };
+      }
+    }
+    // Check scenes for scrollTarget match
+    for (const s of (brief.scenes || [])) {
+      if (s.scrollTarget && lower.includes(s.scrollTarget.toLowerCase().slice(0, 15))) {
+        return { url: s.url, scrollTarget: s.scrollTarget };
+      }
+    }
+    return {};
+  }
+
+  // 1. Expected questions → "Ask: ..."
+  if (brief.expectedQuestions?.length) {
+    for (const q of brief.expectedQuestions.slice(0, 3)) {
+      const question = typeof q === "string" ? q : q.question;
+      if (question && bids.length < MAX_BIDS) {
+        const doc = matchDoc(question);
+        bids.push({ text: `Ask: ${question}`, type: "ask", ...doc });
+      }
+    }
+  }
+
+  // 2. Past lessons (⚠️ prefixed key points) → "Flag: ..."
+  if (brief.keyPoints?.length) {
+    for (const pt of brief.keyPoints) {
+      if (pt.startsWith("⚠️") && bids.length < MAX_BIDS) {
+        const clean = pt.replace(/^⚠️\s*Past lesson:\s*/i, "");
+        const doc = matchDoc(clean);
+        bids.push({ text: `Flag past lesson: ${clean}`, type: "flag", ...doc });
+      }
+    }
+  }
+
+  // 3. Previous context (unresolved items) → "Follow up: ..."
+  if (brief.previousContext && bids.length < MAX_BIDS) {
+    const openItems = brief.previousContext.match(/(?:open|unresolved|pending|TODO|action)[:：]?\s*(.+)/gi);
+    if (openItems) {
+      for (const item of openItems.slice(0, 2)) {
+        if (bids.length < MAX_BIDS) {
+          const doc = matchDoc(item);
+          bids.push({ text: `Follow up on: ${item.trim().slice(0, 80)}`, type: "followup", ...doc });
+        }
+      }
+    }
+  }
+
+  // 4. Decision points → "Drive decision: ..."
+  if (brief.decisionPoints?.length) {
+    for (const dp of brief.decisionPoints.slice(0, 2)) {
+      if (bids.length < MAX_BIDS) {
+        const doc = matchDoc(dp);
+        bids.push({ text: `Drive decision: ${dp}`, type: "decide", ...doc });
+      }
+    }
+  }
+
+  // 5. Remaining key points → "Raise: ..."
+  if (brief.keyPoints?.length && bids.length < MAX_BIDS) {
+    for (const pt of brief.keyPoints) {
+      if (!pt.startsWith("⚠️") && bids.length < MAX_BIDS) {
+        const covered = bids.some(b => b.text.toLowerCase().includes(pt.slice(0, 20).toLowerCase()));
+        if (!covered) {
+          const doc = matchDoc(pt);
+          bids.push({ text: `Raise: ${pt.slice(0, 80)}`, type: "raise", ...doc });
+        }
+      }
+    }
+  }
+
+  return bids.slice(0, MAX_BIDS);
+}
+
+/**
  * Build the Layer 2 meeting brief text for injection via conversation.item.create.
  * This is injected ONCE after session starts — not in session.update instructions.
  *
@@ -121,22 +256,24 @@ export function buildMeetingBriefContext(brief: MeetingPrepBrief | null | undefi
     }
   }
 
-  // Top 3 key points only (full list via read_prep("all_points"))
-  if (brief.keyPoints?.length > 0) {
-    parts.push("\nKEY POINTS:");
-    for (const pt of brief.keyPoints.slice(0, 3)) {
-      parts.push(`- ${pt}`);
-    }
-    if (brief.keyPoints.length > 3) {
-      parts.push(`(${brief.keyPoints.length - 3} more via read_prep)`);
-    }
-  }
-
   // Attendees
   if (brief.attendees?.length > 0) {
     const others = brief.attendees.filter((a) => !a.self);
     if (others.length > 0) {
       parts.push(`\nAttendees: ${others.map((a) => a.displayName || a.email).join(", ")}`);
+    }
+  }
+
+  // Engagement Bids — unified conversation driver (replaces separate KEY POINTS + Q&A sections)
+  // Merges: key points, expected questions, past lessons, decision points, unresolved items
+  // into a single actionable list the AI cycles through. Keeps Layer 2 compact.
+  const bids = buildEngagementBids(brief);
+  if (bids.length > 0) {
+    parts.push(`\nAGENDA (drive these topics — cycle through, never repeat, use read_prep for details):`);
+    for (let i = 0; i < bids.length; i++) {
+      const bid = bids[i];
+      const docHint = bid.docUrl ? ` [show: ${bid.docUrl.split("/").pop()}]` : "";
+      parts.push(`${i + 1}. ${bid.text}${docHint}`);
     }
   }
 
@@ -175,11 +312,14 @@ function buildPlaybookContext(brief: MeetingPrepBrief): string {
     }
   }
 
-  // Decision points
-  if (brief.decisionPoints && brief.decisionPoints.length > 0) {
-    parts.push(`\nDECISIONS TO DRIVE:`);
-    for (const dp of brief.decisionPoints) {
-      parts.push(`- ${dp}`);
+  // Unified agenda bids — merges decision points + Q&A + key points into one list
+  const bids = buildEngagementBids(brief);
+  if (bids.length > 0) {
+    parts.push(`\nQ&A AGENDA (between sections, drive these topics):`);
+    for (let i = 0; i < bids.length; i++) {
+      const bid = bids[i];
+      const docHint = bid.docUrl ? ` [show: ${bid.docUrl.split("/").pop()}]` : "";
+      parts.push(`${i + 1}. ${bid.text}${docHint}`);
     }
   }
 
@@ -205,6 +345,104 @@ export function injectMeetingBrief(
   const briefText = buildMeetingBriefContext(brief);
   if (!briefText) return false;
   return voiceModule.injectContext(briefText);
+}
+
+/**
+ * Resolve meeting prep and inject into voice session. Shared by both join codepaths
+ * (meeting-routes.ts and config_server.ts) to eliminate duplication.
+ *
+ * Resolution order:
+ *   1. session.files.prep exists on disk → read and inject
+ *   2. currentBrief in memory + topic fuzzy match → inject
+ *   3. Scan ~/.callingclaw/shared/ for recent *_prep.md files → inject best match
+ *
+ * @returns The matched MeetingPrepBrief (or null if none found)
+ */
+export async function resolveAndInjectPrep(opts: {
+  session: MeetingSession;
+  meetTopic: string;
+  meetingPrepSkill: MeetingPrepSkill | null;
+  sessionManager: SessionManager;
+  realtime: VoiceModule;
+}): Promise<MeetingPrepBrief | null> {
+  const { session, meetTopic, meetingPrepSkill, sessionManager, realtime } = opts;
+
+  // Source 1: Session has a registered prep file
+  const sessionHasPrep = session.files?.prep;
+  const existingPrepBrief = meetingPrepSkill?.currentBrief ?? null;
+
+  if (sessionHasPrep && realtime.connected) {
+    // If currentBrief matches this session's topic, use it (richer than raw markdown)
+    if (existingPrepBrief && topicSimilarity(existingPrepBrief.topic, meetTopic) > 0.3) {
+      injectMeetingBrief(realtime, existingPrepBrief);
+      console.log("[PrepResolve] Injected currentBrief (session has prep file, topic validated)");
+      return existingPrepBrief;
+    }
+    // Otherwise read raw markdown from disk
+    try {
+      const { resolve } = require("path");
+      const prepPath = sessionHasPrep.startsWith("/") ? sessionHasPrep : resolve(SHARED_DIR, sessionHasPrep);
+      const raw = await Bun.file(prepPath).text();
+      if (raw && raw.length > 100) {
+        const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
+        realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
+        console.log(`[PrepResolve] Injected from disk prep (${raw.length} chars)`);
+      }
+    } catch (e: any) {
+      console.warn(`[PrepResolve] Failed to read prep file: ${e.message}`);
+    }
+    return existingPrepBrief;
+  }
+
+  // Source 2: currentBrief in memory with topic validation
+  if (existingPrepBrief && realtime.connected) {
+    const score = topicSimilarity(existingPrepBrief.topic, meetTopic);
+    if (score > 0.3) {
+      injectMeetingBrief(realtime, existingPrepBrief);
+      console.log(`[PrepResolve] Injected currentBrief (topic match: ${score.toFixed(2)})`);
+      return existingPrepBrief;
+    } else {
+      console.log(`[PrepResolve] Skipping stale brief: "${existingPrepBrief.topic.slice(0, 40)}" ≠ "${meetTopic.slice(0, 40)}" (score=${score.toFixed(2)})`);
+    }
+  }
+
+  // Source 3: Scan disk for recent *_prep.md files
+  if (realtime.connected) {
+    try {
+      const { readdirSync, statSync } = require("fs");
+      const { resolve } = require("path");
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+
+      const prepFiles = readdirSync(SHARED_DIR)
+        .filter((f: string) => f.endsWith("_prep.md"))
+        .map((f: string) => {
+          const full = resolve(SHARED_DIR, f);
+          try { return { name: f, path: full, mtime: statSync(full).mtimeMs }; }
+          catch { return null; }
+        })
+        .filter((f: any) => f && f.mtime > twoHoursAgo)
+        .sort((a: any, b: any) => b.mtime - a.mtime);
+
+      for (const pf of prepFiles) {
+        const raw = await Bun.file(pf.path).text();
+        if (!raw || raw.length < 100) continue;
+        const firstLine = raw.split("\n")[0]?.replace(/^#+\s*/, "").trim() || "";
+        const score = topicSimilarity(firstLine, meetTopic);
+        if (score > 0.3) {
+          const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
+          realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
+          console.log(`[PrepResolve] Disk scan match: ${pf.name} (topic: "${firstLine.slice(0, 40)}", score=${score.toFixed(2)}, ${raw.length} chars)`);
+          // Register this file with the session for future lookups
+          sessionManager.registerFile(session.meetingId, "prep", pf.name);
+          return null; // No structured brief, but context was injected
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[PrepResolve] Disk scan failed: ${e.message}`);
+    }
+  }
+
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -360,31 +598,16 @@ export function getPostMeetingSummary(prepSkill: MeetingPrepSkill): {
  * The message is sent as text to the Voice AI, which speaks it aloud.
  * Keep it concise — ~15 seconds of speech max.
  */
-export function buildMeetingIntro(
-  ownerName: string,
-  topic: string,
-  attendees?: Array<{ displayName?: string; email?: string; self?: boolean }>,
-): string {
-  // Count non-self attendees for context
-  const otherCount = attendees?.filter(a => !a.self).length || 0;
-
-  const parts: string[] = [];
-
-  // Core intro — always present
-  if (ownerName) {
-    parts.push(`大家好，我是 CallingClaw，${ownerName} 的 AI 会议助手。`);
-  } else {
-    parts.push("大家好，我是 CallingClaw，AI 会议助手。");
-  }
-
-  // What it will do
-  if (topic) {
-    parts.push(`今天的会议主题是「${topic}」。`);
-  }
-  parts.push("除了记录要点和跟踪待办，我也会结合团队当前的问题和记忆进行相关审核。");
-  parts.push("你们可以先继续开会，中间有问题的话我会申请发言。");
-
-  return parts.join("");
+export function buildMeetingIntro(ownerName: string, topic: string): string {
+  // No hardcoded language templates. The voice model speaks whatever language
+  // the meeting title implies (57+ languages on OpenAI, 97+ on Gemini).
+  // If participants speak a different language, switch to match them.
+  return [
+    `Introduce yourself briefly as CallingClaw${ownerName ? `, ${ownerName}'s AI meeting assistant` : ", an AI meeting assistant"}.`,
+    topic ? `Today's topic: "${topic}".` : "",
+    `You take notes, track action items, and review context from memory.`,
+    `Keep it to 2-3 natural sentences. Start in the language of the meeting title, but always switch to match whatever language the participants actually speak.`,
+  ].filter(Boolean).join(" ");
 }
 
 // ── Standalone Presentation Context (test mode, no meeting brief) ────
@@ -448,11 +671,9 @@ export function buildPresentationReadyContext(scenes: Array<{ url: string; talki
     `[PRESENTATION READY] You have ${scenes.length} prepared slides for this meeting.\n` +
     `First slide: ${scenes[0]?.url || "unknown"}\n` +
     `DO NOT present yet — start with small talk. Greet participants, confirm the agenda, ` +
-    `ask if everyone is ready. When they express intent to start (e.g. "let's start" / ` +
-    `"开始吧" / "show me" / "dive in" / "开始演示" / "请开始"), call share_screen with ` +
-    `the first scene URL.\n` +
-    `If nobody has real conversation for ~30 seconds, proactively ask: ` +
-    `"I have a presentation ready — shall I start sharing my screen?"`
+    `ask if everyone is ready. When they express intent to start (e.g. "let's start", ` +
+    `"show me", "go ahead", "dive in"), call share_screen with the first scene URL.\n` +
+    `If nobody has real conversation for ~30 seconds, proactively offer to start presenting.`
   );
 }
 
@@ -463,7 +684,6 @@ export function buildPresentationReadyContext(scenes: Array<{ url: string; talki
 export function buildIdleNudgeContext(): string {
   return (
     `[IDLE NUDGE] The meeting has been quiet for a while. Proactively offer to start ` +
-    `presenting. Say something natural like "I have some materials prepared — would you ` +
-    `like me to share my screen and walk you through them?" or "要不我开始演示？我准备了一些材料。"`
+    `presenting. Say something natural like "I have some materials prepared, shall I share my screen?"`
   );
 }

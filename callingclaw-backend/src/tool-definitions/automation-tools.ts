@@ -13,6 +13,7 @@ import type { PlaywrightCLIClient } from "../mcp_client/playwright-cli";
 import type { ZoomSkill } from "../skills/zoom";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion } from "../voice-persona";
+import { PAGE_EXTRACT_JS, PAGE_CLICK_JS, PAGE_TEXT_CLICK_JS, formatPageContext, PAGE_CONTEXT_ID } from "../utils/page-extract";
 
 export interface AutomationToolDeps {
   automationRouter: AutomationRouter;
@@ -166,6 +167,31 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
             url: { type: "string", description: "URL to navigate to (for navigate/new_tab)" },
             ref: { type: "string", description: "Element @ref from snapshot, e.g. 'e1' or '@e1' (for click/type)" },
             text: { type: "string", description: "Text to type or key to press" },
+          },
+          required: ["action"],
+        },
+      },
+      // ── Presenting Tab Control (click/scroll/navigate on shared page) ──
+      {
+        name: "interact",
+        description:
+          "Control the presenting tab (the page you're sharing in Meet). " +
+          "Use this to click buttons, scroll through content, or navigate to a new URL while presenting. " +
+          "For click: use the [index] number from [PAGE] context (e.g. target='3' clicks element [3]). " +
+          "Text matching also works (e.g. target='Download'). " +
+          "After each action, you'll receive updated [PAGE] context showing what's now visible.",
+        parameters: {
+          type: "object",
+          properties: {
+            action: {
+              type: "string",
+              enum: ["click", "scroll", "scroll_down", "scroll_up", "navigate"],
+              description: "Action to perform on presenting page",
+            },
+            target: {
+              type: "string",
+              description: "For click: element [index] number (preferred) or button/link text. For scroll: 'up'/'down'. For navigate: URL.",
+            },
           },
           required: ["action"],
         },
@@ -328,7 +354,16 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           const kws = query.toLowerCase().split(/[\s/\\._-]+/).filter((w: string) => w.length > 1);
           if (kws.length === 0) return "No search keywords provided.";
 
-          // ── Scoring: fuzzy match with bonus for all-keyword matches ──
+          // ── Build prep description index for scoring ──
+          // Allows matching "launch video script" → description "Personal 视频完整分镜脚本"
+          const prepDescriptions = new Map<string, string>();
+          if (prepBrief) {
+            for (const f of (prepBrief.filePaths || [])) {
+              prepDescriptions.set(f.path, f.description || "");
+            }
+          }
+
+          // ── Scoring: fuzzy match with description + filename + path ──
           type ScoredFile = { path: string; score: number; tier: number };
           const scored: ScoredFile[] = [];
           const seen = new Set<string>();
@@ -338,21 +373,25 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
             seen.add(filePath);
             const name = filePath.toLowerCase().split("/").pop() || "";
             const fullLower = filePath.toLowerCase();
+            const desc = (prepDescriptions.get(filePath) || "").toLowerCase();
             let score = 0;
             let matched = 0;
             for (const kw of kws) {
               if (name.includes(kw)) { score += 10; matched++; }       // filename match (strong)
+              else if (desc.includes(kw)) { score += 8; matched++; }   // description match (strong, from prep)
               else if (fullLower.includes(kw)) { score += 3; matched++; } // path match (weak)
             }
             if (matched === 0) return;
             // Bonus: all keywords matched → strong relevance signal
             if (matched === kws.length) score += 20;
+            // Partial match bonus: >60% keywords matched
+            if (matched >= kws.length * 0.6 && matched < kws.length) score += 10;
             // Tier bonus: prep files rank higher
             if (tier === 1) score += 15;
             scored.push({ path: filePath, score, tier });
           }
 
-          // Score tier 1 (prep resources)
+          // Score tier 1 (prep resources — now with description matching)
           for (const f of tier1Files) scoreFile(f, 1);
 
           // Score tier 2 (workspace dirs)
@@ -414,50 +453,212 @@ export function automationTools(deps: AutomationToolDeps): ToolModule {
           }
         }
         // ── interact: click/scroll/navigate on presenting page ──
+        // After each action, re-extract DOM so voice AI sees updated content.
         case "interact": {
           const action = (args.action as string) || "";
           const target = (args.target as string) || "";
           eventBus.emit("voice.tool_call", { tool: "interact", summary: `${action} ${target}`.slice(0, 80) });
           const cl = deps.chromeLauncher;
           if (!cl?.presentingPage) return "No presenting page active. Use share_screen first.";
+          // Detect if presenting tab is on Meeting Stage (scroll/click should target iframe)
+          const currentPageUrl = String(cl.presentingPage?.url() || "");
+          const onStage = currentPageUrl.includes("/stage") || currentPageUrl.includes("callingclaw-stage-");
+          let actionResult: string;
           try {
             switch (action) {
               case "click": {
-                // DOM snapshot → find element → click
-                const elements = await cl.evaluateOnPresentingPage(`(() => {
-                  const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
-                  return Array.from(els).slice(0, 30).map((el, i) => i + '. ' + (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 60));
-                })()`);
-                if (!target) return `Clickable elements:\n${elements}\nCall interact again with action="click" and target="<element text>".`;
-                // Find best match
-                await cl.evaluateOnPresentingPage(`(() => {
-                  const els = document.querySelectorAll('a,button,input,[role="button"],[onclick]');
-                  for (const el of els) {
-                    if ((el.textContent || '').toLowerCase().includes(${JSON.stringify(target.toLowerCase())})) {
-                      el.click(); return 'clicked';
+                if (!target) {
+                  // No target: extract DOM to show what's clickable
+                  const raw = await cl.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+                  const ctx = formatPageContext(raw);
+                  return ctx || "No clickable elements found.";
+                }
+
+                // Index-based click (preferred): target="3" clicks element [3]
+                const indexMatch = target.match(/^\d+$/);
+                if (indexMatch) {
+                  const clickResult = await cl.evaluateOnPresentingPage(PAGE_CLICK_JS(parseInt(target)));
+                  try {
+                    const r = JSON.parse(String(clickResult));
+                    if (r.ok) {
+                      actionResult = `Clicked [${target}] ${r.tag}: "${r.text}".`;
+                    } else {
+                      actionResult = `Element [${target}] not found. Use interact(action="click") without target to see available elements.`;
                     }
+                  } catch {
+                    actionResult = `Clicked element [${target}].`;
                   }
-                  return 'not found';
-                })()`);
-                return `Clicked "${target}".`;
+                } else {
+                  // Text-based fallback: target="Download for Mac" (fuzzy match + W3C events + cursor)
+                  const clickResult = await cl.evaluateOnPresentingPage(PAGE_TEXT_CLICK_JS(target));
+                  try {
+                    const r = JSON.parse(String(clickResult));
+                    if (r.ok && r.external) {
+                      actionResult = `"${r.text}" links to ${r.link}. Did NOT navigate (would leave the current page). The link is: ${r.link}`;
+                    } else {
+                      actionResult = r.ok ? `Clicked "${r.text}".` : `"${target}" not found on page.`;
+                    }
+                  } catch {
+                    actionResult = `Clicked "${target}".`;
+                  }
+                }
+                break;
               }
               case "scroll":
-              case "scroll_down":
-                await cl.evaluateOnPresentingPage(`window.scrollBy(0, ${target === "up" ? -600 : 600})`);
-                return `Scrolled ${target || "down"}.`;
-              case "scroll_up":
-                await cl.evaluateOnPresentingPage(`window.scrollBy(0, -600)`);
-                return "Scrolled up.";
+              case "scroll_down": {
+                // If on Stage page, scroll the IFRAME content (not the outer Stage)
+                if (onStage) {
+                  const dir = target === "up" ? -1 : 1;
+                  const iframeScroll = await cl.evaluateOnPresentingPage(`(() => {
+                    var iframe = document.getElementById('slideFrame');
+                    if (!iframe || !iframe.contentWindow) return JSON.stringify({ error: 'no iframe' });
+                    var doc = iframe.contentDocument;
+                    var vh = iframe.clientHeight;
+
+                    // Section-aware: find next heading in iframe
+                    if (${dir} > 0 && doc) {
+                      var headings = doc.querySelectorAll('h1,h2,h3');
+                      var currentTop = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                      for (var h of headings) {
+                        var hTop = h.getBoundingClientRect().top + currentTop;
+                        if (hTop > currentTop + vh * 0.3) {
+                          h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                          var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+                          return JSON.stringify({
+                            scrollY: Math.round(st), scrollMax: Math.round(sh - vh),
+                            pct: Math.round(st / Math.max(1, sh - vh) * 100),
+                            nextSection: (h.textContent || '').trim().substring(0, 60)
+                          });
+                        }
+                      }
+                    }
+
+                    // Fallback: scroll by viewport height
+                    iframe.contentWindow.scrollBy({ top: ${dir} * Math.round(vh * 0.75), behavior: 'smooth' });
+                    var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                    var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+                    return JSON.stringify({
+                      scrollY: Math.round(st), scrollMax: Math.round(sh - vh),
+                      pct: Math.round(st / Math.max(1, sh - vh) * 100), nextSection: null
+                    });
+                  })()`);
+                  try {
+                    const info = JSON.parse(String(iframeScroll));
+                    if (info.error) { actionResult = `iframe: ${info.error}`; }
+                    else {
+                      actionResult = info.nextSection
+                        ? `Scrolled iframe to: "${info.nextSection}". Position: ${info.pct}%.`
+                        : `Scrolled iframe ${target || "down"}. Position: ${info.pct}%.`;
+                    }
+                  } catch { actionResult = `Scrolled iframe ${target || "down"}.`; }
+                  break;
+                }
+
+                // Regular page scroll (not Stage)
+                const scrollInfo = await cl.evaluateOnPresentingPage(`(() => {
+                  var vh = window.innerHeight;
+                  var currentY = window.scrollY;
+                  var viewBottom = currentY + vh;
+                  var dir = ${JSON.stringify(target)} === "up" ? -1 : 1;
+
+                  // Find next section heading below current viewport
+                  if (dir > 0) {
+                    var headings = document.querySelectorAll('h1,h2,h3,section[id],section[class]');
+                    var nextSection = null;
+                    for (var h of headings) {
+                      var rect = h.getBoundingClientRect();
+                      var absY = rect.top + currentY;
+                      if (absY > viewBottom + 50) {
+                        nextSection = h;
+                        break;
+                      }
+                    }
+                    if (nextSection) {
+                      nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      var title = (nextSection.textContent || '').trim().substring(0, 60);
+                      return JSON.stringify({
+                        scrollY: Math.round(window.scrollY),
+                        scrollMax: Math.round(document.documentElement.scrollHeight - vh),
+                        pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - vh) * 100),
+                        nextSection: title
+                      });
+                    }
+                  }
+
+                  // Fallback: scroll by viewport height
+                  window.scrollBy(0, dir * Math.round(vh * 0.75));
+                  return JSON.stringify({
+                    scrollY: Math.round(window.scrollY),
+                    scrollMax: Math.round(document.documentElement.scrollHeight - vh),
+                    pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - vh) * 100),
+                    nextSection: null
+                  });
+                })()`);
+                try {
+                  const info = JSON.parse(String(scrollInfo));
+                  actionResult = info.nextSection
+                    ? `Scrolled to section: "${info.nextSection}". Position: ${info.pct}%.`
+                    : `Scrolled ${target || "down"}. Position: ${info.pct}% (${info.scrollY}/${info.scrollMax}px).`;
+                } catch {
+                  actionResult = `Scrolled ${target || "down"}.`;
+                }
+                break;
+              }
+              case "scroll_up": {
+                // Reuse the scroll_down Stage detection (target="up")
+                if (onStage) {
+                  const iframeUp = await cl.evaluateOnPresentingPage(`(() => {
+                    var iframe = document.getElementById('slideFrame');
+                    if (!iframe || !iframe.contentWindow) return JSON.stringify({ error: 'no iframe' });
+                    iframe.contentWindow.scrollBy({ top: -Math.round(iframe.clientHeight * 0.75), behavior: 'smooth' });
+                    var doc = iframe.contentDocument;
+                    var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+                    var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+                    return JSON.stringify({ scrollY: Math.round(st), pct: Math.round(st / Math.max(1, sh - iframe.clientHeight) * 100) });
+                  })()`);
+                  try {
+                    const info = JSON.parse(String(iframeUp));
+                    actionResult = info.error ? `iframe: ${info.error}` : `Scrolled iframe up. Position: ${info.pct}%.`;
+                  } catch { actionResult = "Scrolled iframe up."; }
+                  break;
+                }
+                const upInfo = await cl.evaluateOnPresentingPage(`(() => {
+                  window.scrollBy(0, -Math.round(window.innerHeight * 0.75));
+                  return JSON.stringify({ scrollY: Math.round(window.scrollY), pct: Math.round(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight) * 100) });
+                })()`);
+                try {
+                  const info = JSON.parse(String(upInfo));
+                  actionResult = `Scrolled up. Position: ${info.pct}% (${info.scrollY}px).`;
+                } catch {
+                  actionResult = "Scrolled up.";
+                }
+                break;
+              }
               case "navigate":
                 if (!target) return "Provide a URL to navigate to.";
                 await cl.navigatePresentingPage(target);
-                return `Navigated to ${target}.`;
+                actionResult = `Navigated to ${target}.`;
+                break;
               default:
                 return `Unknown action: ${action}. Use click, scroll, scroll_up, scroll_down, or navigate.`;
             }
           } catch (e: any) {
             return `Interact error: ${e.message}`;
           }
+
+          // Re-extract DOM after action so voice AI sees updated page content.
+          // Uses fixed ID — replaces previous DOM context, not accumulates.
+          try {
+            await new Promise(r => setTimeout(r, 300)); // brief pause for page to settle
+            const raw = await cl.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+            const pageCtx = formatPageContext(raw);
+            if (pageCtx && deps.voice) {
+              deps.voice.replaceContext(pageCtx, PAGE_CONTEXT_ID);
+            }
+          } catch {}
+
+          return actionResult;
         }
         default:
           return `Unknown automation tool: ${name}`;

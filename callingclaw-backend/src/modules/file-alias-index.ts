@@ -102,6 +102,21 @@ export class FileAliasIndex {
     const queryKeywords = this.tokenize(query);
     if (queryKeywords.length === 0) return null;
 
+    // First pass: check user aliases with forward-only scoring (lenient)
+    // "Business Talk" matching an entry with 10 keywords should still work
+    // if ALL query keywords are present in the entry
+    for (const entry of this._entries) {
+      let hits = 0;
+      for (const qk of queryKeywords) {
+        if (entry.keywords.some(ek => ek.includes(qk) || qk.includes(ek))) hits++;
+      }
+      if (hits === queryKeywords.length && queryKeywords.length >= 2) {
+        console.log(`[FileAliasIndex] Alias match: "${query}" → ${basename(entry.path)} (all ${hits} keywords matched)`);
+        return entry;
+      }
+    }
+
+    // Second pass: bidirectional scoring (stricter, for general search)
     let bestMatch: FileAlias | null = null;
     let bestScore = 0;
 
@@ -157,6 +172,31 @@ export class FileAliasIndex {
       .slice(0, limit)
       .map((e, i) => `${i + 1}. ${e.description} → ${e.path.replace(homedir(), "~")}`)
       .join("\n");
+  }
+
+  /**
+   * Register a user-coined alias for a file.
+   * When user refers to a file by a nickname (e.g., "Business Talk" → launch_video_brief_compiled.json),
+   * this maps the alias so future searches find it instantly.
+   */
+  registerUserAlias(alias: string, filePath: string, description?: string): void {
+    const existing = this._entries.find(e => e.path === filePath);
+    const aliasKeywords = this.tokenize(alias);
+    if (existing) {
+      // Merge alias keywords into existing entry
+      for (const kw of aliasKeywords) {
+        if (!existing.keywords.includes(kw)) existing.keywords.push(kw);
+      }
+      console.log(`[FileAliasIndex] Alias merged: "${alias}" → ${basename(filePath)} (${existing.keywords.length} keywords)`);
+    } else {
+      this._entries.push({
+        path: filePath,
+        keywords: aliasKeywords,
+        description: description || alias,
+        source: "prep", // treat as prep-quality (boosted score)
+      });
+      console.log(`[FileAliasIndex] Alias registered: "${alias}" → ${filePath}`);
+    }
   }
 
   /** Clear the index (meeting ended). */

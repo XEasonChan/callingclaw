@@ -1,0 +1,23 @@
+{
+  "name": "callingclaw",
+  "owner": {
+    "name": "CallingClaw",
+    "email": "hi@callingclaw.com"
+  },
+  "metadata": {
+    "description": "CallingClaw — AI meeting assistant that joins calls with real-time voice, interactive screen sharing, and post-meeting action items."
+  },
+  "plugins": [
+    {
+      "name": "callingclaw",
+      "source": "./",
+      "description": "Join Google Meet and Zoom as an AI participant with sub-second voice response, live screen control, and meeting intelligence.",
+      "version": "1.0.0",
+      "author": {
+        "name": "CallingClaw",
+        "email": "hi@callingclaw.com"
+      },
+      "homepage": "https://callingclaw.com"
+    }
+  ]
+}

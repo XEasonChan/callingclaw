@@ -106,7 +106,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
     maxSessionMinutes: 120,
   },
   defaultVoice: CONFIG.openai.voice,
-  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 800 },
+  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 1200 },
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
@@ -116,7 +116,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             turn_detection: { type: "semantic_vad" },
-            transcription: { model: "gpt-4o-transcribe" },
+            transcription: { model: "gpt-4o-transcribe", language: CONFIG.transcriptionLanguage.split(",")[0] || "zh" },
           },
           output: {
             format: { type: "audio/pcm", rate: 24000 },
@@ -143,7 +143,7 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
 //   - session.update requires type: "realtime"
 //   - Event names changed: response.text.delta → response.output_text.delta, etc.
 //   - New features: semantic_vad, image input, MCP servers, async function calling
-//   - Transcription: gpt-4o-transcribe (better than whisper-1)
+//   - Transcription: gpt-4o-transcribe with language hint (prevents zh→foreign misrecognition)
 // gpt-realtime-2 adds (over 1.5): 128K ctx, parallel tool calls, configurable
 // reasoning effort, spoken preambles. Wire format unchanged — model swap is drop-in.
 
@@ -176,7 +176,7 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
     maxSessionMinutes: 120,
   },
   defaultVoice: CONFIG.openai15.voice,
-  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 800 },
+  defaultVad: { threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 1200 },
   buildSession({ instructions, tools, voice, vad }) {
     return {
       session: {
@@ -188,7 +188,7 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             turn_detection: { type: "semantic_vad" },
-            transcription: { model: "gpt-4o-transcribe" },
+            transcription: { model: "gpt-4o-transcribe", language: CONFIG.transcriptionLanguage.split(",")[0] || "zh" },
           },
           output: {
             format: { type: "audio/pcm", rate: 24000 },
@@ -874,8 +874,45 @@ export class RealtimeClient {
     this.handlers.set(eventType, list);
   }
 
+  private _lastResponseCreateTs = 0;
+  private _pendingResponseCreate: any | null = null;  // Queued response.create waiting for speech to finish
+  private _isSpeaking = false;
+
+  /** Set by VoiceModule when audio state changes */
+  setSpeaking(speaking: boolean) { this._isSpeaking = speaking; }
+
+  /** Flush pending response.create — call when audio state leaves "speaking" */
+  flushPendingResponse() {
+    if (this._pendingResponseCreate) {
+      const pending = this._pendingResponseCreate;
+      this._pendingResponseCreate = null;
+      console.log(`[Realtime] Flushing queued response.create`);
+      this.sendEvent("response.create", pending);
+    }
+  }
+
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+
+    // Guard response.create — the main source of audio truncation bugs
+    if (type === "response.create") {
+      const now = Date.now();
+      // Source tracking: log where this came from (helps debug truncation)
+      const stack = new Error().stack?.split("\n").slice(2, 4).map(l => l.trim().replace(/^at /, "")).join(" ← ") || "unknown";
+      console.log(`[Realtime] response.create from: ${stack}`);
+      // Debounce: skip if <500ms since last
+      if (now - this._lastResponseCreateTs < 500) {
+        console.log(`[Realtime] response.create debounced (${now - this._lastResponseCreateTs}ms)`);
+        return true;
+      }
+      // Queue if speaking
+      if (this._isSpeaking) {
+        this._pendingResponseCreate = data;
+        console.log(`[Realtime] response.create queued (AI is speaking)`);
+        return true;
+      }
+      this._lastResponseCreateTs = now;
+    }
 
     // Gemini: route through protocol adapter for structural transform
     if (this._geminiAdapter) {
@@ -949,9 +986,13 @@ export class RealtimeClient {
    *  GA API requires session.type on EVERY session.update, not just the first one. */
   private _buildSessionUpdate(fields: Record<string, any>) {
     const session: Record<string, any> = { ...fields };
-    // GA API (openai/openai15): every session.update must include type: "realtime"
+    // GA API (openai/openai15): every session.update must include type + output_modalities
+    // CRITICAL: partial session.update without output_modalities may reset to text-only
     if (this._provider.name === "openai" || this._provider.name === "openai15") {
       session.type = "realtime";
+      if (!session.output_modalities) {
+        session.output_modalities = ["audio"];
+      }
     }
     return { session };
   }

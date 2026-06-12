@@ -1,0 +1,31 @@
+{
+  "name": "callingclaw",
+  "version": "1.0.0",
+  "description": "AI meeting assistant with real-time voice, interactive screen sharing, and meeting intelligence. Join Google Meet and Zoom as an active AI participant — not just a note-taker.",
+  "author": {
+    "name": "CallingClaw",
+    "email": "hi@callingclaw.com"
+  },
+  "repository": "https://github.com/XEasonChan/callingclaw",
+  "license": "MIT",
+  "keywords": [
+    "meeting-assistant",
+    "voice-ai",
+    "google-meet",
+    "zoom",
+    "openai-realtime",
+    "screen-sharing",
+    "ai-agent",
+    "mcp",
+    "claude-code",
+    "meeting-bot",
+    "transcription",
+    "action-items",
+    "sales-demo",
+    "presentation"
+  ],
+  "commands": [
+    "./SKILL.md"
+  ],
+  "homepage": "https://callingclaw.com"
+}

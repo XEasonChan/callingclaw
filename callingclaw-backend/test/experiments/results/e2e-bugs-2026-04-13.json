@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-04-13T11:53:26.709Z",
+  "mode": "Full E2E (Meet + Screen + Voice)",
+  "duration": 204,
+  "total": 40,
+  "passed": 34,
+  "failed": 6,
+  "bugs": [
+    {
+      "phase": "Phase 2: Prep",
+      "name": "Prep file created",
+      "detail": "TIMEOUT after 120s",
+      "severity": "P0"
+    }
+  ],
+  "results": [
+    {
+      "name": "Prep file created",
+      "pass": false,
+      "detail": "TIMEOUT after 120s",
+      "phase": "Phase 2: Prep",
+      "severity": "P0"
+    },
+    {
+      "name": "Duplicate join blocked",
+      "pass": false,
+      "detail": "status=in_meeting",
+      "phase": "Phase 3: Join"
+    },
+    {
+      "name": "Transcript captured",
+      "pass": false,
+      "detail": "0 entries",
+      "phase": "Phase 3: Join"
+    },
+    {
+      "name": "Sharing flag active",
+      "pass": false,
+      "detail": "sharing=false",
+      "phase": "Phase 4: Screen Share"
+    },
+    {
+      "name": "Presenting page is Stage",
+      "pass": false,
+      "detail": "NOT a stage page",
+      "phase": "Phase 4: Screen Share"
+    },
+    {
+      "name": "Voice session cleared",
+      "pass": false,
+      "detail": "active=true, transport=meet_bridge",
+      "phase": "Phase 7: Leave"
+    }
+  ]
+}

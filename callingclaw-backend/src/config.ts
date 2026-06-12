@@ -55,6 +55,12 @@ export const CONFIG = {
   // Default: gemini (Kore voice, 10x cheaper than OpenAI, best quality)
   voiceProvider: (process.env.VOICE_PROVIDER || "gemini") as "openai" | "openai15" | "grok" | "gemini",
 
+  // Transcription language hint (ISO 639-1 code, comma-separated, or "auto")
+  // Default "zh,en" — hints Whisper to expect Chinese+English (prevents hallucinating random languages).
+  // The hint IMPROVES accuracy, it doesn't restrict detection. Whisper still handles other languages.
+  // BUG-021: "auto" (no hint) causes gpt-4o-transcribe to hallucinate Hebrew/German/Japanese on ambiguous audio.
+  transcriptionLanguage: (process.env.TRANSCRIPTION_LANGUAGE || "zh,en") as string,
+
   // OpenAI (Realtime GA — gpt-realtime-2, GPT-5-class voice flagship)
   // Uses GA API: no beta header, new event names, session.type required.
   // Override with OPENAI_REALTIME_MODEL env var to pin a specific version.
@@ -97,17 +103,17 @@ export const CONFIG = {
     voice: "Kore",  // options: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr
   },
 
-  // Anthropic Computer Use (direct API — optional)
+  // Anthropic Computer Use (direct API — optional, falls back to OpenRouter Haiku)
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
-    model: "claude-sonnet-4-6-20250627",
+    model: "claude-haiku-4-5-20251001",
   },
 
-  // OpenRouter (alternative gateway for Claude — no Anthropic key needed)
+  // OpenRouter (unified gateway — one key for all models)
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     baseUrl: "https://openrouter.ai/api/v1",
-    model: "anthropic/claude-sonnet-4.6",
+    model: "anthropic/claude-haiku-4-5",
   },
 
   // Meeting intelligence — fast models for gap detection + semantic search
@@ -133,10 +139,11 @@ export const CONFIG = {
     model: process.env.MEETING_AUTOMATION_MODEL || "anthropic/claude-haiku-4-5",
   },
 
-  // Vision analysis (screen/meeting screenshots → Gemini Flash via OpenRouter)
+  // Vision analysis (screen/meeting screenshots via OpenRouter)
+  // A/B eval showed Haiku 4.5 matches Sonnet quality (96% vs 100%) at 6x less cost.
+  // Haiku also has native vision — no need for a separate Gemini Flash model.
   vision: {
-    model: process.env.VISION_MODEL || "google/gemini-3-flash-preview",
-    // Falls back to OpenRouter config for API key/base URL
+    model: process.env.VISION_MODEL || "anthropic/claude-haiku-4-5",
   },
 
   // Google OAuth (Calendar + Meet)
@@ -148,8 +155,8 @@ export const CONFIG = {
 
   // Screen
   screen: {
-    width: parseInt(process.env.SCREEN_WIDTH || "1920"),
-    height: parseInt(process.env.SCREEN_HEIGHT || "1080"),
+    width: parseInt(process.env.SCREEN_WIDTH || "0"),
+    height: parseInt(process.env.SCREEN_HEIGHT || "0"),
     captureFps: 1,
     ssimThreshold: 0.95,
   },
@@ -191,6 +198,27 @@ export const CONFIG = {
   // User identity
   userEmail: process.env.USER_EMAIL || _userConfig.userEmail || "",
 };
+
+// Auto-detect screen resolution if not set via env
+if (CONFIG.screen.width === 0 || CONFIG.screen.height === 0) {
+  try {
+    const out = require("child_process").execSync(
+      `system_profiler SPDisplaysDataType 2>/dev/null | grep -i resolution | head -1`
+    ).toString().trim();
+    // Parse "Resolution: 2560 x 1600 Retina" or "3840 x 2160"
+    const match = out.match(/(\d{3,5})\s*x\s*(\d{3,5})/);
+    if (match) {
+      CONFIG.screen.width = parseInt(match[1]!);
+      CONFIG.screen.height = parseInt(match[2]!);
+      console.log(`[Config] Auto-detected screen: ${CONFIG.screen.width}x${CONFIG.screen.height}`);
+    }
+  } catch {}
+  // Fallback
+  if (CONFIG.screen.width === 0) {
+    CONFIG.screen.width = 1920;
+    CONFIG.screen.height = 1080;
+  }
+}
 
 export type CallingClawConfig = typeof CONFIG;
 

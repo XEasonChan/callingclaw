@@ -33,9 +33,15 @@ export interface OC001_Response {
   filePaths: Array<{ path: string; description: string; action?: "open" | "scroll" | "present" }>;
   browserUrls: Array<{ url: string; description: string; action?: "navigate" | "demo" | "show" }>;
   folderPaths: Array<{ path: string; description: string }>;
+  speakingPlan?: Array<{ phase: string; durationMin: number; points: string; sceneIndices?: number[] }>;
+  scenes?: Array<{ url: string; scrollTarget?: string; talkingPoints: string; durationMs: number }>;
 }
 
 export const OC001_PROMPT = (req: OC001_Request) => {
+  const { detectLanguage } = require("./prompt-constants");
+  const topicLang = detectLanguage(req.topic);
+  const langLabel = topicLang === "zh" ? "Chinese" : topicLang === "ja" ? "Japanese" : topicLang === "ko" ? "Korean" : "English";
+
   const attendeeSection = req.attendees?.length
     ? `\n## Meeting Attendees\n${req.attendees
         .map((a) => `- ${a.name || a.email}${a.name ? ` (${a.email})` : ""}${a.status ? ` — ${a.status}` : ""}`)
@@ -50,12 +56,15 @@ Read the relevant files and your memory, then generate a structured JSON meeting
 ## Meeting Topic
 ${req.topic}
 
+## Output Language
+CRITICAL: The meeting topic is in ${langLabel}. ALL output (summary, keyPoints, expectedQuestions, speakingPlan, scenes) MUST be written in **${langLabel}**. Do NOT switch to another language because your memory or files are in a different language. The meeting topic language determines the output language.
+
 ## Additional Context from User
 ${req.userContext || "(no additional context)"}${attendeeSection}
 
 ## What to Include
 
-1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in the user's preferred language.
+1. **summary**: 2-3 paragraphs summarizing what will be presented. Write in **${langLabel}** (matching the meeting topic).
 2. **keyPoints**: 5-8 bullet points covering the main topics to discuss. **Must include at least 1 item prefixed with "⚠️ Past lesson:" if MEMORY.md contains relevant past mistakes, failures, or lessons learned for this topic.**
 3. **architectureDecisions**: For each major technical decision, explain WHAT was decided and WHY.
 4. **expectedQuestions**: 3-5 questions that might come up, with suggested answers. **Include questions about past failures and how to avoid them.**
@@ -63,6 +72,8 @@ ${req.userContext || "(no additional context)"}${attendeeSection}
 6. **filePaths**: All relevant local files with absolute paths. Suggest action: "open" / "scroll" / "present".
 7. **browserUrls**: All relevant web URLs (GitHub, deployed apps, Figma, docs).
 8. **folderPaths**: Key project directories the user might want to show.
+9. **speakingPlan** (if this is a presentation/demo meeting): Ordered phases with timing and talking points. The voice AI follows this narrative structure.
+10. **scenes** (if browserUrls should be presented on screen): Ordered list of URLs/sections to show, with what to say at each. The AI will navigate to these using scroll/click tools. Use approximate section descriptions for scrollTarget (exact CSS selectors not needed — the AI sees the live DOM).
 
 ## CRITICAL: Surface Past Mistakes
 Search MEMORY.md "Lessons Learned" section and daily memory files for past mistakes, failures, and debugging experiences related to this topic. These learnings MUST be surfaced — put them in keyPoints (prefixed "⚠️ Past lesson:") and expectedQuestions. The goal: ensure the same errors are never repeated.
@@ -73,14 +84,16 @@ Return ONLY valid JSON matching this exact structure:
 {
   "topic": "string",
   "goal": "string — what the meeting should achieve",
-  "summary": "string — 2-3 paragraphs in user's language",
+  "summary": "string — 2-3 paragraphs in the SAME language as the meeting topic",
   "keyPoints": ["string — 5-8 bullet points"],
   "architectureDecisions": [{"decision": "string", "rationale": "string"}],
   "expectedQuestions": [{"question": "string", "suggestedAnswer": "string"}],
   "previousContext": "string or null — prior meeting summary",
   "filePaths": [{"path": "/absolute/path", "description": "string", "action": "open|scroll|present"}],
   "browserUrls": [{"url": "https://...", "description": "string", "action": "navigate|demo|show"}],
-  "folderPaths": [{"path": "/absolute/path", "description": "string"}]
+  "folderPaths": [{"path": "/absolute/path", "description": "string"}],
+  "speakingPlan": [{"phase": "string", "durationMin": 2, "points": "what to say in 1-2 sentences"}],
+  "scenes": [{"url": "https://...", "scrollTarget": "section description or heading text", "talkingPoints": "what to say", "durationMs": 30000}]
 }
 \`\`\`
 
@@ -103,6 +116,8 @@ export function parseOC001(raw: string, fallbackTopic: string): OC001_Response {
         filePaths: Array.isArray(p.filePaths) ? p.filePaths : [],
         browserUrls: Array.isArray(p.browserUrls) ? p.browserUrls : [],
         folderPaths: Array.isArray(p.folderPaths) ? p.folderPaths : [],
+        speakingPlan: Array.isArray(p.speakingPlan) ? p.speakingPlan : undefined,
+        scenes: Array.isArray(p.scenes) ? p.scenes : undefined,
       };
     } catch {}
   }
@@ -355,7 +370,7 @@ export function parseOC006(raw: string): OC006_Response {
 
 // ══════════════════════════════════════════════════════════════
 // OC-007: Meeting Vision Context Push
-// Trigger: Every ~40s during meeting (batch of 5 screen descriptions)
+// Trigger: Every ~15s during meeting (batch of 5 screen descriptions at 3s analysis interval)
 // ══════════════════════════════════════════════════════════════
 
 export interface OC007_Request {

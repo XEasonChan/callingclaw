@@ -55,21 +55,7 @@ if ! command -v bun &>/dev/null; then
 fi
 ok "Bun $(bun --version)"
 
-# Check Python 3
-PYTHON_BIN=""
-for candidate in python3 /opt/miniconda3/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3; do
-  if command -v "$candidate" &>/dev/null; then
-    PYTHON_BIN="$candidate"
-    break
-  fi
-done
-
-if [[ -z "$PYTHON_BIN" ]]; then
-  warn "Python 3 not found — installing via Homebrew..."
-  brew install python@3.11
-  PYTHON_BIN="python3"
-fi
-ok "Python $($PYTHON_BIN --version 2>&1 | awk '{print $2}') at $PYTHON_BIN"
+# Python sidecar was removed in v2.6.1 — no longer needed
 
 # Check Google Chrome
 if [[ -d "/Applications/Google Chrome.app" ]]; then
@@ -94,9 +80,7 @@ info "Installing Bun packages..."
 bun install --silent
 ok "Bun dependencies installed"
 
-info "Installing Python packages..."
-$PYTHON_BIN -m pip install -q -r python_sidecar/requirements.txt 2>/dev/null
-ok "Python dependencies installed"
+# Python sidecar removed in v2.6.1 — skip Python packages
 
 # ── Step 4: Setup .env File ──────────────────────────────────────
 
@@ -135,9 +119,6 @@ ANTHROPIC_API_KEY=${ANTHROPIC_KEY}
 # GOOGLE_CLIENT_SECRET=
 # GOOGLE_REFRESH_TOKEN=
 
-# Python path (auto-detected)
-PYTHON_PATH=${PYTHON_BIN}
-
 # Screen resolution of this machine
 SCREEN_WIDTH=1920
 SCREEN_HEIGHT=1080
@@ -152,9 +133,9 @@ echo -e "\n${BLUE}[5/7]${NC} macOS permissions setup...\n"
 
 info "CallingClaw needs these macOS permissions to function:"
 echo ""
-echo "    1. Screen Recording  — for screenshots & Computer Use"
-echo "    2. Accessibility     — for mouse/keyboard automation (PyAutoGUI)"
-echo "    3. Microphone        — for audio capture (BlackHole routing)"
+echo "    1. Screen Recording  — for screenshots & visual analysis"
+echo "    2. Accessibility     — for mouse/keyboard automation (NativeBridge)"
+echo "    3. Microphone        — for direct voice conversations"
 echo ""
 
 # Detect the terminal app
@@ -177,13 +158,13 @@ if [[ "$OPEN_SETTINGS" != "n" ]] && [[ "$OPEN_SETTINGS" != "N" ]]; then
   info "Opening Screen Recording settings..."
   open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || \
     open -b com.apple.systempreferences /System/Library/PreferencePanes/Security.prefPane 2>/dev/null || true
-  echo -e "    ${YELLOW}→ Add '$TERMINAL_APP' and 'Python' to the list, then toggle ON${NC}"
+  echo -e "    ${YELLOW}→ Add '$TERMINAL_APP' to the list, then toggle ON${NC}"
   read -p "    Press Enter when done..."
 
   # Accessibility
   info "Opening Accessibility settings..."
   open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
-  echo -e "    ${YELLOW}→ Add '$TERMINAL_APP' and 'Python' to the list, then toggle ON${NC}"
+  echo -e "    ${YELLOW}→ Add '$TERMINAL_APP' to the list, then toggle ON${NC}"
   read -p "    Press Enter when done..."
 
   # Microphone
@@ -202,18 +183,9 @@ fi
 
 echo -e "\n${BLUE}[6/7]${NC} Google Meet audio configuration...\n"
 
-echo "  After joining a Google Meet meeting, configure Chrome's audio:"
-echo ""
-echo "    1. In Google Meet → Settings → Audio"
-echo "       Speaker output: BlackHole 2ch"
-echo "       Microphone:     BlackHole 16ch"
-echo ""
-echo "    This routes:"
-echo "       Meeting audio → BlackHole 2ch → CallingClaw (captures)"
-echo "       CallingClaw AI → BlackHole 16ch → Meeting mic (speaks)"
-echo ""
-
-ok "Audio routing documented"
+ok "Audio injection via Playwright addInitScript (no manual configuration needed)"
+echo "  CallingClaw automatically injects audio at browser level when joining Meet."
+echo "  No virtual audio drivers required."
 
 # ── Step 7: Create Helper Directories ────────────────────────────
 

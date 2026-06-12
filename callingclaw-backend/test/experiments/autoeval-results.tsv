@@ -1,0 +1,34 @@
+timestamp	commit	score	breakdown	experiment	details
+2026-04-06T13:31:35	f4413f8	70	tool:6/6 log:1/6 voice:4/6	voice-only: test intent→action pipeline via sendText	V-002,V-006
+2026-04-06T13:37:57	2f8099e	100	system:6/6 tool:6/6 voice:6/6	voice-only: test intent→action pipeline via sendText	all_pass
+2026-04-06T13:48:02	3c2658b	55	system:4/4 tool:0/4 voice:2/4	voice-only: test intent→action pipeline via sendText	V-001,V-002,V-003,V-004
+2026-04-06T14:35:47	cc4c951	72	sys:9/10 tool:6/10 content:8/10 fluency:9/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-06T14:41:41	b4270c9	60	sys:3/4 tool:3/4 content:2/4 fluency:3/4 accuracy:0/4	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04
+2026-04-06T16:11:52	f9a48aa	33	sys:4/10 tool:4/10 content:3/10 fluency:4/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-06T16:15:54	3e5ef48	0	sys:0/10 tool:0/10 content:0/10 fluency:0/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-06T16:17:33	e63a0cf	0	sys:0/10 tool:0/10 content:0/10 fluency:0/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-06T16:22:15	e63a0cf	75	sys:10/10 tool:5/10 content:9/10 fluency:9/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-06T16:38:42	ee4a97c	71	sys:10/10 tool:5/10 content:7/10 fluency:10/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-07T02:21:22	bbbce5b	79	sys:10/10 tool:8/10 content:7/10 fluency:9/10 accuracy:4/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-07T11:15:20	6b004b9	71	sys:10/10 tool:6/10 content:7/10 fluency:9/10 accuracy:0/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-07T11:22:18	bc50962	75	sys:10/10 tool:5/10 content:9/10 fluency:8/10 accuracy:2/10	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,D-01
+2026-04-07T11:31:17	875a77c	73	sys:12/12 tool:5/12 content:11/12 fluency:9/12 accuracy:3/12	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,E-01,E-02,D-01
+2026-04-07T11:41:16	f0df498	75	sys:12/12 tool:7/12 content:9/12 fluency:11/12 accuracy:3/12	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,E-01,E-02,D-01
+2026-04-07T12:27:24	c402062	83	sys:12/12 tool:9/12 content:10/12 fluency:11/12 accuracy:5/12	scenario-eval: business presentation quality + action accuracy	A-01,A-02,A-03,A-04,B-01,B-02,B-03,C-01,C-02,E-01,E-02,D-01
+2026-04-07T13:03:46	c402062	87	sys:12/12 tool:11/12 content:10/12 fluency:11/12 accuracy:6/12	scenario-eval: business presentation quality + action accuracy	A-01,B-02,D-01
+2026-04-07T14:14:50	a2ac926	21	sys:3/12 tool:3/12 content:2/12 fluency:3/12 accuracy:1/12	scenario-eval: business presentation quality + action accuracy	A-01,B-01,B-02,B-03,C-01,C-02,E-01,E-02,D-01
+2026-04-07T14:24:41	a2ac926	80	sys:5/5 tool:3/5 content:5/5 fluency:4/5 accuracy:1/5	scenario-eval: business presentation quality + action accuracy	A-03,B-01
+2026-04-07T14:33:19	a2ac926	88	sys:12/12 tool:10/12 content:11/12 fluency:12/12 accuracy:4/12	scenario-eval: business presentation quality + action accuracy	B-02,B-03,D-01
+2026-04-07T14:42:28	a2ac926	83	sys:12/12 tool:10/12 content:9/12 fluency:11/12 accuracy:6/12	scenario-eval: business presentation quality + action accuracy	A-01,A-02,B-02,E-02,D-01
+2026-04-07T15:09:10	da20169	77	sys:12/12 tool:9/12 content:8/12 fluency:10/12 accuracy:6/12	scenario-eval: business presentation quality + action accuracy	A-01,A-02,B-01,B-02,C-02,E-02,D-01
+2026-04-07T15:19:17	da20169	84	sys:12/12 tool:10/12 content:10/12 fluency:11/12 accuracy:5/12	scenario-eval: business presentation quality + action accuracy	A-01,B-02,E-02,D-01
+2026-04-07T15:21:39	fe5b243	45	sys:2/2 tool:0/2 content:1/2 fluency:1/2 accuracy:0/2	scenario-eval: business presentation quality + action accuracy	A-01,A-02
+2026-04-07T15:29:16	fe5b243	78	sys:14/14 tool:6/14 content:13/14 fluency:14/14 accuracy:2/14	scenario-eval: business presentation quality + action accuracy	A-01,A-03,B-01,B-02,B-03,C-01,F-01,F-02,E-02
+2026-04-07T15:37:56	3eb6156	71	sys:15/15 tool:7/15 content:11/15 fluency:14/15 accuracy:2/15	scenario-eval: business presentation quality + action accuracy	A-01,A-02,B-01,B-02,B-03,C-01,C-02,F-01,F-03,E-02,D-01
+2026-04-07T15:49:14	2d333a0	91	sys:15/15 tool:14/15 content:12/15 fluency:14/15 accuracy:14/15	scenario-eval: business presentation quality + action accuracy	A-01,A-02,E-02,D-01
+2026-04-08T02:48:07	9dfe356	95	sys:15/15 tool:14/15 content:14/15 fluency:14/15 accuracy:14/15	scenario-eval: business presentation quality + action accuracy	B-02,D-01
+2026-04-08T03:39:23	166018f	95	sys:15/15 tool:14/15 content:14/15 fluency:14/15 accuracy:14/15	scenario-eval: business presentation quality + action accuracy	B-02,D-01
+2026-04-08T05:37:28	fbbf37d	94	sys:11/11 tool:10/11 content:11/11 fluency:9/11 accuracy:10/11	scenario-eval: business presentation quality + action accuracy	G-02
+2026-04-08T05:41:38	8b87cfd	85	sys:8/8 tool:7/8 content:6/8 fluency:7/8 accuracy:6/8	scenario-eval: business presentation quality + action accuracy	A-EN-02,G-EN-02,H-EN-01
+2026-04-08T07:17:02	134ac08	93	sys:8/8 tool:8/8 content:7/8 fluency:8/8 accuracy:5/8	scenario-eval: business presentation quality + action accuracy	A-EN-02
+2026-04-09T08:32:09	e805c55	91	sys:9/9 tool:8/9 content:8/9 fluency:8/9 accuracy:8/9	scenario-eval: business presentation quality + action accuracy	E-02,D-01

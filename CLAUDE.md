@@ -87,7 +87,12 @@ See `callingclaw-backend/CONTEXT-ENGINEERING.md` for full details. Critical cons
 
 ### Tool Definitions
 
-`tool-definitions/index.ts` exports `buildAllTools(deps)` which collects tools from modular files (calendar-tools, meeting-tools, automation-tools, ai-tools). Each module returns `{ definitions, handler }`.
+`tool-definitions/index.ts` exports `buildAllTools(deps)` which collects tools from modular files (calendar-tools, meeting-tools, automation-tools, ai-tools, prep-tools). Each module returns `{ definitions, handler }`.
+
+Key tools added in v2.8.14+:
+- `read_prep` (prep-tools) — Zero-cost local query of prep sections (resources, decisions, questions, history, scenes)
+- `interact` (automation-tools) — Click/scroll/navigate on presenting page with DOM re-extraction
+- `share_screen` — Natural language URL resolution ("官网" → callingclaw.com), tab reuse, iframe pre-loading
 
 ### EventBus
 
@@ -98,7 +103,7 @@ Event-driven integration hub (`modules/event-bus.ts`). Supports WebSocket subscr
 - **Main process** (`main/index.js`) — DaemonSupervisor (spawns/manages Bun backend), PermissionChecker, window+tray management, IPC handlers
 - **Renderer** (`renderer/index.html`, vanilla JS) — communicates with backend via HTTP/WS to localhost:4000
 - **Preload** (`preload/index.js`) — contextBridge exposes `callingclaw.*` API
-- **Audio Bridge** (`renderer/audio-bridge.js`) — AudioWorklet capture+playback with ring buffer. Two modes: `direct` (local mic/speaker) and `meet_bridge` (BlackHole routing)
+- **Audio Bridge** (`renderer/audio-bridge.js`) — AudioWorklet capture+playback with ring buffer. Direct mode only (local mic/speaker). Meet audio is handled by Playwright `addInitScript` injection in ChromeLauncher, not through Electron.
 
 ### WebSocket Multiplexing
 
@@ -109,12 +114,15 @@ Event-driven integration hub (`modules/event-bus.ts`). Supports WebSocket subscr
 
 ### Meeting Stage (`/stage`)
 
-Transparent AI workspace screen-shared during meetings. ChromeLauncher opens `/stage` by default when `shareScreen()` is called without a URL.
+Transparent AI workspace screen-shared during meetings. Per-meeting Stage HTML is **pre-generated** during meeting join (`stage-generator.ts`) with iframe src already baked in — no dynamic `loadSlideFrame()` needed.
 
-- **Left**: Presentation iframe, controlled via `loadSlideFrame()` / `evaluateOnSlideFrame()` / `clickOnSlideFrame()` (Playwright, same-origin only). Cross-origin URLs fall back to `navigatePresentingPage()` (same tab, share persists).
-- **Right**: Dual-model EventBus feed (S1 voice events + S2 compute events) + Working Documents panel
-- **Working Documents**: Tracked server-side in `SharedContext.stageDocuments`, injected into voice Layer 3 as numbered list. Users say "open the first document" → `open_file({ doc_number: 1 })`.
-- **API**: `GET /api/stage/documents`, `POST /api/screen/iframe/load`
+- **Left**: Presentation iframe. Content loaded at page render time (no race condition). Supports localhost HTML and markdown files via `render.html?file=...`. Scrollable via `contentWindow.scrollBy()` from parent page.
+- **Right**: Dual-system panels:
+  - **System One** (S1): Voice transcript (🗣️ AI / 👤 user) + tool calls (🔧)
+  - **System Two** (S2): Agent actions — intent classification (🎯), file search (🔍), execution (⚡), completion (✅)
+- **Working Documents**: From prep brief's `filePaths` + `browserUrls`, registered via `meeting.prep_ready` event.
+- **Markdown Renderer**: `public/render.html` — universal CallingClaw-branded markdown renderer. Usage: `/render.html?file=/path/to/file.md`
+- **API**: `GET /api/stage/documents`, `GET /api/file/read?path=...`, `POST /api/screen/scroll` (auto-detects Stage → scrolls iframe), `GET /api/audio/status`
 
 ### Meeting-Time Model Usage
 
@@ -123,7 +131,7 @@ During meetings, CallingClaw uses its own fast models, NOT OpenClaw:
 | Module | Model | Purpose |
 |--------|-------|---------|
 | VoiceModule | OpenAI Realtime / Gemini Live | Real-time voice conversation |
-| VisionModule | Gemini Flash (OpenRouter) | Screenshot analysis every ~40s |
+| VisionModule | Gemini Flash (OpenRouter) → gpt-4o-mini fallback | Screenshot capture 1s, analysis every ~3s |
 | ContextRetriever | Haiku (OpenRouter) | Gap detection + agentic search |
 | TranscriptAuditor | Haiku (OpenRouter) | Real-time intent classification |
 | ComputerUseModule | Haiku/Sonnet (Anthropic API) | Screen control when voice AI requests |
@@ -151,9 +159,7 @@ OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-00
 | **Audio setSinkId** | Must be called BEFORE `getUserMedia()` (Electron bug #40704) | v2.5.0 |
 | **Scheduler events** | Use `meeting.prep_ready` not `scheduler.prep_ready` — frontend only listens for the former | v2.7.8 |
 | **MeetingScheduler dedup** | Must check existing sessions by meetUrl/calendarEventId before creating new ones | v2.7.9 |
-| **BlackHole speaker** | If system default output = BlackHole, direct mode AI audio goes to virtual device | v2.7.10 |
-| **getUserMedia + BlackHole** | Even virtual audio devices trigger macOS TCC mic permission — must be in checkAll() | v2.7.10 |
-| **BlackHole macOS 26** | BlackHole 0.6.1 loopback is BROKEN on macOS 26 Tahoe (0 signal). Use Playwright addInitScript audio injection instead | v2.7.11 |
+| **BlackHole removed** | BlackHole virtual audio replaced by Playwright `addInitScript` audio injection in v2.7.12. `clearAudioDevicePrefs()` in ChromeLauncher still needed to prevent Chrome from loading cached BlackHole device prefs from old profiles | v2.7.12 |
 | **Meet audio receivers** | Meet creates 5+ audio receivers per PeerConnection, most are `muted=true` (silence). MUST select `track.muted===false` for the active speaker | v2.7.11 |
 | **Worklet cross-origin** | AudioWorklet.addModule() from localhost fails inside Meet page (cross-origin). MUST use Blob URL inline worklet code | v2.7.11 |
 | **Playwright CLI vs Library** | `playwright-cli` eval() cannot intercept getUserMedia (Meet caches at module load). MUST use Playwright library `addInitScript()` for pre-load injection | v2.7.11 |
@@ -161,5 +167,9 @@ OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-00
 | **Audio capture self-check** | After joining Meet, MUST verify captured audio has nonzero amplitude (maxAmp > 0). If all zeros, cycle through ALL receivers trying each for 5s — the unmuted receiver may appear later after join stabilizes. **FIXED v2.7.12**: setupCapture cycles receivers by index with triedReceiverIdx | v2.7.12 |
 | **Playwright lib vs CLI coexistence** | `launchPersistentContext` holds Chrome process — playwright-cli CANNOT connect to same profile simultaneously. **FIXED v2.7.12**: ChromeLauncher.joinGoogleMeet() + admission monitor use Playwright library directly, playwright-cli bypassed for Meet join | v2.7.12 |
 | **Admit monitor missing** | **FIXED v2.7.12**: Admission monitor ported to ChromeLauncher (startAdmissionMonitor, _admitEvalLib, onMeetingEnd). Uses page.evaluate() directly | v2.7.12 |
-| **BlackHole in Chrome prefs** | Chrome profile saves last-used audio devices. If BlackHole was previously selected, Meet picks it on next launch → muted audio. ChromeLauncher.clearAudioDevicePrefs() resets to system default on every launch | v2.7.19 |
 | **Screen share native dialog** | Chrome's screen picker dialog is NATIVE (not DOM), Playwright CANNOT click it. Use `--auto-select-desktop-capture-source=CallingClaw Presenting` flag to auto-select tab by title match. Set tab title via `document.title = "CallingClaw Presenting"` before sharing | v2.7.19 |
+| **Stage iframe cross-origin** | Pre-generated Stage HTML must be served via localhost (not `file://`). `file://` parent + `http://localhost` iframe = cross-origin → `contentDocument` blocked. Stage generator writes to `public/` dir | v2.8.14 |
+| **Whisper Chinese recognition** | OpenAI transcription defaults to English, misrecognizes Chinese as Russian/Korean/Polish. Set `language` in transcription config. Configurable via `TRANSCRIPTION_LANGUAGE` env var (default: `zh,en`) | v2.8.14 |
+| **Transcript reset on re-join** | `meeting.started` was clearing transcript on every join. Now only resets for DIFFERENT meeting URLs. Same URL re-join preserves conversation history | v2.8.14 |
+| **Voice session context leak** | Old meeting context leaked into new meetings. `voice.resetForNewMeeting()` now called on `meeting.ended` — clears context queue + refreshes instructions | v2.8.14 |
+| **Empty Stage presentation** | `share_screen` without URL defaulted to empty `/stage`. Now uses pre-generated Stage HTML with iframe content baked in. Falls back to `render.html` for markdown files | v2.8.14 |

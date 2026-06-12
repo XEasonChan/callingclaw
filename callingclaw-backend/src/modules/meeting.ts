@@ -30,6 +30,10 @@ export class MeetingModule {
   private _openclawBridge: OpenClawBridge | null = null;
   private _meetingStartTime: number | null = null;
   private _extractionTimer: Timer | null = null;
+  private _maxRecordingTimer: Timer | null = null;
+  private _extracting = false;
+  private _extractionCount = 0;
+  private _lastExtractionHash = "";
   private _transcriptHandler: ((entry: any) => void) | null = null;
 
   constructor(context: SharedContext) {
@@ -46,9 +50,35 @@ export class MeetingModule {
    * Periodically extracts action items from the transcript.
    */
   startRecording() {
+    // Defensive cleanup: clear any residual state from a previous meeting
+    // (happens if previous join failed and stopRecording was never called)
+    if (this._extractionTimer) {
+      clearInterval(this._extractionTimer);
+      this._extractionTimer = null;
+    }
+    if (this._maxRecordingTimer) {
+      clearTimeout(this._maxRecordingTimer);
+      this._maxRecordingTimer = null;
+    }
+    if (this._transcriptHandler) {
+      this.context.off("transcript", this._transcriptHandler);
+      this._transcriptHandler = null;
+    }
+
     this._meetingStartTime = Date.now();
+
+    // Hard timeout: force-stop recording after 3 hours (safety net for stuck state)
+    this._maxRecordingTimer = setTimeout(() => {
+      if (this._meetingStartTime) {
+        console.error("[Meeting] Max recording duration (3h) reached — force-stopping");
+        this.stopRecording();
+      }
+    }, 3 * 60 * 60 * 1000);
     this._summaryCount = 0;
     this._lastSummaryHash = "";
+    this._extractionCount = 0;
+    this._lastExtractionHash = "";
+    this._extracting = false;
     console.log("[Meeting] Recording started");
 
     // Extract action items every 2 minutes
@@ -82,6 +112,9 @@ export class MeetingModule {
    */
   stopRecording() {
     if (this._extractionTimer) clearInterval(this._extractionTimer);
+    this._extractionTimer = null;
+    if (this._maxRecordingTimer) clearTimeout(this._maxRecordingTimer);
+    this._maxRecordingTimer = null;
     if (this._transcriptHandler) {
       this.context.off("transcript", this._transcriptHandler);
       this._transcriptHandler = null;
@@ -95,8 +128,37 @@ export class MeetingModule {
    * Falls back to direct LLM if OpenClaw unavailable.
    */
   async extractActionItems(): Promise<MeetingNote[]> {
+    // Guard: prevent concurrent extraction
+    if (this._extracting) {
+      console.warn("[Meeting] Extraction already in progress — skipping");
+      return [];
+    }
+    // Circuit breaker: max 5 extractions per meeting session
+    if (this._extractionCount >= 5) {
+      console.warn(`[Meeting] Extraction circuit breaker: ${this._extractionCount} extractions already — refusing`);
+      return [];
+    }
+
     const transcript = this.context.getTranscriptText(50);
     if (!transcript) return [];
+
+    // Minimum content threshold: skip near-empty meetings (just intro/ack)
+    const userEntries = (transcript.match(/^\[user\]/gm) || []).length;
+    if (userEntries < 3) {
+      console.warn(`[Meeting] Only ${userEntries} user entries — too few for extraction, skipping`);
+      return [];
+    }
+
+    // Idempotency: skip if transcript hasn't changed since last extraction
+    const hash = Bun.hash(transcript).toString(16);
+    if (hash === this._lastExtractionHash && this._extractionCount > 0) {
+      console.warn(`[Meeting] Transcript unchanged (hash ${hash}) — skipping duplicate extraction`);
+      return [];
+    }
+
+    this._extracting = true;
+    this._extractionCount++;
+    this._lastExtractionHash = hash;
 
     try {
       let text: string;
@@ -150,6 +212,8 @@ export class MeetingModule {
     } catch (e: any) {
       console.error("[Meeting] Extraction error:", e.message);
       return [];
+    } finally {
+      this._extracting = false;
     }
   }
 
@@ -173,6 +237,13 @@ export class MeetingModule {
     }
 
     const transcript = this.context.getConversationText(1000);
+
+    // Minimum content threshold: skip near-empty meetings
+    const userEntries = (transcript.match(/^\[user\]/gm) || []).length;
+    if (userEntries < 3) {
+      console.warn(`[Meeting] Only ${userEntries} user entries — too few for summary, skipping`);
+      return { title: "Meeting", duration: "unknown", participants: [], keyPoints: ["Skipped: insufficient content"], actionItems: [], decisions: [], followUps: [] };
+    }
 
     // Idempotency: skip if transcript hasn't changed
     const hash = Bun.hash(transcript).toString(16);
@@ -268,7 +339,7 @@ export class MeetingModule {
 
     // Build markdown content — conversation only (no tool/system noise)
     const transcript = this.context.getConversationText(1000);
-    const md = `# ${summary.title}
+    const md = `# ${summary.title || this._topic || "Meeting"}
 
 **Date:** ${now.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
 **Duration:** ${summary.duration}

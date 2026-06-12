@@ -61,6 +61,10 @@ export class VoiceModule {
   private _audioState: AudioState = "idle";
   private _audioStateTs: number = 0;
   private _presentationMode = false;
+  private _lastAudioOutputTs: number = 0;  // When AI last produced audio (for echo debounce)
+  private _responseDone = false;   // response.done received (generation complete)
+  private _audioDone = false;      // response.audio.done received (playback complete)
+  private _responseHadAudio = false; // did this response produce any audio.delta?
 
   // Response gate: serializes response.create. Concurrent creates (filler vs
   // tool completion vs presentSlide) made the provider reject with
@@ -117,11 +121,39 @@ export class VoiceModule {
   /** Voice path tracer for observability metrics */
   get tracer(): VoiceTracer { return this._tracer; }
 
+  /**
+   * Flush queued response.create only when BOTH conditions are met:
+   * 1. response.done received (generation complete)
+   * 2. response.audio.done received (audio fully sent to client)
+   *
+   * This prevents new responses from interrupting audio still being played.
+   * OpenAI's response.done fires BEFORE audio.done — if we flush on response.done
+   * alone, the new response cancels the still-playing audio mid-sentence.
+   */
+  private _tryFlushAfterComplete() {
+    if (this._responseDone && this._audioDone) {
+      // Both done — safe to start next response (audio was played)
+      this._responseDone = false;
+      this._audioDone = false;
+      this._responseHadAudio = false;
+      setTimeout(() => this.client.flushPendingResponse(), 500);
+    } else if (this._responseDone && !this._responseHadAudio) {
+      // Response done but NO audio was produced (text-only response, e.g., from sendText)
+      // Flush immediately — no audio to wait for
+      this._responseDone = false;
+      this._audioDone = false;
+      this._responseHadAudio = false;
+      this.client.flushPendingResponse();
+    }
+  }
+
   private _setAudioState(state: AudioState) {
     if (this._audioState !== state) {
       const prev = this._audioState;
       this._audioState = state;
       this._audioStateTs = Date.now();
+      // Sync speaking state to client for response.create queue management
+      this.client.setSpeaking(state === "speaking");
       console.log(`[Voice] Audio state: ${prev} → ${state}`);
     }
   }
@@ -188,6 +220,17 @@ export class VoiceModule {
 
     // ── Audio State + Interruption: User starts speaking ──
     this.client.on("input_audio_buffer.speech_started", () => {
+      // Echo debounce: ONLY suppress during active speaking or a brief tail after.
+      // P0 FIX: must check _audioState === "speaking" — without this check,
+      // real user speech within 1.5s of AI finishing gets blocked as "echo",
+      // breaking the entire conversation loop.
+      const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
+      const echoThresholdMs = this._presentationMode ? 2000 : 800;
+      if (this._audioState === "speaking" && msSinceLastOutput < echoThresholdMs) {
+        console.log(`[Voice] Echo debounce: speech_started ${msSinceLastOutput}ms after last audio output (threshold: ${echoThresholdMs}ms, state: speaking) — ignoring`);
+        return; // Skip this interruption — likely echo
+      }
+
       // Trace: mark interruption if AI was speaking, then start new turn
       if (this._audioState === "speaking") {
         this._tracer.mark('interruptionTime');
@@ -263,6 +306,10 @@ export class VoiceModule {
       this._responseActive = true;
       this._setAudioState("thinking");
       this._tracer.mark('modelFirstToken');
+      // Reset completion flags for new response
+      this._responseDone = false;
+      this._audioDone = false;
+      this._responseHadAudio = false;
       // Reset heard-transcript counters for new response
       this._currentResponseAudioSamples = 0;
       this._currentResponseStartTime = 0;
@@ -278,6 +325,11 @@ export class VoiceModule {
       this._currentResponseAudioSamples += samples;
       if (!this._currentResponseStartTime) this._currentResponseStartTime = Date.now();
 
+      // Track audio presence for flush logic (text-only responses have no audio.delta)
+      this._responseHadAudio = true;
+      // Track last audio output for echo debounce
+      this._lastAudioOutputTs = Date.now();
+
       // First audio chunk → transition to speaking
       if (this._audioState !== "speaking") {
         this._tracer.mark('modelFirstAudio');
@@ -291,6 +343,9 @@ export class VoiceModule {
       this._tracer.mark('ttsPlaybackEnd');
       this._tracer.endTurn();
       this._setAudioState("listening");
+      // Mark audio as done — flush only when BOTH audio.done AND response.done have fired
+      this._audioDone = true;
+      this._tryFlushAfterComplete();
     });
 
     this.client.on("response.done", (event: any) => {
@@ -315,6 +370,9 @@ export class VoiceModule {
           }
         }, 50);
       }
+      // Mark response generation as done — flush only when BOTH response.done AND audio.done
+      this._responseDone = true;
+      this._tryFlushAfterComplete();
     });
 
     // ── Live Transcript: User speech ──
@@ -410,22 +468,12 @@ export class VoiceModule {
           // 1. Submit tool result WITHOUT triggering response (backgroundResult)
           this.client.submitToolResultBackground(call_id, "ok");
 
-          // 2. Let the model generate a natural filler phrase ("让我查一下..." / "One moment...")
-          if (this.client.providerName === "gemini") {
-            // Gemini auto-responds to context; response.create is a no-op
-            this.client.injectContext(`[SYSTEM] You just started the "${name}" tool. Briefly acknowledge you're working on it, one short sentence.`);
-          } else {
-            // OpenAI / Grok: gated response.create with instructions for contextual filler
-            this._requestResponse({
-              response: {
-                instructions: `You just called the "${name}" tool. Briefly and naturally acknowledge you're working on it. One short sentence. Match the conversation language.`,
-              },
-            });
-          }
+          // 2. Silent inject filler context — NO response.create (方向A: never interrupt speech)
+          // The model will see this on its next turn (after current speech finishes or user speaks)
+          this.injectContext(`[WORKING] Running "${name}"...`);
 
-          // 3. Execute async — inject result when ready, then trigger model to continue.
-          // Result cap is 1500 chars: the old 200-char slice destroyed multi-line
-          // results like open_file's candidate list, breaking the retry loop.
+          // 3. Execute async — inject result when ready (1500-char cap: a 200-char
+          // slice destroyed multi-line results like open_file's candidate list).
           if (this.onToolCall) {
             this.onToolCall(name, args, call_id).then(async (result) => {
               const capped = result.length > 1500 ? result.slice(0, 1500) + "\n…(truncated)" : result;
@@ -582,6 +630,17 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
+   * Inject context with a fixed ID — replaces previous injection with the same ID.
+   * Used for page DOM context that should show only the LATEST state,
+   * not accumulate in the FIFO queue.
+   */
+  replaceContext(text: string, id: string): string | false {
+    if (!this.client.connected) return false;
+    this.client.removeContext(id);
+    return this.client.injectContext(text, id);
+  }
+
+  /**
    * Inject a screenshot into the voice model's conversation.
    * Provider-aware: openai15/gemini get actual images, others get text caption.
    *
@@ -623,12 +682,61 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
   }
 
   /**
-   * Send audio chunk from Python sidecar
+   * Reset session state for a new meeting.
+   * Clears all injected context and conversation history so the next meeting
+   * starts fresh. Does NOT disconnect — voice stays connected for continuity.
    */
-  sendAudio(base64Pcm: string) {
-    if (this.client.connected) {
-      this.client.sendAudio(base64Pcm);
+  resetForNewMeeting() {
+    // Clear all injected context items (Layer 2 + Layer 3)
+    this.client.clearContextQueue();
+    // Reset audio state tracking
+    this._currentResponseAudioSamples = 0;
+    this._currentResponseStartTime = 0;
+    this._currentResponseTranscript = "";
+    this._lastAudioOutputTs = 0;
+    this._presentationMode = false;
+    this._setAudioState("listening");
+    // Force a fresh session.update to reset server-side state
+    if (this.client.connected && this._lastInstructions) {
+      this.client.updateInstructions(this._lastInstructions);
+      console.log("[Voice] Session reset for new meeting (context cleared, instructions refreshed)");
     }
+  }
+
+  /**
+   * Send audio chunk from capture pipeline (Chrome WebSocket or Python sidecar).
+   * Server-side echo gate: drop audio when AI is speaking or just finished speaking.
+   * This prevents Zoom/Meet SFU echo from reaching the Realtime API's VAD,
+   * which would otherwise fire speech_started and cancel the AI response.
+   */
+  private _echoGateDropped = 0;
+  private _sendAudioLogCount = 0;
+  sendAudio(base64Pcm: string) {
+    if (++this._sendAudioLogCount % 200 === 1) {
+      console.log(`[Voice] sendAudio called #${this._sendAudioLogCount} (state=${this._audioState}, connected=${this.client.connected})`);
+    }
+    if (!this.client.connected) return;
+
+    // Echo gate: suppress audio input while AI is producing audio output.
+    // Google Meet has built-in echo cancellation → short gate (300ms).
+    // Zoom SFU echoes with 1-2s delay → needs longer gate.
+    // Gate ONLY during speaking state + brief tail. NOT during listening
+    // (that blocks real user speech and causes "no response" bug).
+    const msSinceLastOutput = Date.now() - this._lastAudioOutputTs;
+    if (this._audioState === "speaking" && msSinceLastOutput < 500) {
+      this._echoGateDropped++;
+      if (this._echoGateDropped === 1 || this._echoGateDropped % 500 === 0) {
+        console.log(`[Voice] Echo gate: dropped ${this._echoGateDropped} audio chunks (state=${this._audioState}, ${msSinceLastOutput}ms since output)`);
+      }
+      return;
+    }
+
+    // Gate cleared — reset counter and send audio
+    if (this._echoGateDropped > 0) {
+      console.log(`[Voice] Echo gate cleared after ${this._echoGateDropped} dropped chunks`);
+      this._echoGateDropped = 0;
+    }
+    this.client.sendAudio(base64Pcm);
   }
 
   /**
@@ -644,15 +752,13 @@ Speak naturally and concisely. When you perform actions, briefly narrate what yo
    * Unlike sendText() (role:"user" → AI responds TO it), this uses role:"system"
    * so the AI presents FROM the content in its own words.
    */
-  presentSlide(text: string) {
-    this.context.addTranscript({ role: "system", text: `[Slide] ${text.slice(0, 100)}...`, ts: Date.now() });
-    this.client.sendEvent("conversation.item.create", {
-      item: {
-        type: "message",
-        role: "system",
-        content: [{ type: "input_text", text: `[PRESENT NOW] Present this naturally in your own words. Stay close to the content, make it conversational:\n${text}` }],
-      },
-    });
+  presentSlide(text: string, sectionTitle?: string) {
+    this.context.addTranscript({ role: "system", text: `[Slide] ${(sectionTitle || text).slice(0, 100)}...`, ts: Date.now() });
+    // Use replaceContext with fixed ID — only one slide in context at a time (EXP-7C finding)
+    this.replaceContext(
+      `[PRESENT NOW] ${sectionTitle ? sectionTitle + "\n\n" : ""}${text}`,
+      "ctx_current_slide"
+    );
     this._requestResponse({});
   }
 

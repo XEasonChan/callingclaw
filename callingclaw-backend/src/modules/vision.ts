@@ -73,6 +73,25 @@ export class VisionModule {
       this.visionClient = new OpenAI({ apiKey: "dummy" });
       this.visionModel = CONFIG.vision.model;
     }
+
+    // TLS warmup: pre-establish connection to vision API endpoint
+    // First real call carries ~200KB image payload; cold TLS handshake adds 200-500ms.
+    // HEAD request caches the TLS session ticket so the first vision call is fast.
+    this._warmupTLS();
+  }
+
+  private _warmupTLS() {
+    const endpoints = [
+      CONFIG.openrouter.apiKey ? `${CONFIG.openrouter.baseUrl}/models` : null,
+      CONFIG.openai.apiKey ? "https://api.openai.com/v1/models" : null,
+    ].filter(Boolean) as string[];
+
+    for (const url of endpoints) {
+      fetch(url, { method: "HEAD" }).catch(() => {});
+    }
+    if (endpoints.length > 0) {
+      console.log(`[Vision] TLS warmup: ${endpoints.length} endpoint(s)`);
+    }
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -248,6 +267,10 @@ export class VisionModule {
       ? `Previous screen state: ${this._lastDescription.slice(0, 200)}`
       : "No previous screen state.";
 
+    // Context enrichment: extract meeting topic from recent transcript if visible
+    const topicMatch = recentTranscript.match(/主题[是为]「(.+?)」|topic.*?[":]\s*"?(.+?)[".\n]/i);
+    const topicLine = topicMatch ? `Meeting topic: ${topicMatch[1] || topicMatch[2]}` : "";
+
     const systemPrompt = meetingMode
         ? `You are analyzing a meeting screen capture. Focus on NEW and CHANGED content only.
 
@@ -258,6 +281,7 @@ Rules:
 - If just meeting grid (faces), say "Meeting grid view, no shared content"
 - 1-3 sentences maximum. Focus on WHAT'S DIFFERENT from previous state.
 - ${LANGUAGE_RULE}
+${topicLine ? `\n${topicLine}` : ""}
 
 ${prevDescription}
 
@@ -306,16 +330,22 @@ ${recentTranscript}`;
       if (CONFIG.openai.apiKey && this.visionModel !== "gpt-4o-mini") {
         try {
           const fallbackClient = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+          const fbSystem = meetingMode
+            ? "Describe what's on the meeting screen. Focus on shared/presented content. 1-3 sentences."
+            : "Describe what's on screen concisely. Focus on active app and visible content. 1-3 sentences.";
+          const fbUser = meetingMode
+            ? "What's currently shown on the meeting screen?"
+            : "Describe what's currently on screen.";
           const fallbackResp = await fallbackClient.chat.completions.create({
             model: "gpt-4o-mini",
             max_tokens: meetingMode ? 300 : 500,
             messages: [
-              { role: "system", content: systemPrompt },
+              { role: "system", content: fbSystem },
               {
                 role: "user",
                 content: [
                   { type: "image_url", image_url: { url: `data:image/jpeg;base64,${screenshot}`, detail: "low" } },
-                  { type: "text", text: userText },
+                  { type: "text", text: fbUser },
                 ],
               },
             ],

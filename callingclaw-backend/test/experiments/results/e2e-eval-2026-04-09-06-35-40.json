@@ -1,0 +1,52 @@
+{
+  "model": "2.9.1",
+  "results": [
+    {
+      "id": "CR-E2E-01",
+      "category": "context_recall",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 17342,
+      "toolsCalled": [],
+      "aiResponse": "这支个人视频的分镜脚本一共有23帧。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-02",
+      "category": "context_recall",
+      "score": 50,
+      "breakdown": {
+        "toolCorrect": false,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 100
+      },
+      "latencyMs": 15110,
+      "toolsCalled": [],
+      "aiResponse": "Pika 的定价是每月 19.99 美元，采用订阅制的云端服务，主要专注于视频生成。而我们的 CallingClaw 是一次性购买，价格同样是 19.99 美元，并且是本地运行的 Mac 应用，侧重于实时会议助手功能。两者的收费模式、运行方式和核心功能都有明显差异。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    },
+    {
+      "id": "CR-E2E-03",
+      "category": "context_recall",
+      "score": 63,
+      "breakdown": {
+        "toolCorrect": true,
+        "fileFound": true,
+        "contextQuality": 0,
+        "responseQuality": 50
+      },
+      "latencyMs": 15093,
+      "toolsCalled": [],
+      "aiResponse": "CallingClaw 的核心定位是一个本地运行的 Mac 会议智能助手，一次性购买即可拥有。它帮助用户在会议中实时记录、整理和跟进，强调隐私安全和流畅体验。",
+      "log": "[Voice] Tool call: search_files {\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: ~/Library/Mobile Documents/com~apple~CloudDocs/Ca\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)\n[Voice] Tool call: open_file {\n[Router] shortcuts → open_file (90%): \"open file: https://callingclaw.com\"\n[Voice] Slow tool open_file completed async → context injected (no response.create)"
+    }
+  ],
+  "avgScore": 54,
+  "duration": 48
+}

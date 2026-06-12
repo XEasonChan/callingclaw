@@ -2,12 +2,11 @@
 // Wraps existing OpenClawBridge + OC protocol into the AgentAdapter interface.
 // This preserves all existing behavior: Gateway WS, session management, cron jobs.
 
-import type { AgentAdapter, ScheduledJob } from "../agent-adapter";
+import { InternalJobScheduler, type AgentAdapter, type ScheduledJob } from "../agent-adapter";
 import type { OpenClawBridge } from "../openclaw_bridge";
 import {
   OC001_PROMPT, type OC001_Request,
   OC002_PROMPT, type OC002_Request,
-  OC003_PROMPT, parseOC003, type OC003_Request,
   OC004_PROMPT, type OC004_Request,
   OC005_PROMPT, type OC005_Request,
   OC006_PROMPT, type OC006_Request,
@@ -18,9 +17,11 @@ import { LANGUAGE_RULE } from "../prompt-constants";
 export class OpenClawAdapter implements AgentAdapter {
   readonly name = "openclaw" as const;
   private bridge: OpenClawBridge;
+  private scheduler: InternalJobScheduler;
 
-  constructor(bridge: OpenClawBridge) {
+  constructor(bridge: OpenClawBridge, onJobFire?: (job: ScheduledJob) => void) {
     this.bridge = bridge;
+    this.scheduler = new InternalJobScheduler(onJobFire || (() => {}));
   }
 
   get connected() { return this.bridge.connected; }
@@ -63,43 +64,20 @@ export class OpenClawAdapter implements AgentAdapter {
     return this.bridge.sendTask(instruction);
   }
 
-  // ── Scheduling (OpenClaw Cron — OC-003) ──
+  // ── Scheduling (InternalJobScheduler — reliable setTimeout + disk persistence) ──
+  // OC-003 cron was removed: LLM-in-the-scheduling-loop was fragile.
+  // Scheduling is deterministic and should never depend on an LLM.
 
   async scheduleJob(opts: {
     name: string;
     fireAt: Date;
     payload: { meetUrl: string; summary: string };
   }): Promise<string> {
-    const joinAtISO = opts.fireAt.toISOString();
-    const eventDescription = [
-      `Meeting starting soon — auto-join`,
-      ``,
-      `**Topic**: ${opts.payload.summary}`,
-      `**Meet link**: ${opts.payload.meetUrl}`,
-      ``,
-      `Steps to execute:`,
-      `1. Call CallingClaw API to join the meeting:`,
-      `   curl -s -X POST http://localhost:4000/api/meeting/join -H "Content-Type: application/json" -d '{"url": "${opts.payload.meetUrl}"}'`,
-      `2. After confirming join success, notify the user the meeting has started`,
-      `3. If join fails, inform the user and provide the Meet link for manual join`,
-    ].join("\n");
-
-    const req: OC003_Request = {
-      id: "OC-003",
-      cronName: opts.name,
-      joinAtISO,
-      eventSummary: opts.payload.summary,
-      eventDescription,
-    };
-
-    const response = await this.bridge.sendTask(OC003_PROMPT(req));
-    const { jobId } = parseOC003(response);
-    return jobId;
+    return this.scheduler.schedule(opts);
   }
 
-  async cancelJob(_jobId: string): Promise<void> {
-    // OpenClaw cron jobs are one-shot — no cancel API needed
-    // (they auto-clean after firing)
+  async cancelJob(jobId: string): Promise<void> {
+    this.scheduler.cancel(jobId);
   }
 
   // ── Post-Meeting Delivery (OpenClaw → Telegram) ──

@@ -26,6 +26,7 @@ import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion, pushContextUpdate } from "../voice-persona";
 import { callModel, parseJSON } from "../ai_gateway/llm-client";
 import { CONFIG } from "../config";
+import { PAGE_EXTRACT_JS, formatPageContext } from "../utils/page-extract";
 
 // ── Types ──
 
@@ -59,6 +60,7 @@ export class TranscriptAuditor {
   private chromeLauncher: any = null; // ChromeLauncher instance for presenting tab operations
   private voice: VoiceModule | null = null;
   private orchestrator: import("./action-orchestrator").ActionOrchestrator | null = null;
+  private agentAdapter: any = null; // AgentAdapter for research_task delegation
 
   private _active = false;
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -67,6 +69,8 @@ export class TranscriptAuditor {
   private _recentActions: string[] = []; // dedup ring buffer (last 5)
   private _lastExecutionTs = 0;
   private _fastLaneProcessing = false; // prevent concurrent fast lane executions
+  private _researchGeneration = 0; // incremented on deactivate() to cancel stale research callbacks
+  private _activeResearch = new Map<string, number>(); // in-flight research: normalized query → taskId timestamp
 
   // ── Tuning knobs ──
   private DEBOUNCE_MS = 1200;         // Wait 1.2s after last user utterance (was 2.5s, reduced for meeting responsiveness)
@@ -74,7 +78,7 @@ export class TranscriptAuditor {
   private CONFIDENCE_AUTO = 0.85;     // Auto-execute threshold
   private CONFIDENCE_SUGGEST = 0.6;   // Suggest to Voice AI threshold
   private WINDOW_ENTRIES = 15;        // Transcript entries to analyze
-  private COOLDOWN_MS = 5000;         // Min gap between executions
+  private COOLDOWN_MS = 3000;          // Short cooldown (3s) to batch rapid speech. Dedup relies on ring buffer, not this timer.
 
   constructor(opts: {
     context: SharedContext;
@@ -85,6 +89,7 @@ export class TranscriptAuditor {
     meetJoiner: MeetJoiner;
     chromeLauncher?: any;
     orchestrator?: import("./action-orchestrator").ActionOrchestrator;
+    agentAdapter?: any;
   }) {
     this.context = opts.context;
     this.eventBus = opts.eventBus;
@@ -94,6 +99,7 @@ export class TranscriptAuditor {
     this.meetJoiner = opts.meetJoiner;
     this.chromeLauncher = opts.chromeLauncher || null;
     this.orchestrator = opts.orchestrator || null;
+    this.agentAdapter = opts.agentAdapter || null;
   }
 
   get active() {
@@ -165,8 +171,10 @@ export class TranscriptAuditor {
     this.context.off("transcript", this._onTranscript);
     this.eventBus.off("voice.tool_call", this._onVoiceToolCall);
     this.automationRouter.fileIndex.clear();
+    this._researchGeneration++; // Cancel any in-flight research callbacks from this meeting
+    this._activeResearch.clear();
     this.voice = null;
-    console.log("[TranscriptAuditor] Deactivated");
+    console.log("[TranscriptAuditor] Deactivated (research gen: ${this._researchGeneration})");
     this.eventBus.emit("auditor.deactivated", {});
   }
 
@@ -179,8 +187,9 @@ export class TranscriptAuditor {
       this._recentActions.push(key);
       if (this._recentActions.length > 5) this._recentActions.shift();
     }
-    this._lastExecutionTs = Date.now();
-    console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool}, suppressing auditor for ${this.COOLDOWN_MS}ms`);
+    // Don't set global cooldown here — ring buffer handles dedup for same actions.
+    // Global cooldown would block DIFFERENT actions (e.g., "open PRD" → "open Pika")
+    console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool} — added to ring buffer`);
   };
 
   private _onTranscript = (entry: TranscriptEntry) => {
@@ -220,8 +229,18 @@ export class TranscriptAuditor {
 
     // Action-level dedup (not utterance-level — a single utterance can trigger
     // both fast lane action AND slow lane retrieval)
+    // Scroll actions are repeatable — "scroll down" x3 means scroll 3 times.
+    // Only dedup non-repeatable actions (share_screen, navigate, etc.)
+    // Scroll/click are repeatable — "scroll down" x3 means scroll 3 times.
+    // Only dedup non-repeatable actions (share_screen, navigate, etc.)
+    const isRepeatableAction = intent.action.startsWith("scroll") || intent.action === "browser_click";
     const actionKey = `${intent.action}:${JSON.stringify(intent.params)}`;
-    if (this._recentActions.includes(actionKey)) return;
+    if (!isRepeatableAction && this._recentActions.includes(actionKey)) {
+      console.log(`[TranscriptAuditor] Skipping duplicate: ${actionKey}`);
+      return;
+    }
+    // For repeatable actions, enforce a 2s cooldown to prevent STT chunk duplication
+    if (isRepeatableAction && Date.now() - this._lastExecutionTs < 2000) return;
 
     this._fastLaneProcessing = true;
     const startTs = Date.now();
@@ -264,9 +283,9 @@ export class TranscriptAuditor {
           : await runRouter();
 
         if (!summary.startsWith("Error:") && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
-          // speak: auditor actions have no other narration path — the user
-          // otherwise stares at a changed screen with a silent assistant
-          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, summary, this.eventBus, { speak: true });
+          // 方向A: silent injection only — the model picks up the [DONE] note on
+          // its next natural turn instead of interrupting mid-sentence
+          notifyTaskCompletion(this.voice, this.meetingPrepSkill, text, summary, this.eventBus);
         }
       }
 
@@ -307,9 +326,10 @@ export class TranscriptAuditor {
 
       if (!result.action) return; // No actionable intent
 
-      // Dedup: skip if we just did this exact action
+      // Dedup: skip if we just did this exact action (repeatable actions exempt)
       const actionKey = `${result.action}:${JSON.stringify(result.params)}`;
-      if (this._recentActions.includes(actionKey)) {
+      const isRepeatable = result.action?.startsWith("scroll") || result.action === "browser_click";
+      if (!isRepeatable && this._recentActions.includes(actionKey)) {
         console.log(`[TranscriptAuditor] Skipping duplicate: ${actionKey}`);
         return;
       }
@@ -360,17 +380,30 @@ export class TranscriptAuditor {
       )
       .join("\n");
 
+    // Context enrichment: give Haiku full picture (screen + prep + recent actions)
+    const screenDesc = this.context?.screen?.description || "";
+    const pageUrl = this.context?.screen?.url || "";
+    const recentActions = this._dedupRing?.slice(-3).map((d: string) => d.split(":")[0]).join(", ") || "";
+    const prepTopic = brief?.topic || "";
+    const enrichment = [
+      screenDesc ? `[Current screen: ${screenDesc.slice(0, 120)}]` : "",
+      pageUrl ? `[Page URL: ${pageUrl}]` : "",
+      recentActions ? `[Recent actions: ${recentActions}]` : "",
+      prepTopic ? `[Meeting topic: ${prepTopic}]` : "",
+    ].filter(Boolean).join("\n");
+    const enrichedTranscript = enrichment ? `${enrichment}\n\n${transcriptText}` : transcriptText;
+
     const prompt = `You are CallingClaw's meeting agent — a fast background assistant. You monitor the conversation and execute actions when the voice AI or participants request something.
 
 ## Your Tools (choose the RIGHT one)
 
 ### File & URL Tools
-- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone says "打开那个XX文件" / "show me the XX" / "open the XX page" but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
+- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone asks to open/show/find a file but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
 - **open_url**: Open an exact URL. Use when a full URL is mentioned. Params: { "url": "https://..." }
 - **open_file**: Open a file by exact path. Only use if you know the full path. Params: { "path": "/abs/path", "app": "browser"|"vscode" }
 
 ### Screen Sharing Tools
-- **share_url**: Open a URL and present it in the meeting (投屏). Params: { "url": "https://..." }
+- **share_url**: Open a URL and present it in the meeting (screen share). Params: { "url": "https://..." }
 - **share_file**: Search for a file and present it in the meeting. Params: { "query": "keywords" }
 - **stop_sharing**: Stop presenting. Params: {}
 
@@ -383,6 +416,18 @@ export class TranscriptAuditor {
 - **share_screen**: Start sharing (no URL = entire screen). Params: {}
 - **meet_mute**: Toggle mute. Params: {}
 - **meet_camera**: Toggle camera. Params: {}
+
+### Research Tools (background, 10-30s)
+- **research_task**: Delegate web/deep research to the background agent. Params: { "query": "what to research" }
+  USE research_task for:
+    - "search X/Twitter for Y" (external web search)
+    - "what are people saying about Z" (public opinion)
+    - "research competitors of W" (market research)
+    - "find recent news about Q" (current events)
+  DO NOT use research_task for:
+    - "what did we discuss about X" → this is recall_context (internal memory)
+    - "look up in our files" → this is search_and_open (local files)
+    - "what was the decision on Y" → this is recall_context (meeting history)
 
 ## Known Files & URLs (from meeting prep)
 ${
@@ -424,17 +469,18 @@ ${(() => {
   return bc ? `Active page: ${bc.title} (${bc.url})` : "";
 })()}
 
-## Transcript (most recent at bottom)
-${transcriptText}
+## Transcript (most recent at bottom, with current screen + action context)
+${enrichedTranscript}
 
 ## When to Act
-1. Someone says "打开/open/show/展示/投屏/看看/找到" + a thing → ACT (search_and_open, share_file, open_url)
+1. Someone asks to open, show, display, share screen, or find something → ACT (search_and_open, share_file, open_url)
 2. Someone says "点击/click/登录/login/下一步/next" → ACT (click on presenting tab)
 3. Someone says "往下/scroll down/翻页" → ACT (scroll)
 4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
-5. Discussion/opinion ("我觉得.../this should be.../下次需要...") → DO NOT ACT, confidence=0
+5. Discussion/opinion (expressing views, suggestions for future) → DO NOT ACT, confidence=0
 6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
 7. **ALREADY HANDLED**: If you see [Tool Call] or [Tool Result] in the transcript for the same action → DO NOT ACT, confidence=0. The voice AI already executed it.
+8. **When in doubt, don't act.** A bad action (clicking the wrong thing, opening the wrong file) is worse than a missed action. Only act when you're confident the user wants something done.
 
 ## STT Name Aliases (speech-to-text often mangles these)
 The transcription is from live STT, which frequently misspells proper nouns. Treat these as equivalent:
@@ -552,13 +598,18 @@ Respond with JSON only:
       return `not_found: "${userIntent}" — ${elements.length} clickable elements checked`;
     }
 
-    // Step 3: Click by index — guaranteed correct target
+    // Step 3: Click by index with cursor animation — guaranteed correct target
     const target = elements[clickIndex]!;
-    const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(() => {
+    const clickResult = await this.chromeLauncher.evaluateOnPresentingPage(`(async () => {
       var els = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"], [onclick]'));
       var el = els[${clickIndex}];
-      if (el) { el.click(); return 'clicked:' + (el.textContent || '').trim().substring(0, 40); }
-      return 'not_found: index out of range';
+      if (!el) return 'not_found: index out of range';
+      el.scrollIntoView({ behavior: 'instant', block: 'center' });
+      var rect = el.getBoundingClientRect();
+      var x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+      if (window.__ccCursor) { await window.__ccCursor.flyTo(x, y); window.__ccCursor.ripple(x, y); }
+      el.click();
+      return 'clicked:' + (el.textContent || '').trim().substring(0, 40);
     })()`);
 
     console.log(`[Auditor] Click resolved: "${userIntent}" → #${clickIndex + 1} [${target.tag}] "${target.text}" → ${clickResult}`);
@@ -592,6 +643,10 @@ Respond with JSON only:
           console.log(`[Auditor] Searching for file: "${query}"`);
           const searchResult = await this.automationRouter.execute(`open file: ${query}`);
           executionResult = searchResult.success ? searchResult.result : `File not found: "${query}"`;
+          // Register found file as a stage document (avoids re-searching next time)
+          if (searchResult.success && searchResult.filePath) {
+            this.context.addStageDocument(searchResult.filePath, "new");
+          }
           break;
         }
 
@@ -633,11 +688,21 @@ Respond with JSON only:
         }
 
         case "open_url": {
-          instruction = `open ${params.url} in browser`;
-          const r = await this.automationRouter.execute(instruction);
-          executionResult = r.success
-            ? r.result
-            : `Router failed: ${r.result}`;
+          const openUrl = params.url || "";
+          instruction = `open ${openUrl} in browser`;
+          // Prefer Playwright Chrome (same window as Meet) over system browser
+          try {
+            const resp = await fetch("http://localhost:4000/api/screen/share", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: openUrl }),
+            });
+            const data = await resp.json() as any;
+            executionResult = data.success ? `Opened ${openUrl}` : `Share failed: ${data.message}`;
+          } catch (e: any) {
+            // Fallback: system browser
+            const r = await this.automationRouter.execute(instruction);
+            executionResult = r.success ? r.result : `Router failed: ${r.result}`;
+          }
           break;
         }
 
@@ -719,6 +784,105 @@ Respond with JSON only:
             executionResult = "No active meeting page";
           }
           break;
+        }
+
+        // ── Research delegation (background, async) ──
+        // Codex findings #1-16: full production-safe implementation
+        case "research_task": {
+          const query = params.query || "";
+          if (!query) { executionResult = "No research query provided"; break; }
+
+          const taskId = `research_${Date.now()}`;
+          const normalizedQuery = query.toLowerCase().split(/\s+/).slice(0, 5).join(" ");
+
+          // #6: Agent disconnected → emit proper research events, not generic done
+          if (!this.agentAdapter?.connected) {
+            this.eventBus.emit("research.started", { taskId, query });
+            this.eventBus.emit("research.completed", { taskId, query, error: "No agent connected" });
+            executionResult = "No agent available for research";
+            // #12: Don't push to dedup ring on failure
+            return; // #1: Early return — skip generic post-switch done path
+          }
+
+          // #11: In-flight guard — prevent duplicate research
+          for (const [existingQuery, ts] of this._activeResearch) {
+            if (existingQuery === normalizedQuery && Date.now() - ts < 120000) {
+              executionResult = `Research already running: "${query}"`;
+              return; // Skip generic done path
+            }
+          }
+          this._activeResearch.set(normalizedQuery, Date.now());
+
+          // Capture generation for stale callback detection (#4)
+          const gen = this._researchGeneration;
+
+          // 1. Emit started → S2 panel shows task card
+          this.eventBus.emit("research.started", { taskId, query });
+
+          // 2. Tell voice AI (non-blocking)
+          if (this.voice?.connected) {
+            this.voice.injectContext(`[RESEARCH_STARTED] Searching: ${query}`);
+          }
+
+          // 3. Delegate to slow brain (fire-and-forget, don't block the auditor)
+          this.agentAdapter.executeTask(
+            `Search the web for: "${query}". Find relevant posts, articles, or discussions. ` +
+            `Summarize the top 3-5 findings with key opinions and sources. Be concise.`
+          ).then(async (result: string) => {
+            // #4: Check generation — if meeting changed, discard stale result
+            if (gen !== this._researchGeneration) {
+              console.log(`[Auditor] Research result discarded (stale, gen ${gen} vs ${this._researchGeneration})`);
+              return;
+            }
+            this._activeResearch.delete(normalizedQuery);
+
+            // #5: Check for error/timeout patterns in result string
+            const ERROR_PATTERNS = /timed out|no external agent|failed|error:|unavailable|billing error/i;
+            if (ERROR_PATTERNS.test(result) && result.length < 200) {
+              if (this.voice?.connected) {
+                this.voice.injectContext(`[RESEARCH] Search for "${query}" returned an error: ${result.slice(0, 200)}`);
+              }
+              this.eventBus.emit("research.completed", { taskId, query, error: result.slice(0, 200) });
+              console.warn(`[Auditor] Research error detected: "${query}" → ${result.slice(0, 100)}`);
+              return;
+            }
+
+            // 4. Save as Working Document
+            const filePath = `${process.env.HOME}/.callingclaw/shared/research-${Date.now()}.md`;
+            await Bun.write(filePath, `# Research: ${query}\n\n${result}`);
+            this.context.addStageDocument(filePath, "new");
+            // #7: Emit EventBus event so Stage WS listener picks up the new doc
+            this.eventBus.emit("stage.documents_updated", { filePath, badge: "new" });
+
+            // #15: Use replaceContext with fixed ID — don't accumulate in FIFO
+            if (this.voice?.connected) {
+              this.voice.replaceContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`, "ctx_research_result");
+              // #2/#3: Don't force response.create — queue it, only flush when voice is idle
+              if (this.voice.audioState === "listening") {
+                this.voice.client.sendEvent("response.create", {});
+              } else {
+                this.voice.client.queuePendingResponse();
+              }
+            }
+
+            // 6. Emit completed → S2 shows ✅
+            this.eventBus.emit("research.completed", {
+              taskId, query, filePath,
+              resultPreview: result.slice(0, 200),
+            });
+            console.log(`[Auditor] Research completed: "${query}" → ${filePath}`);
+          }).catch((err: any) => {
+            if (gen !== this._researchGeneration) return; // #4: Stale
+            this._activeResearch.delete(normalizedQuery);
+            if (this.voice?.connected) {
+              this.voice.injectContext(`[RESEARCH] Search for "${query}" failed: ${err.message}`);
+            }
+            this.eventBus.emit("research.completed", { taskId, query, error: err.message });
+            console.error(`[Auditor] Research failed: "${query}"`, err.message);
+          });
+
+          // #1: Return early — do NOT fall through to generic post-switch done path
+          return;
         }
 
         case "click": {
@@ -849,19 +1013,42 @@ Respond with JSON only:
         source: "transcript_auditor",
       });
 
-      // Push completion to Voice AI as a live note
-      if (
-        this.voice?.connected &&
-        this.meetingPrepSkill.currentBrief
-      ) {
-        notifyTaskCompletion(
-          this.voice,
-          this.meetingPrepSkill,
-          instruction,
-          executionResult,
-          this.eventBus,
-          { speak: true } // auditor-originated: no other narration path
-        );
+      // ── Close the loop: inject result + DOM context → trigger voice to continue ──
+      if (this.voice?.connected) {
+        // 1. Push completion as live note (existing behavior)
+        if (this.meetingPrepSkill.currentBrief) {
+          notifyTaskCompletion(
+            this.voice,
+            this.meetingPrepSkill,
+            instruction,
+            executionResult,
+            this.eventBus
+          );
+        } else {
+          // No prep brief — inject directly
+          this.voice.injectContext(`[DONE] ${action}: ${executionResult}`);
+        }
+
+        // 2. For visual actions: re-extract DOM and inject page context
+        const visualActions = new Set(["click", "scroll", "navigate", "share_url", "share_file", "share_screen", "open_url"]);
+        if (action && visualActions.has(action) && this.chromeLauncher?.presentingPage) {
+          try {
+            await new Promise(r => setTimeout(r, 500)); // wait for page settle
+            const raw = await this.chromeLauncher.evaluateOnPresentingPage(PAGE_EXTRACT_JS);
+            const pageCtx = formatPageContext(raw);
+            if (pageCtx) {
+              this.voice.injectContext(pageCtx);
+              console.log(`[TranscriptAuditor] DOM context injected after ${action} (${pageCtx.length} chars)`);
+            }
+          } catch (e: any) {
+            console.warn(`[TranscriptAuditor] DOM extract failed after ${action}: ${e.message}`);
+          }
+        }
+
+        // 3. Context already injected above (silent). NO response.create.
+        // Model sees [DONE] + [PAGE] on next natural turn (user speech or presenter advance).
+        // This prevents background actions from interrupting AI mid-sentence.
+        console.log(`[TranscriptAuditor] Action done → context injected silently (no response.create)`);
       }
 
       console.log(

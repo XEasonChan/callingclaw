@@ -1,0 +1,3705 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CallingClaw is a local-first architecture for multimodal meeting intelligence agents. Give your agent a seat, a voice, and computer access.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="../Assests/logo.png">
+  <title>CallingClaw — AI That Joins Your Meetings</title>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="CallingClaw — AI That Joins Your Meetings">
+  <meta property="og:description" content="Give your agent a calendar, a voice, and computer access. CallingClaw joins video calls with full memory of your work — ready to discuss, present, and act.">
+  <meta property="og:type" content="website">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- GSAP + ScrollTrigger + Lenis for smooth scroll animations -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+
+  <style>
+    /* ── Design Tokens — Warm Parchment Palette (synced with React DESIGN.md) ── */
+    :root {
+      --bg: #f5f4ed;
+      --bg-subtle: #faf9f5;
+      --surface: #ffffff;
+      --surface-elevated: #ffffff;
+      --moss: #141413;
+      --text: #141413;
+      --text-secondary: #5e5d59;
+      --text-tertiary: #87867f;
+      --accent: #DC4A3A;
+      --accent-hover: #c43d2e;
+      --accent-light: rgba(220, 74, 58, 0.08);
+      --accent-glow: rgba(220, 74, 58, 0.12);
+      --accent-pale: #FFD6D1;
+      --coral: #e85d4c;
+      --success: #4aa682;
+      --success-light: #e6f4ee;
+      --danger: #b53333;
+      --border: #f0eee6;
+      --border-light: #e8e6dc;
+      --suited-black: #141413;
+      --warm-sand: #e8e6dc;
+      --charcoal: #4d4c48;
+
+      --font-display: "Fraunces", Georgia, serif;
+      --font-body: "Inter", -apple-system, system-ui, sans-serif;
+      --font-mono: "Geist Mono", ui-monospace, monospace;
+
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-expo: cubic-bezier(0.19, 1, 0.22, 1);
+      --duration: 300ms;
+      --duration-slow: 500ms;
+
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-md: 0 4px 24px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
+      --shadow-accent: 0 2px 12px rgba(201, 100, 66, 0.15);
+    }
+
+    /* ── Dark Theme ──────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg: #141413;
+      --bg-subtle: #1c1c1a;
+      --surface: #242422;
+      --surface-elevated: #30302e;
+      --moss: #141413;
+      --text: #e8e6dc;
+      --text-secondary: #b0aea5;
+      --text-tertiary: #87867f;
+      --accent: #e85d4c;
+      --accent-hover: #f07a6b;
+      --accent-light: rgba(232, 93, 76, 0.12);
+      --accent-glow: rgba(232, 93, 76, 0.15);
+      --accent-pale: #3d2220;
+      --coral: #f07a6b;
+      --success: #6bb39a;
+      --success-light: rgba(107, 179, 154, 0.12);
+      --danger: #d94444;
+      --border: #30302e;
+      --border-light: #242422;
+      --suited-black: #141413;
+      --warm-sand: #3d3d3a;
+      --charcoal: #b0aea5;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    /* ── Reset ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ───────────────────────────────────────────── */
+    html {
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    html.lenis, html.lenis body {
+      height: auto;
+    }
+
+    .lenis.lenis-smooth {
+      scroll-behavior: auto !important;
+    }
+
+    .lenis.lenis-smooth [data-lenis-prevent] {
+      overscroll-behavior: contain;
+    }
+
+    .lenis.lenis-stopped {
+      overflow: hidden;
+    }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+      transition: background var(--duration) ease, color var(--duration) ease;
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* ── Typography ─────────────────────────────────────── */
+    h1, h2, h3, h4 {
+      font-family: var(--font-display);
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    h1 { font-size: clamp(2.5rem, 5vw, 3.5rem); font-weight: 500; letter-spacing: -0.02em; }
+    h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); letter-spacing: -0.02em; }
+    h3 { font-size: clamp(1.125rem, 2vw, 1.375rem); }
+    h4 { font-size: 1rem; font-weight: 600; }
+
+    p { color: var(--text-secondary); max-width: 60ch; }
+
+    /* Section subtitle — same max-width as container content (1004px) */
+    .section-subtitle {
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 640px;
+      margin-inline: auto;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color var(--duration) var(--ease-out);
+    }
+    a:hover { color: var(--accent-hover); }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .container {
+      max-width: 1100px;
+      margin-inline: auto;
+      padding-inline: clamp(1.5rem, 5vw, 3rem);
+    }
+
+    section {
+      padding-block: clamp(3rem, 8vw, 6rem);
+    }
+
+    /* ── Nav — Floating Pill ──────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: center;
+      background: transparent;
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(20, 20, 19, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      padding: 0.5rem 0.75rem 0.5rem 1rem;
+      max-width: 860px;
+      width: 100%;
+      gap: 0.25rem;
+    }
+
+    [data-theme="dark"] nav .container {
+      background: rgba(245, 244, 237, 0.92);
+      border-color: rgba(20, 20, 19, 0.06);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] .logo {
+      color: #141413;
+    }
+
+    [data-theme="dark"] .nav-links a {
+      color: rgba(20, 20, 19, 0.5);
+    }
+
+    [data-theme="dark"] .nav-links a:hover {
+      color: #141413;
+      background: rgba(20, 20, 19, 0.04);
+    }
+
+    [data-theme="dark"] .theme-toggle {
+      background: rgba(20, 20, 19, 0.05);
+      border-color: rgba(20, 20, 19, 0.1);
+    }
+
+    [data-theme="dark"] .theme-toggle:hover {
+      background: rgba(20, 20, 19, 0.1);
+    }
+
+    [data-theme="dark"] .theme-toggle svg {
+      color: rgba(20, 20, 19, 0.5);
+    }
+
+    [data-theme="dark"] .theme-toggle:hover svg {
+      color: #141413;
+    }
+
+    .logo {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+      color: #faf9f5;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    [data-theme="dark"] .logo {
+      color: #faf9f5;
+    }
+
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .claw-icon {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      vertical-align: middle;
+    }
+
+    .claw-icon-sm {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+      vertical-align: middle;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      font-family: var(--font-body);
+      color: rgba(255, 255, 255, 0.55);
+      padding: 0.375rem 0.75rem;
+      border-radius: 100px;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .nav-links a:hover {
+      color: #faf9f5;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* dark mode nav link overrides are in the dark nav block above */
+
+    /* ── Theme Toggle ────────────────────────────────── */
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+      color: rgba(255, 255, 255, 0.6);
+      transition: color var(--duration) var(--ease-out);
+    }
+
+    .theme-toggle:hover svg {
+      color: #faf9f5;
+    }
+
+    /* Show sun in dark mode, moon in light mode */
+    [data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    [data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+    /* ── Buttons ──────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 100px;
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all var(--duration) var(--ease-out);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      box-shadow: 0 2px 12px rgba(220, 74, 58, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      color: #ffffff;
+      transform: scale(1.02);
+      box-shadow: 0 4px 20px rgba(220, 74, 58, 0.35);
+    }
+
+    .btn-secondary {
+      background: var(--suited-black);
+      color: #b0aea5;
+      border: none;
+    }
+
+    .btn-secondary:hover {
+      background: var(--suited-black);
+      color: #e8e6dc;
+      transform: scale(1.02);
+    }
+
+    /* ── Hero Section ─────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding-top: clamp(5rem, 12vw, 8rem);
+      padding-bottom: 2rem;
+      overflow: visible;
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    /* ── Hero Etheral Shadow Background ─────────────── */
+    .hero-noise-canvas {
+      display: none; /* replaced by etheral shadow */
+    }
+
+    .hero-shadow-bg {
+      display: none; /* replaced by flickering grid */
+    }
+
+    /* ── Flickering Grid Background (ported from React) ── */
+    .flickering-grid-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .flickering-grid-wrap canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .flickering-grid-base {
+      -webkit-mask-image: radial-gradient(1000px circle at center, white, transparent);
+      mask-image: radial-gradient(1000px circle at center, white, transparent);
+    }
+
+    .flickering-grid-glow {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .flickering-grid-glow canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .flickering-grid-glow.active {
+      opacity: 1;
+    }
+
+
+    .hero .container,
+    .hero .hero-image-wrapper {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero h1 {
+      font-size: clamp(3rem, 7vw, 5rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      max-width: 20ch;
+      margin-inline: auto;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero h1 .gradient {
+      color: var(--accent);
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+      line-height: 1.6;
+      max-width: 640px;
+      margin-inline: auto;
+      margin-bottom: 2.5rem;
+      color: var(--text-secondary);
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 3rem;
+    }
+
+    .hero-actions .btn {
+      min-width: 220px;
+    }
+
+    /* Hero Image with GSAP ScrollTrigger Animation */
+    .hero-image-wrapper {
+      position: relative;
+      width: 100%;
+      overflow: visible;
+    }
+
+    /* Pin spacer container - GSAP will pin within this */
+    .hero-pin-spacer {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: visible;
+    }
+
+    .hero-image-container {
+      position: relative;
+      width: 100vw;
+      margin-inline: auto;
+      overflow: hidden;
+      border-radius: 16px;
+      /* Start scaled down, GSAP animates scale→1 (GPU-only, no layout reflow) */
+      will-change: transform, border-radius;
+    }
+
+    .hero-image {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: cover;
+      border-radius: inherit;
+    }
+
+    /* Demo Panel Overlay — YouTube embed container */
+    .hero-demo-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, 100%);
+      width: min(calc(100vw - 3rem), 960px);
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      z-index: 10;
+      will-change: transform, opacity;
+      background: #000;
+    }
+
+    .hero-demo-panel .yt-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+    }
+
+    .hero-demo-panel .yt-wrap iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    /* Transparent overlay — blocks iframe scroll-swallowing during GSAP scrub */
+    .hero-demo-panel .yt-scroll-guard {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      cursor: pointer;
+    }
+
+    .hero-demo-panel .yt-scroll-guard.inactive {
+      display: none;
+    }
+
+    /* ── Mobile: YouTube play button on hero image ── */
+    .hero-yt-play {
+      display: none; /* shown via JS on mobile */
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      width: 56px;
+      height: 40px;
+      background: #ff0000;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .hero-yt-play:hover { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4); }
+    .hero-yt-play::after {
+      content: "";
+      position: absolute;
+      top: 50%; left: 54%;
+      transform: translate(-50%, -50%);
+      border-style: solid;
+      border-width: 8px 0 8px 14px;
+      border-color: transparent transparent transparent white;
+    }
+
+    /* Fullscreen YouTube modal */
+    .yt-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.92);
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .yt-modal.open { display: flex; }
+    .yt-modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      font-size: 1.25rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+    .yt-modal-body {
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .yt-modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    /* ── Meeting Harness Section ─────────────────────── */
+    .meeting-harness {
+      text-align: center;
+      background: var(--bg-subtle);
+      position: relative;
+      z-index: 2; /* Above hero image overflow */
+    }
+
+    .meeting-harness h2 {
+      margin-bottom: 0.75rem;
+    }
+
+    .meeting-harness h2 .underline {
+      text-decoration: underline;
+      text-decoration-color: var(--accent);
+      text-underline-offset: 4px;
+    }
+
+    .meeting-harness-subtitle {
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 640px;
+      margin-inline: auto;
+      margin-bottom: 1.75rem;
+      color: var(--text-secondary);
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 100px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .badge svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .badge.accent {
+      background: var(--accent-light);
+      border-color: transparent;
+      color: var(--accent);
+    }
+
+    .capability-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .capability-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      opacity: 0.85;
+    }
+
+    .capability-tag .cap-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      color: var(--text-secondary);
+    }
+
+    .capability-tag .cap-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Bandwidth Section ────────────────────────────── */
+    .bandwidth {
+      padding-block: clamp(3rem, 8vw, 5rem);
+      background: var(--bg);
+      position: relative;
+      z-index: 2;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 800px;
+    }
+
+    .bandwidth-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .bandwidth-header h2 {
+      margin-bottom: 1rem;
+    }
+
+    .bandwidth-header h2 .highlight {
+      color: var(--accent);
+      text-decoration: underline;
+      text-decoration-color: var(--accent);
+      text-decoration-thickness: 3px;
+      text-underline-offset: 4px;
+    }
+
+    .bandwidth-header p {
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 640px;
+      margin-inline: auto;
+      color: var(--text-secondary);
+    }
+
+    .bandwidth-content {
+      display: grid;
+      grid-template-columns: 0.8fr 1.4fr;
+      gap: 1.5rem;
+      align-items: stretch;
+    }
+
+    /* Speed Comparison Cards (Wispr Flow style) */
+    .speed-comparison {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
+    }
+
+    .bandwidth-content.visible .speed-comparison {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .speed-card {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .speed-card:first-child {
+      border-radius: 16px 16px 0 0;
+      border-bottom: none;
+    }
+
+    .speed-card:last-child {
+      border-radius: 0 0 16px 16px;
+      flex: 1;
+    }
+
+    .speed-card-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .speed-card-value {
+      font-size: 2.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .speed-card-text {
+      font-size: 0.9375rem;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      flex: 1;
+    }
+
+    .speed-card.voice {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .speed-card.voice .speed-card-label {
+      color: rgba(255,255,255,0.8);
+    }
+
+    .speed-card.voice .speed-card-value {
+      color: white;
+    }
+
+    .speed-card.voice .speed-card-text {
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* Attachment Tags in Speed Card */
+    .speed-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .speed-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.625rem;
+      background: rgba(255,255,255,0.15);
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: rgba(255,255,255,0.9);
+      backdrop-filter: blur(4px);
+    }
+
+    .speed-attachment-icon {
+      display: inline-flex;
+      align-items: center;
+      width: 12px;
+      height: 12px;
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* Bandwidth Image Container */
+    .bandwidth-image-container {
+      position: relative;
+      opacity: 0;
+      transform: translateX(40px);
+      transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out);
+      display: flex;
+      align-items: stretch;
+    }
+
+    .bandwidth-image-container.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .bandwidth-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Voice Wave Indicator */
+    .voice-wave-indicator {
+      position: absolute;
+      top: 40%;
+      right: 15%;
+      background: rgba(66, 154, 255, 0.5);
+      border-radius: 24px;
+      padding: 0.5rem 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.5s var(--ease-out) 0.5s, transform 0.5s var(--ease-out) 0.5s;
+    }
+
+    .bandwidth-image-container.visible .voice-wave-indicator {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .voice-wave {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 20px;
+    }
+
+    .voice-wave-bar {
+      width: 3px;
+      background: white;
+      border-radius: 2px;
+      animation: voiceWave 0.8s ease-in-out infinite;
+    }
+
+    .voice-wave-bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+    .voice-wave-bar:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+    .voice-wave-bar:nth-child(3) { height: 12px; animation-delay: 0.2s; }
+    .voice-wave-bar:nth-child(4) { height: 18px; animation-delay: 0.3s; }
+    .voice-wave-bar:nth-child(5) { height: 10px; animation-delay: 0.4s; }
+
+    @keyframes voiceWave {
+      0%, 100% { transform: scaleY(1); }
+      50% { transform: scaleY(0.5); }
+    }
+
+    /* Action Status Cards - Stacking Animation */
+    .action-cards {
+      position: absolute;
+      bottom: 11%;
+      left: 5%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 10;
+    }
+
+    .action-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      color: #1f2937;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border: 2px solid var(--accent);
+      opacity: 0;
+      transform: translateY(40px);
+      will-change: transform, opacity;
+    }
+
+    .action-card-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      color: var(--accent);
+    }
+
+    .action-card-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── How It Works Section ─────────────────────────── */
+    .how-it-works {
+      background: #0E2923;
+      position: relative;
+      z-index: 2;
+      color: #e8e6dc;
+      padding-block: clamp(4rem, 10vw, 6rem);
+    }
+
+    .how-it-works { position: relative; overflow: hidden; content-visibility: auto; contain-intrinsic-size: auto 1200px; }
+    .hiw-grid-base, .hiw-grid-glow { position: absolute; inset: 0; pointer-events: none; }
+    .hiw-grid-base canvas, .hiw-grid-glow canvas { display: block; width: 100%; height: 100%; }
+    .hiw-grid-base { -webkit-mask-image: radial-gradient(800px circle at center, white, transparent); mask-image: radial-gradient(800px circle at center, white, transparent); }
+    .hiw-grid-glow { opacity: 0; transition: opacity 0.3s ease; }
+    .hiw-grid-glow.active { opacity: 1; }
+
+    /* Pause all CSS animations when section is off-screen (toggled via JS) */
+    .how-it-works.offscreen * { animation-play-state: paused !important; }
+
+    .how-it-works h2, .how-it-works h3, .how-it-works h4 {
+      color: #faf9f5;
+    }
+
+    .how-it-works p {
+      color: rgba(250, 249, 245, 0.6);
+    }
+
+    .hiw-header {
+      text-align: left;
+      margin-bottom: 2.5rem;
+    }
+
+    .hiw-header .hiw-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .hiw-header h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      margin-bottom: 0.5rem;
+      color: #faf9f5;
+    }
+
+    .hiw-header p {
+      font-size: 1rem;
+    }
+
+    /* ── Apple-style Progress Tabs ── */
+    .hiw-tabs {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      justify-content: center;
+    }
+
+    .hiw-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 140px;
+      text-align: left;
+    }
+
+    .hiw-tab-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgba(250, 249, 245, 0.35);
+      transition: color 0.3s ease;
+      white-space: nowrap;
+    }
+
+    .hiw-tab.active .hiw-tab-label {
+      color: #faf9f5;
+    }
+
+    .hiw-tab-bar {
+      width: 100%;
+      height: 3px;
+      background: rgba(250, 249, 245, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    @keyframes hiwFill { from { width: 0%; } to { width: 100%; } }
+    .hiw-tab-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: none;
+    }
+
+    .hiw-tab.visited .hiw-tab-fill {
+      width: 100%;
+      background: rgba(250, 249, 245, 0.3);
+    }
+
+    /* ── Carousel Track (Apple peek-through style) ── */
+    .hiw-carousel {
+      position: relative;
+      overflow: visible;
+      margin-inline: -1.5rem;
+    }
+
+    .hiw-carousel-clip {
+      overflow: hidden;
+      padding-inline: 1.5rem;
+    }
+
+    .hiw-cards {
+      display: flex;
+      gap: 1.25rem;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform;
+    }
+
+    /* Outer card — dark green glass */
+    .hiw-card {
+      flex: 0 0 75%;
+      min-width: 0;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      opacity: 0.35;
+      transform: scale(0.96);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hiw-card.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Step number */
+    .hiw-card-step {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 0.375rem;
+    }
+
+    .hiw-card h3 {
+      margin-bottom: 0.375rem;
+      font-size: 1.125rem;
+    }
+
+    .hiw-card-desc {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+      color: rgba(250, 249, 245, 0.5);
+    }
+
+    /* Inner prototype card — light surface */
+    .hiw-visual {
+      background: #faf9f5;
+      border: 1px solid rgba(14, 20, 19, 0.06);
+      border-radius: 14px;
+      overflow: hidden;
+      color: var(--text);
+      flex: 1;
+    }
+
+    /* ── Step 1: Onboarding Calendar Schedule ── */
+    .hiw-ob-calendar { width: 100%; margin-top: 0.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 0.6875rem; }
+    .hiw-ob-cal-header { display: flex; align-items: center; gap: 0.375rem; padding: 0.4rem 0.6rem; background: var(--bg); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.625rem; color: var(--text-secondary); }
+    .hiw-ob-cal-item { display: flex; gap: 0.5rem; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); align-items: flex-start; }
+    .hiw-ob-cal-item:last-child { border-bottom: none; }
+    .hiw-ob-cal-item.active { background: var(--accent-light); }
+    .hiw-ob-cal-time { flex-shrink: 0; font-size: 0.5625rem; font-weight: 600; color: var(--text-tertiary); min-width: 3.5em; padding-top: 0.1rem; }
+    .hiw-ob-cal-event { flex: 1; min-width: 0; }
+    .hiw-ob-cal-name { font-weight: 600; font-size: 0.625rem; color: var(--text); }
+    .hiw-ob-cal-meta { font-size: 0.5625rem; color: var(--text-tertiary); margin-top: 0.1rem; }
+    .hiw-ob-cal-invitees { font-size: 0.5rem; color: var(--text-tertiary); margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem; }
+    .hiw-ob-email-input { display: flex; align-items: center; gap: 0.375rem; margin-top: 0.75rem; padding: 0.4rem 0.6rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 0.6875rem; }
+
+    /* ── Step 5: Mini Architecture Diagram ── */
+    .hiw-ob-arch-card { width: 100%; padding: 0.5rem 0.625rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); transition: all 0.3s ease; }
+    .hiw-ob-arch-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(220, 74, 58, 0.15), 0 2px 8px rgba(220, 74, 58, 0.1); }
+    .hiw-ob-arch-card.dimmed { opacity: 0.4; }
+    .hiw-ob-arch-badge { display: inline-block; font-size: 0.5rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 5px; border-radius: 3px; margin-bottom: 0.2rem; }
+    .hiw-ob-arch-badge.s1 { background: rgba(220, 74, 58, 0.1); color: var(--accent); }
+    .hiw-ob-arch-badge.s2 { background: rgba(56, 152, 236, 0.1); color: #3898ec; }
+    .hiw-ob-arch-title { font-size: 0.75rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem; }
+    .hiw-ob-arch-providers { display: flex; gap: 0.375rem; margin-bottom: 0.25rem; }
+    .hiw-ob-provider { font-size: 0.5625rem; padding: 2px 6px; border-radius: 4px; background: var(--bg); border: 1px solid var(--border); color: var(--text-secondary); }
+    .hiw-ob-provider.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .hiw-ob-arch-stats { display: flex; gap: 0.5rem; font-size: 0.5rem; color: var(--text-tertiary); }
+    .hiw-ob-arch-bridge { display: flex; align-items: center; gap: 0.25rem; justify-content: center; padding: 0.125rem 0; }
+    .hiw-ob-arch-bridge-line { flex: 1; height: 1px; background: var(--border); }
+
+    .hiw-visual h3, .hiw-visual h4, .hiw-visual strong {
+      color: #141413;
+    }
+
+    .hiw-visual p, .hiw-visual td, .hiw-visual span {
+      color: #5e5d59;
+    }
+
+    .hiw-card-step {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .hiw-card h3 {
+      margin-bottom: 0.5rem;
+    }
+
+    .hiw-card-desc {
+      font-size: 0.875rem;
+      line-height: 1.6;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Card Visual Mocks */
+    .hiw-visual {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* ── Step 1: Onboarding Split ── */
+    .hiw-onboard-split { display: flex; gap: 1.5rem; padding: 1.5rem; min-height: 280px; }
+    .hiw-onboard-left { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+    .hiw-onboard-right { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); border-radius: 10px; position: relative; overflow: hidden; }
+    .hiw-ob-tag { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 0.25rem; }
+    .hiw-ob-title { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem; }
+    .hiw-ob-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.75rem; }
+    .hiw-ob-status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-secondary); padding: 0.2rem 0; }
+    .hiw-ob-status.granted { color: var(--success); }
+    .hiw-ob-status.pending { color: #FF9F0A; }
+    .hiw-ob-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .hiw-ob-dot.green { background: var(--success); }
+    .hiw-ob-dot.yellow { background: #FF9F0A; animation: obPulse 1.2s infinite; }
+    .hiw-ob-dot.grey { background: var(--border-light); }
+    @keyframes obPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .hiw-ob-btn { display: inline-block; padding: 0.4rem 0.75rem; border-radius: 8px; font-size: 0.6875rem; font-weight: 600; cursor: default; }
+    .hiw-ob-btn.primary { background: var(--accent); color: white; }
+    .hiw-ob-btn.ghost { background: transparent; color: var(--text-tertiary); }
+    .hiw-ob-screen-frame { width: 100%; aspect-ratio: 16/10; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+    .hiw-ob-titlebar { display: flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .hiw-ob-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .hiw-ob-dot.red { background: #ff5f57; }
+    .hiw-ob-dot.yellow { background: #ffbd2e; }
+    .hiw-ob-dot.green { background: #27c93f; }
+    .hiw-ob-screen-body { position: relative; flex: 1; }
+    .hiw-ob-scan-line { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); box-shadow: 0 0 8px var(--accent); z-index: 2; animation: obScan 2.5s ease-in-out infinite; }
+    @keyframes obScan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+    /* Red bounding boxes — match desktop onboarding UI */
+    .hiw-ob-box { position: absolute; border: 2px solid var(--accent); border-radius: 6px; opacity: 0; pointer-events: none; animation: obBoxPulse 2.5s ease-in-out infinite; }
+    .hiw-ob-box.b1 { top: 4%; left: 3%; width: 45%; height: 30%; animation-delay: 0.3s; }
+    .hiw-ob-box.b2 { top: 4%; right: 3%; width: 30%; height: 42%; animation-delay: 0.8s; }
+    .hiw-ob-box.b3 { bottom: 4%; left: 3%; width: 94%; height: 22%; animation-delay: 1.3s; }
+    .hiw-ob-box.b4 { top: 38%; left: 3%; width: 45%; height: 26%; animation-delay: 1.0s; }
+    .hiw-ob-box.b5 { top: 50%; right: 3%; width: 30%; height: 22%; animation-delay: 0.5s; }
+    @keyframes obBoxPulse { 0%,30% { opacity: 0; } 35%,55% { opacity: 1; } 60%,100% { opacity: 0; } }
+    /* Labels near bounding boxes */
+    .hiw-ob-label { position: absolute; font-size: 0.5rem; font-weight: 600; color: var(--accent); background: var(--surface); padding: 1px 4px; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); opacity: 0; pointer-events: none; animation: obBoxPulse 2.5s ease-in-out infinite; }
+    .hiw-ob-label.l1 { top: 35%; left: 5%; animation-delay: 0.5s; }
+    .hiw-ob-label.l2 { top: 47%; right: 5%; animation-delay: 1.0s; }
+    .hiw-ob-label.l3 { bottom: 27%; left: 5%; animation-delay: 1.5s; }
+    .hiw-ob-label.l4 { top: 65%; left: 20%; animation-delay: 1.2s; }
+    .hiw-ob-label.l5 { top: 73%; right: 8%; animation-delay: 0.7s; }
+    .hiw-ob-dots { display: flex; gap: 6px; }
+    .hiw-ob-pip { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; }
+    .hiw-ob-pip.done { background: var(--success); border-color: var(--success); }
+    .hiw-ob-pip.active { width: 20px; border-radius: 4px; background: var(--accent); border-color: var(--accent); }
+
+    /* ── Step 2: Telegram + Calendar ── */
+    .hiw-daily-split { display: flex; gap: 1rem; padding: 1rem; min-height: 280px; }
+    .hiw-tg-chat { flex: 1; background: var(--surface); border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .hiw-tg-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); background: var(--bg); }
+    .hiw-tg-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+    .hiw-tg-body { flex: 1; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; }
+    .hiw-tg-msg { max-width: 85%; padding: 0.5rem 0.625rem; border-radius: 10px; font-size: 0.75rem; line-height: 1.5; color: var(--text); }
+    .hiw-tg-msg.out { align-self: flex-end; background: #d4f5d0; border-bottom-right-radius: 3px; }
+    .hiw-tg-msg.in { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+    .hiw-tg-check { font-size: 0.625rem; color: var(--success); text-align: right; margin-top: 0.15rem; }
+    .hiw-tg-attachment { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.5rem; background: var(--bg-subtle); border-radius: 6px; font-size: 0.6875rem; color: var(--accent); font-weight: 500; margin-top: 0.25rem; }
+    .hiw-tg-link-card { display: flex; gap: 0.5rem; margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-subtle); border-radius: 8px; border-left: 3px solid #4aa682; }
+    .hiw-tg-link-left { flex: 1; min-width: 0; }
+    .hiw-tg-link-icon { flex-shrink: 0; width: 36px; height: 36px; background: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .hiw-cal-panel { flex: 0 0 40%; background: var(--surface); border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .hiw-cal-panel-header { padding: 0.75rem; border-bottom: 1px solid var(--border); }
+    .hiw-cal-slots { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.375rem; flex: 1; }
+    .hiw-cal-slot-btn { padding: 0.5rem 0.625rem; border-radius: 8px; font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); border: 1px solid var(--border); cursor: default; transition: background 0.2s; }
+    .hiw-cal-slot-btn.booked { border-color: var(--accent); background: var(--accent-light); }
+    .hiw-cal-event-card { margin-top: 0.5rem; padding: 0.5rem; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
+    .hiw-cal-prep-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.625rem; font-weight: 500; color: var(--accent); padding: 0.2rem 0.4rem; background: var(--accent-light); border-radius: 4px; }
+
+    /* ── Step 4: Review Table ── */
+    .hiw-review-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
+    .hiw-review-table th { padding: 0.5rem; text-align: left; font-weight: 600; font-size: 0.6875rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); }
+    .hiw-review-table td { padding: 0.5rem; vertical-align: top; border-bottom: 1px solid var(--border); }
+    .hiw-review-frame { width: 120px; }
+    .hiw-review-thumb { width: 100%; }
+    .hiw-review-content { }
+    .hiw-review-time { font-family: var(--font-mono); font-size: 0.625rem; color: var(--text-tertiary); background: var(--bg-subtle); padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .hiw-review-priority { display: inline-block; font-size: 0.5625rem; font-weight: 600; padding: 0.1rem 0.35rem; border-radius: 4px; margin-top: 0.35rem; }
+    .hiw-review-priority.p1 { background: #fef2f1; color: var(--accent); }
+    .hiw-review-priority.p3 { background: var(--bg-subtle); color: var(--text-tertiary); }
+
+    /* ── Step 3: Meeting Frame ── */
+    .hiw-mf-header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: #f5f4ed; border-bottom: 1px solid #e8e6dc; font-size: 0.75rem; }
+    .hiw-mf-title { display: flex; align-items: center; gap: 0.4rem; color: #5e5d59; font-family: var(--font-mono); font-size: 0.6875rem; }
+    .hiw-mf-live { display: flex; align-items: center; gap: 0.3rem; font-size: 0.625rem; font-weight: 700; color: #4aa682; text-transform: uppercase; letter-spacing: 0.05em; }
+    .hiw-mf-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #4aa682; animation: obPulse 1.5s infinite; }
+    .hiw-mf-browser { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; background: #e8e6dc; border-bottom: 1px solid #d1cfc5; }
+    .hiw-mf-dots { display: flex; gap: 4px; }
+    .hiw-mf-dots span { width: 8px; height: 8px; border-radius: 50%; }
+    .hiw-mf-tabs { display: flex; gap: 2px; margin-left: 0.5rem; }
+    .hiw-mf-tab { padding: 0.25rem 0.5rem; border-radius: 5px 5px 0 0; font-size: 0.625rem; font-weight: 500; background: #d1cfc5; color: #5e5d59; cursor: default; }
+    .hiw-mf-tab.active { background: #faf9f5; color: #141413; }
+    .hiw-mf-body { display: flex; min-height: 220px; }
+    .hiw-mf-screen { flex: 1; padding: 0.75rem; padding-bottom: 3rem; position: relative; background: #faf9f5; }
+    .hiw-mf-sidebar { flex: 0 0 180px; background: #f0eee6; border-left: 1px solid #e8e6dc; padding: 0.625rem; display: flex; flex-direction: column; gap: 0.625rem; overflow-y: auto; font-size: 0.625rem; }
+    .hiw-mf-side-section { }
+    .hiw-mf-side-label { font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #87867f; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.3rem; }
+    .hiw-mf-feed { display: flex; flex-direction: column; gap: 0.25rem; }
+    .hiw-mf-feed-item { font-size: 0.5625rem; line-height: 1.4; color: #5e5d59; padding: 0.2rem 0.35rem; background: rgba(255,255,255,0.6); border-radius: 4px; }
+    .hiw-mf-docs { display: flex; flex-direction: column; gap: 0.2rem; }
+    .hiw-mf-doc { display: flex; align-items: center; gap: 0.25rem; font-size: 0.5625rem; color: #5e5d59; padding: 0.2rem 0.35rem; background: rgba(255,255,255,0.6); border-radius: 4px; }
+    .hiw-mf-cursor { position: absolute; top: 20%; left: 30%; z-index: 5; transition: left 0.8s cubic-bezier(0.25,0.1,0.25,1), top 0.8s cubic-bezier(0.25,0.1,0.25,1); }
+    .hiw-mf-notion-header { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8125rem; margin-bottom: 0.5rem; color: #141413; }
+    .hiw-mf-avatars { margin-left: auto; display: flex; gap: 0.25rem; }
+    .hiw-mf-avatar { width: 24px; height: 24px; border-radius: 6px; background: #e8e6dc; display: flex; align-items: center; justify-content: center; font-size: 0.625rem; font-weight: 600; color: #5e5d59; overflow: hidden; }
+    .hiw-mf-avatar.active { border: 2px solid #4aa682; }
+    .hiw-mf-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
+    .hiw-mf-table th { padding: 0.35rem 0.5rem; text-align: left; font-weight: 500; color: #87867f; border-bottom: 1px solid #f0eee6; font-size: 0.625rem; }
+    .hiw-mf-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #f0eee6; color: #141413; }
+    .hiw-tag { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.5625rem; font-weight: 500; }
+    .hiw-tag.green { background: #dbeddb; color: #1e6b53; }
+    .hiw-tag.yellow { background: #fdecc8; color: #9a6700; }
+    .hiw-tag.red { background: #fde8e8; color: #b53333; }
+    .hiw-mf-caption { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.875rem; background: rgba(0,0,0,0.72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: white; border-radius: 10px; font-size: 0.6875rem; white-space: nowrap; z-index: 10; }
+    .hiw-mf-caption img { border-radius: 3px; }
+    .hiw-mf-caption span { transition: opacity 0.15s ease; }
+    .hiw-mf-controls { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem; background: #f5f4ed; border-top: 1px solid #e8e6dc; }
+    .hiw-mf-ctrl { width: 32px; height: 32px; border-radius: 50%; background: white; border: 1px solid #e8e6dc; display: flex; align-items: center; justify-content: center; color: #5e5d59; }
+    .hiw-mf-ctrl.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .hiw-mf-ctrl.end { background: #b53333; border-color: #b53333; color: white; }
+
+    /* Step 1: Download Visual */
+    .hiw-setup-card {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .hiw-setup-icon {
+      width: 56px;
+      height: 56px;
+    }
+
+    .hiw-setup-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text);
+      text-align: center;
+    }
+
+    .hiw-checklist {
+      list-style: none;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .hiw-checklist li {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .hiw-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--success);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .hiw-check svg {
+      width: 11px;
+      height: 11px;
+      color: white;
+    }
+
+    .hiw-setup-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.625rem 1.25rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    /* Step 2: Chat Visual */
+    .hiw-chat-visual {
+      display: flex;
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+
+    .hiw-chat-messages {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .hiw-chat-bubble {
+      padding: 0.625rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      line-height: 1.5;
+      max-width: 85%;
+    }
+
+    .hiw-chat-bubble.user {
+      background: #007AFF;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+
+    [data-theme="dark"] .hiw-chat-bubble.user {
+      background: #0A84FF;
+    }
+
+    .hiw-chat-bubble.agent {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+
+    .hiw-mini-calendar {
+      width: 140px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.625rem;
+    }
+
+    .hiw-cal-header {
+      background: var(--accent);
+      color: white;
+      padding: 0.375rem 0.5rem;
+      font-weight: 600;
+      font-size: 0.6875rem;
+      text-align: center;
+    }
+
+    .hiw-cal-slot {
+      padding: 0.375rem 0.5rem;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      gap: 0.375rem;
+      color: var(--text-tertiary);
+    }
+
+    .hiw-cal-slot:last-child {
+      border-bottom: none;
+    }
+
+    .hiw-cal-event {
+      background: var(--accent-light);
+      color: var(--accent);
+      border-radius: 4px;
+      padding: 0.25rem 0.375rem;
+      font-weight: 600;
+      flex: 1;
+      font-size: 0.5625rem;
+      line-height: 1.3;
+    }
+
+    /* Step 3: Meeting Visual */
+    .hiw-meeting-visual {
+      overflow: hidden;
+    }
+
+    .hiw-meeting-chrome {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.6875rem;
+    }
+
+    .hiw-meeting-title {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+    }
+
+    .hiw-live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      color: var(--success);
+      font-weight: 600;
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .hiw-live-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: livePulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .hiw-sprint-table {
+      font-size: 0.6875rem;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .hiw-sprint-table th,
+    .hiw-sprint-table td {
+      padding: 0.375rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .hiw-sprint-table th {
+      font-weight: 500;
+      color: var(--text-tertiary);
+      font-size: 0.625rem;
+      background: var(--bg-subtle);
+    }
+
+    .hiw-sprint-table td {
+      color: var(--text);
+    }
+
+    .hiw-status {
+      display: inline-block;
+      padding: 0.0625rem 0.375rem;
+      border-radius: 3px;
+      font-size: 0.5625rem;
+      font-weight: 500;
+    }
+
+    .hiw-status.done { background: #dbeddb; color: #1e6b53; }
+    .hiw-status.progress { background: #fdecc8; color: #9a6700; }
+    .hiw-status.todo { background: #ffe2dd; color: #93291c; }
+
+    [data-theme="dark"] .hiw-status.done { background: #2b593f; color: #6ee7b7; }
+    [data-theme="dark"] .hiw-status.progress { background: #594a2b; color: #fcd34d; }
+    [data-theme="dark"] .hiw-status.todo { background: #5c2b2b; color: #fca5a5; }
+
+    .hiw-meeting-caption {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.75rem;
+      background: rgba(220, 74, 58, 0.9);
+      color: white;
+      font-size: 0.6875rem;
+    }
+
+    .hiw-meeting-participants {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-subtle);
+      border-top: 1px solid var(--border);
+    }
+
+    .hiw-participant {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.625rem;
+      color: var(--text-secondary);
+    }
+
+    .hiw-participant-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .hiw-participant-dot.speaking {
+      background: var(--success);
+    }
+
+    .hiw-participant-dot.silent {
+      background: var(--text-tertiary);
+    }
+
+    /* Step 4: Summary Visual */
+    .hiw-summary-card {
+      padding: 1.25rem;
+    }
+
+    .hiw-summary-header {
+      margin-bottom: 1rem;
+    }
+
+    .hiw-summary-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .hiw-summary-meta {
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      margin-top: 0.125rem;
+    }
+
+    .hiw-summary-section {
+      margin-bottom: 0.75rem;
+    }
+
+    .hiw-summary-section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.375rem;
+    }
+
+    .hiw-summary-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .hiw-summary-list li {
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.375rem;
+      line-height: 1.4;
+    }
+
+    .hiw-summary-list li input[type="checkbox"] {
+      margin-top: 0.125rem;
+      accent-color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .hiw-summary-files {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .hiw-summary-file {
+      font-size: 0.6875rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .hiw-summary-status {
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--accent-light);
+      border-radius: 6px;
+      font-size: 0.6875rem;
+      color: var(--accent);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .hiw-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--accent-glow);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: hiwSpin 0.8s linear infinite;
+    }
+
+    @keyframes hiwSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Mobile: timeline hidden, carousel stays horizontal */
+    @media (max-width: 767px) {
+      .hiw-timeline { display: none; }
+
+      .hiw-card {
+        flex: 0 0 92%;
+      }
+
+      .hiw-visual {
+        overflow: hidden;
+      }
+    }
+
+    /* ── Comparison Section ───────────────────────────── */
+    .comparison {
+      background: var(--bg);
+      position: relative;
+      z-index: 2;
+    }
+
+    .comparison-header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.875rem;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 0.875rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comparison-table th {
+      font-weight: 600;
+      color: var(--text-tertiary);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--accent);
+    }
+
+    .comparison-table td:first-child {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .comparison-table td {
+      color: var(--text-secondary);
+    }
+
+    /* ── CallingClaw highlight column (2nd column) ── */
+    .comparison-table th.col-highlight {
+      color: var(--text);
+      font-weight: 700;
+      background: rgba(220, 74, 58, 0.06);
+    }
+
+    .comparison-table td.col-highlight {
+      background: rgba(220, 74, 58, 0.04);
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ── Status cells ── */
+    .cmp-yes {
+      color: var(--text);
+    }
+
+    .cmp-partial {
+      color: var(--text-tertiary);
+    }
+
+    .cmp-no {
+      color: var(--border-light);
+      font-size: 1.1em;
+    }
+
+    /* ── Features Grid ────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+      margin-top: 3rem;
+    }
+
+    .feature-item {
+      text-align: center;
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 1rem;
+      background: var(--bg-subtle);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .feature-icon svg {
+      width: 24px;
+      height: 24px;
+      color: var(--text-secondary);
+    }
+
+    .feature-item h4 {
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-item p {
+      font-size: 0.8125rem;
+      max-width: 22ch;
+      margin-inline: auto;
+      line-height: 1.5;
+    }
+
+    /* ── Architecture Section ────────────────────────── */
+    .architecture {
+      background: var(--bg-subtle);
+      position: relative;
+      z-index: 2;
+    }
+
+    .arch-diagram {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      max-width: 900px;
+      margin-inline: auto;
+    }
+
+    .arch-brain-card {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+    }
+
+    .arch-brain-card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.125rem;
+    }
+
+    .arch-badge {
+      display: inline-block;
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .arch-badge.s1 {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .arch-badge.s2 {
+      background: rgba(56, 152, 236, 0.08);
+      color: #3898ec;
+    }
+
+    .arch-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .arch-stat {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+    }
+
+    .arch-stat-label {
+      color: var(--text-tertiary);
+    }
+
+    .arch-stat-value {
+      font-weight: 600;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+    }
+
+    /* Memory bridge */
+    .arch-bridge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.375rem;
+      padding: 0 1rem;
+      min-width: 80px;
+    }
+
+    .arch-bridge-line {
+      width: 2px;
+      flex: 1;
+      min-height: 20px;
+      background: var(--border);
+    }
+
+    .arch-bridge-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+
+    .arch-bridge-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .arch-bridge-sub {
+      font-size: 0.625rem;
+      color: var(--text-tertiary);
+    }
+
+    @media (max-width: 768px) {
+      .arch-diagram {
+        flex-direction: column;
+        gap: 0;
+      }
+      .arch-bridge {
+        flex-direction: row;
+        padding: 0.75rem 0;
+        min-width: 0;
+      }
+      .arch-bridge-line {
+        width: auto;
+        height: 2px;
+        min-height: 0;
+        flex: 1;
+      }
+    }
+
+    /* ── CTA Section ──────────────────────────────────── */
+    .cta-section {
+      position: relative;
+      min-height: 70vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .cta-bg {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+    }
+
+    .cta-bg img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+
+    .cta-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%);
+    }
+
+    .cta-content {
+      position: relative;
+      z-index: 1;
+      padding-block: clamp(2rem, 5vw, 3rem) clamp(12rem, 25vw, 18rem);
+    }
+
+    .cta-content h2 {
+      color: white;
+      margin-bottom: 1.5rem;
+      font-size: clamp(2rem, 4vw, 3rem);
+    }
+
+    .cta-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .cta-actions .btn {
+      min-width: 220px;
+    }
+
+    /* Telephone Line SVG */
+    .telephone-line {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 60%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .telephone-line svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .telephone-line-path {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 8 12;
+      animation: telephoneLineFlow 20s linear infinite;
+    }
+
+    @keyframes telephoneLineFlow {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -1000; }
+    }
+
+    /* ── Footer ───────────────────────────────────────── */
+    footer {
+      padding: 2rem 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    footer p {
+      font-size: 0.8125rem;
+      color: var(--text-tertiary);
+      margin-inline: auto;
+    }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .bandwidth-content {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      .speed-comparison {
+        order: 2;
+        flex-direction: row;
+      }
+
+      .speed-card {
+        flex: 1;
+      }
+
+      .speed-card:first-child {
+        border-radius: 16px 0 0 16px;
+        border-bottom: 1px solid var(--border);
+        border-right: none;
+      }
+
+      .speed-card:last-child {
+        border-radius: 0 16px 16px 0;
+      }
+
+      .speed-card-value {
+        font-size: 1.75rem;
+      }
+
+      .bandwidth-image-container {
+        order: 1;
+      }
+
+      .voice-wave-indicator {
+        top: 45%;
+        right: 8%;
+      }
+
+      .action-cards {
+        bottom: 8%;
+        left: 3%;
+      }
+
+      .action-card {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.75rem;
+      }
+
+      .features-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+      }
+      .feature-icon {
+        width: 32px;
+        height: 32px;
+        margin-bottom: 0.5rem;
+        border-radius: 8px;
+      }
+      .feature-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .feature-item h4 {
+        font-size: 0.8125rem;
+        margin-bottom: 0.25rem;
+      }
+      .feature-item p {
+        font-size: 0.6875rem;
+        max-width: none;
+      }
+
+      .comparison-table {
+        font-size: 0.75rem;
+      }
+
+      .comparison-table th,
+      .comparison-table td {
+        padding: 0.75rem 0.5rem;
+      }
+
+      /* Hero: no pin on mobile, natural scroll */
+      .hero {
+        padding-top: 5rem;
+        padding-bottom: 1rem;
+        min-height: auto;
+      }
+      .hero h1 {
+        font-size: 2rem;
+        max-width: 100%;
+        margin-bottom: 1rem;
+      }
+      .hero-subtitle {
+        font-size: 0.9375rem;
+        margin-bottom: 1.5rem;
+      }
+      .hero-actions {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+      }
+      .hero-actions .btn,
+      .cta-actions .btn {
+        min-width: 260px;
+        width: 260px;
+      }
+      .cta-actions {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .hero-image-container {
+        width: calc(100% - 1rem) !important;
+      }
+
+      /* HiW carousel: horizontal only, scale inner content */
+      .hiw-card {
+        flex: 0 0 92% !important;
+        padding: 1rem 0.75rem;
+      }
+      .hiw-carousel-clip { overflow: hidden !important; }
+      .hiw-tabs {
+        gap: 0.375rem;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 0.25rem;
+      }
+      .hiw-tab { width: auto; min-width: 0; }
+      .hiw-tab-label { font-size: 0.625rem; }
+
+      /* Keep horizontal layout in all cards, just scale down via zoom */
+      .hiw-visual {
+        zoom: 0.72;
+        overflow: hidden;
+      }
+      .hiw-onboard-split { min-height: auto; }
+      .hiw-daily-split { min-height: auto; }
+      .hiw-mf-sidebar { flex: 0 0 120px; }
+      .hiw-mf-caption { white-space: normal; max-width: 90%; }
+    }
+
+    /* ── Scroll Animation Observer ────────────────────── */
+    .scroll-reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
+    }
+
+    .scroll-reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="container">
+      <a href="/" class="logo">
+        <div class="logo-mark">
+          <img src="../Assests/callingclaw-logo.png" alt="CallingClaw">
+        </div>
+        CallingClaw
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Product</a></li>
+        <li><a href="#how-it-works">How it Works</a></li>
+        <li><a href="#comparison">Comparison</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li>
+          <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Flickering Grid Background (fixed, fades out after hero) -->
+  <div class="flickering-grid-wrap flickering-grid-base" id="flickeringGridBaseWrap">
+    <canvas id="flickeringGridBase"></canvas>
+  </div>
+  <div class="flickering-grid-glow" id="flickeringGridGlowWrap">
+    <canvas id="flickeringGridGlow"></canvas>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container" id="heroTagline">
+      <h1>Your Agent Needs <span class="gradient">a Seat,</span><br>Not a Notepad <span class="gradient">in meetings</span></h1>
+      <p class="hero-subtitle">Open-source agentware that joins video calls with full memory of your work — ready to discuss, present, and act. Local-first.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/XEasonChan/callingclaw/releases/latest" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/XEasonChan/callingclaw" target="_blank" rel="noopener" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+    </div>
+
+    <!-- Hero Image with GSAP ScrollTrigger animation -->
+    <div class="hero-image-wrapper">
+      <div class="hero-pin-spacer" id="heroPinSpacer">
+        <div class="hero-image-container" id="heroImageContainer">
+          <img src="../Assests/HeroPage_Background.png" alt="AI agent in meeting room" class="hero-image" id="heroImage">
+          <!-- Mobile: YouTube play button overlay (shown via JS) -->
+          <button class="hero-yt-play" id="heroYtPlay" aria-label="Play demo video"></button>
+
+        <!-- Demo Panel — YouTube embed (slides up on scroll, desktop only) -->
+        <div class="hero-demo-panel">
+          <div class="yt-wrap">
+            <!-- REPLACE VIDEO_ID with your actual YouTube video ID -->
+            <iframe
+              src="https://www.youtube.com/embed/VIDEO_ID?rel=0&modestbranding=1&color=white"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+              loading="lazy"
+              title="CallingClaw Demo">
+            </iframe>
+            <!-- Scroll guard: blocks iframe from eating scroll events during GSAP pin -->
+            <div class="yt-scroll-guard" id="ytScrollGuard"></div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Meeting Harness Section -->
+  <section class="meeting-harness" id="features">
+    <div class="container">
+      <h2><span class="underline">Meeting Harness</span> for Your Full-time Agents</h2>
+      <div class="badge-row">
+        <span class="badge accent">
+          <img src="../Assests/logo-openclaw.png" class="claw-icon" alt="">
+          OpenClaw
+        </span>
+        <span class="badge">
+          <img src="../Assests/logo-claude-code.png" class="claw-icon" alt="">
+          Claude Code
+        </span>
+      </div>
+      <p class="meeting-harness-subtitle">CallingClaw is agentware — it doesn't replace your agent, it gives your agent a meeting room, a calendar, and a voice. Your agent's capabilities come along naturally.</p>
+      <div class="capability-row">
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg></span> Memory</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span> Files</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span> MCP Tools</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span> Skills</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span> Browser & Cookies</span>
+        <span class="capability-tag"><span class="cap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Calendar</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5× Bandwidth Section -->
+  <section class="bandwidth">
+    <div class="container">
+      <!-- Centered Header -->
+      <div class="bandwidth-header">
+        <h2><span class="highlight">5×</span> More Bandwidth for AI Interaction</h2>
+        <p>Point at the screen and say what to change — your agent sees exactly where and what. No need to deploy to the public web for review — everything stays local.</p>
+      </div>
+
+      <div class="bandwidth-content">
+        <!-- Speed Comparison (Wispr Flow style) -->
+        <div class="speed-comparison">
+          <div class="speed-card">
+            <div class="speed-card-label">Keyboard</div>
+            <div class="speed-card-value">45 wpm</div>
+            <div class="speed-card-text">The homepage tagline needs updating, and also fix the...</div>
+          </div>
+          <div class="speed-card voice">
+            <div class="speed-card-label">CallingClaw</div>
+            <div class="speed-card-value">220 wpm + context</div>
+            <div class="speed-card-text">Three different points that didn't align with our requirement, the first one is the home page tagline, then the feature section layout, and finally the CTA button color.</div>
+            <div class="speed-attachments">
+              <span class="speed-attachment">
+                <span class="speed-attachment-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+                screenshot_landing.png
+              </span>
+              <span class="speed-attachment">
+                <span class="speed-attachment-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+                index.html
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bandwidth-image-container">
+          <img src="../Assests/Bandwidth_Benefit.png" alt="AI agent pointing at screen" class="bandwidth-image">
+
+          <!-- Voice Wave Indicator -->
+          <div class="voice-wave-indicator">
+            <div class="voice-wave">
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+              <div class="voice-wave-bar"></div>
+            </div>
+          </div>
+
+          <!-- Action Status Cards -->
+          <div class="action-cards">
+            <div class="action-card">
+              <div class="action-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="M21 21l-4.35-4.35"/>
+                </svg>
+              </div>
+              Retrieving relevant memory
+            </div>
+            <div class="action-card">
+              <div class="action-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="16 18 22 12 16 6"/>
+                  <polyline points="8 6 2 12 8 18"/>
+                </svg>
+              </div>
+              Updating Code of Homepage
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="how-it-works" id="how-it-works">
+    <!-- Flickering grid on dark bg -->
+    <div class="hiw-grid-base" id="hiwGridBaseWrap"><canvas id="hiwGridBase"></canvas></div>
+    <div class="hiw-grid-glow" id="hiwGridGlowWrap"><canvas id="hiwGridGlow"></canvas></div>
+    <div class="container" style="position:relative;z-index:1;">
+      <div class="hiw-header">
+        <div class="hiw-label">How It Works</div>
+        <h2>Four Steps to Your First Conversation</h2>
+        <p>The full meeting cycle, agentic — from prep to delivery.</p>
+      </div>
+
+      <!-- Apple-style Progress Tabs -->
+      <div class="hiw-tabs" id="hiwTabs">
+        <button class="hiw-tab active" data-step="0">
+          <span class="hiw-tab-label">GUI for Onboarding</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+        <button class="hiw-tab" data-step="1">
+          <span class="hiw-tab-label">CLI &amp; Invisible Daily</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+        <button class="hiw-tab" data-step="2">
+          <span class="hiw-tab-label">Live Meeting</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+        <button class="hiw-tab" data-step="3">
+          <span class="hiw-tab-label">Results &amp; Action</span>
+          <div class="hiw-tab-bar"><div class="hiw-tab-fill"></div></div>
+        </button>
+      </div>
+
+      <!-- Carousel -->
+      <div class="hiw-carousel-clip">
+      <div class="hiw-carousel">
+      <div class="hiw-cards" id="hiwCards">
+
+        <!-- Step 1: GUI Onboarding — Desktop permission screen -->
+        <div class="hiw-card active" data-hiw-card="0">
+          <span class="hiw-card-step">Onboarding</span>
+          <h3>GUI for Setting Up</h3>
+          <p class="hiw-card-desc">Download the desktop app. A guided setup walks you through each permission — screen, mic, accessibility, then connects to your agent.</p>
+          <div class="hiw-visual">
+            <div class="hiw-onboard-split">
+              <!-- Left: permission steps -->
+              <div class="hiw-onboard-left">
+                <div class="hiw-ob-tag">Step 1 / 4</div>
+                <div class="hiw-ob-title">Screen Understanding</div>
+                <div class="hiw-ob-desc">CallingClaw needs to see the screen to understand what's being discussed in meetings.</div>
+                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Granted</div>
+                <div class="hiw-ob-status granted"><span class="hiw-ob-dot green"></span> Microphone — Granted</div>
+                <div class="hiw-ob-status pending"><span class="hiw-ob-dot yellow"></span> Accessibility — Waiting...</div>
+                <div class="hiw-ob-status"><span class="hiw-ob-dot grey"></span> Connect to OpenClaw</div>
+                <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+                  <span class="hiw-ob-btn primary">Grant Accessibility</span>
+                  <span class="hiw-ob-btn ghost">Skip</span>
+                </div>
+              </div>
+              <!-- Right: visual -->
+              <div class="hiw-onboard-right">
+                <div class="hiw-ob-screen-frame">
+                  <div class="hiw-ob-titlebar">
+                    <span class="hiw-ob-dot red"></span>
+                    <span class="hiw-ob-dot yellow"></span>
+                    <span class="hiw-ob-dot green"></span>
+                  </div>
+                  <div class="hiw-ob-screen-body">
+                    <div class="hiw-ob-scan-line"></div>
+                    <div class="hiw-ob-box b1"></div>
+                    <div class="hiw-ob-box b2"></div>
+                    <div class="hiw-ob-box b3"></div>
+                    <div class="hiw-ob-box b4"></div>
+                    <div class="hiw-ob-box b5"></div>
+                    <div class="hiw-ob-label l1">Slide</div>
+                    <div class="hiw-ob-label l2">Code</div>
+                    <div class="hiw-ob-label l3">Footer</div>
+                    <div class="hiw-ob-label l4">Diagram</div>
+                    <div class="hiw-ob-label l5">Nav</div>
+                  </div>
+                </div>
+                <!-- Progress dots -->
+                <div class="hiw-ob-dots">
+                  <span class="hiw-ob-pip done"></span>
+                  <span class="hiw-ob-pip done"></span>
+                  <span class="hiw-ob-pip active"></span>
+                  <span class="hiw-ob-pip"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: CLI & Invisible Daily — Telegram + Calendar -->
+        <div class="hiw-card" data-hiw-card="1">
+          <span class="hiw-card-step">Daily Use</span>
+          <h3>CLI &amp; Invisible for Daily Use</h3>
+          <p class="hiw-card-desc">Message your agent on Telegram or CLI. It schedules meetings, prepares context from your recent work, and stays ready.</p>
+          <div class="hiw-visual">
+            <div class="hiw-daily-split">
+              <!-- Left: Telegram-style chat -->
+              <div class="hiw-tg-chat">
+                <div class="hiw-tg-header">
+                  <div class="hiw-tg-avatar">
+                    <img src="../Assests/callingclaw-logo.png" width="28" height="28" style="object-fit:contain;" alt="">
+                  </div>
+                  <div>
+                    <div style="font-weight:600;font-size:0.8125rem;color:var(--text);">CallingClaw</div>
+                    <div style="font-size:0.6875rem;color:var(--success);">online</div>
+                  </div>
+                </div>
+                <div class="hiw-tg-body">
+                  <div class="hiw-tg-msg out">Review the landing page tomorrow at 3pm</div>
+                  <div class="hiw-tg-msg in" style="max-width:95%;">
+                    <div style="font-weight:600;">Meeting created &#x2705;</div>
+                    <div style="margin-top:0.4rem;font-size:0.6875rem;line-height:1.6;">
+                      Meet: <span style="color:#3898ec;text-decoration:underline;">https://meet.google.com/abc-defg-hij</span><br>
+                      Time: 9:10 AM (~12 min from now)<br>
+                      Auto-join: 9:08 cron set
+                    </div>
+                    <div style="margin-top:0.5rem;font-size:0.6875rem;font-weight:600;color:var(--text);">Meeting plan:</div>
+                    <div style="font-size:0.625rem;line-height:1.6;color:var(--text-secondary);margin-top:0.2rem;">
+                      1. Share screen, open site-1/index.html<br>
+                      2. Scroll top to bottom, showcase:<br>
+                      &nbsp;&nbsp;&#x2022; Hero animation + scroll expand<br>
+                      &nbsp;&nbsp;&#x2022; Section scroll-reveal effects<br>
+                      &nbsp;&nbsp;&#x2022; Bottom CTA<br>
+                      3. Discuss adjustments after review
+                    </div>
+                    <div class="hiw-tg-attachment" style="margin-top:0.5rem;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      landing-review_prep.md
+                    </div>
+                    <!-- Google Meet link preview card -->
+                    <div class="hiw-tg-link-card">
+                      <div class="hiw-tg-link-left">
+                        <div style="color:#4aa682;font-size:0.625rem;font-weight:600;">Google Meet</div>
+                        <div style="font-size:0.5625rem;line-height:1.4;color:var(--text-secondary);margin-top:0.1rem;">Real-time meetings by Google. Share video, desktop, and presentations.</div>
+                      </div>
+                      <div class="hiw-tg-link-icon">
+                        <img src="https://fonts.gstatic.com/s/i/productlogos/meet_2020q4/v1/web-96dp/logo_meet_2020q4_color_2x_web_96dp.png" width="28" height="28" alt="Google Meet" style="object-fit:contain;">
+                      </div>
+                    </div>
+                    <div class="hiw-tg-check">&#10003;&#10003;</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Right: Calendly-style slots -->
+              <div class="hiw-cal-panel">
+                <div class="hiw-cal-panel-header">
+                  <div style="font-weight:600;font-size:0.8125rem;">Tomorrow, Tue</div>
+                  <div style="font-size:0.6875rem;color:var(--text-tertiary);">3 slots available</div>
+                </div>
+                <div class="hiw-cal-slots">
+                  <div class="hiw-cal-slot-btn">1:00 PM</div>
+                  <div class="hiw-cal-slot-btn">2:00 PM</div>
+                  <div class="hiw-cal-slot-btn booked">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                      <span>3:00 PM</span>
+                      <span style="font-size:0.625rem;color:var(--accent);font-weight:600;">BOOKED</span>
+                    </div>
+                    <!-- Expanded event card -->
+                    <div class="hiw-cal-event-card">
+                      <div style="font-weight:600;font-size:0.75rem;color:var(--text);margin-bottom:0.25rem;">Landing Page Review</div>
+                      <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">Google Meet &bull; 30 min</div>
+                      <div class="hiw-cal-prep-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Meeting Prep attached
+                      </div>
+                    </div>
+                  </div>
+                  <div class="hiw-cal-slot-btn">4:00 PM</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Live Meeting — full meeting frame from legacy -->
+        <div class="hiw-card" data-hiw-card="2">
+          <span class="hiw-card-step">Live Meeting</span>
+          <h3>Join, Present &amp; Discuss</h3>
+          <p class="hiw-card-desc">Your agent joins Google Meet, shares screen with browser tabs, moves a visible cursor, and speaks with live captions.</p>
+          <div class="hiw-visual" style="padding:0;">
+            <!-- Meeting frame chrome -->
+            <div class="hiw-mf-header">
+              <div class="hiw-mf-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> CallingClaw is sharing screen</div>
+              <div class="hiw-mf-live"><span class="hiw-mf-live-dot"></span> LIVE</div>
+            </div>
+            <!-- Browser chrome with tabs -->
+            <div class="hiw-mf-browser">
+              <div class="hiw-mf-dots"><span style="background:#ff5f57"></span><span style="background:#ffbd2e"></span><span style="background:#27c93f"></span></div>
+              <div class="hiw-mf-tabs">
+                <span class="hiw-mf-tab active">📋 Sprint Backlog</span>
+                <span class="hiw-mf-tab">🔧 System Flow</span>
+                <span class="hiw-mf-tab">🌐 Website Review</span>
+              </div>
+            </div>
+            <!-- Screen + Sidebar layout -->
+            <div class="hiw-mf-body">
+              <!-- Left: Screen content -->
+              <div class="hiw-mf-screen">
+                <div class="hiw-mf-cursor" id="hiwMfCursor">
+                  <svg width="16" height="20" viewBox="0 0 24 28" fill="none"><path d="M5.5 3.2V20.8c0 .45.26.75.68.75.17 0 .35-.04.52-.14l4.43-2.8 2.83 4.95a1 1 0 0 0 1.54.44 1 1 0 0 0 .44-1.54l-2.83-4.95H18.5c.45 0 .75-.26.75-.68 0-.17-.04-.35-.14-.52L6.61 3.2" fill="var(--accent)" stroke="white" stroke-width="1"/></svg>
+                </div>
+                <div class="hiw-mf-notion-header">
+                  <span>📋</span> <strong>Sprint Backlog</strong>
+                  <div class="hiw-mf-avatars">
+                    <span class="hiw-mf-avatar">P</span>
+                    <span class="hiw-mf-avatar active"><img src="../Assests/callingclaw-logo.png" width="16" height="16" style="object-fit:contain" alt=""></span>
+                  </div>
+                </div>
+                <table class="hiw-mf-table">
+                  <thead><tr><th>Task</th><th>Status</th><th>Priority</th><th>Assignee</th></tr></thead>
+                  <tbody>
+                    <tr><td>Implement voice routing</td><td><span class="hiw-tag green">Done</span></td><td>P0</td><td><img src="../Assests/callingclaw-logo.png" width="12" height="12" style="object-fit:contain;vertical-align:middle;margin-right:2px" alt="">OpenClaw</td></tr>
+                    <tr><td>Add screen share API</td><td><span class="hiw-tag yellow">In Progress</span></td><td>P0</td><td><img src="../Assests/callingclaw-logo.png" width="12" height="12" style="object-fit:contain;vertical-align:middle;margin-right:2px" alt="">OpenClaw</td></tr>
+                    <tr><td>Calendar integration</td><td><span class="hiw-tag red">Blocked</span></td><td>P1</td><td>Peter</td></tr>
+                    <tr><td>Visual diff optimization</td><td><span class="hiw-tag green">Done</span></td><td>P1</td><td><img src="../Assests/callingclaw-logo.png" width="12" height="12" style="object-fit:contain;vertical-align:middle;margin-right:2px" alt="">OpenClaw</td></tr>
+                  </tbody>
+                </table>
+                <div class="hiw-mf-caption" id="hiwMfCaption">
+                  <img src="../Assests/callingclaw-logo.png" width="14" height="14" style="object-fit:contain" alt=""> <span id="hiwMfCaptionText"><strong style="color:white">CallingClaw:</strong> <span style="color:white">Here's our current sprint plan.</span></span>
+                </div>
+              </div>
+              <!-- Right: Stage sidebar -->
+              <div class="hiw-mf-sidebar">
+                <!-- System 1 feed -->
+                <div class="hiw-mf-side-section">
+                  <div class="hiw-mf-side-label">System 1 <span style="color:var(--accent);">&#x25CF;</span></div>
+                  <div class="hiw-mf-feed">
+                    <div class="hiw-mf-feed-item">&#x1F5E3; Presenting sprint backlog...</div>
+                    <div class="hiw-mf-feed-item">&#x1F5E3; Voice routing is done</div>
+                    <div class="hiw-mf-feed-item">&#x1F527; Called: <span style="font-family:var(--font-mono);font-size:0.5625rem;">share_screen</span></div>
+                  </div>
+                </div>
+                <!-- System 2 feed -->
+                <div class="hiw-mf-side-section">
+                  <div class="hiw-mf-side-label">System 2 <span style="color:#3898ec;">&#x25CF;</span></div>
+                  <div class="hiw-mf-feed">
+                    <div class="hiw-mf-feed-item">&#x1F50D; Searching MEMORY.md...</div>
+                    <div class="hiw-mf-feed-item">&#x26A1; Opening site-1/index.html</div>
+                    <div class="hiw-mf-feed-item">&#x2705; Context injected (3 items)</div>
+                  </div>
+                </div>
+                <!-- Working Documents -->
+                <div class="hiw-mf-side-section">
+                  <div class="hiw-mf-side-label">Documents</div>
+                  <div class="hiw-mf-docs">
+                    <div class="hiw-mf-doc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> landing-review_prep.md</div>
+                    <div class="hiw-mf-doc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> DESIGN.md</div>
+                    <div class="hiw-mf-doc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/></svg> site-1/index.html</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Meeting controls -->
+            <div class="hiw-mf-controls">
+              <span class="hiw-mf-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></span>
+              <span class="hiw-mf-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+              <span class="hiw-mf-ctrl active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+              <span class="hiw-mf-ctrl end"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Results & Action — Review table + executing -->
+        <div class="hiw-card" data-hiw-card="3">
+          <span class="hiw-card-step">After Meeting</span>
+          <h3>Results &amp; Autonomous Action</h3>
+          <p class="hiw-card-desc">Every action item is paired with a screenshot and timestamp. Your agent already knows what was discussed — alignment is immediate.</p>
+          <div class="hiw-visual">
+            <div class="hiw-summary-card">
+              <div class="hiw-summary-header">
+                <div class="hiw-summary-title">Meeting Summary — Landing Page Review</div>
+                <div class="hiw-summary-meta">12 min &bull; 3 decisions &bull; 2 review items</div>
+              </div>
+              <!-- Two-column review table -->
+              <table class="hiw-review-table">
+                <thead><tr><th>Screenshot</th><th>Discussion &amp; Action</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="hiw-review-frame">
+                      <div class="hiw-review-thumb">
+                        <div style="background:var(--bg-subtle);border-radius:6px;width:100%;height:80px;display:flex;align-items:center;justify-content:center;font-size:0.625rem;color:var(--text-tertiary);">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="hiw-review-content">
+                      <span class="hiw-review-time">23:16</span>
+                      <div style="font-weight:600;font-size:0.8125rem;color:var(--text);margin-bottom:0.25rem;">Hero Copy Update</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">Emphasize agent comes with full memory, not blank. Update tagline and subtitle.</div>
+                      <span class="hiw-review-priority p1">Key</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="hiw-review-frame">
+                      <div class="hiw-review-thumb">
+                        <div style="background:var(--bg-subtle);border-radius:6px;width:100%;height:80px;display:flex;align-items:center;justify-content:center;font-size:0.625rem;color:var(--text-tertiary);">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="hiw-review-content">
+                      <span class="hiw-review-time">23:22</span>
+                      <div style="font-weight:600;font-size:0.8125rem;color:var(--text);margin-bottom:0.25rem;">Footer Layout Bug</div>
+                      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">Column alignment broken on mobile. Fix spacing after copy update ships.</div>
+                      <span class="hiw-review-priority p3">Info</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="hiw-summary-status">
+                <span class="hiw-spinner"></span>
+                Agent is executing action items...
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- /.hiw-cards -->
+      </div> <!-- /.hiw-carousel -->
+      </div> <!-- /.hiw-carousel-clip -->
+    </div>
+  </section>
+
+  <!-- Comparison Section -->
+  <section class="comparison" id="comparison">
+    <div class="container">
+      <div class="comparison-header">
+        <h2>Comparison</h2>
+        <p class="section-subtitle" style="margin-top:0.75rem;">Traditional meeting AI records and transcribes. CallingClaw joins, speaks, and acts — locally, with full access to your machine.</p>
+      </div>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="col-highlight">CallingClaw</th>
+            <th>Pika Stream</th>
+            <th>Granola / Otter</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Real-time voice participation</td>
+            <td class="col-highlight"><span class="cmp-yes">Full duplex</span></td>
+            <td class="cmp-partial">Partial</td>
+            <td><span class="cmp-no">—</span></td>
+          </tr>
+          <tr>
+            <td>Screen perception &amp; sharing</td>
+            <td class="col-highlight"><span class="cmp-yes">Vision + DOM</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td><span class="cmp-no">—</span></td>
+          </tr>
+          <tr>
+            <td>Computer control</td>
+            <td class="col-highlight"><span class="cmp-yes">Voice-triggered</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td><span class="cmp-no">—</span></td>
+          </tr>
+          <tr>
+            <td>Agent MCP action</td>
+            <td class="col-highlight"><span class="cmp-yes">Full tool use</span></td>
+            <td class="cmp-partial">Limited</td>
+            <td><span class="cmp-no">—</span></td>
+          </tr>
+          <tr>
+            <td>Meeting preparation</td>
+            <td class="col-highlight"><span class="cmp-yes">Automatic</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td><span class="cmp-no">—</span></td>
+          </tr>
+          <tr>
+            <td>Cross-meeting memory</td>
+            <td class="col-highlight"><span class="cmp-yes">Local file memory</span></td>
+            <td class="cmp-partial">Limited</td>
+            <td class="cmp-partial">Transcript only</td>
+          </tr>
+          <tr>
+            <td>Live action item capture</td>
+            <td class="col-highlight"><span class="cmp-yes">Real-time</span></td>
+            <td><span class="cmp-no">—</span></td>
+            <td class="cmp-partial">Post-meeting</td>
+          </tr>
+          <tr>
+            <td>Data privacy</td>
+            <td class="col-highlight"><span class="cmp-yes">100% local</span></td>
+            <td class="cmp-partial">Cloud</td>
+            <td class="cmp-partial">Cloud</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+  </section>
+
+  <!-- Architecture Section -->
+  <section class="architecture" id="architecture">
+    <div class="container">
+      <div style="text-align:center;margin-bottom:2.5rem;">
+        <h2>Architecture</h2>
+        <p class="section-subtitle" style="margin-top:0.5rem;">Like <em>Thinking, Fast and Slow</em> — fast voice for real-time dialogue, slow reasoning for deep execution, connected through shared memory.</p>
+      </div>
+
+      <!-- Dual-brain diagram -->
+      <div class="arch-diagram">
+        <!-- System 1 -->
+        <div class="arch-brain-card s1">
+          <div class="arch-badge s1">System 1 — Fast Thinking</div>
+          <h3>Voice AI</h3>
+          <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">OpenAI Realtime / Gemini Live</div>
+          <p style="font-size:0.8125rem;line-height:1.5;margin-bottom:1rem;">Conversational, intuitive, immediate. Handles real-time dialogue, answering questions, guiding discussions, and aligning context through natural voice.</p>
+          <div class="arch-stats">
+            <div class="arch-stat"><span class="arch-stat-label">Latency</span><span class="arch-stat-value">~300ms</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Modality</span><span class="arch-stat-value">Voice + Vision</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Best For</span><span class="arch-stat-value">Dialogue, Q&amp;A, Align</span></div>
+          </div>
+        </div>
+
+        <!-- Memory bridge (center) -->
+        <div class="arch-bridge">
+          <div class="arch-bridge-line"></div>
+          <div class="arch-bridge-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z"/><path d="M9 22h6"/></svg>
+          </div>
+          <div class="arch-bridge-label">Memory</div>
+          <div class="arch-bridge-sub">Context Bridge</div>
+          <div class="arch-bridge-line"></div>
+        </div>
+
+        <!-- System 2 -->
+        <div class="arch-brain-card s2">
+          <div class="arch-badge s2">System 2 — Slow Thinking</div>
+          <h3>OpenClaw</h3>
+          <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">Claude (Deep Reasoning)</div>
+          <p style="font-size:0.8125rem;line-height:1.5;margin-bottom:1rem;">Analytical, methodical, thorough. Reads files, accesses memory, plans multi-step execution. Prepares meeting briefs before, executes action items after.</p>
+          <div class="arch-stats">
+            <div class="arch-stat"><span class="arch-stat-label">Latency</span><span class="arch-stat-value">2-10s</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Modality</span><span class="arch-stat-value">Text + Files + Code</span></div>
+            <div class="arch-stat"><span class="arch-stat-label">Best For</span><span class="arch-stat-value">Execute, Optimize, Build</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Privacy badges -->
+      <div class="features-grid" style="margin-top:3rem;">
+        <div class="feature-item scroll-reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h4>Open Source</h4>
+          <p>Apache 2.0 license. Full codebase on GitHub.</p>
+        </div>
+        <div class="feature-item scroll-reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h4>Free</h4>
+          <p>No subscription, no fees. Bring your own API keys.</p>
+        </div>
+        <div class="feature-item scroll-reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27,6.96 12,12.01 20.73,6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </div>
+          <h4>100% Local</h4>
+          <p>All agent data stays on your machine.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <div class="cta-bg">
+      <img src="../Assests/Footer_CTA_new.png" alt="Video call your agent">
+    </div>
+
+    <!-- Telephone Line Animation -->
+    <div class="telephone-line">
+      <svg viewBox="0 0 600 400" preserveAspectRatio="none">
+        <path class="telephone-line-path" d="
+          M 600 50
+          Q 500 60, 480 100
+          Q 450 160, 400 180
+          Q 350 200, 320 240
+          Q 280 290, 220 320
+          Q 160 350, 100 360
+          Q 40 370, -20 380
+          L -50 400
+        "/>
+      </svg>
+    </div>
+
+    <div class="container">
+      <div class="cta-content">
+        <h2>Video Call Your Agent Now</h2>
+        <p style="color:rgba(255,255,255,0.7); margin-top:0.5rem; margin-bottom:1.5rem;">Download the desktop agentware. GUI walks you through setup and authorization, then your agent runs via CLI in the background.</p>
+        <div class="cta-actions">
+          <a href="https://github.com/XEasonChan/callingclaw/releases/latest" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/></svg>
+            Download for macOS
+          </a>
+          <a href="https://github.com/XEasonChan/callingclaw" target="_blank" rel="noopener" class="btn btn-secondary" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:white;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>© 2026 CallingClaw. Open source under Apache 2.0 License.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ── Theme Toggle ──────────────────────────────────────
+    const html = document.documentElement;
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    html.setAttribute('data-theme', savedTheme);
+
+    // Theme toggle button
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        const currentTheme = html.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+      });
+    }
+
+    // ── Scroll Reveal Animation ───────────────────────────
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    // ── Smooth Scroll (Lenis on desktop, native on touch devices) ──────
+    // Lenis conflicts with GSAP ScrollTrigger pin+scrub on touch devices
+    // (iPad Safari: touch events → Lenis interpolation → stale scroll progress).
+    // On touch: let native scroll drive ScrollTrigger directly.
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+    if (!isTouch) {
+      var lenis = new Lenis({
+        duration: 0.8,  // shorter = less interpolation lag competing with GSAP scrub
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        orientation: 'vertical',
+        gestureOrientation: 'vertical',
+        smoothWheel: true,
+        wheelMultiplier: 1,
+      });
+
+      lenis.on('scroll', ScrollTrigger.update);
+
+      gsap.ticker.add((time) => {
+        lenis.raf(time * 1000);
+      });
+
+      gsap.ticker.lagSmoothing(0); // Lenis official: disable GSAP smoothing (Lenis handles it)
+    } else {
+      // Touch devices: GSAP normalizeScroll handles touch → scroll for pinned sections
+      ScrollTrigger.normalizeScroll(true);
+    }
+
+    // ── Hero GSAP ScrollTrigger Animation ─────────────────────────────────
+    const heroImageContainer = document.getElementById('heroImageContainer');
+    const heroImage = document.getElementById('heroImage');
+    const heroDemoPanel = heroImageContainer?.querySelector('.hero-demo-panel');
+    const heroPinSpacer = document.getElementById('heroPinSpacer');
+    const heroWrapper = document.querySelector('.hero-image-wrapper');
+
+    if (heroImageContainer && heroDemoPanel && heroPinSpacer && heroImage && heroWrapper) {
+      gsap.registerPlugin(ScrollTrigger);
+
+      const gridBaseWrap = document.getElementById('flickeringGridBaseWrap');
+      const gridGlowWrap = document.getElementById('flickeringGridGlowWrap');
+      const isMobile = window.innerWidth < 768;
+
+      if (isMobile) {
+        // ── MOBILE: hide demo panel, show play button on hero image ──
+        heroDemoPanel.style.display = 'none';
+        var playBtn = document.getElementById('heroYtPlay');
+        if (playBtn) playBtn.style.display = 'block';
+
+        // Play button opens YouTube modal
+        var ytModal = document.getElementById('ytModal');
+        var ytModalBody = document.getElementById('ytModalBody');
+        var ytModalClose = document.getElementById('ytModalClose');
+        if (playBtn && ytModal && ytModalBody) {
+          playBtn.addEventListener('click', function() {
+            ytModalBody.innerHTML = '<iframe src="https://www.youtube.com/embed/VIDEO_ID?rel=0&autoplay=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen title="CallingClaw Demo"></iframe>';
+            ytModal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+          });
+          ytModalClose.addEventListener('click', function() {
+            ytModal.classList.remove('open');
+            ytModalBody.innerHTML = '';
+            document.body.style.overflow = '';
+          });
+          ytModal.addEventListener('click', function(e) {
+            if (e.target === ytModal) {
+              ytModalClose.click();
+            }
+          });
+        }
+
+        // Fade grid on scroll
+        ScrollTrigger.create({
+          trigger: heroWrapper,
+          start: 'top 60%',
+          end: 'bottom top',
+          onUpdate: function(self) {
+            var p = self.progress;
+            if (gridBaseWrap) gridBaseWrap.style.opacity = Math.max(0, 1 - p * 2);
+            if (gridGlowWrap) gridGlowWrap.style.opacity = Math.max(0, 1 - p * 3);
+          }
+        });
+      } else {
+        // ── DESKTOP: pin hero, expand image, slide demo panel in ──
+        gsap.set(heroDemoPanel, {
+          xPercent: -50,
+          y: '100%',
+          opacity: 0,
+        });
+
+        var heroSection = document.querySelector('.hero');
+        var ytScrollGuard = document.getElementById('ytScrollGuard');
+        var heroTl = gsap.timeline({
+          scrollTrigger: {
+            trigger: heroSection,
+            start: 'top top',
+            end: '+=50%',
+            pin: true,
+            scrub: 0.3,
+            anticipatePin: 1,
+            onUpdate: function(self) {
+              var p = self.progress;
+              if (gridBaseWrap) gridBaseWrap.style.opacity = Math.max(0, 1 - p);
+              if (gridGlowWrap) gridGlowWrap.style.opacity = Math.max(0, 1 - p * 1.5);
+              if (ytScrollGuard) ytScrollGuard.classList.toggle('inactive', p >= 0.98);
+              // Hide grid canvases once faded out (saves canvas draw + compositing cost)
+              if (p > 0.7) {
+                if (gridBaseWrap) gridBaseWrap.style.visibility = 'hidden';
+                if (gridGlowWrap) gridGlowWrap.style.visibility = 'hidden';
+              } else {
+                if (gridBaseWrap) gridBaseWrap.style.visibility = '';
+                if (gridGlowWrap) gridGlowWrap.style.visibility = '';
+              }
+            },
+          }
+        });
+
+        // Calculate initial scale: container starts visually as 960px (or viewport - 2rem)
+        var initialWidth = Math.min(window.innerWidth - 32, 960);
+        var fullWidth = window.innerWidth;
+        var startScale = initialWidth / fullWidth;
+        gsap.set(heroImageContainer, { scale: startScale, borderRadius: '16px' });
+
+        heroTl.to(heroImageContainer, {
+          scale: 1,               // transform: scale() — GPU-only, no layout reflow
+          borderRadius: '0px',
+          duration: 1,
+          ease: 'power1.inOut'
+        }, 0);
+
+        heroTl.to(heroDemoPanel, {
+          y: '-50%',
+          opacity: 1,
+          duration: 0.6,
+          ease: 'power2.out'
+        }, 0.4);
+
+        ScrollTrigger.create({
+          trigger: heroPinSpacer,
+          start: 'bottom top',
+          onEnter: function() {
+            if (gridBaseWrap) gridBaseWrap.style.opacity = '0';
+            if (gridGlowWrap) gridGlowWrap.style.opacity = '0';
+          },
+        });
+      }
+    }
+
+    // Observe bandwidth image
+    const bandwidthImage = document.querySelector('.bandwidth-image-container');
+    if (bandwidthImage) observer.observe(bandwidthImage);
+
+    // Observe bandwidth left (for chat bubble)
+    const bandwidthContent = document.querySelector('.bandwidth-content');
+    if (bandwidthContent) observer.observe(bandwidthContent);
+
+    // ── Action Cards Scroll Animation (GSAP ScrollTrigger) ──
+    const actionCards = document.querySelectorAll('.action-card');
+    const bandwidthSection = document.querySelector('.bandwidth-image-container');
+
+    if (actionCards.length >= 2 && bandwidthSection) {
+      // Use ScrollTrigger instead of manual scroll+getBoundingClientRect (avoids layout thrash)
+      actionCards.forEach(function(card) { card.style.willChange = 'transform, opacity'; });
+      gsap.set(actionCards, { opacity: 0, y: 40 });
+
+      gsap.to(actionCards[0], {
+        opacity: 1, y: 0,
+        scrollTrigger: { trigger: bandwidthSection, start: 'top 70%', end: 'center center', scrub: true }
+      });
+      gsap.to(actionCards[1], {
+        opacity: 1, y: 0,
+        scrollTrigger: { trigger: bandwidthSection, start: 'top 50%', end: 'center 30%', scrub: true }
+      });
+    }
+
+    // Observe scroll reveal elements
+    document.querySelectorAll('.scroll-reveal').forEach(el => {
+      observer.observe(el);
+    });
+
+    // ── Tab Switching ─────────────────────────────────────
+    const tabs = document.querySelectorAll('.browser-tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    function switchTab(tabName) {
+      tabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+      tabContents.forEach(content => {
+        content.classList.toggle('active', content.dataset.tabContent === tabName);
+      });
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+    });
+
+    // ── Demo Animation ────────────────────────────────────
+    const cursor = document.getElementById('clawCursor');
+    const screenContent = document.getElementById('screenContent');
+    const captionContainer = document.getElementById('captionContainer');
+
+    function showCaption(text) {
+      if (!captionContainer) return;
+      const caption = captionContainer.querySelector('.caption-text');
+      if (caption) {
+        caption.classList.add('fade-out');
+        setTimeout(() => {
+          caption.innerHTML = `<span class="speaker">CallingClaw:</span> ${text}`;
+          caption.classList.remove('fade-out');
+        }, 200);
+      }
+    }
+
+    function animateCursorTo(x, y, duration = 800) {
+      return new Promise(resolve => {
+        cursor.style.transition = `left ${duration}ms cubic-bezier(0.25, 0.1, 0.25, 1), top ${duration}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
+        cursor.style.left = x + 'px';
+        cursor.style.top = y + 'px';
+        setTimeout(resolve, duration);
+      });
+    }
+
+    function simulateClick() {
+      return new Promise(resolve => {
+        cursor.style.transform = 'scale(0.85)';
+        // Add visible click ripple
+        const ripple = document.createElement('div');
+        ripple.style.cssText = 'position:absolute;width:24px;height:24px;border-radius:50%;background:rgba(220,74,58,0.4);transform:scale(0);pointer-events:none;left:50%;top:50%;margin-left:-12px;margin-top:-12px;';
+        ripple.animate([
+          { transform: 'scale(0)', opacity: 1 },
+          { transform: 'scale(2.5)', opacity: 0 }
+        ], { duration: 400, easing: 'ease-out' });
+        cursor.appendChild(ripple);
+        setTimeout(() => {
+          cursor.style.transform = 'scale(1)';
+          ripple.remove();
+          setTimeout(resolve, 100);
+        }, 150);
+      });
+    }
+
+    async function runPresentation() {
+      if (!screenContent || !cursor) { console.warn('No screenContent or cursor'); return; }
+
+      // Wait for demo panel to be fully visible and have non-zero dimensions
+      await new Promise(r => setTimeout(r, 1000));
+      const rect = screenContent.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) { console.warn('screenContent too small:', rect); return; }
+      const screenRect = { width: rect.width, height: rect.height };
+      cursor.style.display = 'block';
+
+      // Initialize cursor position
+      cursor.style.left = (screenRect.width * 0.5) + 'px';
+      cursor.style.top = (screenRect.height * 0.5) + 'px';
+
+      while (true) {
+        // Tab 1: Sprint Backlog
+        showCaption("Here's our current sprint plan.");
+        await animateCursorTo(screenRect.width * 0.3, screenRect.height * 0.35, 800);
+        await new Promise(r => setTimeout(r, 1200));
+
+        showCaption("Voice routing is done — that was the hard part.");
+        await animateCursorTo(screenRect.width * 0.4, screenRect.height * 0.42, 600);
+        await new Promise(r => setTimeout(r, 1500));
+
+        showCaption("Screen share API is in progress now.");
+        await animateCursorTo(screenRect.width * 0.45, screenRect.height * 0.5, 500);
+        await new Promise(r => setTimeout(r, 1500));
+
+        showCaption("Let me show you the architecture...");
+        await new Promise(r => setTimeout(r, 800));
+
+        // Move to Architecture tab
+        const archTab = document.querySelector('[data-tab="architecture"]');
+        const screenContentRect = screenContent.getBoundingClientRect();
+        const archTabRect = archTab.getBoundingClientRect();
+        const archX = archTabRect.left - screenContentRect.left + archTabRect.width / 2;
+        const archY = archTabRect.top - screenContentRect.top + archTabRect.height / 2;
+
+        await animateCursorTo(archX, archY, 600);
+        await simulateClick();
+        switchTab('architecture');
+        await new Promise(r => setTimeout(r, 400));
+
+        showCaption("This is our system architecture.");
+        await animateCursorTo(screenRect.width * 0.2, screenRect.height * 0.4, 800);
+        await new Promise(r => setTimeout(r, 1200));
+
+        showCaption("LLM generates responses, TTS converts to speech...");
+        await animateCursorTo(screenRect.width * 0.5, screenRect.height * 0.4, 900);
+        await new Promise(r => setTimeout(r, 1500));
+
+        showCaption("The key is BlackHole for zero-latency audio routing.");
+        await animateCursorTo(screenRect.width * 0.8, screenRect.height * 0.4, 700);
+        await new Promise(r => setTimeout(r, 1800));
+
+        showCaption("Now let me check our website design...");
+        await new Promise(r => setTimeout(r, 800));
+
+        // Move to Review tab
+        const reviewTab = document.querySelector('[data-tab="review"]');
+        const reviewTabRect = reviewTab.getBoundingClientRect();
+        const reviewX = reviewTabRect.left - screenContentRect.left + reviewTabRect.width / 2;
+        const reviewY = reviewTabRect.top - screenContentRect.top + reviewTabRect.height / 2;
+
+        await animateCursorTo(reviewX, reviewY, 600);
+        await simulateClick();
+        switchTab('review');
+        await new Promise(r => setTimeout(r, 400));
+
+        showCaption("This is the current landing page.");
+        await animateCursorTo(screenRect.width * 0.35, screenRect.height * 0.5, 800);
+        await new Promise(r => setTimeout(r, 1200));
+
+        showCaption("I think we should add a demo video here.");
+        await animateCursorTo(screenRect.width * 0.4, screenRect.height * 0.7, 600);
+        await new Promise(r => setTimeout(r, 1800));
+
+        showCaption("Let me go back to the plan...");
+        await new Promise(r => setTimeout(r, 800));
+
+        // Back to Notion tab
+        const notionTab = document.querySelector('[data-tab="notion"]');
+        const notionTabRect = notionTab.getBoundingClientRect();
+        const notionX = notionTabRect.left - screenContentRect.left + notionTabRect.width / 2;
+        const notionY = notionTabRect.top - screenContentRect.top + notionTabRect.height / 2;
+
+        await animateCursorTo(notionX, notionY, 600);
+        await simulateClick();
+        switchTab('notion');
+
+        showCaption("Any questions about the plan?");
+        await animateCursorTo(screenRect.width * 0.5, screenRect.height * 0.45, 800);
+        await new Promise(r => setTimeout(r, 2500));
+      }
+    }
+
+    // Start presentation when hero scroll animation nears completion
+    // Uses GSAP onUpdate progress check (no scroll listener, no getComputedStyle)
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      var presentationStarted = false;
+      var heroSection = document.querySelector('.hero');
+      if (heroSection) {
+        ScrollTrigger.create({
+          trigger: heroSection,
+          start: 'top top',
+          end: '+=50%',
+          onUpdate: function(self) {
+            if (!presentationStarted && self.progress > 0.85) {
+              presentationStarted = true;
+              setTimeout(runPresentation, 300);
+            }
+          }
+        });
+      }
+    }
+
+    // ── How-It-Works: Apple-style Carousel (CSS animation, no rAF loop) ──
+    ;(function initHiwCarousel() {
+      var tabs = document.querySelectorAll('.hiw-tab');
+      var track = document.getElementById('hiwCards');
+      var cards = document.querySelectorAll('.hiw-card');
+      var carousel = document.querySelector('.hiw-carousel');
+      if (!tabs.length || !track || !cards.length || !carousel) return;
+
+      var current = 0;
+      var total = cards.length;
+      var DURATION = 6;
+      var paused = false;
+
+      function getOffset(index) {
+        var carouselW = carousel.offsetWidth;
+        var card = cards[index];
+        return -(card.offsetLeft - (carouselW - card.offsetWidth) / 2);
+      }
+
+      function goTo(index) {
+        current = index;
+        track.style.transform = 'translateX(' + getOffset(current) + 'px)';
+
+        cards.forEach(function(c, i) { c.classList.toggle('active', i === current); });
+
+        // Tab states: CSS animation drives the fill bar (no JS rAF loop)
+        tabs.forEach(function(tab, i) {
+          var fill = tab.querySelector('.hiw-tab-fill');
+          tab.classList.remove('active', 'visited');
+          fill.style.animation = 'none';
+          if (i < current) {
+            tab.classList.add('visited');
+            fill.style.width = '100%';
+          } else if (i === current) {
+            tab.classList.add('active');
+            fill.style.width = '0%';
+            // CSS animation: 0→100% over DURATION seconds, GPU-composited
+            fill.offsetHeight; // force reflow to restart animation
+            fill.style.animation = 'hiwFill ' + DURATION + 's linear forwards';
+            fill.style.animationPlayState = paused ? 'paused' : 'running';
+          } else {
+            fill.style.width = '0%';
+          }
+        });
+      }
+
+      // CSS animation end → advance to next card
+      tabs.forEach(function(tab) {
+        var fill = tab.querySelector('.hiw-tab-fill');
+        fill.addEventListener('animationend', function() {
+          if (!paused) goTo((current + 1) % total);
+        });
+      });
+
+      // Click tab → jump
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          goTo(parseInt(tab.dataset.step));
+        });
+      });
+
+      // Pause/resume: toggle CSS animation-play-state (no JS timer needed)
+      function setPaused(p) {
+        paused = p;
+        var fill = tabs[current] && tabs[current].querySelector('.hiw-tab-fill');
+        if (fill) fill.style.animationPlayState = p ? 'paused' : 'running';
+      }
+
+      var clipEl = document.querySelector('.hiw-carousel-clip');
+      if (clipEl) {
+        clipEl.addEventListener('mouseenter', function() { setPaused(true); });
+        clipEl.addEventListener('mouseleave', function() { setPaused(false); });
+      }
+
+      window.addEventListener('resize', function() {
+        track.style.transition = 'none';
+        track.style.transform = 'translateX(' + getOffset(current) + 'px)';
+        requestAnimationFrame(function() { track.style.transition = ''; });
+      });
+
+      // Visibility: pause CSS animation when off-screen
+      var section = document.querySelector('.how-it-works');
+      new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) { setPaused(false); if (!current) goTo(0); }
+          else { setPaused(true); }
+        });
+      }, { threshold: 0.2 }).observe(section);
+
+      cards[0].classList.add('active');
+    })();
+
+    // ── Step 3 Meeting Frame: Cursor + Caption Animation ────────────
+    // Pauses when card is not active or not visible (no wasted CPU)
+    ;(function initMfAnimation() {
+      var cursor = document.getElementById('hiwMfCursor');
+      var captionText = document.getElementById('hiwMfCaptionText');
+      if (!cursor || !captionText) return;
+
+      var active = false;
+      var abortCtrl = null;
+
+      function moveTo(xPct, yPct, dur, signal) {
+        cursor.style.transition = 'left ' + dur + 'ms cubic-bezier(0.25,0.1,0.25,1), top ' + dur + 'ms cubic-bezier(0.25,0.1,0.25,1)';
+        cursor.style.left = xPct + '%';
+        cursor.style.top = yPct + '%';
+        return new Promise(function(r, rej) {
+          var t = setTimeout(r, dur);
+          if (signal) signal.addEventListener('abort', function() { clearTimeout(t); rej('aborted'); });
+        });
+      }
+
+      function clickAnim(signal) {
+        return new Promise(function(r, rej) {
+          cursor.style.transform = 'scale(0.8)';
+          var t = setTimeout(function() { cursor.style.transform = 'scale(1)'; setTimeout(r, 100); }, 150);
+          if (signal) signal.addEventListener('abort', function() { clearTimeout(t); rej('aborted'); });
+        });
+      }
+
+      function say(text) {
+        captionText.style.opacity = '0';
+        setTimeout(function() {
+          captionText.innerHTML = '<strong style="color:white">CallingClaw:</strong> <span style="color:white">' + text + '</span>';
+          captionText.style.opacity = '1';
+        }, 150);
+      }
+
+      function wait(ms, signal) {
+        return new Promise(function(r, rej) {
+          var t = setTimeout(r, ms);
+          if (signal) signal.addEventListener('abort', function() { clearTimeout(t); rej('aborted'); });
+        });
+      }
+
+      async function runLoop(signal) {
+        try {
+          while (!signal.aborted) {
+            say("Here's our current sprint plan.");
+            await moveTo(30, 30, 800, signal);
+            await wait(1500, signal);
+            say("Voice routing is done — that was the hard part.");
+            await moveTo(25, 42, 600, signal);
+            await clickAnim(signal);
+            await wait(1800, signal);
+            say("Screen share API is in progress now.");
+            await moveTo(35, 52, 500, signal);
+            await clickAnim(signal);
+            await wait(1800, signal);
+            say("Calendar integration is blocked on Peter's side.");
+            await moveTo(28, 62, 500, signal);
+            await wait(1800, signal);
+            say("Visual diff optimization shipped yesterday.");
+            await moveTo(40, 72, 600, signal);
+            await clickAnim(signal);
+            await wait(1500, signal);
+            say("Any questions about the plan?");
+            await moveTo(50, 45, 800, signal);
+            await wait(2500, signal);
+          }
+        } catch(e) { /* aborted — clean stop */ }
+      }
+
+      // Only run when card 2 is visible and active in the carousel
+      var card = document.querySelector('[data-hiw-card="2"]');
+      if (!card) return;
+      new IntersectionObserver(function(entries) {
+        var visible = entries[0].isIntersecting && card.classList.contains('active');
+        if (visible && !active) {
+          active = true;
+          abortCtrl = new AbortController();
+          runLoop(abortCtrl.signal);
+        } else if (!visible && active) {
+          active = false;
+          if (abortCtrl) abortCtrl.abort();
+        }
+      }, { threshold: 0.3 }).observe(card);
+    })();
+
+    // ── Pause HiW CSS animations when off-screen ──
+    ;(function() {
+      var hiw = document.querySelector('.how-it-works');
+      if (!hiw) return;
+      hiw.classList.add('offscreen');
+      new IntersectionObserver(function(entries) {
+        hiw.classList.toggle('offscreen', !entries[0].isIntersecting);
+      }, { threshold: 0 }).observe(hiw);
+    })();
+
+    // ── Flickering Grid Animation (ported from React FlickeringGrid) ────
+    ;(function initFlickeringGrid() {
+      // ── Color parser: any CSS color → "rgba(r, g, b," prefix ──
+      function toRGBA(color) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 1;
+        const cx = c.getContext('2d');
+        cx.fillStyle = color;
+        cx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = cx.getImageData(0, 0, 1, 1).data;
+        return `rgba(${r}, ${g}, ${b},`;
+      }
+
+      // ── Create one flickering grid on a canvas ──────
+      function createGrid(canvas, opts) {
+        const ctx = canvas.getContext('2d');
+        const dpr = 1; // Cap at 1x — decorative 4px dots don't need retina (saves 4x draw calls)
+        const squareSize = opts.squareSize || 4;
+        const gridGap = opts.gridGap || 4;
+        const flickerChance = opts.flickerChance || 0.1;
+        const maxOpacity = opts.maxOpacity || 0.3;
+        const colorPrefix = toRGBA(opts.color || '#000');
+
+        let cols, rows, squares, w, h;
+        let lastTime = 0;
+        let animId = null;
+        let inView = true;
+
+        function resize() {
+          w = canvas.parentElement.clientWidth;
+          h = canvas.parentElement.clientHeight;
+          canvas.width = w * dpr;
+          canvas.height = h * dpr;
+          canvas.style.width = w + 'px';
+          canvas.style.height = h + 'px';
+          cols = Math.floor(w / (squareSize + gridGap));
+          rows = Math.floor(h / (squareSize + gridGap));
+          squares = new Float32Array(cols * rows);
+          for (let i = 0; i < squares.length; i++) {
+            squares[i] = Math.random() * maxOpacity;
+          }
+        }
+
+        var frameSkip = 0;
+        function draw(time) {
+          animId = requestAnimationFrame(draw);
+          if (!inView) return;
+          // Throttle to ~15fps (every 4th frame) — 4 canvases at 60fps kills the main thread
+          if (++frameSkip < 4) return;
+          frameSkip = 0;
+          const dt = (time - lastTime) / 1000;
+          lastTime = time;
+
+          // Update flickering
+          for (let i = 0; i < squares.length; i++) {
+            if (Math.random() < flickerChance * dt * 4) {
+              squares[i] = Math.random() * maxOpacity;
+            }
+          }
+
+          // Draw
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+              const opacity = squares[i * rows + j];
+              ctx.fillStyle = colorPrefix + opacity + ')';
+              ctx.fillRect(
+                i * (squareSize + gridGap) * dpr,
+                j * (squareSize + gridGap) * dpr,
+                squareSize * dpr,
+                squareSize * dpr
+              );
+            }
+          }
+        }
+
+        // Visibility optimization
+        const io = new IntersectionObserver(([e]) => { inView = e.isIntersecting; }, { threshold: 0 });
+        io.observe(canvas);
+
+        // Resize handling
+        const ro = new ResizeObserver(() => resize());
+        ro.observe(canvas.parentElement);
+
+        resize();
+        animId = requestAnimationFrame(draw);
+
+        // Respect reduced motion
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          cancelAnimationFrame(animId);
+        }
+
+        return { resize, destroy() { cancelAnimationFrame(animId); io.disconnect(); ro.disconnect(); } };
+      }
+
+      // ── Base grid: subtle pink/coral flickering ─────
+      const baseCanvas = document.getElementById('flickeringGridBase');
+      if (baseCanvas) {
+        createGrid(baseCanvas, {
+          color: '#FFD6D1',
+          maxOpacity: 0.45,
+          flickerChance: 0.1,
+          squareSize: 4,
+          gridGap: 4,
+        });
+      }
+
+      // ── Glow grid: brighter, follows mouse ─────────
+      const glowCanvas = document.getElementById('flickeringGridGlow');
+      const glowWrap = document.getElementById('flickeringGridGlowWrap');
+      if (glowCanvas && glowWrap) {
+        createGrid(glowCanvas, {
+          color: '#DC4A3A',
+          maxOpacity: 0.5,
+          flickerChance: 0.3,
+          squareSize: 4,
+          gridGap: 4,
+        });
+
+        // Mouse tracking — radial mask follows cursor (throttled to ~30fps)
+        var lastMaskUpdate = 0;
+        document.addEventListener('mousemove', function(e) {
+          var now = performance.now();
+          if (now - lastMaskUpdate < 33) return; // ~30fps cap
+          lastMaskUpdate = now;
+          var x = (e.clientX / window.innerWidth * 100).toFixed(1);
+          var y = (e.clientY / window.innerHeight * 100).toFixed(1);
+          var mask = 'radial-gradient(400px circle at ' + x + '% ' + y + '%, white, transparent)';
+          glowWrap.style.webkitMaskImage = mask;
+          glowWrap.style.maskImage = mask;
+        }, { passive: true });
+
+        document.addEventListener('mouseenter', function() {
+          glowWrap.classList.add('active');
+        });
+        document.addEventListener('mouseleave', function() {
+          glowWrap.classList.remove('active');
+        });
+        // Start hidden, show on first move
+        let firstMove = true;
+        document.addEventListener('mousemove', function() {
+          if (firstMove) { glowWrap.classList.add('active'); firstMove = false; }
+        }, { passive: true, once: true });
+      }
+
+      // ── HiW section grid (dark bg, cream-colored) ──
+      var hiwBase = document.getElementById('hiwGridBase');
+      var hiwGlowCanvas = document.getElementById('hiwGridGlow');
+      var hiwGlowWrap = document.getElementById('hiwGridGlowWrap');
+      if (hiwBase) {
+        createGrid(hiwBase, { color: '#1a3d35', maxOpacity: 0.4, flickerChance: 0.08, squareSize: 4, gridGap: 5 });
+      }
+      if (hiwGlowCanvas && hiwGlowWrap) {
+        createGrid(hiwGlowCanvas, { color: '#faf9f5', maxOpacity: 0.25, flickerChance: 0.25, squareSize: 4, gridGap: 5 });
+        document.addEventListener('mousemove', function(e) {
+          var sect = document.querySelector('.how-it-works');
+          if (!sect) return;
+          var r = sect.getBoundingClientRect();
+          if (e.clientY < r.top || e.clientY > r.bottom) { hiwGlowWrap.classList.remove('active'); return; }
+          hiwGlowWrap.classList.add('active');
+          var x = ((e.clientX - r.left) / r.width * 100).toFixed(1);
+          var y = ((e.clientY - r.top) / r.height * 100).toFixed(1);
+          var mask = 'radial-gradient(350px circle at ' + x + '% ' + y + '%, white, transparent)';
+          hiwGlowWrap.style.webkitMaskImage = mask;
+          hiwGlowWrap.style.maskImage = mask;
+        }, { passive: true });
+      }
+    })();
+  </script>
+
+  <!-- YouTube modal (mobile play button triggers this) -->
+  <div class="yt-modal" id="ytModal">
+    <button class="yt-modal-close" id="ytModalClose">&times;</button>
+    <div class="yt-modal-body" id="ytModalBody"></div>
+  </div>
+
+</body>
+</html>

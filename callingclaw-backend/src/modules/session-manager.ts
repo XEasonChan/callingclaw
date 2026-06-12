@@ -77,6 +77,36 @@ const MAX_SESSIONS = 50;
 
 function isoNow(): string { return new Date().toISOString(); }
 
+/** Fuzzy topic similarity: containment check + word overlap + bigram Jaccard.
+ *  Returns 0.0–1.0. Use threshold > 0.3 for prep-to-meeting matching.
+ *  Handles CJK characters natively via bigram scoring. */
+export function topicSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const na = a.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff\s]/g, "").trim();
+  const nb = b.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff\s]/g, "").trim();
+  if (!na || !nb) return 0;
+  if (na === nb) return 1.0;
+  // Containment: one topic is a substring of the other
+  if (na.includes(nb) || nb.includes(na)) return 0.8;
+  // Word overlap
+  const wa = new Set(na.split(/\s+/).filter(w => w.length > 1));
+  const wb = new Set(nb.split(/\s+/).filter(w => w.length > 1));
+  if (wa.size > 0 && wb.size > 0) {
+    let shared = 0;
+    for (const w of wa) if (wb.has(w)) shared++;
+    const overlap = shared / Math.max(wa.size, wb.size);
+    if (overlap > 0.5) return 0.4 + overlap * 0.4;
+  }
+  // Bigram Jaccard (handles CJK)
+  const ba = new Set<string>(), bb = new Set<string>();
+  for (let i = 0; i < na.length - 1; i++) ba.add(na.slice(i, i + 2));
+  for (let i = 0; i < nb.length - 1; i++) bb.add(nb.slice(i, i + 2));
+  let inter = 0;
+  for (const g of ba) if (bb.has(g)) inter++;
+  const union = new Set([...ba, ...bb]).size;
+  return union === 0 ? 0 : inter / union;
+}
+
 export class SessionManager {
   private eventBus: EventBus;
   private _dbSyncFn: ((session: MeetingSession) => void) | null = null;
@@ -141,6 +171,19 @@ export class SessionManager {
   }): MeetingSession {
     const existing = this._findExisting(opts.meetUrl, opts.calendarEventId, opts.topic);
     if (existing) {
+      // Adopt meetUrl if the matched session doesn't have one (bridges prepare → join gap)
+      if (opts.meetUrl && !existing.meetUrl) {
+        console.log(`[SessionManager] Adopting meetUrl for prep session: ${existing.meetingId} → ${opts.meetUrl}`);
+        const index = this._read();
+        const s = index.sessions.find(s => s.meetingId === existing.meetingId);
+        if (s) {
+          s.meetUrl = opts.meetUrl;
+          s.updatedAt = isoNow();
+          this._save(index);
+          this._syncDB(s);
+        }
+        existing.meetUrl = opts.meetUrl;
+      }
       // Update stale "Meeting" topic if we now have a better one
       const hasRealTopic = opts.topic && opts.topic !== "Meeting" && !opts.topic.startsWith("Meeting at ");
       const hasStaleGenericTopic = existing.topic === "Meeting" || existing.topic.startsWith("Meeting at ");
@@ -344,15 +387,40 @@ export class SessionManager {
     );
     if (byKey) return byKey;
 
-    // Fallback: match by topic for sessions without meetUrl/calendarEventId
+    // Tier 3: exact topic match for sessions without meetUrl/calendarEventId
     // Prevents duplicate sessions from delegate API and talk-locally
     if (topic && topic !== "Meeting" && !topic.startsWith("Meeting at ")) {
-      return sessions.find(s =>
+      const exactTopic = sessions.find(s =>
         s.status !== SESSION_STATUS.ENDED &&
         !s.meetUrl && !s.calendarEventId &&
         s.topic === topic
-      ) || null;
+      );
+      if (exactTopic) return exactTopic;
     }
+
+    // Tier 4: fuzzy topic match for recent prep sessions (OAuth-down resilience)
+    // Only when caller provides a meetUrl (join flow), not during prepare-only calls.
+    // Matches prep sessions that have files.prep, are preparing/ready, and < 2h old.
+    if (meetUrl && topic && topic !== "Meeting" && !topic.startsWith("Meeting at ")) {
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const prepSessions = sessions.filter(s =>
+        s.status !== SESSION_STATUS.ENDED &&
+        (s.status === SESSION_STATUS.PREPARING || s.status === SESSION_STATUS.READY) &&
+        s.files?.prep &&
+        s.createdAt > twoHoursAgo
+      );
+      if (prepSessions.length > 0) {
+        const scored = prepSessions
+          .map(s => ({ session: s, score: topicSimilarity(topic, s.topic) }))
+          .filter(x => x.score > 0.3)
+          .sort((a, b) => b.score - a.score);
+        if (scored.length > 0) {
+          console.log(`[SessionManager] Fuzzy topic match: "${topic.slice(0, 40)}" ↔ "${scored[0].session.topic.slice(0, 40)}" (score=${scored[0].score.toFixed(2)})`);
+          return scored[0].session;
+        }
+      }
+    }
+
     return null;
   }
 

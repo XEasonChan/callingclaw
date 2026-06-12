@@ -18,10 +18,30 @@ import { OpenClawBridge } from "../openclaw_bridge";
 
 // ── Screenshot dimensions for API ──
 // Full 1920x1080 PNG ~3-5MB base64 ~500k+ tokens per image.
-// Anthropic recommends max 1280x800 for computer use.
-// We use sips (macOS) to resize screenshots before sending to the API.
-const API_SCREEN_WIDTH = 1280;
-const API_SCREEN_HEIGHT = 800;
+// Anthropic recommends specific resolutions for computer use.
+// We pick the closest match to the actual display aspect ratio to avoid distortion.
+// (Inspired by Clicky's ElementLocationDetector approach)
+const ANTHROPIC_RESOLUTIONS: [number, number, number][] = [
+  [1024, 768,  1.333],   // 4:3 (legacy displays)
+  [1280, 800,  1.600],   // 16:10 (MacBook Air/Pro — most common)
+  [1366, 768,  1.779],   // ~16:9 (external monitors)
+];
+
+function pickApiResolution(): { width: number; height: number } {
+  const realAspect = CONFIG.screen.width / CONFIG.screen.height;
+  let best = ANTHROPIC_RESOLUTIONS[1]!; // default 1280x800
+  let bestDelta = Infinity;
+  for (const [w, h, aspect] of ANTHROPIC_RESOLUTIONS) {
+    const delta = Math.abs(realAspect - aspect);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = [w, h, aspect];
+    }
+  }
+  return { width: best[0], height: best[1] };
+}
+
+const { width: API_SCREEN_WIDTH, height: API_SCREEN_HEIGHT } = pickApiResolution();
 
 // ── Model → Tool Version mapping ──
 // Opus 4.6, Sonnet 4.6, Opus 4.5 → computer_20251124 + computer-use-2025-11-24
@@ -53,6 +73,8 @@ export class ComputerUseModule {
   private bridge: PythonBridge;
   private context: SharedContext;
   private _running = false;
+  // Sliding window of recent interactions (Clicky pattern: gives context for multi-step tasks)
+  private _interactionHistory: Array<{ instruction: string; result: string; ts: number }> = [];
   private _mode: "anthropic" | "openrouter" | "none" = "none";
   private openclaw: OpenClawBridge;
   private eventBus?: EventBus;
@@ -461,7 +483,12 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
     const identitySection =
       "## Identity\n" +
       "You are CallingClaw's computer control module on macOS.\n" +
-      "Be precise with coordinates. Take screenshots to verify actions.";
+      "Be precise with coordinates. Take screenshots to verify actions.\n" +
+      "When describing what you did, speak conversationally. Don't list coordinates or technical details.\n\n" +
+      "## When to click vs describe\n" +
+      "- Click when the user asks to interact with something specific on screen.\n" +
+      "- Don't click when the user asks a general question or wants an explanation.\n" +
+      "- After clicking, take a screenshot to verify. Describe the result naturally.";
 
     const toolSelectionSection = this.openclaw.connected
       ? "## Tool Selection (priority order)\n" +
@@ -475,7 +502,14 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
         "2. `bash` — shell commands: launch apps, run scripts, quick file ops.\n" +
         '   Launch apps: open -a "AppName"  |  Open URLs: open "https://..."  |  Verify: take screenshot after.';
 
-    const systemPrompt = `${identitySection}\n\n${toolSelectionSection}${contextBlock}`;
+    // Append recent interaction history (sliding window, like Clicky's 10-exchange memory)
+    let historyBlock = "";
+    if (this._interactionHistory.length > 0) {
+      historyBlock = "\n\n## Recent actions (what you already did)\n" +
+        this._interactionHistory.map(h => `- "${h.instruction.slice(0, 60)}" → ${h.result.slice(0, 80)}`).join("\n");
+    }
+
+    const systemPrompt = `${identitySection}\n\n${toolSelectionSection}${contextBlock}${historyBlock}`;
 
     this.emitActivity("ai.step", `Starting: "${instruction.slice(0, 60)}"`);
 
@@ -569,6 +603,9 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
           ts: Date.now(),
         });
 
+        // Record interaction for history window
+        this._interactionHistory.push({ instruction, result: text.slice(0, 100), ts: Date.now() });
+        if (this._interactionHistory.length > 5) this._interactionHistory.shift();
         return { summary: text, steps };
       }
 
@@ -702,7 +739,12 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
       messages.push({ role: "user", content: toolResults });
     }
 
-    return { summary: "Max steps reached", steps };
+    // _running reset happens in execute()'s finally
+    const summary = "Max steps reached";
+    // Record interaction for history window
+    this._interactionHistory.push({ instruction, result: summary, ts: Date.now() });
+    if (this._interactionHistory.length > 5) this._interactionHistory.shift();
+    return { summary, steps };
   }
 
   /**

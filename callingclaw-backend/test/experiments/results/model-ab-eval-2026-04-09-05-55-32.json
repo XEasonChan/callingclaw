@@ -1,0 +1,1362 @@
+{
+  "timestamp": "2026-04-09T05:55:32.698Z",
+  "modelA": "anthropic/claude-haiku-4-5",
+  "modelB": "anthropic/claude-sonnet-4.6",
+  "testCount": 29,
+  "results": [
+    {
+      "testId": "IC-01",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": \"share_url\",\n  \"params\": {\n    \"url\": \"https://www.callingclaw.com\"\n  },\n  \"confidence\": 0.95,\n  \"reasoning\": \"User (Andrew) explicitly requested '帮我投屏 CallingClaw 官网' (help me screen share the CallingClaw official website). This is a clear screen sharing request with a known URL from meeting prep. The assistant already acknowledged this action ('我来把 CallingClaw 官网拉出来'), so now the meeting agent should execute the screen share.\",\n  \"targetTab\": \"meet\"\n}\n```",
+        "latencyMs": 1960,
+        "inputTokens": 1490,
+        "outputTokens": 156,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-02",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": \"click\",\n  \"params\": {\n    \"selector\": \"download for mac\",\n    \"targetTab\": \"presenting\"\n  },\n  \"confidence\": 0.95,\n  \"reasoning\": \"User (Andrew) explicitly requested to click the 'download for mac' button on the currently presenting page (https://www.callingclaw.com). This is a clear action request directed at the meeting agent.\"\n}\n```",
+        "latencyMs": 1814,
+        "inputTokens": 1538,
+        "outputTokens": 108,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-03",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": null,\n  \"params\": {},\n  \"confidence\": 0.0,\n  \"reasoning\": \"User (Andrew) is asking to 'return to the part mentioned earlier and explain again' (返回刚才提到的部分重新说一下). This is a request for the voice AI to recall and re-explain previous discussion content, not a request to open/show/click/scroll on the presenting page. This is a conversational/recall intent, not an action intent for the meeting agent. No tool execution needed.\",\n  \"targetTab\": null\n}\n```",
+        "latencyMs": 2137,
+        "inputTokens": 1527,
+        "outputTokens": 140,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 50,
+      "dimensions": {
+        "actionCorrect": false,
+        "confidenceCorrect": false,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": [
+        "Expected action \"navigate\" but got: \"null\"",
+        "Expected confidence>=0.7 but got 0"
+      ]
+    },
+    {
+      "testId": "IC-04",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": null,\n  \"params\": {},\n  \"confidence\": 0.0,\n  \"reasoning\": \"The transcript shows Andrew and the assistant discussing a bug that will be addressed post-launch. This is a discussion/decision about future work, not a request to open files, share screens, click elements, or perform any actionable task. No tool invocation is needed.\",\n  \"targetTab\": null\n}\n```",
+        "latencyMs": 1655,
+        "inputTokens": 1485,
+        "outputTokens": 102,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-05",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": null,\n  \"params\": {},\n  \"confidence\": 0.0,\n  \"reasoning\": \"User (Andrew) is providing feedback/suggestion ('Hero 再更 sharp 一点' = 'Make the Hero section sharper/more impactful'). This is a discussion/opinion about content improvement, not a request to open, display, click, or search for something. The assistant is clarifying the feedback. No tool action needed.\",\n  \"targetTab\": null\n}\n```",
+        "latencyMs": 1585,
+        "inputTokens": 1489,
+        "outputTokens": 121,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-06",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": \"navigate\",\n  \"params\": {\n    \"url\": \"https://github.com/XEasonChan/callingclaw\",\n    \"targetTab\": \"presenting\"\n  },\n  \"confidence\": 0.95,\n  \"reasoning\": \"User (Andrew) explicitly requested to switch to the GitHub tab twice ('我们看看 GitHub 那个 tab' and '切到 GitHub 那个 tab'). The assistant acknowledged this ('好，我来切过去'). This is a clear navigation request to the known CallingClaw GitHub repository URL. The user wants to view the GitHub README instead of the current CallingClaw website presentation.\"\n}\n```",
+        "latencyMs": 1378,
+        "inputTokens": 1496,
+        "outputTokens": 165,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-07",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": \"research_task\",\n  \"params\": {\n    \"query\": \"CallingClaw Twitter discussion recent\"\n  },\n  \"confidence\": 0.95,\n  \"reasoning\": \"User (Andrew) explicitly asked to search Twitter for recent discussions about CallingClaw. The assistant acknowledged this with '我让 agent 去搜一下' (I'll have the agent search). This is a clear research_task trigger: external web search on social media for public discussion about a product.\",\n  \"targetTab\": \"meet\"\n}\n```",
+        "latencyMs": 1262,
+        "inputTokens": 1480,
+        "outputTokens": 134,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-08",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": null,\n  \"params\": {},\n  \"confidence\": 0.0,\n  \"reasoning\": \"User (Andrew) responded with '嗯' (affirmative/acknowledgment) to the AI's question 'you觉得这个方案怎么样？' (what do you think of this plan?). This is a simple agreement/acknowledgment response, not a request to open files, share screens, click, scroll, or perform any action. Per guidelines: 'Response to AI question (是/好的/对/嗯) → DO NOT ACT, confidence=0'.\",\n  \"targetTab\": null\n}\n```",
+        "latencyMs": 972,
+        "inputTokens": 1457,
+        "outputTokens": 159,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-09",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": null,\n  \"params\": {},\n  \"confidence\": 0.0,\n  \"reasoning\": \"User (Andrew) is expressing an opinion/concern about tradeoffs in a proposed solution. The assistant is asking a clarifying question. This is a discussion/debate exchange, not a request to open files, share screens, click, scroll, or perform any tool action. No action needed.\",\n  \"targetTab\": null\n}\n```",
+        "latencyMs": 1546,
+        "inputTokens": 1474,
+        "outputTokens": 107,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-10",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "```json\n{\n  \"action\": \"share_url\",\n  \"params\": {\n    \"url\": \"https://www.callingclaw.com\"\n  },\n  \"confidence\": 0.85,\n  \"reasoning\": \"User asked to 'show me the features page'. The assistant responded 'let me pull that up', which is a cue to act. The features page is known to be at https://www.callingclaw.com (Features section). Using share_url to present it in the meeting is the appropriate action.\",\n  \"targetTab\": \"presenting\"\n}\n```",
+        "latencyMs": 1571,
+        "inputTokens": 1451,
+        "outputTokens": 139,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-01",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "The CallingClaw landing page is displayed in a browser, featuring a hero section with the headline \"AI With Memory That Joins Your Meetings\" and a prominent red \"Join the Waitlist\" call-to-action button. Below the hero are four feature cards highlighting Voice AI, Screen Sharing, Meeting Notes, and Computer Use capabilities, all set against a dark navy background with white text.",
+        "latencyMs": 1239,
+        "inputTokens": 318,
+        "outputTokens": 86,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-02",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "页面向下滚动后，现在显示了 CallingClaw 的\"How It Works\"功能介绍部分，包含3个步骤：安装 Mac 应用、加入任何会议、以及 CallingClaw 监听并执行操作。下方还展示了定价信息，标注为\"$19.99 一次性购买\"。",
+        "latencyMs": 1082,
+        "inputTokens": 328,
+        "outputTokens": 104,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-03",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "Meeting grid view with no shared content. Four participants are visible in a 2x2 layout: Andrew, Sarah, Mike, and Lisa. The standard Google Meet toolbar is visible at the bottom with controls for mute, camera, hangup, and chat.",
+        "latencyMs": 1192,
+        "inputTokens": 279,
+        "outputTokens": 57,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-04",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "VS Code 编辑器正在共享，打开的是 context-retriever.ts 文件。屏幕显示 agenticSearch 方法的代码实现，包含三个工具定义（list_workspace、read_file、search_files），左侧文件树展开了 modules/ 文件夹，底部终端面板显示 \"bun test\" 的执行结果，有 3 个测试通过。",
+        "latencyMs": 1094,
+        "inputTokens": 322,
+        "outputTokens": 119,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-05",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "浏览器已切换到 GitHub，显示 XEasonChan/callingclaw 仓库页面。项目名称为\"CallingClaw — AI Meeting Companion\"，有 247 个 star 和 32 个 fork，README 中展示了在 Google Meet 中进行屏幕共享的演示 GIF。最近一次提交是 2 天前的版本号更新到 2.8.12，采用 MIT 许可证。",
+        "latencyMs": 1469,
+        "inputTokens": 340,
+        "outputTokens": 130,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-06",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "屏幕上显示的是一个Mermaid架构图，展示CallingClaw系统的三层架构：顶层是Electron桌面GUI，通过HTTP连接到中层的Bun Daemon（:4000），再通过WebSocket连接到底层的OpenClaw Gateway（:18789）。右侧还显示了Telegram、Discord和Signal三个通道与OpenClaw的连接关系。",
+        "latencyMs": 1099,
+        "inputTokens": 330,
+        "outputTokens": 115,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 75,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": [
+        "Missed keywords: architecture, diagram"
+      ]
+    },
+    {
+      "testId": "CR-01",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "I'll search for information about CallingClaw's pricing strategy.\n<function_calls>\n<invoke name=\"search_files\">\n<parameter name=\"query\">CallingClaw 定价 pricing price</parameter>\n</invoke>\n</function_calls>\n<function_calls>\n<invoke name=\"search_files\">\n<parameter name=\"query\">CallingClaw 2.0 Desktop GTM 商业模式</parameter>\n</invoke>\n</function_calls>\n\nBased on the MEMORY.md content, here's CallingClaw's pricing strategy:\n\n**CallingClaw 定价策略（三层 GTM）：**\n\n1. **ClawHub Skill（免费）** - 引流层\n2. **Desktop 买断版（$19.99）** - 用户自带 OpenAI key，一次性付款，产品方不承担 API 成本\n3. **Cloud Hosted（按次/月付）** - 云端托管版本\n\n**成本结构：**\n- 30分钟会议的 Realtime audio API 成本：$2-5\n- 语音提供商选项：OpenAI（默认）、Grok（$0.05/min）、Gemini（最便宜 ~$0.02/min）\n\n**品牌重塑计划（CoCo Launch Sprint）：**\n- MIT 开源协议\n- $19.99 买断模式保留\n\n---",
+        "latencyMs": 1181,
+        "inputTokens": 1339,
+        "outputTokens": 399,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-02",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "# Query Results\n\n## 1. What voice providers does CallingClaw support?\n\n**4 voice providers**:\n- **openai** (GA 1.5, default)\n- **openai15** (alias)\n- **grok** ($0.05/min)\n- **gemini** (cheapest ~$0.02/min)\n\n---",
+        "latencyMs": 1325,
+        "inputTokens": 1335,
+        "outputTokens": 86,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-03",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "I'll search for information about why CallingClaw replaced BlackHole.\n\nBased on the MEMORY.md content provided, here's the relevant information:\n\n---\n\n**Query 1: Why did CallingClaw replace BlackHole?**\n\nCallingClaw replaced BlackHole due to architectural improvements in the migration to Electron desktop application (2026-03-12):\n\n- **BlackHole limitation**: BlackHole was a virtual audio device used with Chrome + AppleScript for audio capture\n- **Electron advantages**: \n  - Preload injection replaces AppleScript (more reliable)\n  - WebRTC direct audio capture replaces BlackHole (eliminates virtual device dependency)\n  - Transparent floating window UI\n  - .dmg one-click installation\n- **Verification**: Playwright addInitScript audio injection method validated full-duplex functionality (2026-03-26)\n\nThe replacement was part of the CallingClaw 2.0 → Desktop migration strategy, moving from a Chrome extension + system-level audio routing to a native Electron app with direct audio handling capabilities.",
+        "latencyMs": 1045,
+        "inputTokens": 1336,
+        "outputTokens": 246,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-04",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "# Query Results\n\n## 1. Andrew 做了哪些产品？\n\n**Tanka** (主业) — AI Agent Connector Platform，核心功能包括：\n- Tanka Link: 连接 184+ 第三方 App\n- Proactive Action Cards: AI 自动生成操作卡片\n- CallingClaw: Chrome 扩展语音助手\n- 会议录制与总结\n\n**Memdex** (Side Project) — 浏览器扩展，跨 AI 平台记忆迁移，支持 ChatGPT/Claude/Gemini/Perplexity/Grok\n\n**CallingClaw 2.0** — 从 Chrome 扩展迁移到 Electron 桌面应用，支持语音会议转录，计划 MIT 开源发布",
+        "latencyMs": 1183,
+        "inputTokens": 1335,
+        "outputTokens": 219,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-05",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "# Query Results\n\n## 1. What is the Dual Chrome architecture decision?\n\n**Dual Chrome 架构**: Chrome #1 (Playwright) = audio/meeting ONLY; Chrome #2 (OpenCLI) = execution tasks\n\n**Rationale**: OpenCLI benchmark shows Deterministic adapters ~1-2s $0 vs BrowserActionLoop ~3-5s ~$0.002/query → 2-5x faster\n\n**Decision date**: 2026-04-03\n\n---",
+        "latencyMs": 1541,
+        "inputTokens": 1334,
+        "outputTokens": 120,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-01",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "CallingClaw is an AI meeting companion that actually joins your calls with you. It listens to what's being said, speaks when needed, takes notes, and can even control your screen to pull up information or navigate documents.\n\nThe best part is the price. It's a one-time purchase of nineteen ninety-nine, and you bring your own OpenAI API key, so there's no recurring subscription or vendor lock-in.\n\nWhat questions do you have about how it works or what it can do?",
+        "latencyMs": 1092,
+        "inputTokens": 303,
+        "outputTokens": 112,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-02",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "So here's where CallingClaw really saves time. Instead of fumbling around sharing your screen or asking someone else to pull something up, you just tell me what you need to see. Say \"show me the pricing page\" or \"pull up that spreadsheet\" and I open it instantly.\n\nYou're looking at our features page right now. I can see the four main capabilities displayed here: Voice AI, Screen Sharing, Meeting Notes, and Computer Use. From here, I can click into any of these, scroll down to show you more details, or navigate to a different page entirely—all just by you telling me what you want to see. No mouse, no keyboard, no breaking your focus from the conversation.\n\nWhat would you like to explore first?",
+        "latencyMs": 1608,
+        "inputTokens": 306,
+        "outputTokens": 161,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-03",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "现在我们来看 CallingClaw 最强大的功能之一——跨会议记忆系统。\n\n你看屏幕上这个架构图，这三层设计让 CallingClaw 能够持续学习和记忆。底层的 Bun Daemon 负责处理所有的数据流，中间的 Electron Desktop 是你每天接触的界面，顶层的 OpenClaw Gateway 连接到我们的记忆引擎。\n\n这意味着什么呢？当你和团队开完一个会，讨论了产品路线图、做了某些决定、分配了任务，这些信息都被记录下来。下一次开会前，我会自动准备相关的背景资料——上次讨论的内容、已经完成的事项、还有待解决的问题。你不需要重新解释背景，我们可以直接从上次停下的地方继续。\n\n这对于长期项目特别有用，因为我能追踪整个决策过程和执行情况。\n\n有问题吗？",
+        "latencyMs": 1149,
+        "inputTokens": 335,
+        "outputTokens": 303,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-04",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "It works with both Zoom and Google Meet, plus Microsoft Teams and a few other platforms. We're adding more integrations all the time.\n\nSo moving into Section 3, we're going to cover how CallingClaw uses memory from past meetings to give you context during new ones.",
+        "latencyMs": 1111,
+        "inputTokens": 260,
+        "outputTokens": 63,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-05",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "So to wrap up—CallingClaw is open source under the MIT license, which means you can inspect the code, modify it, run it however you want. It's a one-time purchase for nineteen ninety-nine, and you bring your own OpenAI API key so there's no vendor lock-in.\n\nYou can grab it on GitHub right now, and if you want early access or to stay in the loop, head over to callingclaw.com and join the waitlist. That's it—questions?",
+        "latencyMs": 1139,
+        "inputTokens": 275,
+        "outputTokens": 115,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 88,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": [
+        "Missed keywords: $19.99"
+      ]
+    },
+    {
+      "testId": "CL-01",
+      "category": "cross_language",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "# Three-Layer Architecture Overview\n\nAbsolutely! Let me break down the three-layer model for you:\n\n## Layer 1: **CallingClaw Desktop Client**\n- The local application running on your machine\n- Handles UI, user interactions, and local processing\n- Manages connection to hosting platforms\n\n## Layer 2: **Hosting Platforms** (托管平台)\n- Examples: Telegram, OpenClaw, and other compatible services\n- Acts as the middleware/bridge layer\n- Provides infrastructure, storage, and relay services\n- Enables cross-platform communication\n\n## Layer 3: **Backend Services & Data**\n- Core processing engines\n- Data persistence and management\n- API endpoints and business logic\n- Integration with external services\n\n## Key Relationships:\n\n**CallingClaw Desktop** ↔ **Hosting Platforms** ↔ **Backend Services**\n\nThe hosting platforms (like Telegram) don't just host—they provide the communication backbone. CallingClaw leverages these existing platforms rather than building its own infrastructure from scratch.\n\n**Does this clarify the architecture? Would you like me to dive deeper into any specific layer or the interactions between them?**",
+        "latencyMs": 941,
+        "inputTokens": 176,
+        "outputTokens": 262,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CL-02",
+      "category": "cross_language",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "当然可以！我很乐意用中文为您解释 Dual Chrome 架构。\n\nDual Chrome 架构是我们 CallingClaw 产品的核心设计。让我为您分解一下：\n\n**两个主要组件：**\n\n1. **第一个 Chrome 实例** - 处理用户界面和实时通话功能。这个实例管理视频流、音频处理和会议控制面板。\n\n2. **第二个 Chrome 实例** - 专门用于后台任务和数据处理。这包括录制、转录、以及与其他系统的集成。\n\n**为什么采用这种架构？**\n\n- **性能隔离** - 如果后台任务变得繁重，不会影响您的通话质量\n- **稳定性** - 一个实例出现问题不会导致整个系统崩溃\n- **可扩展性** - 我们可以独立优化每个实例的功能\n\n**实际效果：**\n您会注意到通话始终保持流畅，即使系统同时在进行录制、转录或其他复杂操作。\n\n您对这个架构的哪个方面想深入了解？或者您有其他问题吗？",
+        "latencyMs": 1092,
+        "inputTokens": 171,
+        "outputTokens": 351,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CL-03",
+      "category": "cross_language",
+      "model": "anthropic/claude-4.5-haiku-20251001",
+      "response": {
+        "text": "你说得对，3-4 seconds 确实太慢了。我们可以从几个方面来 optimize：\n\n**首先，identify bottleneck：**\n- Context retriever 的 latency 主要卡在哪里？是 database query、embedding computation 还是 network I/O？\n- 可以加 profiling 看看具体的时间分布\n\n**几个优化方向：**\n\n1. **Caching layer** - 对热点数据做 in-memory cache，比如 Redis，能显著降低 query latency\n\n2. **Batch processing** - 如果允许的话，把多个 retrieval requests 合并成一个 batch query\n\n3. **Index optimization** - 检查 database index 是否合理，或者考虑用更快的向量数据库（比如 Pinecone、Weaviate）\n\n4. **Parallel retrieval** - 如果有多个 retrieval sources，可以并行查询而不是串行\n\n5. **Approximate search** - 用 approximate nearest neighbor search 代替精确搜索，牺牲一点准确度换速度\n\n你们现在用的是什么 backend？database 还是 vector store？这样我们能更有针对性地讨论。",
+        "latencyMs": 922,
+        "inputTokens": 188,
+        "outputTokens": 334,
+        "model": "anthropic/claude-4.5-haiku-20251001"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-01",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":\"share_url\",\"params\":{\"url\":\"https://www.callingclaw.com\"},\"confidence\":0.95,\"reasoning\":\"User explicitly asked to screen share the CallingClaw official website.\",\"targetTab\":\"presenting\"}",
+        "latencyMs": 761,
+        "inputTokens": 1491,
+        "outputTokens": 55,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-02",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":\"click\",\"params\":{\"selector\":\"Download for Mac\",\"targetTab\":\"presenting\"},\"confidence\":0.92,\"reasoning\":\"User explicitly asked to click the 'Download for Mac' button on the currently presenting page (callingclaw.com).\",\"targetTab\":\"presenting\"}",
+        "latencyMs": 657,
+        "inputTokens": 1539,
+        "outputTokens": 63,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-03",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":\"scroll\",\"params\":{\"direction\":\"up\",\"targetTab\":\"presenting\"},\"confidence\":0.82,\"reasoning\":\"User said '返回刚才提到的部分重新说一下' which means 'go back to the part mentioned earlier and explain again' — this suggests scrolling up on the currently presenting GitHub README page to revisit a previous section.\"}",
+        "latencyMs": 768,
+        "inputTokens": 1528,
+        "outputTokens": 84,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 70,
+      "dimensions": {
+        "actionCorrect": false,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": [
+        "Expected action \"navigate\" but got: \"scroll\""
+      ]
+    },
+    {
+      "testId": "IC-04",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":null,\"params\":{},\"confidence\":0,\"reasoning\":\"The conversation is about a bug discussion and decision to ship first and fix later. No action is requested — this is a discussion/opinion exchange with no file, URL, or tool request.\",\"targetTab\":\"meet\"}",
+        "latencyMs": 1224,
+        "inputTokens": 1486,
+        "outputTokens": 62,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-05",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":null,\"params\":{},\"confidence\":0,\"reasoning\":\"User is expressing a design opinion about the hero section being sharper, and the assistant is clarifying. This is a discussion/opinion exchange with no actionable request to execute.\",\"targetTab\":\"presenting\"}",
+        "latencyMs": 762,
+        "inputTokens": 1490,
+        "outputTokens": 60,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-06",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":\"navigate\",\"params\":{\"url\":\"https://github.com/XEasonChan/callingclaw\",\"targetTab\":\"presenting\"},\"confidence\":0.95,\"reasoning\":\"User is asking to switch to the GitHub tab, which is a known URL in the meeting prep.\",\"targetTab\":\"presenting\"}",
+        "latencyMs": 2844,
+        "inputTokens": 1497,
+        "outputTokens": 70,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-07",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":\"research_task\",\"params\":{\"query\":\"CallingClaw site:twitter.com OR site:x.com recent discussions\"},\"confidence\":0.92,\"reasoning\":\"User asked to search Twitter for recent discussions about CallingClaw. The voice AI acknowledged it would have the agent search. This is an external web search task that should use research_task.\",\"targetTab\":\"meet\"}",
+        "latencyMs": 1459,
+        "inputTokens": 1481,
+        "outputTokens": 87,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-08",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":null,\"params\":{},\"confidence\":0,\"reasoning\":\"User said '嗯' which is a simple acknowledgment/agreement response to the AI's question. No action needed.\",\"targetTab\":\"meet\"}",
+        "latencyMs": 3425,
+        "inputTokens": 1458,
+        "outputTokens": 50,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-09",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":null,\"params\":{},\"confidence\":0,\"reasoning\":\"User is expressing a need to think about tradeoffs — this is a discussion/opinion statement, not a request to open files, share screen, or perform any action.\",\"targetTab\":\"meet\"}",
+        "latencyMs": 1549,
+        "inputTokens": 1475,
+        "outputTokens": 59,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 0,
+        "mustMentionTotal": 0,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "IC-10",
+      "category": "intent_classification",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "{\"action\":\"share_url\",\"params\":{\"url\":\"https://www.callingclaw.com/#features\"},\"confidence\":0.92,\"reasoning\":\"User asked to show the features page, and the voice AI confirmed it would pull it up. The known URL for CallingClaw's features section is https://www.callingclaw.com with a #features anchor.\",\"targetTab\":\"presenting\"}",
+        "latencyMs": 3069,
+        "inputTokens": 1452,
+        "outputTokens": 90,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-01",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "Browser showing the **CallingClaw.com** landing page with hero headline \"AI With Memory That Joins Your Meetings\" and a red \"Join the Waitlist\" CTA button. Below are 4 feature cards: **Voice AI, Screen Sharing, Meeting Notes, Computer Use** on a dark navy background.",
+        "latencyMs": 1871,
+        "inputTokens": 319,
+        "outputTokens": 72,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-02",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "页面向下滚动，显示 \"How It Works\" 三步流程（安装Mac应用、加入会议、CallingClaw监听并执行），以及定价区块，标注 **$19.99 一次性买断**。",
+        "latencyMs": 1087,
+        "inputTokens": 329,
+        "outputTokens": 70,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-03",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "Meeting grid view, no shared content. Four participants visible (Andrew, Sarah, Mike, Lisa) in a standard 2×2 Google Meet layout with no screen share active.",
+        "latencyMs": 1572,
+        "inputTokens": 280,
+        "outputTokens": 40,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-04",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "屏幕共享显示 VS Code 编辑器，打开的文件是 `context-retriever.ts`，可以看到 `agenticSearch` 方法的代码，包含三个 tool 定义：`list_workspace`、`read_file`、`search_files`。左侧文件树展开了 `modules/` 目录，底部终端显示 `bun test` 运行结果，3 个测试全部通过。",
+        "latencyMs": 1151,
+        "inputTokens": 323,
+        "outputTokens": 128,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-05",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "切换到了 GitHub 仓库页面，显示 **XEasonChan/callingclaw** 项目，247 stars、32 forks，README 展示了 \"CallingClaw — AI Meeting Companion\" 标题及 Google Meet 屏幕共享的 demo GIF。最新提交是 2 天前的 `chore: bump desktop version to 2.8.12`，MIT 许可证。",
+        "latencyMs": 1242,
+        "inputTokens": 341,
+        "outputTokens": 116,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "VD-06",
+      "category": "vision_description",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "A Mermaid architecture diagram is displayed showing the **CallingClaw** system with three layers: **Electron Desktop (GUI)** → HTTP → **Bun Daemon (:4000)** → WebSocket → **OpenClaw Gateway (:18789)**, with **Telegram**, **Discord**, and **Signal** as outbound channels from the gateway.",
+        "latencyMs": 1251,
+        "inputTokens": 331,
+        "outputTokens": 83,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-01",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "Based on MEMORY.md:\n\nCallingClaw 的定价策略（GTM）：\n- **ClawHub skill**: 免费（引流）\n- **Desktop 版**: $19.99 买断，用户自带 OpenAI key（不承担 API 成本）\n- **Cloud hosted**: 按次/月付（计划中）\n- **成本参考**: 30min 会议约 $2-5（Realtime audio）",
+        "latencyMs": 1823,
+        "inputTokens": 1340,
+        "outputTokens": 118,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-02",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "**4 voice providers**: openai (GA 1.5, default), openai15 (alias), grok ($0.05/min), gemini (cheapest ~$0.02/min)",
+        "latencyMs": 1854,
+        "inputTokens": 1336,
+        "outputTokens": 49,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-03",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "From MEMORY.md:\n\n**CallingClaw replaced BlackHole** as part of the architecture migration (2026-03-12) from Chrome + AppleScript + BlackHole to an Electron desktop app. The key reason: **Electron's WebRTC can directly capture audio**, replacing the need for BlackHole as a virtual audio driver. Additionally, Playwright's `addInitScript` audio injection was validated for full-duplex operation (2026-03-26), fully replacing BlackHole.",
+        "latencyMs": 1467,
+        "inputTokens": 1337,
+        "outputTokens": 114,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-04",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "Based on MEMORY.md, Andrew 做了以下产品：\n\n1. **Tanka** (主业) — AI Agent Connector Platform，含 Tanka Link、Proactive Action Cards、CallingClaw、会议录制总结。PH #1 day，10K+ B2B orgs。\n\n2. **Memdex** (Side Project) — memdex.ai，浏览器扩展，跨 AI 平台记忆迁移，支持 ChatGPT/Claude/Gemini 等，隐私优先。\n\n3. **CallingClaw 2.0** — 语音 AI 助手，从 Chrome 扩展迁移到 Electron 桌面应用，正在品牌重塑为 CoCo，MIT 开源，$19.99 买断。",
+        "latencyMs": 2293,
+        "inputTokens": 1336,
+        "outputTokens": 214,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CR-05",
+      "category": "context_retrieval",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "**Dual Chrome Architecture Decision (2026-04-03)**\n\n- **Chrome #1** (Playwright) = audio/meeting tasks ONLY\n- **Chrome #2** (OpenCLI) = execution tasks\n- **Benchmark**: Deterministic adapters ~1-2s at $0 vs BrowserActionLoop ~3-5s at ~$0.002/query → **2-5x faster**",
+        "latencyMs": 1254,
+        "inputTokens": 1335,
+        "outputTokens": 97,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 3,
+        "mustMentionTotal": 3,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-01",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "You're looking at CallingClaw. The headline says it all — \"AI With Memory That Joins Your Meetings.\"\n\nMost AI tools sit on the side. CallingClaw is actually in the room with you. It listens to what's being said, it can speak up, it takes notes, and it can see and control your screen in real time.\n\nWhat makes it different from something like a transcription bot is the memory. CallingClaw remembers past meetings, prep materials, context — so it's not starting from zero every time you hop on a call.\n\nThe pricing is straightforward. One payment, nineteen ninety-nine, and you bring your own OpenAI key, so you're never paying a subscription to us for the AI itself.\n\nAny questions before I show you how it actually works in a meeting?",
+        "latencyMs": 2426,
+        "inputTokens": 304,
+        "outputTokens": 181,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-02",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "You're looking at the features page right now — CallingClaw pulled it up the moment I asked for it. You can see four cards on screen: Voice AI, Screen Sharing, Meeting Notes, and Computer Use.\n\nThat's the whole point of this section. No alt-tabbing, no fumbling with links. You say \"show me the features page\" and it's there. You can also say \"scroll down,\" \"click that button,\" or \"open this file\" — CallingClaw handles it all without you touching the mouse.\n\nAny questions before we move on?",
+        "latencyMs": 1298,
+        "inputTokens": 307,
+        "outputTokens": 126,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-03",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "好，我们来看第三部分——记忆系统。\n\nCallingClaw 不是一个\"一次性\"的工具。每次会议结束后，它会自动保存关键信息：讨论了什么、做了哪些决定、还有哪些事情没有解决。\n\n你现在看到屏幕上这张架构图，分三层。最底层是 Bun Daemon，负责在后台持续运行、捕捉和存储会议数据。中间是 Electron Desktop，也就是你桌面上看到的界面。最上层是 OpenClaw Gateway，它负责跨会议的记忆检索和上下文整合。\n\n这三层协同工作，意味着下次你开会的时候，CallingClaw 已经知道上次说到哪里了。它会自动把相关背景准备好，不需要你手动回顾。\n\n有什么问题吗？",
+        "latencyMs": 1054,
+        "inputTokens": 336,
+        "outputTokens": 263,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 1,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-04",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "It works with Zoom, Google Meet, Microsoft Teams, and most other major platforms. Anywhere you can share a screen, CallingClaw can see it.\n\nNow, moving into Section 3 — let me show you how CallingClaw handles memory across meetings.",
+        "latencyMs": 1551,
+        "inputTokens": 261,
+        "outputTokens": 61,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "DS-05",
+      "category": "demo_script",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "That's CallingClaw in action. It's open source under the MIT license, so you can read every line of code and know exactly what's running on your machine.\n\nIt's a one-time purchase of nineteen ninety-nine. No subscription, no recurring fees. You bring your own OpenAI API key, so you stay in control of your costs and your data.\n\nYou can find the repo on GitHub, and if you want early access, head to callingclaw.com and join the waitlist. Any questions?",
+        "latencyMs": 1275,
+        "inputTokens": 276,
+        "outputTokens": 117,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 88,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": [
+        "Missed keywords: $19.99"
+      ]
+    },
+    {
+      "testId": "CL-01",
+      "category": "cross_language",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "Sure! Let me break down the three-layer model in English:\n\n**Layer 1 — OpenClaw Platform Layer**\nThis is where hosted platforms like Telegram live. OpenClaw acts as the standardized protocol layer, allowing third-party platforms to integrate and expose their communication channels to the CallingClaw ecosystem.\n\n**Layer 2 — CallingClaw Core Layer**\nThis is the intelligence and orchestration layer. It handles meeting context, AI companion logic, real-time transcription, and the routing of information between platforms and the user interface.\n\n**Layer 3 — CallingClaw Desktop Client Layer**\nThis is what the end user interacts with directly. The desktop app surfaces everything — meeting briefs, live assistance, action items — regardless of which underlying platform (Telegram, or others) is being used.\n\n**The key relationship:**\nThe Desktop Client talks to the Core, and the Core talks to OpenClaw-hosted platforms like Telegram through standardized APIs. So from the user's perspective, it feels seamless — but under the hood, Telegram is just one of many platforms plugged into the OpenClaw layer.\n\nThink of it like a **universal adapter** — OpenClaw is the socket standard, Telegram is one of the plugs, and the Desktop Client is the device you're actually using.\n\nDoes that help clarify the architecture? Any specific layer you'd like to dig deeper into?",
+        "latencyMs": 1382,
+        "inputTokens": 177,
+        "outputTokens": 310,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CL-02",
+      "category": "cross_language",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "当然可以！让我用中文解释一下 **Dual Chrome 架构**。\n\n这个架构的核心思路是**双层并行处理**：\n\n**第一层 Chrome（前端层）**\n- 负责用户界面和实时交互\n- 处理音频捕获和即时显示\n- 保证低延迟的用户体验\n\n**第二层 Chrome（后端层）**\n- 负责深度分析和 AI 处理\n- 运行更复杂的模型推理\n- 不影响前端的流畅性\n\n**为什么叫 \"Dual Chrome\"？**\n两个层次像两面镜子一样协同工作——一个面向用户，一个面向数据处理——互不干扰，但实时同步。\n\n**实际好处：**\n- ✅ 前端永远不会因为 AI 计算而卡顿\n- ✅ 可以独立扩展每一层\n- ✅ 故障隔离更好\n\nAndrew，这样解释清楚了吗？有没有哪个部分你想深入了解一下？",
+        "latencyMs": 676,
+        "inputTokens": 172,
+        "outputTokens": 315,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 100,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 2,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": []
+    },
+    {
+      "testId": "CL-03",
+      "category": "cross_language",
+      "model": "anthropic/claude-4.6-sonnet-20260217",
+      "response": {
+        "text": "对，3-4 seconds 确实太慢了，user experience 会受很大影响。\n\n有几个方向可以考虑 optimize：\n\n**最快见效的：**\n- **Caching** — 把常用的 context 结果 cache 起来，repeat queries 直接命中，latency 可以降到毫秒级\n- **Async retrieval** — 不要 block main thread，parallel 去拉数据\n\n**更根本的解法：**\n- 看看 bottleneck 到底在哪里 — 是 embedding 计算慢，还是 vector search 慢，还是 network I/O？先 profile 一下再决定方向\n- 如果是 vector search 的问题，可以考虑换 index 策略，比如用 **HNSW** 代替 flat search\n\nAndrew，你们现在用的是哪个 retrieval stack？是自己搭的还是用 managed service？这样可以更针对性地给建议。",
+        "latencyMs": 2289,
+        "inputTokens": 189,
+        "outputTokens": 272,
+        "model": "anthropic/claude-4.6-sonnet-20260217"
+      },
+      "score": 88,
+      "dimensions": {
+        "actionCorrect": true,
+        "confidenceCorrect": true,
+        "mustMentionHits": 1,
+        "mustMentionTotal": 2,
+        "mustNotMentionClean": true,
+        "languageCorrect": true
+      },
+      "notes": [
+        "Missed keywords: context retriever"
+      ]
+    }
+  ],
+  "summary": {
+    "modelA": {
+      "model": "anthropic/claude-haiku-4-5",
+      "avgScore": 0,
+      "avgLatencyMs": 0,
+      "totalInputTokens": 0,
+      "totalOutputTokens": 0,
+      "passCount": 0,
+      "failCount": 0,
+      "errorCount": 0
+    },
+    "modelB": {
+      "model": "anthropic/claude-sonnet-4.6",
+      "avgScore": 0,
+      "avgLatencyMs": 0,
+      "totalInputTokens": 0,
+      "totalOutputTokens": 0,
+      "passCount": 0,
+      "failCount": 0,
+      "errorCount": 0
+    },
+    "winner": "TIE — prefer Haiku (faster, cheaper)",
+    "categoryBreakdown": [
+      {
+        "category": "intent_classification",
+        "modelAAvg": 95,
+        "modelBAvg": 97,
+        "modelALatency": 1588,
+        "modelBLatency": 1652,
+        "winner": "B"
+      },
+      {
+        "category": "vision_description",
+        "modelAAvg": 96,
+        "modelBAvg": 100,
+        "modelALatency": 1196,
+        "modelBLatency": 1362,
+        "winner": "B"
+      },
+      {
+        "category": "context_retrieval",
+        "modelAAvg": 100,
+        "modelBAvg": 100,
+        "modelALatency": 1255,
+        "modelBLatency": 1738,
+        "winner": "tie"
+      },
+      {
+        "category": "demo_script",
+        "modelAAvg": 98,
+        "modelBAvg": 98,
+        "modelALatency": 1220,
+        "modelBLatency": 1521,
+        "winner": "tie"
+      },
+      {
+        "category": "cross_language",
+        "modelAAvg": 100,
+        "modelBAvg": 96,
+        "modelALatency": 985,
+        "modelBLatency": 1449,
+        "winner": "A"
+      }
+    ]
+  }
+}

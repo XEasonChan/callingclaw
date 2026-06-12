@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CallingClaw Launch Video Brief</title>
+<style>
+  :root { --accent: #E63946; --bg: #fafafa; --card: #fff; --text: #1a1a2e; --muted: #6b7280; --border: #e5e7eb; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 15px; margin-bottom: 32px; }
+  h2 { font-size: 20px; font-weight: 600; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 8px; color: var(--accent); }
+
+  /* Overview table */
+  .overview-table { width: 100%; border-collapse: collapse; margin: 16px 0 32px; font-size: 14px; }
+  .overview-table th { background: var(--accent); color: #fff; padding: 10px 14px; text-align: left; font-weight: 600; }
+  .overview-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .overview-table tr:nth-child(even) td { background: #f9fafb; }
+
+  /* Storyboard table */
+  .storyboard { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  .storyboard th { background: #1a1a2e; color: #fff; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .storyboard td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .storyboard tr:nth-child(even) td { background: #f9fafb; }
+  .storyboard .frame-num { font-weight: 700; color: var(--accent); font-size: 15px; text-align: center; min-width: 40px; }
+  .storyboard .emotion { font-style: italic; color: var(--muted); font-size: 12px; }
+  .storyboard .duration { font-weight: 600; color: #059669; text-align: center; }
+  .act-header td { background: var(--accent) !important; color: #fff; font-weight: 700; font-size: 14px; padding: 8px 12px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 16px 0; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .stat { text-align: center; padding: 16px; }
+  .stat-num { font-size: 32px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 13px; color: var(--muted); }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 24px; margin: 16px 0; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+  .timeline-item { position: relative; margin-bottom: 16px; padding-left: 16px; }
+  .timeline-item::before { content: ''; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .timeline-item strong { display: block; font-size: 14px; }
+  .timeline-item span { font-size: 13px; color: var(--muted); }
+
+  /* Competitor */
+  .vs-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  .vs-table th { padding: 8px 12px; background: #f3f4f6; font-weight: 600; text-align: left; }
+  .vs-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .vs-table .us { color: #059669; font-weight: 600; }
+  .vs-table .them { color: var(--muted); }
+
+  /* Discussion */
+  .discussion-item { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 12px 16px; margin: 8px 0; border-radius: 0 8px 8px 0; }
+  .discussion-item strong { color: #92400e; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tag-personal { background: #dbeafe; color: #1e40af; }
+  .tag-business { background: #fce7f3; color: #9d174d; }
+  .tag-warning { background: #fef3c7; color: #92400e; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>CallingClaw <span>Launch Video Brief</span></h1>
+<p class="subtitle">上线视频计划 · 2 个视频 · 23帧分镜 · 74秒正片 · 待讨论确认</p>
+
+<!-- Stats -->
+<div class="card-grid">
+  <div class="card stat"><div class="stat-num">2</div><div class="stat-label">Videos (Personal + Business)</div></div>
+  <div class="card stat"><div class="stat-num">23</div><div class="stat-label">Frames in Personal Storyboard</div></div>
+  <div class="card stat"><div class="stat-num">74s</div><div class="stat-label">Total Duration (58s + 16s easter egg)</div></div>
+  <div class="card stat"><div class="stat-num">$19.99</div><div class="stat-label">Buy-once Price (vs Pika $0.50/min)</div></div>
+</div>
+
+<h2>📋 两个视频概览</h2>
+
+<table class="overview-table">
+  <thead><tr><th></th><th><span class="tag tag-personal">Personal</span> Video 1</th><th><span class="tag tag-business">Business</span> Video 2</th></tr></thead>
+  <tbody>
+    <tr><td><strong>标题</strong></td><td>"Your Agent Needs a Seat at the Table"</td><td>"The Collaboration Network: AI Agents in Enterprise"</td></tr>
+    <tr><td><strong>时长</strong></td><td>~60-75s</td><td>~90-120s</td></tr>
+    <tr><td><strong>调性</strong></td><td>震撼 → 好奇 → 行动</td><td>思考 → 共鸣 → 认同</td></tr>
+    <tr><td><strong>受众</strong></td><td>开发者 / 个人用户 / 独立开发者</td><td>企业决策者 / 团队负责人 / 投资人</td></tr>
+    <tr><td><strong>核心叙事</strong></td><td>AI Agent 从聊天窗口走进会议室</td><td>企业从"团队"变为"协作网络"，AI 是新节点</td></tr>
+    <tr><td><strong>分发</strong></td><td>GitHub / HN / X / Product Hunt</td><td>LinkedIn / 企业官网 / 投资人 Pitch</td></tr>
+    <tr><td><strong>Aha Moment</strong></td><td>AI 在 Meet 里和第三方对话 + 操作电脑</td><td>层级 = 信息路由，AI 替代路由功能</td></tr>
+    <tr><td><strong>状态</strong></td><td>✅ 23帧分镜 v1 完成</td><td>⚠️ 需新建</td></tr>
+  </tbody>
+</table>
+
+<h2>🎬 Personal 视频 — 分镜脚本 v1</h2>
+<p style="margin-bottom:12px;color:var(--muted);font-size:14px;">23 帧 · 正片 58s + 彩蛋 16s = 74s · 叙事: Aha Moment → 痛点 → 解决流程 → 会后闭环 → 彩蛋</p>
+
+<table class="storyboard">
+  <thead><tr><th>帧</th><th>画面描述</th><th>文字叠加</th><th>时长</th><th>情绪</th></tr></thead>
+  <tbody>
+    <!-- Act 1 -->
+    <tr class="act-header"><td colspan="5">第一幕: Aha Moment — 先给震撼</td></tr>
+    <tr><td class="frame-num">1</td><td>Google Meet 界面，AI 和用户两个参会者，语音波形跳动</td><td>—</td><td class="duration">3s</td><td class="emotion">震撼</td></tr>
+    <tr><td class="frame-num">2</td><td>分屏: AI 在对话 + 同时操作电脑，鼠标自动移动点击</td><td>"with its computer"</td><td class="duration">3s</td><td class="emotion">惊讶</td></tr>
+    <tr><td class="frame-num">3</td><td>CallingClaw Meeting Room 截屏 + Agent 平台 Logo 环绕</td><td>"Your agent could join your meeting"</td><td class="duration">3s</td><td class="emotion">兼容感</td></tr>
+
+    <!-- Act 2 -->
+    <tr class="act-header"><td colspan="5">第二幕: 痛点 — IM 里的消息不可读</td></tr>
+    <tr><td class="frame-num">4</td><td>手机 IM: Agent 发来大量代码块+长文本，疯狂滚动</td><td>—</td><td class="duration">3s</td><td class="emotion">信息过载</td></tr>
+    <tr><td class="frame-num">5</td><td>点开文件 → 报错 → 公网发布 → 安全警告</td><td>"Too long to read. Can't open local files."</td><td class="duration">3s</td><td class="emotion">沮丧</td></tr>
+    <tr><td class="frame-num">6</td><td>用户在 IM 输入"直接在会议里给我看吧"</td><td>"Show me in a meeting"</td><td class="duration">2s</td><td class="emotion">转折</td></tr>
+
+    <!-- Act 3 -->
+    <tr class="act-header"><td colspan="5">第三幕: 解决流程 — AI 完整工作流</td></tr>
+    <tr><td class="frame-num">7</td><td>IM 里 AI 回复"好的，我帮你约个会议"</td><td>—</td><td class="duration">2s</td><td class="emotion">自然过渡</td></tr>
+    <tr><td class="frame-num">8</td><td>Google Calendar 弹出日历邀请，自动选好时间</td><td>—</td><td class="duration">2s</td><td class="emotion">效率</td></tr>
+    <tr><td class="frame-num">9</td><td>桌面通知 "CallingClaw: 会议准备已完成"</td><td>"Prep complete"</td><td class="duration">2s</td><td class="emotion">可靠</td></tr>
+    <tr><td class="frame-num">10</td><td>Meet 界面，AI 自动加入并打招呼</td><td>—</td><td class="duration">2s</td><td class="emotion">亲切</td></tr>
+    <tr><td class="frame-num">11</td><td>AI 开始投屏演示，Meeting Stage 界面</td><td>"Let me walk you through this"</td><td class="duration">3s</td><td class="emotion">专业</td></tr>
+    <tr><td class="frame-num">12</td><td>AI 在投屏中操作: 滚动、点击、切换页面</td><td>—</td><td class="duration">3s</td><td class="emotion">流畅</td></tr>
+
+    <!-- Act 4 -->
+    <tr class="act-header"><td colspan="5">第四幕: 会后闭环 — AI 继续执行</td></tr>
+    <tr><td class="frame-num">13</td><td>会议结束，AI 发送会议纪要到 IM</td><td>"Summary sent"</td><td class="duration">2s</td><td class="emotion">高效</td></tr>
+    <tr><td class="frame-num">14</td><td>AI 确认执行任务: "我开始执行这三个任务了"</td><td>—</td><td class="duration">2s</td><td class="emotion">执行力</td></tr>
+    <tr><td class="frame-num">15</td><td>AI 自动汇报: "任务1已完成，PR已提交"</td><td>—</td><td class="duration">2s</td><td class="emotion">闭环</td></tr>
+
+    <!-- Act 5 -->
+    <tr class="act-header"><td colspan="5">第五幕: 打破第四面墙 + CTA</td></tr>
+    <tr><td class="frame-num">16</td><td>AI 给观众发 Meet 邀请: "我也可以加入你的会议"</td><td>—</td><td class="duration">3s</td><td class="emotion">惊喜</td></tr>
+    <tr><td class="frame-num">17</td><td>日历上弹出新邀请，参会者是"你"</td><td>"Your meeting, your agent"</td><td class="duration">2s</td><td class="emotion">行动</td></tr>
+    <tr><td class="frame-num">18</td><td>CallingClaw Logo + GitHub 链接</td><td>"Open Source · $19.99 · Your API Key"</td><td class="duration">3s</td><td class="emotion">CTA</td></tr>
+
+    <!-- Easter Egg -->
+    <tr class="act-header"><td colspan="5">🥚 彩蛋 (片尾 Post-Credits) — 16s</td></tr>
+    <tr><td class="frame-num">19</td><td>IM: "要不我直接到你工位上找你聊？" AI: "好啊"</td><td>—</td><td class="duration">2s</td><td class="emotion">好奇</td></tr>
+    <tr><td class="frame-num">20</td><td>手持镜头走过办公室走廊，走向最里面的工位</td><td>—</td><td class="duration">3s</td><td class="emotion">悬念</td></tr>
+    <tr><td class="frame-num">21</td><td>空椅子、亮屏幕、鼠标自己在动。桌上有 Logo 贴纸和温咖啡</td><td>—</td><td class="duration">5s</td><td class="emotion">震撼 · 未来感</td></tr>
+    <tr><td class="frame-num">22</td><td>屏幕弹出通知"下一场会议15分钟后"，鼠标移向"加入"</td><td>—</td><td class="duration">2s</td><td class="emotion">循环感</td></tr>
+    <tr><td class="frame-num">23</td><td>淡出黑屏 → "Expecting the future" → Tanka Logo</td><td>"AI Agent & Memory Collab Network"</td><td class="duration">4s</td><td class="emotion">格局</td></tr>
+  </tbody>
+</table>
+
+<h2>🏢 Business 视频 — 企业场景规划</h2>
+
+<div class="timeline">
+  <div class="timeline-item"><strong>第一幕: 趋势洞察 (15-20s)</strong><span>组织从层级→网络，AI Agent 是新节点，但还进不了会议</span></div>
+  <div class="timeline-item"><strong>第二幕: 企业用例 (30-40s)</strong><span>团队周会（Jira+Slack→会前邮件→投屏汇报→会后纪要+ticket）+ 客户 Demo（AI 跨时区代替 Sales）</span></div>
+  <div class="timeline-item"><strong>第三幕: 安全差异化 (15-20s)</strong><span>本地运行、数据不出企业网络、$19.99 买断 vs 竞品 $40/月/人</span></div>
+  <div class="timeline-item"><strong>第四幕: CTA (10-15s)</strong><span>Tanka Memory = 公司的 world model，每次会议都在积累</span></div>
+</div>
+
+<h2>⚔️ 竞品对比</h2>
+
+<table class="vs-table">
+  <thead><tr><th></th><th>CallingClaw</th><th>Pika PikaStream</th><th>Otter.ai</th><th>ChatGPT Voice</th></tr></thead>
+  <tbody>
+    <tr><td><strong>加入会议</strong></td><td class="us">✅ Google Meet</td><td class="them">✅ Meet + Zoom</td><td class="them">✅ Meet + Zoom</td><td class="them">❌</td></tr>
+    <tr><td><strong>语音对话</strong></td><td class="us">✅ 实时双工</td><td class="them">✅</td><td class="them">❌ 只转录</td><td class="them">✅ 但不能进会议</td></tr>
+    <tr><td><strong>操作电脑</strong></td><td class="us">✅ Playwright+Vision</td><td class="them">❌</td><td class="them">❌</td><td class="them">❌</td></tr>
+    <tr><td><strong>投屏演示</strong></td><td class="us">✅ Meeting Stage</td><td class="them">❌</td><td class="them">❌</td><td class="them">❌</td></tr>
+    <tr><td><strong>运行位置</strong></td><td class="us">本地 (macOS)</td><td class="them">云端</td><td class="them">云端</td><td class="them">云端</td></tr>
+    <tr><td><strong>定价</strong></td><td class="us">$19.99 买断</td><td class="them">$0.50/分钟</td><td class="them">$20-40/月/人</td><td class="them">$20/月</td></tr>
+    <tr><td><strong>数据安全</strong></td><td class="us">不出本地</td><td class="them">云端处理</td><td class="them">云端处理</td><td class="them">云端处理</td></tr>
+    <tr><td><strong>开源</strong></td><td class="us">MIT License</td><td class="them">闭源</td><td class="them">闭源</td><td class="them">闭源</td></tr>
+  </tbody>
+</table>
+
+<h2>⚠️ 待讨论事项</h2>
+
+<div class="discussion-item"><strong>1. Aha Moment 够不够震撼？</strong> — 帧1 直接进入 AI 开会画面，3秒内要建立"这 AI 能开会+操作电脑"的认知。是否需要调整？</div>
+<div class="discussion-item"><strong>2. 录制稳定性</strong> — 4/4 测试发现 10 个 bug（echo loop 已修），音频注入需每次全新 Playwright session。录前必须 dry run。</div>
+<div class="discussion-item"><strong>3. 配音方案</strong> — AI 真实语音 vs 字幕+音乐？真实语音更有说服力但需要稳定的 voice session。</div>
+<div class="discussion-item"><strong>4. 彩蛋拍摄</strong> — 需要联合办公空间（走廊+空工位+亮屏幕）。道具: Logo 贴纸+咖啡。关键: 安静环境只有键盘声。</div>
+<div class="discussion-item"><strong>5. 发布节奏</strong> — Personal 先打 HN/GitHub (viral hook) → 3-5 天后 Business 打 LinkedIn (enterprise conversion)。</div>
+<div class="discussion-item"><strong>6. 版本一致性</strong> <span class="tag tag-warning">⚠️ Past lesson</span> — VERSION/git/status 版本号不一致问题。录制前确认统一。</div>
+
+<h2>📎 相关资源</h2>
+<div class="card">
+  <p><strong>文件</strong></p>
+  <ul style="margin:8px 0;padding-left:20px;font-size:14px;">
+    <li><code>demo-video-storyboard-v1.md</code> — Personal 视频完整 23 帧分镜脚本</li>
+    <li><code>video-plan-overview.md</code> — 两个视频整体规划 (Personal vs Business)</li>
+    <li><code>video-discussion-prep-0404.md</code> — Aha Moment 分析 + 待讨论清单</li>
+    <li><code>callingclaw-pitch-deck.html</code> — 十字路口 PPT (10 页 interactive)</li>
+  </ul>
+  <p style="margin-top:12px;"><strong>链接</strong></p>
+  <ul style="margin:8px 0;padding-left:20px;font-size:14px;">
+    <li><a href="https://www.callingclaw.com">CallingClaw 官网</a></li>
+    <li><a href="https://sequoiacap.com/article/from-hierarchy-to-intelligence/">红杉 Jack "From Hierarchy to Intelligence"</a></li>
+    <li><a href="https://github.com/XEasonChan/callingclaw">GitHub Repo (当前 private)</a></li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>

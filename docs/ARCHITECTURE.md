@@ -77,7 +77,7 @@ User starts a voice session
 **During conversation:**
 - `recall_context` tool → ContextRetriever cache (0ms) → local MEMORY.md → Haiku subprocess → OpenClaw (fallback only)
 - `computer_action` tool → ComputerUseModule → Anthropic API (Haiku/Sonnet, no OpenClaw)
-- VisionModule → Gemini Flash screenshot analysis (every ~40s)
+- VisionModule → Gemini Flash screenshot analysis (1s capture, ~3s analysis)
 - TranscriptAuditor → Haiku intent classification (continuous)
 - ContextRetriever → Haiku gap detection + agentic search (continuous)
 
@@ -142,7 +142,7 @@ Tool calls (automatic, triggered by AI):
   check_calendar → GoogleCalendarClient
 
 Background (continuous, no tool call needed):
-  VisionModule → Gemini Flash screenshot analysis (every ~40s)
+  VisionModule → Gemini Flash screenshot analysis (1s capture, ~3s analysis)
   ContextRetriever → Haiku gap detection (every ~500 chars of new transcript)
   TranscriptAuditor → Haiku intent classification (per utterance)
 ```

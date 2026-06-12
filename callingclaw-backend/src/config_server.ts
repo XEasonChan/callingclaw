@@ -36,7 +36,9 @@ import type { OpenClawBridge } from "./openclaw_bridge";
 import type { TranscriptAuditor } from "./modules/transcript-auditor";
 import type { BrowserActionLoop } from "./modules/browser-action-loop";
 import type { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro } from "./voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, resolveAndInjectPrep, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext, buildEngagementBids } from "./voice-persona";
+import { topicSimilarity } from "./modules/session-manager";
+import { generateStageHtml, resolveDocumentUrl } from "./modules/stage-generator";
 import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
@@ -329,6 +331,8 @@ export function startConfigServer(services: Services) {
               if (++globalThis._vtAudioCount % 50 === 1) {
                 console.log(`[VoiceTest] Mic audio chunk #${globalThis._vtAudioCount} (${data.audio.length} b64 chars)`);
               }
+              // Route through VoiceModule.sendAudio() which has a server-side echo gate.
+              // Drops audio when AI is speaking, preventing SFU echo from triggering VAD.
               services.realtime.sendAudio(data.audio);
             } else if (data.type === "caption") {
               // Meet captions DOM scrape — reliable transcript from Google's speech recognition.
@@ -951,6 +955,19 @@ export function startConfigServer(services: Services) {
         return Response.json({ ok: true }, { headers });
       }
 
+      // POST /api/voice/inject — Inject system context into voice session (no response trigger)
+      if (url.pathname === "/api/voice/inject" && req.method === "POST") {
+        const body = (await req.json()) as { text: string };
+        const id = services.realtime.injectContext(body.text);
+        return Response.json({ ok: true, id }, { headers });
+      }
+
+      // POST /api/voice/respond — Trigger voice model to generate a response
+      if (url.pathname === "/api/voice/respond" && req.method === "POST") {
+        services.realtime.sendEvent("response.create", {});
+        return Response.json({ ok: true }, { headers });
+      }
+
       // ══════════════════════════════════════════════════════════════
       // ── Computer Use API ──
       // ══════════════════════════════════════════════════════════════
@@ -1537,12 +1554,44 @@ export function startConfigServer(services: Services) {
           }
         }
 
+        // Look up calendar event FIRST — we need the topic for session creation
+        let meetAttendees: any[] = [];
+        let calEvent: any = null;
+        if (services.calendar?.connected) {
+          try {
+            calEvent = await services.calendar.findEventByMeetUrl(validated.url);
+            if (calEvent?.attendees) meetAttendees = calEvent.attendees;
+          } catch {}
+        }
+
+        // Resolve topic: body.topic > calendar summary > instructions > workspace > default
+        const meetTopic = body.topic || calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
+
         // Reuse existing session for the same Meet URL, or create new one
         const session = services.sessionManager!.findOrCreate({
-          topic: body.topic || body.instructions?.slice(0, 200) || "Meeting",
+          topic: meetTopic,
           meetUrl: validated.url,
         });
         const meetingId = session.meetingId;
+
+        // Update session topic if calendar gave us a better one
+        if (calEvent?.summary && session.topic !== calEvent.summary) {
+          services.sessionManager!.update(meetingId, { topic: calEvent.summary });
+        }
+
+        // Guard: reject concurrent join for the same meeting URL
+        // This prevents duplicate cron jobs from all trying to join simultaneously
+        if (session.status === "active" && voiceSessionState.active && voiceSessionState.mode === "meeting") {
+          console.log(`[Meeting] Rejecting duplicate join — already in meeting (${meetingId})`);
+          return Response.json({
+            meetingId,
+            status: "already_joined",
+            success: true,
+            message: "Already in this meeting",
+            voice: "connected",
+          }, { headers });
+        }
+
         // NOTE: markActive happens inside emitMeetingStarted() below — marking
         // active before the join attempt left permanently-stuck "active"
         // sessions whenever the join failed or admission was denied.
@@ -1573,21 +1622,97 @@ export function startConfigServer(services: Services) {
         } else if (services.realtime.connected) {
           voiceStarted = true;
         }
+        // Resolve and inject meeting prep brief (shared helper handles all fallbacks:
+        // session.files.prep → currentBrief with topic validation → disk scan for recent prep)
+        let prepBrief: any = await resolveAndInjectPrep({
+          session,
+          meetTopic,
+          meetingPrepSkill: services.meetingPrepSkill,
+          sessionManager: services.sessionManager!,
+          realtime: services.realtime,
+        });
 
-        // Look up calendar event to get attendees
-        let meetAttendees: any[] = [];
-        let calEvent: any = null;
-        if (services.calendar?.connected) {
-          try {
-            calEvent = await services.calendar.findEventByMeetUrl(validated.url);
-            if (calEvent?.attendees) meetAttendees = calEvent.attendees;
-          } catch {}
+        // Check for local presentation script (prep JSON with speakingPlan + scenes)
+        // This enables PRESENTER mode without waiting for OpenClaw
+        if (services.meetingPrepSkill) {
+          // Clear previous meeting's brief if topic doesn't match (fuzzy check)
+          const prevBrief = services.meetingPrepSkill.currentBrief;
+          if (prevBrief && topicSimilarity(prevBrief.topic, meetTopic) < 0.3) {
+            services.meetingPrepSkill.setBrief(null as any);
+            console.log(`[Meeting] Cleared stale prep brief (was: "${prevBrief.topic}", now: "${meetTopic}")`);
+          }
+
+          if (!(services.meetingPrepSkill.currentBrief?.speakingPlan?.length > 0)) {
+            const { homedir } = require("os");
+            const sharedDir = `${homedir()}/.callingclaw/shared`;
+            try {
+              // STRICT: Only load prep files that match this meeting's ID or session's meetUrl
+              // NEVER fall back to random files — that causes test data contamination (P0 bug 2026-04-10)
+              const candidates = [
+                `${meetingId}_prep.json`,
+                `${meetingId}_presentation.json`,
+              ];
+
+              // Also check if SessionManager has a registered prep file for this session
+              const sessionWithPrep = services.sessionManager?.get(meetingId);
+              if (sessionWithPrep?.files?.prep && sessionWithPrep.files.prep.endsWith(".json")) {
+                candidates.push(sessionWithPrep.files.prep);
+              }
+              if (sessionWithPrep?.files?.presentation) {
+                candidates.push(sessionWithPrep.files.presentation);
+              }
+
+              let loaded = false;
+              for (const fname of candidates) {
+                const jsonPath = `${sharedDir}/${fname}`;
+                const file = Bun.file(jsonPath);
+                if (!(await file.exists())) continue;
+                const prepData = JSON.parse(await file.text());
+                if (prepData.speakingPlan && prepData.scenes) {
+                  prepBrief = {
+                    topic: prepData.topic || meetTopic,
+                    goal: prepData.goal || "",
+                    generatedAt: Date.now(),
+                    summary: prepData.summary || "",
+                    keyPoints: prepData.keyPoints || [],
+                    architectureDecisions: [],
+                    expectedQuestions: [],
+                    filePaths: prepData.filePaths || [],
+                    browserUrls: prepData.browserUrls || [],
+                    folderPaths: [],
+                    attendees: meetAttendees || [],
+                    liveNotes: [],
+                    speakingPlan: prepData.speakingPlan,
+                    scenes: prepData.scenes,
+                    decisionPoints: prepData.decisionPoints || [],
+                  };
+                  services.meetingPrepSkill.setBrief(prepBrief);
+                  for (const f of (prepData.filePaths || [])) {
+                    services.context.addStageDocument(f.path, "new");
+                  }
+                  for (const u of (prepData.browserUrls || [])) {
+                    services.context.addStageDocument(u.url, "new");
+                  }
+                  console.log(`[Meeting] ✅ Loaded presentation script from ${fname}: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes`);
+                  loaded = true;
+                  break;
+                }
+              }
+              if (!loaded) {
+                console.log(`[Meeting] No prep JSON for meetingId=${meetingId} — will wait for OpenClaw background prep`);
+              }
+            } catch (e: any) {
+              console.warn(`[Meeting] Prep JSON scan failed: ${e.message}`);
+            }
+          }
         }
 
-        // Generate meeting prep brief via OpenClaw — BACKGROUND, NEVER blocks join
-        const meetTopic = body.topic || calEvent?.summary || body.instructions?.slice(0, 200) || services.context.workspace?.topic || "Meeting";
-        let prepBrief: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        // Generate prep brief in background — use agentAdapter (works with any platform),
+        // fall back to openclawBridge for backward compat
+        const canGeneratePrep = services.meetingPrepSkill && (
+          services.agentAdapter?.connected || services.openclawBridge?.connected
+        );
+        if (!prepBrief && canGeneratePrep) {
           // Fire-and-forget: prep runs in background, injects when ready
           (async () => {
             try {
@@ -1601,7 +1726,9 @@ export function startConfigServer(services: Services) {
               console.warn("[Meeting] Prep brief failed (non-blocking):", e.message);
             }
           })();
-          console.log("[Meeting] Prep brief started in background — join continues immediately");
+          console.log(`[Meeting] Prep brief started in background via ${services.agentAdapter?.name || "openclaw"} — join continues immediately`);
+        } else if (!prepBrief) {
+          console.warn(`[Meeting] ⚠️ Skipping prep: meetingPrepSkill=${!!services.meetingPrepSkill}, adapter=${services.agentAdapter?.connected ?? false}, openclaw=${services.openclawBridge?.connected ?? false}`);
         }
 
         // Step 2: Configure audio + screen capture mode BEFORE joining
@@ -1635,10 +1762,11 @@ export function startConfigServer(services: Services) {
         let joinSummary = "";
         let joinMethod = "meetjoiner";
 
-        if (services.chromeLauncher && validated.platform === "google_meet") {
-          // Preferred: ChromeLauncher handles join + audio (no playwright-cli needed)
-          // Audio injection via addInitScript replaces BlackHole — keep default devices
-          console.log("[Meeting] Using ChromeLauncher join (Playwright library, no CLI conflict)...");
+        if (services.chromeLauncher && (validated.platform === "google_meet" || validated.platform === "zoom")) {
+          // Preferred: ChromeLauncher handles join + audio for Meet AND Zoom
+          // Both use WebRTC — audio injection via addInitScript works on any meeting platform
+          // Zoom: navigates to web client, clicks "Join from Your Browser"
+          console.log(`[Meeting] Using ChromeLauncher join for ${validated.platform} (Playwright library)...`);
           try {
             await services.chromeLauncher.launch();
             console.log("[Meeting] ✅ ChromeLauncher: audio injection init script installed");
@@ -1665,7 +1793,7 @@ export function startConfigServer(services: Services) {
               console.warn("[Meeting] Audio pipeline activation failed:", e.message);
             }
           }
-        } else if (services.playwrightCli && validated.platform === "google_meet") {
+        } else if (services.playwrightCli && (validated.platform === "google_meet" || validated.platform === "zoom")) {
           // Fallback: playwright-cli (legacy path)
           if (!services.playwrightCli.connected) {
             try { await services.playwrightCli.start(); } catch (e: any) {
@@ -1700,6 +1828,34 @@ export function startConfigServer(services: Services) {
           joinSummary = joinSuccess ? "Joined via MeetJoiner" : (session.error || "Unknown error");
         }
 
+        // ── Generate custom Meeting Stage HTML (iframe src pre-baked) ──
+        let customStageUrl: string | null = null;
+        {
+          const brief = prepBrief || services.meetingPrepSkill?.currentBrief;
+          const docUrl = resolveDocumentUrl(brief);
+          console.log(`[Meeting] Stage check: prepBrief=${!!prepBrief}, currentBrief=${!!services.meetingPrepSkill?.currentBrief}, docUrl=${docUrl || "null"}, scenes=${brief?.scenes?.length || 0}, files=${brief?.filePaths?.length || 0}`);
+          if (docUrl) {
+            try {
+              const docs = (brief?.filePaths || []).map((f: any) => ({
+                name: f.path.split("/").pop() || f.path,
+                path: f.path,
+                badge: "new" as const,
+              }));
+              const agendaBids = brief ? buildEngagementBids(brief) : [];
+              customStageUrl = await generateStageHtml({
+                meetingId,
+                title: meetTopic,
+                documentUrl: docUrl,
+                documents: docs,
+                agendaBids,
+              });
+              console.log(`[Meeting] ✅ Custom Stage generated: ${customStageUrl}`);
+            } catch (e: any) {
+              console.warn(`[Meeting] Stage generation failed: ${e.message}`);
+            }
+          }
+        }
+
         // Only emit meeting.started when ACTUALLY in the meeting (not waiting_room)
         const emitMeetingStarted = () => {
           services.sessionManager?.markActive(meetingId, { meetUrl: validated.url });
@@ -1710,19 +1866,61 @@ export function startConfigServer(services: Services) {
             url: validated.url,
             platform: validated.platform,
             meetingId,
+            title: meetTopic,
           });
+
+          // Mark voice session active so /api/voice/session/status returns correct state
+          if (voiceStarted || services.realtime.connected) {
+            markVoiceSession({
+              mode: "meeting",
+              transport: "meet_bridge",
+              topic: meetTopic,
+              provider: services.realtime.provider,
+            });
+          }
+
           services.eventBus.emit("voice.started", { audio_mode: "meet_bridge" });
           console.log("[Meeting] meeting.started emitted — now in meeting");
 
-          // Self-introduction: tell participants who CallingClaw is and why it's here
+          // Self-introduction + presentation mode setup
           if (services.realtime.connected) {
-            setTimeout(() => {
+            setTimeout(async () => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
+              const intro = buildMeetingIntro(ownerName, topicSnippet);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent");
-            }, 2000); // Wait 2s for audio bridge to fully initialize
+
+              // If we have a presentation script (speakingPlan + scenes), inject it
+              const brief = prepBrief || services.meetingPrepSkill?.currentBrief;
+              if (brief?.speakingPlan && brief.scenes?.length > 0) {
+                // Primer message (EXP-7C finding: eliminates hallucination in first turns)
+                services.realtime.injectContext(
+                  `[PRESENTATION] You are delivering a ${brief.speakingPlan.length}-part briefing on "${brief.topic}". When you receive [PRESENT NOW] content blocks, present only that section. Quote specific numbers and data, never fabricate. Sound like a senior PM giving a concise briefing.`
+                );
+
+                // Inject playbook context so voice knows the presentation plan
+                injectMeetingBrief(services.realtime, brief);
+                console.log(`[Meeting] ✅ Presentation mode: ${brief.speakingPlan.length} phases, ${brief.scenes.length} scenes (with primer)`);
+
+                // Also inject the presentation ready context
+                const readyCtx = buildPresentationReadyContext(brief.scenes);
+                if (readyCtx) services.realtime.injectContext(readyCtx);
+
+                // Idle nudge: if no conversation after 30s, prompt AI to start presenting
+                const idleTimer = setTimeout(() => {
+                  const recentEntries = services.context.getRecentTranscript(5);
+                  const hasRealConversation = recentEntries.some(
+                    (e: any) => e.role === "user" && e.text.length > 20 && (Date.now() - e.ts) < 25000
+                  );
+                  if (!hasRealConversation && services.realtime.connected) {
+                    services.realtime.injectContext(buildIdleNudgeContext());
+                    console.log("[Meeting] Idle nudge sent — prompting AI to start presentation");
+                  }
+                }, 30000);
+                services.eventBus.on("meeting.ended", () => clearTimeout(idleTimer));
+              }
+            }, 2000);
           }
         };
 
@@ -1865,11 +2063,12 @@ export function startConfigServer(services: Services) {
                 }).catch((e: any) => console.error("[Meeting] Auto-leave delivery failed:", e.message));
               }
 
-              // Stop voice session
+              // Stop voice session + clear state
               if (services.realtime.connected) {
                 services.realtime.stop();
                 services.eventBus.emit("voice.stopped", {});
               }
+              clearVoiceSession();
 
               console.log("[Meeting] Auto-leave complete — summary + delivery triggered");
             } catch (e: any) {
@@ -2371,7 +2570,14 @@ STEP-BY-STEP FLOW:
         // Each step emits progress events → Desktop shows real-time log in side panel.
 
         const prepId = `prep_${Date.now()}`;
-        const prepMeetingId = services.sessionManager!.generateId();
+
+        // Create session in SessionManager immediately (so session is queryable + ID is stable)
+        const prepSession = services.sessionManager!.findOrCreate({
+          topic: body.topic,
+          meetUrl: body.url,
+          startTime: body.start_time,
+        });
+        const prepMeetingId = prepSession.meetingId;
 
         // Return immediately with just the topic
         const agenda = {
@@ -2392,7 +2598,8 @@ STEP-BY-STEP FLOW:
 
         // ── Background pipeline: title → time → calendar → deep research ──
         // Every step emits "meeting.prep_progress" so Desktop can show live log
-        if (services.openclawBridge?.connected) {
+        const canPrepare = services.agentAdapter?.connected || services.openclawBridge?.connected;
+        if (canPrepare) {
           (async () => {
             const emit = (step: string, data?: any) => {
               services.eventBus.emit("meeting.prep_progress", { prepId, step, ...data });
@@ -2508,6 +2715,11 @@ STEP-BY-STEP FLOW:
               });
             }
           })();
+        }
+
+        if (!canPrepare) {
+          console.warn(`[MeetingPrepare] ⚠️ No agent available — prep will not run (adapter=${services.agentAdapter?.connected ?? false}, openclaw=${services.openclawBridge?.connected ?? false})`);
+          agenda.prepStatus = "skipped";
         }
 
         return Response.json(agenda, { headers });
@@ -2687,7 +2899,10 @@ STEP-BY-STEP FLOW:
 
         // Step 2: Generate meeting prep brief (best-effort)
         let prepBrief: any = null;
-        if (services.meetingPrepSkill && services.openclawBridge?.connected) {
+        const canPrep = services.meetingPrepSkill && (
+          services.agentAdapter?.connected || services.openclawBridge?.connected
+        );
+        if (canPrep) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, topic, undefined, undefined, meetingId);
             prepBrief = prepResult.brief;
@@ -2705,7 +2920,17 @@ STEP-BY-STEP FLOW:
             console.warn("[TalkLocally] ❌ Prep brief failed (continuing without):", e.message);
           }
         } else {
-          console.warn(`[TalkLocally] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, openClaw=${services.openclawBridge?.connected ?? false}`);
+          console.warn(`[TalkLocally] ⚠️ Skipping prep brief: meetingPrepSkill=${!!services.meetingPrepSkill}, adapter=${services.agentAdapter?.connected ?? false}, openClaw=${services.openclawBridge?.connected ?? false}`);
+        }
+
+        // Step 2.5: Launch Playwright Chrome for execution tools (share_screen, open_file, etc.)
+        // Without this, all Playwright-dependent tools fail with "No page — call launch() first"
+        // This mirrors the launch() call in /api/meeting/join (online meeting mode)
+        try {
+          await services.chromeLauncher.launch();
+          console.log("[TalkLocally] ✅ ChromeLauncher launched for execution tools");
+        } catch (e: any) {
+          console.warn("[TalkLocally] ⚠️ ChromeLauncher launch failed (execution tools unavailable):", e.message);
         }
 
         // Step 3: Start meeting recording (transcript)
@@ -3250,9 +3475,82 @@ STEP-BY-STEP FLOW:
       // ── Bridge / Google / Static ──
       // ══════════════════════════════════════════════════════════════
 
+      // GET /api/capabilities — Dynamic capability discovery for OpenClaw / external callers
+      // Ensures callers always get current config without hardcoding
+      if (url.pathname === "/api/capabilities" && req.method === "GET") {
+        return Response.json({
+          version: CONFIG.version,
+          voiceProvider: CONFIG.voiceProvider,
+          transcriptionLanguage: CONFIG.transcriptionLanguage,
+          features: {
+            meetingStage: true,           // Pre-generated Stage HTML with iframe
+            markdownRenderer: true,       // /render.html?file=... for any .md file
+            iframeScroll: true,           // Scroll iframe content via API
+            interactTool: true,           // Click/scroll/navigate on presenting page
+            readPrepTool: true,           // Zero-cost prep section queries
+            naturalUrlResolution: true,   // "官网" → resolved from prep brief
+            dualSystemPanels: true,       // System One (Voice) + System Two (Agent)
+          },
+          tools: [
+            "share_screen", "stop_sharing", "interact", "read_prep", "search_files",
+            "open_file", "leave_meeting", "recall_context", "take_screenshot",
+          ],
+          prepFiles: (() => {
+            try {
+              const fs = require("fs");
+              const home = require("os").homedir();
+              return fs.readdirSync(`${home}/.callingclaw/shared`)
+                .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_compiled.json"))
+                .map((f: string) => `${home}/.callingclaw/shared/${f}`);
+            } catch { return []; }
+          })(),
+        }, { headers });
+      }
+
+      // GET /api/audio/status — Audio pipeline diagnostic
+      if (url.pathname === "/api/audio/status" && req.method === "GET") {
+        const log = (() => { try { return require("child_process").execSync("strings /tmp/callingclaw-backend.log | tail -100").toString(); } catch { return ""; } })();
+        const audioChunks = (log.match(/Mic audio chunk/g) || []).length;
+        const pipelineReady = log.includes("pipeline_ready");
+        const echoSuppressed = (log.match(/Echo suppressed/g) || []).length;
+        const interrupted = (log.match(/interrupted AI response/g) || []).length;
+        const speechStarted = (log.match(/speech_started/g) || []).length;
+        const audioDeltas = (log.match(/response\.audio\.d/g) || []).length;
+        return Response.json({
+          pipeline: pipelineReady ? "ready" : "not_ready",
+          capture: { chunks: audioChunks, flowing: audioChunks > 0 },
+          playback: { audioDeltas, hasOutput: audioDeltas > 0 },
+          echo: { suppressed: echoSuppressed },
+          vad: { speechStarted, interrupted },
+        }, { headers });
+      }
+
       // GET /api/stage/documents — Working documents on the Meeting Stage
       if (url.pathname === "/api/stage/documents" && req.method === "GET") {
         return Response.json({ documents: services.context.stageDocuments }, { headers });
+      }
+
+      // GET /api/file/read — Read a local file (for markdown renderer + voice context)
+      if (url.pathname === "/api/file/read" && req.method === "GET") {
+        const filePath = url.searchParams.get("path");
+        if (!filePath) return Response.json({ error: "path required" }, { status: 400, headers });
+        // Security: only allow reading from known safe directories
+        const safePrefixes = [
+          require("os").homedir() + "/.callingclaw/",
+          require("os").homedir() + "/.openclaw/",
+          require("os").homedir() + "/Library/Mobile Documents/com~apple~CloudDocs/Tanka/",
+          require("os").homedir() + "/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw",
+        ];
+        const resolved = require("path").resolve(filePath);
+        if (!safePrefixes.some(p => resolved.startsWith(p))) {
+          return Response.json({ error: "Access denied — path outside allowed directories" }, { status: 403, headers });
+        }
+        try {
+          const content = await Bun.file(resolved).text();
+          return Response.json({ content, path: resolved, size: content.length }, { headers });
+        } catch (e: any) {
+          return Response.json({ error: `File not found: ${e.message}` }, { status: 404, headers });
+        }
       }
 
       // POST /api/screen/iframe/load — Load URL into stage slide iframe
@@ -3272,7 +3570,42 @@ STEP-BY-STEP FLOW:
           return Response.json({ error: "ChromeLauncher not active — join a meeting first" }, { status: 400, headers });
         }
         const body = (await req.json().catch(() => ({}))) as { url?: string };
-        const result = await services.chromeLauncher.shareScreen(body.url);
+        let shareUrl = body.url;
+        // If no URL specified, use pre-generated Stage HTML (has iframe content baked in)
+        if (!shareUrl) {
+          try {
+            const fs = require("fs");
+            const publicDir = require("path").resolve(import.meta.dir, "../public");
+            const stageFiles = fs.readdirSync(publicDir)
+              .filter((f: string) => f.startsWith("stage-") && f.endsWith(".html") && f !== "stage.html")
+              .map((f: string) => ({ name: f, mtime: fs.statSync(`${publicDir}/${f}`).mtimeMs }))
+              .sort((a: any, b: any) => b.mtime - a.mtime);
+            if (stageFiles[0]) {
+              shareUrl = `http://localhost:${CONFIG.port}/${stageFiles[0].name}`;
+              console.log(`[API] Using pre-generated Stage: ${shareUrl}`);
+            }
+          } catch {}
+        }
+        // If presenting tab exists, navigate it. Then ensure Meet is still sharing.
+        if (shareUrl && services.chromeLauncher.presentingPage) {
+          try {
+            await services.chromeLauncher.navigatePresentingPage(shareUrl);
+            console.log(`[API] Navigated presenting tab to ${shareUrl} (reused)`);
+            // Re-verify Meet share state (cross-origin navigation can break tab capture)
+            await services.chromeLauncher.page.waitForTimeout(1000);
+            const stillSharing = await services.chromeLauncher.checkSharingStatus();
+            if (!stillSharing) {
+              console.log(`[API] Meet lost share after navigation — restarting shareScreen()`);
+              const startResult = await services.chromeLauncher.shareScreen(shareUrl);
+              console.log(`[API] shareScreen result: ${JSON.stringify(startResult)}`);
+              return Response.json(startResult, { headers });
+            }
+            return Response.json({ success: true, message: `Presenting: ${shareUrl}` }, { headers });
+          } catch {
+            // Navigate failed — fall through to new share
+          }
+        }
+        const result = await services.chromeLauncher.shareScreen(shareUrl);
         return Response.json(result, { headers });
       }
 
@@ -3285,12 +3618,47 @@ STEP-BY-STEP FLOW:
         return Response.json(result, { headers });
       }
 
-      // POST /api/screen/scroll — Scroll the presenting tab
+      // POST /api/screen/scroll — Scroll the presenting tab (or iframe if on Stage)
       if (url.pathname === "/api/screen/scroll" && req.method === "POST") {
         if (!services.chromeLauncher?.presentingPage) {
           return Response.json({ error: "No presenting tab open" }, { status: 400, headers });
         }
         const body = (await req.json().catch(() => ({}))) as { direction?: "up" | "down"; target?: string; pixels?: number };
+
+        // If on Stage, scroll the IFRAME content (not the Stage outer page)
+        const pageUrl = String(services.chromeLauncher.presentingPage.url());
+        const isOnStage = pageUrl.includes("/stage") || pageUrl.includes("callingclaw-stage-");
+        if (isOnStage) {
+          try {
+            const px = body.pixels || 500;
+            const dir = body.direction === "up" ? -px : px;
+            // Scroll inside the iframe's contentDocument
+            const iframeResult = await services.chromeLauncher.evaluateOnPresentingPage(`(() => {
+              var iframe = document.getElementById('slideFrame');
+              if (!iframe || !iframe.contentWindow) return JSON.stringify({ error: 'no iframe access' });
+              // Use contentWindow.scrollBy — works regardless of scroll container (body vs documentElement)
+              iframe.contentWindow.scrollBy({ top: ${dir}, behavior: 'smooth' });
+              // Read position from whichever element has the scroll
+              var doc = iframe.contentDocument;
+              var st = Math.max(doc.documentElement.scrollTop, doc.body.scrollTop);
+              var sh = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+              var ch = iframe.clientHeight;
+              return JSON.stringify({
+                scrollY: Math.round(st),
+                scrollMax: Math.round(sh - ch),
+                pct: Math.round(st / Math.max(1, sh - ch) * 100)
+              });
+            })()`);
+            const info = iframeResult ? JSON.parse(String(iframeResult)) : null;
+            return Response.json({
+              success: true,
+              result: info ? `iframe scrolled ${body.direction || "down"}: ${info.pct}% (${info.scrollY}/${info.scrollMax}px)` : "iframe scrolled"
+            }, { headers });
+          } catch (e: any) {
+            return Response.json({ success: false, error: `iframe scroll failed: ${e.message}` }, { headers });
+          }
+        }
+
         try {
           let scrollResult: any;
           if (body.target) {
@@ -3424,8 +3792,15 @@ STEP-BY-STEP FLOW:
             console.log(`[PresentPrep] ${prepId} — Reading page content...`);
             let htmlContent = "";
             if (body.url!.startsWith("http://localhost") && body.url!.includes(`:${CONFIG.port}/`)) {
-              const filename = body.url!.replace(/^http:\/\/localhost:\d+\//, "");
-              htmlContent = await Bun.file(`${import.meta.dir}/../public/${filename}`).text();
+              const parsedUrl = new URL(body.url!);
+              // If URL has query params (e.g. render.html?file=...), fetch via HTTP to get rendered output
+              if (parsedUrl.search) {
+                const resp = await fetch(body.url!, { signal: AbortSignal.timeout(10000) });
+                htmlContent = await resp.text();
+              } else {
+                const filename = parsedUrl.pathname.replace(/^\//, "");
+                htmlContent = await Bun.file(`${import.meta.dir}/../public/${filename}`).text();
+              }
             } else if (body.url!.startsWith("file://")) {
               htmlContent = await Bun.file(decodeURIComponent(body.url!.replace("file://", ""))).text();
             } else {

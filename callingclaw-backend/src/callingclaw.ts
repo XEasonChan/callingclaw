@@ -17,6 +17,7 @@ import { ChromeLauncher } from "./chrome-launcher";
 import { PeekabooClient } from "./mcp_client/peekaboo";
 import { ZoomSkill } from "./skills/zoom";
 import { MeetJoiner, detectPlatform, type MeetingPlatform } from "./meet_joiner";
+import { detectLanguage } from "./prompt-constants";
 import { OpenClawBridge } from "./openclaw_bridge";
 import { BrowserCaptureProvider } from "./capture/browser-capture-provider";
 import { DesktopCaptureProvider } from "./capture/desktop-capture-provider";
@@ -28,6 +29,7 @@ import { OpenClawDispatcher } from "./openclaw-dispatcher";
 import { createAgentAdapter, type AgentAdapter, type AgentPlatform } from "./agent-adapter";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
+import { NoShowDetector } from "./modules/no-show-detector";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -80,13 +82,12 @@ sessionManager.setDBSync((session) => {
   });
 });
 
-// Wire calendar auth error detection → EventBus + OpenClaw notification
+// Wire calendar auth error detection → auto-reconnect + notify user
 calendar.onAuthError = (error: string) => {
   console.warn(`[Calendar] Auth error detected: ${error}`);
-  eventBus.emit("calendar.auth_error", {
-    error,
-    message: "Google OAuth refresh token 已过期或被撤销，日历功能暂时不可用。请重新授权。",
-  });
+  eventBus.emit("calendar.auth_error", { error });
+  // Auto-trigger reconnect loop (retries every 5 min until reconnected)
+  calendar.startAutoReconnect();
 };
 
 // Load persisted tasks
@@ -126,6 +127,7 @@ console.log(`[Init] Agent platform: ${_detectedPlatform}`);
 const contextSync = new ContextSync();
 const openclawBridge = new OpenClawBridge(); // kept for backward compat (activity events, ContextSync)
 const dispatcher = new OpenClawDispatcher(openclawBridge);
+const noShowDetector = new NoShowDetector({ eventBus, context, openclawBridge });
 
 // Job fire handler: when internal timer fires, auto-join the meeting
 const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
@@ -133,7 +135,7 @@ const _onJobFire = (job: import("./agent-adapter").ScheduledJob) => {
   fetch(`http://localhost:${CONFIG.port}/api/meeting/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: job.payload.meetUrl }),
+    body: JSON.stringify({ url: job.payload.meetUrl, topic: job.payload.summary }),
   }).then(r => {
     if (r.ok) console.log(`[JobScheduler] Join request sent for "${job.payload.summary}"`);
     else console.error(`[JobScheduler] Join failed: ${r.status}`);
@@ -332,12 +334,18 @@ const vision = new VisionModule({
     // Emit vision event for Desktop UI visibility
     eventBus.emit("meeting.vision", { description, timestamp: Date.now() });
 
+    // Inject vision description into Realtime voice model (replaces stale one)
+    // Uses fixed ID so each vision update REPLACES the previous, keeping context compact.
+    if (voice.connected && description.length > 20) {
+      voice.replaceContext(`[VISION] What's currently on screen: ${description}`, "ctx_vision");
+    }
+
     // Append to live log file on disk (+ emit WS event for real-time frontend)
     if (meetingPrepSkill.liveLogPath) {
       appendToLiveLog(meetingPrepSkill.liveLogPath, `[SCREEN] ${description}`, eventBus, activeMeetingId || undefined);
     }
 
-    // Push visual context to agent every 5 descriptions (~40 seconds)
+    // Push visual context to agent every 5 descriptions (~15 seconds at 3s analysis interval)
     if (_meetingVisionBuffer.length >= 5 && agentAdapter.connected) {
       const batch = _meetingVisionBuffer.splice(0);
       agentAdapter.executeTask(
@@ -369,8 +377,18 @@ eventBus.on("meeting.started", (data) => {
     || sessionManager.generateId();
   // Reset incremental context injection state for new meeting
   resetContextInjectionState();
-  // Reset transcript from previous meeting to prevent context leakage
-  context.resetTranscript();
+  // Only reset transcript if joining a DIFFERENT meeting (not re-joining same one)
+  // This preserves conversation history across multiple join/leave cycles in the same meeting
+  const currentUrl = data?.url || "";
+  const prevUrl = context.workspace?.meetUrl || "";
+  if (currentUrl && prevUrl && currentUrl !== prevUrl) {
+    context.resetTranscript();
+    console.log(`[Init] Transcript reset (new meeting URL: ${currentUrl.slice(-15)})`);
+  } else if (context.transcript.length === 0) {
+    // Fresh start, no need to log
+  } else {
+    console.log(`[Init] Transcript preserved (${context.transcript.length} entries, same meeting)`);
+  }
   // Mark meeting active for consumers that must not infer it (ComputerUse model split)
   context.setInMeeting(true);
   // Start KeyFrameStore for multimodal timeline (screenshots saved to disk)
@@ -431,6 +449,32 @@ eventBus.on("meeting.started", (data) => {
       stopMeetingVisionAndFlush("3 hour safety limit reached");
     }
   }, 3 * 60 * 60 * 1000);
+
+  // ── Notify user via OpenClaw + start no-show detection ──
+  const notifyTopic = data?.topic || meetingPrepSkill.currentBrief?.topic
+    || sessionManager.list({ status: "active" })[0]?.topic || "Meeting";
+
+  noShowDetector.activate({ url: data?.url || meetUrl, topic: notifyTopic });
+
+  // Delay notification to avoid clobbering any in-flight OpenClaw task
+  // (OpenClawBridge tracks a single chatResolve at a time)
+  if (openclawBridge.connected) {
+    setTimeout(() => {
+      const lang = detectLanguage(notifyTopic);
+      const msg = lang === "zh"
+        ? `已加入会议「${notifyTopic}」，在里面等您 🎧`
+        : lang === "ja"
+        ? `会議「${notifyTopic}」に参加しました。お待ちしています 🎧`
+        : `Joined meeting "${notifyTopic}", waiting for you 🎧`;
+      openclawBridge.sendTaskIsolated(
+        `CallingClaw joined meeting "${notifyTopic}". ` +
+        `Send this message to the user via Telegram:\n\n"${msg}"\n\n` +
+        `Reply "sent" when done.`
+      ).catch((e: any) => {
+        console.warn("[MeetingNotify] Failed to notify user of join:", e.message);
+      });
+    }, 15_000); // 15s delay: let any in-flight prep/join task complete first
+  }
 
   // ── Start Browser DOM context capture (both modes) ──
   // Captures active browser tab DOM every 10s for richer context.
@@ -554,6 +598,14 @@ eventBus.on("voice.stopped", () => {
 });
 
 eventBus.on("meeting.ended", async () => {
+  noShowDetector.deactivate();
+
+  // Safety net: ensure recording is stopped even if autoLeaveMeeting() failed mid-way
+  if (meeting.getNotes().isRecording) {
+    console.warn("[Init] meeting.ended fired but recording still active — forcing stopRecording()");
+    meeting.stopRecording();
+  }
+
   // Finalize multimodal timeline before clearing meeting state
   const meetTopic = meetingPrepSkill.currentBrief?.topic || "Meeting";
   if (keyFrameStore.active) {
@@ -615,6 +667,13 @@ eventBus.on("meeting.ended", async () => {
   }
   if (contextRetriever.active) {
     contextRetriever.deactivate();
+  }
+
+  // ── Reset voice session for clean next meeting ──
+  // Clears all injected context + refreshes instructions so new meeting
+  // starts without old conversation history leaking in
+  if (voice.connected) {
+    voice.resetForNewMeeting();
   }
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
@@ -900,6 +959,7 @@ const transcriptAuditor = new TranscriptAuditor({
   meetJoiner,
   chromeLauncher,
   orchestrator,
+  agentAdapter,
 });
 
 // ── 2e. ContextRetriever (Event-Driven Knowledge Gap Fill) ──────
@@ -925,19 +985,11 @@ const FILLER_PHRASES = [
 ];
 let _lastFillerTs = 0;
 eventBus.on("retriever.searching", (data) => {
-  // Only inject filler if voice is connected and not too frequent
-  const now = Date.now();
-  if (voice.connected && now - _lastFillerTs > 30_000) {
-    _lastFillerTs = now;
-    const filler = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
-    // System instruction, NOT sendText: a fabricated user message made the
-    // model reply TO the filler, polluted the transcript, and re-triggered
-    // the auditor/retriever pipelines on the system's own words.
-    voice.speakWithInstruction(
-      `You are currently looking up background material on "${(data as any).topic?.slice(0, 50) || "this topic"}". ` +
-      `Say one short filler sentence like "${filler}" in the conversation language, nothing else.`
-    );
-    console.log(`[Filler] Spoke filler while searching for "${(data as any).topic?.slice(0, 30)}"`);
+  // Silent context injection — model sees the search is happening but doesn't
+  // interrupt its current speech with "好的". It can mention it when it next speaks.
+  if (voice.connected) {
+    voice.injectContext(`[SYSTEM] Searching for context about "${(data as any).topic?.slice(0, 50)}"... results will arrive shortly.`);
+    console.log(`[Filler] Silent context injected for "${(data as any).topic?.slice(0, 30)}"`);
   }
 });
 
@@ -1021,7 +1073,22 @@ function updateStageDocsContext() {
 }
 eventBus.on("meeting.prep_ready", (data: any) => {
   const fp = data?.filepath || data?.filePath;
-  if (fp) { context.addStageDocument(fp, "new"); updateStageDocsContext(); }
+  if (fp) { context.addStageDocument(fp, "new"); }
+  // Also add prep's filePaths and browserUrls to stage documents
+  const brief = data?.prepBrief;
+  if (brief) {
+    if (Array.isArray(brief.filePaths)) {
+      for (const f of brief.filePaths) {
+        if (f.path) context.addStageDocument(f.path, "new");
+      }
+    }
+    if (Array.isArray(brief.browserUrls)) {
+      for (const u of brief.browserUrls) {
+        if (u.url) context.addStageDocument(u.url, "new");
+      }
+    }
+  }
+  updateStageDocsContext();
 });
 eventBus.on("meeting.summary_ready", (data: any) => {
   if (data?.filepath) { context.addStageDocument(data.filepath, "new"); updateStageDocsContext(); }
@@ -1033,6 +1100,50 @@ eventBus.on("workspace.updated", (data: any) => {
   if (data?.file) { context.addStageDocument(data.file, "modified"); updateStageDocsContext(); }
 });
 eventBus.on("voice.started", () => { updateStageDocsContext(); });
+// #8: Refresh voice doc context when research adds a Working Document
+eventBus.on("research.completed", (data: any) => {
+  if (data?.filePath && !data?.error) { updateStageDocsContext(); }
+});
+
+// ── Calendar + Scheduler Notifications (OpenClaw → Telegram) ──────────
+
+// Meeting created via Desktop App → notify user with Meet link
+eventBus.on("calendar.updated", (data: any) => {
+  if (data?.action !== "created") return;
+  // The actual Meet link comes from the API response, not this event.
+  // MeetingScheduler will pick it up on next poll and emit scheduler.meeting_scheduled.
+  console.log(`[CalendarNotify] Event created: ${data?.summary || "meeting"}`);
+});
+
+// Meeting detected on calendar → notify user with link and auto-join time
+eventBus.on("scheduler.meeting_scheduled", (data: any) => {
+  if (!openclawBridge.connected || !data?.meetUrl) return;
+  const lang = detectLanguage(data?.summary || "");
+  const topic = data?.summary || "Meeting";
+  const joinTime = data?.joinAt ? new Date(data.joinAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+  const msg = lang === "zh"
+    ? `📅 检测到会议「${topic}」\n🔗 ${data.meetUrl}\n⏰ 将在 ${joinTime} 自动加入`
+    : `📅 Meeting detected: "${topic}"\n🔗 ${data.meetUrl}\n⏰ Auto-joining at ${joinTime}`;
+  openclawBridge.sendTaskIsolated(
+    `CallingClaw detected an upcoming meeting and scheduled auto-join. ` +
+    `Send this to the user via Telegram:\n\n"${msg}"\n\nReply "sent" when done.`
+  ).catch((e: any) => {
+    console.warn("[CalendarNotify] Failed to notify:", e.message);
+  });
+});
+
+// Calendar disconnected → notify user so they can provide a Meet link manually
+eventBus.on("calendar.auth_error", (data: any) => {
+  if (!openclawBridge.connected) return;
+  openclawBridge.sendTaskIsolated(
+    `CallingClaw's Google Calendar connection was lost (token expired). ` +
+    `Send this to the user via Telegram:\n\n` +
+    `"⚠️ Calendar connection lost. Auto-reconnecting... If you need me to join a meeting, ` +
+    `send me the Google Meet link directly."\n\nReply "sent" when done.`
+  ).catch((e: any) => {
+    console.warn("[CalendarNotify] Failed to notify auth error:", e.message);
+  });
+});
 
 // Forward meeting action items to EventBus
 context.on("note", (note) => {
@@ -1136,7 +1247,16 @@ startConfigServer({
   sessionManager,
 });
 
-// ── 8. Python Sidecar REMOVED — NativeBridge handles all input actions ──
+// ── 8. Startup Cleanup ────────────────────────────────────────
+// Remove orphan test/eval files and stale sessions to prevent data contamination
+import { cleanupSharedDirectory } from "./modules/shared-documents";
+cleanupSharedDirectory().then(({ removedOrphans, purgedSessions }) => {
+  if (removedOrphans > 0 || purgedSessions > 0) {
+    console.log(`[Init] Cleanup: ${removedOrphans} orphan files removed, ${purgedSessions} stale sessions purged`);
+  }
+}).catch(() => {});
+
+// NativeBridge active (no Python sidecar)
 // Audio: Electron AudioWorklet + SwitchAudioSource
 // Input: osascript + cliclick (via NativeBridge)
 // Screenshots: screencapture CLI + Chrome CDP

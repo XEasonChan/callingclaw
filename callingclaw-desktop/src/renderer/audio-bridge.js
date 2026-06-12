@@ -63,7 +63,8 @@ var ElectronAudioBridge = (function() {
     'class PlaybackProcessor extends AudioWorkletProcessor {',
     '  constructor() {',
     '    super();',
-    '    this._buffer = new Float32Array(24000 * 10);', // 10 second ring buffer
+    '    this._bufLen = 24000 * 10;',  // 10 second ring buffer
+    '    this._buffer = new Float32Array(this._bufLen);',
     '    this._writePos = 0;',
     '    this._readPos = 0;',
     '    this.port.onmessage = (e) => {',
@@ -74,8 +75,14 @@ var ElectronAudioBridge = (function() {
     '      }',
     '      var samples = e.data;',
     '      for (var i = 0; i < samples.length; i++) {',
-    '        this._buffer[this._writePos % this._buffer.length] = samples[i];',
+    '        this._buffer[this._writePos % this._bufLen] = samples[i];',
     '        this._writePos++;',
+    '      }',
+    // Prevent unbounded growth: reset both pointers when safe
+    '      if (this._readPos > this._bufLen * 2) {',
+    '        var offset = this._readPos - (this._readPos % this._bufLen);',
+    '        this._readPos -= offset;',
+    '        this._writePos -= offset;',
     '      }',
     '    };',
     '  }',
@@ -84,7 +91,7 @@ var ElectronAudioBridge = (function() {
     '    if (!output) return true;',
     '    for (var i = 0; i < output.length; i++) {',
     '      if (this._readPos < this._writePos) {',
-    '        output[i] = this._buffer[this._readPos % this._buffer.length];',
+    '        output[i] = this._buffer[this._readPos % this._bufLen];',
     '        this._readPos++;',
     '      } else {',
     '        output[i] = 0;',
@@ -302,6 +309,33 @@ var ElectronAudioBridge = (function() {
     }
   }
 
+  // ── Receive AI Audio (binary PCM16 — no base64 round-trip) ──
+
+  function playAudioBinary(pcm16ArrayBuffer) {
+    if (!_running || !_audioCtx || !_playbackWorklet) return;
+    if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(function() {});
+
+    try {
+      var pcm16 = new Int16Array(pcm16ArrayBuffer);
+      var float32 = new Float32Array(pcm16.length);
+      for (var j = 0; j < pcm16.length; j++) {
+        float32[j] = pcm16[j] / 32768;
+      }
+      // Micro fade-in/out (24 samples = 1ms)
+      var FADE = 24;
+      if (float32.length > FADE * 2) {
+        for (var f = 0; f < FADE; f++) {
+          var gain = f / FADE;
+          float32[f] *= gain;
+          float32[float32.length - 1 - f] *= gain;
+        }
+      }
+      _playbackWorklet.port.postMessage(float32, [float32.buffer]);
+    } catch (e) {
+      console.warn('[AudioBridge] playAudioBinary error:', e.message);
+    }
+  }
+
   // ── Interrupt: clear ring buffer ──
 
   function interruptPlayback() {
@@ -360,6 +394,7 @@ var ElectronAudioBridge = (function() {
     start: start,
     stop: stop,
     playAudio: playAudio,
+    playAudioBinary: playAudioBinary,
     interruptPlayback: interruptPlayback,
     getStatus: getStatus,
     getAnalyserNode: getAnalyserNode,

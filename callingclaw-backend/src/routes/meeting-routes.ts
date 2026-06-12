@@ -6,7 +6,7 @@
 
 import { CONFIG } from "../config";
 import { validateMeetingUrl } from "../meet_joiner";
-import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
+import { buildVoiceInstructions, prepareMeeting, injectMeetingBrief, resolveAndInjectPrep, buildMeetingIntro, buildPresentationReadyContext, buildIdleNudgeContext } from "../voice-persona";
 import { generateMeetingId, upsertSession } from "../modules/shared-documents";
 import { PresentationEngine } from "../modules/presentation-engine";
 import type { Services, RouteHandler } from "./types";
@@ -150,35 +150,86 @@ export function meetingRoutes(services: Services): RouteHandler {
         const meetingId = session.meetingId;
         services.sessionManager!.markActive(meetingId, { meetUrl: validated.url });
 
-        // Generate meeting prep brief via OpenClaw (best-effort, non-blocking join)
-        // DEDUP: Skip if session already has a prep file (e.g., from /api/meeting/delegate)
-        // or if meetingPrepSkill already has a loaded brief for this meeting.
-        let prepBrief: any = null;
-        const existingPrepBrief = services.meetingPrepSkill?.currentBrief;
-        const sessionHasPrep = session.files?.prep;
-        if (sessionHasPrep || existingPrepBrief) {
-          // Prep already exists — inject into voice context
-          prepBrief = existingPrepBrief;
-          if (prepBrief && services.realtime.connected) {
-            injectMeetingBrief(services.realtime, prepBrief);
-            console.log("[Meeting] Layer 2 meeting brief injected (existing prep)");
-          } else if (sessionHasPrep && services.realtime.connected) {
-            // Brief not in memory but prep file exists on disk — read and inject raw markdown
+        // Resolve and inject meeting prep brief (shared helper handles all fallbacks:
+        // session.files.prep → currentBrief with topic validation → disk scan for recent prep)
+        let prepBrief: any = await resolveAndInjectPrep({
+          session,
+          meetTopic,
+          meetingPrepSkill: services.meetingPrepSkill,
+          sessionManager: services.sessionManager!,
+          realtime: services.realtime,
+        });
+
+        // Load presentation script if a prep JSON exists (speakingPlan + scenes)
+        // This powers PRESENTER mode — voice follows the plan, shares screen, scrolls in sync
+        if (!prepBrief?.speakingPlan && services.meetingPrepSkill) {
+          const { homedir } = require("os");
+          const { existsSync } = require("fs");
+          // Look for prep JSON: cc_{meetingId}_prep.json or by topic match
+          const sharedDir = `${homedir()}/.callingclaw/shared`;
+          const prepJsonCandidates = [
+            // Same session ID as prep markdown: cc_{id}_prep.json
+            session.files?.prep?.replace(/_prep\.md$/, "_prep.json"),
+            // Session-specific presentation script
+            `${sharedDir}/${meetingId}_presentation.json`,
+            // Topic-based fallback (for manually created prep scripts)
+            ...(() => {
+              try {
+                const fs = require("fs");
+                return fs.readdirSync(sharedDir)
+                  .filter((f: string) => f.endsWith("_prep.json") || f.endsWith("_presentation.json"))
+                  .map((f: string) => `${sharedDir}/${f}`);
+              } catch { return []; }
+            })(),
+          ].filter(Boolean);
+          console.log(`[Meeting] Scanning ${prepJsonCandidates.length} prep JSON candidates...`);
+          for (const jsonPath of prepJsonCandidates) {
             try {
-              const prepPath = session.files!.prep as string;
-              const raw = await Bun.file(prepPath).text();
-              if (raw && raw.length > 100) {
-                // Truncate to fit voice context (~4000 chars)
-                // Resources are now at the top of prep markdown, simple truncation preserves them
-                const content = raw.length > 4000 ? raw.slice(0, 4000) + "\n..." : raw;
-                services.realtime.injectContext(`[MEETING_PREP]\n${content}\n[/MEETING_PREP]`);
-                console.log(`[Meeting] Layer 2 injected from disk prep (${raw.length} chars → ${content.length} chars)`);
+              if (jsonPath && existsSync(jsonPath)) {
+                const prepData = JSON.parse(await Bun.file(jsonPath).text());
+                if (prepData.speakingPlan && prepData.scenes) {
+                  // Merge presentation data into the brief
+                  if (!prepBrief) {
+                    prepBrief = {
+                      topic: prepData.topic || meetTopic,
+                      goal: prepData.goal || "",
+                      generatedAt: Date.now(),
+                      summary: "",
+                      keyPoints: [],
+                      architectureDecisions: [],
+                      expectedQuestions: [],
+                      filePaths: prepData.filePaths || [],
+                      browserUrls: prepData.browserUrls || [],
+                      folderPaths: [],
+                      attendees: [],
+                      liveNotes: [],
+                      speakingPlan: prepData.speakingPlan,
+                      scenes: prepData.scenes,
+                      decisionPoints: prepData.decisionPoints || [],
+                    };
+                    services.meetingPrepSkill.setBrief(prepBrief);
+                  } else {
+                    prepBrief.speakingPlan = prepData.speakingPlan;
+                    prepBrief.scenes = prepData.scenes;
+                    if (prepData.decisionPoints) prepBrief.decisionPoints = prepData.decisionPoints;
+                    if (prepData.filePaths) prepBrief.filePaths = [...(prepBrief.filePaths || []), ...prepData.filePaths];
+                  }
+                  console.log(`[Meeting] Loaded presentation script: ${prepData.speakingPlan.length} phases, ${prepData.scenes.length} scenes`);
+                  // Re-inject with playbook context now that speakingPlan exists
+                  if (services.realtime.connected) {
+                    injectMeetingBrief(services.realtime, prepBrief);
+                    console.log("[Meeting] Layer 2 re-injected with presentation script");
+                  }
+                  break;
+                }
               }
             } catch (e: any) {
-              console.warn(`[Meeting] Failed to read prep file from disk: ${e.message}`);
+              console.warn(`[Meeting] Failed to load prep JSON: ${e.message}`);
             }
           }
-        } else if (services.meetingPrepSkill && services.agentAdapter?.connected) {
+        }
+
+        if (!prepBrief && services.meetingPrepSkill && services.agentAdapter?.connected) {
           try {
             const prepResult = await prepareMeeting(services.meetingPrepSkill, meetTopic, undefined, meetAttendees, meetingId);
             prepBrief = prepResult.brief;
@@ -295,7 +346,7 @@ export function meetingRoutes(services: Services): RouteHandler {
             setTimeout(() => {
               const ownerName = CONFIG.userEmail?.split("@")[0] || "";
               const topicSnippet = meetTopic && meetTopic !== "Meeting" ? meetTopic : "";
-              const intro = buildMeetingIntro(ownerName, topicSnippet, meetAttendees);
+              const intro = buildMeetingIntro(ownerName, topicSnippet);
               services.realtime.sendText(intro);
               console.log("[Meeting] Self-introduction sent (Small Talk mode)");
 
