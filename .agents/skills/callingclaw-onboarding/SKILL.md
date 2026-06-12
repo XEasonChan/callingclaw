@@ -49,7 +49,7 @@ cd "$HOME/CallingClaw"
 ```
 
 - If the user pasted a different GitHub URL, clone that instead.
-- `setup.sh` may need API keys (`OPENAI_API_KEY` for voice, `OPENROUTER_API_KEY` for fast models). If missing, ask the user ONE message at a time and write them into the repo `.env`.
+- `setup.sh` prompts for the needed configuration (voice + fast-model providers) interactively — let the user complete those prompts themselves; this skill never collects or stores credentials.
 - Register the MCP server for THIS agent so the rest of the flow uses tools, not curl: the server entry point is `<repo>/plugins/callingclaw-events/index.ts` (run with `bun`). In Hermes: add under `mcp_servers:` in `~/.hermes/config.yaml`; in Claude Code: `claude mcp add callingclaw-events -- bun <repo>/plugins/callingclaw-events/index.ts`.
 - Poll up to 60s until the backend is healthy, then report which subsystems are up.
 
@@ -97,6 +97,6 @@ No → summarize what's set up, mention they can ask any time. Done.
 | Symptom | Fix |
 |---|---|
 | Backend unreachable | `cd <repo> && ./scripts/start.sh --no-desktop` |
-| Join ok but no voice | `OPENAI_API_KEY` missing in repo `.env`; then `POST /api/voice/start` |
+| Join ok but no voice | Voice provider not configured — re-run `./scripts/setup.sh`, then `POST /api/voice/start` |
 | Stuck in waiting room | The meeting owner must admit CallingClaw once; afterwards it auto-admits attendees |
 | Calendar create fails | Refresh token expired → `scripts/google-auth.sh`, then re-check Stage 3 |
