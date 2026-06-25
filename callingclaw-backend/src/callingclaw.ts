@@ -94,24 +94,33 @@ calendar.onAuthError = (error: string) => {
 await taskStore.load();
 
 // ── 1b. ContextSync + Agent Adapter ─────────────────────────────
-// Detect agent platform: openclaw > claude-code > hermes > standalone
+// Detect agent platform: openclaw > claude-code > codex > hermes > standalone
 const _detectedPlatform: AgentPlatform = (() => {
   const envPlatform = process.env.AGENT_PLATFORM;
   if (
     envPlatform === "openclaw" ||
     envPlatform === "claude-code" ||
+    envPlatform === "codex" ||
     envPlatform === "hermes" ||
     envPlatform === "standalone"
   ) {
     return envPlatform;
   }
-  // Auto-detect: prefer openclaw if config exists, then claude-code CLI, then hermes
+  // Auto-detect: prefer openclaw if config exists, then claude-code CLI, then codex, then hermes
   try {
     if (require("fs").existsSync(`${process.env.HOME}/.openclaw/openclaw.json`)) return "openclaw";
   } catch {}
   try {
     require("child_process").execSync("which claude", { stdio: "ignore" });
     return "claude-code";
+  } catch {}
+  try {
+    require("child_process").execSync("which codex", { stdio: "ignore" });
+    return "codex";
+  } catch {}
+  try {
+    // Codex desktop app bundles the CLI but doesn't put it on PATH
+    if (require("fs").existsSync("/Applications/Codex.app/Contents/Resources/codex")) return "codex";
   } catch {}
   try {
     if (require("fs").existsSync(`${process.env.HOME}/.hermes/config.yaml`)) return "hermes";

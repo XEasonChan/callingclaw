@@ -43,6 +43,8 @@ if [[ -z "$AGENT_PLATFORM" ]]; then
     AGENT_PLATFORM="openclaw"
   elif command -v claude &>/dev/null; then
     AGENT_PLATFORM="claude-code"
+  elif command -v codex &>/dev/null || [[ -x "/Applications/Codex.app/Contents/Resources/codex" ]]; then
+    AGENT_PLATFORM="codex"
   elif [[ -f "$HOME/.hermes/config.yaml" ]] || command -v hermes &>/dev/null || [[ -x "$HOME/.local/bin/hermes" ]]; then
     AGENT_PLATFORM="hermes"
   else
@@ -74,7 +76,15 @@ elif [[ "$AGENT_PLATFORM" == "claude-code" ]]; then
   if command -v claude &>/dev/null; then
     ok "Agent platform: Claude Code ($(claude --version 2>/dev/null || echo 'unknown'))"
   else
-    warn "Claude Code CLI not found — falling back to standalone"
+    warn "Claude Code CLI not found — install: npm install -g @anthropic-ai/claude-code (falling back to standalone)"
+  fi
+elif [[ "$AGENT_PLATFORM" == "codex" ]]; then
+  CODEX_CMD=""
+  if command -v codex &>/dev/null; then CODEX_CMD="codex"; elif [[ -x "/Applications/Codex.app/Contents/Resources/codex" ]]; then CODEX_CMD="/Applications/Codex.app/Contents/Resources/codex"; fi
+  if [[ -n "$CODEX_CMD" ]]; then
+    ok "Agent platform: Codex ($("$CODEX_CMD" --version 2>/dev/null || echo 'unknown'))"
+  else
+    warn "Codex CLI not found — run ./scripts/setup-codex.sh (falling back to standalone)"
   fi
 elif [[ "$AGENT_PLATFORM" == "hermes" ]]; then
   HERMES_CMD=""

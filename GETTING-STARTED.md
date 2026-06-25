@@ -49,8 +49,8 @@ cd callingclaw
 
 The setup script will:
 1. Install **Bun** (if missing)
-2. Install **OpenClaw** via npm (if missing)
-3. Run OpenClaw onboarding (first time — asks for API keys)
+2. Detect your **agent platform** (OpenClaw → Claude Code → Codex → Hermes → standalone)
+3. Register the CallingClaw MCP server with your agent (so you can talk to CallingClaw from inside it)
 4. Create `.env` from template
 5. Install all dependencies
 
@@ -69,6 +69,34 @@ OPENROUTER_API_KEY=sk-or-v1-xxx
 Get keys at:
 - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 - OpenRouter: [openrouter.ai/keys](https://openrouter.ai/keys)
+
+---
+
+## Agent Platforms
+
+CallingClaw's voice, meeting join, notes, and screen features work on their own.
+For cognitive tasks (meeting prep, deep reasoning, post-meeting todo execution)
+it delegates to whichever agent you already have installed — no OpenClaw required.
+
+| Platform | Setup | Talk to CallingClaw from the agent |
+|----------|-------|-------------------------------------|
+| **Claude Code** | `./scripts/setup-claude-code.sh` | `claude "use callingclaw tools to report status"` |
+| **Codex** (CLI or desktop app) | `./scripts/setup-codex.sh` | `codex exec "use callingclaw tools to report status"` |
+| **Hermes** (NousResearch) | `./scripts/setup-hermes.sh` | `./scripts/start-hermes.sh` |
+| **OpenClaw** | automatic in `setup.sh` | OpenClaw Control UI / Telegram |
+| **Standalone** | nothing — fallback | — (voice, notes, screen still work) |
+
+Each setup script registers the `callingclaw-events` MCP server with that agent
+(7 tools: status, transcript, summary, recent_events, join_meeting,
+prepare_meeting, list_calendar) and sets `AGENT_PLATFORM` in `.env`.
+
+Because Claude Code and Codex both support headless/remote invocation
+(`claude -p`, `codex exec`), any machine with one of them installed and
+CallingClaw set up can be driven remotely: the agent session calls the MCP
+tools, which talk to the backend on `localhost:4000`.
+
+The Codex desktop app bundles its CLI inside `Codex.app` without putting it on
+PATH — CallingClaw finds it automatically (override with `CODEX_BIN` in `.env`).
 
 ---
 
