@@ -69,6 +69,12 @@ export const CONFIG = {
     realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
     realtimeUrl: "wss://api.openai.com/v1/realtime",
     voice: "marin",
+    // gpt-realtime-2 configurable reasoning effort: minimal | low | medium | high | xhigh.
+    // Default "low" keeps live-meeting latency tight (also the model's recommended
+    // production starting point). Wired into the session as `reasoning.effort`.
+    // Empty string ("") omits the field entirely — safe for older/non-reasoning models.
+    realtimeEffort: (process.env.OPENAI_REALTIME_EFFORT ?? "low") as
+      | "minimal" | "low" | "medium" | "high" | "xhigh" | "",
   },
 
   // OpenAI Realtime 2 (gpt-realtime-2 — GPT-5-class reasoning, 128K ctx)
@@ -81,6 +87,9 @@ export const CONFIG = {
     realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
     realtimeUrl: "wss://api.openai.com/v1/realtime",
     voice: "marin",  // Voices: marin, cedar
+    // See openai.realtimeEffort above — same env var, same default ("low").
+    realtimeEffort: (process.env.OPENAI_REALTIME_EFFORT ?? "low") as
+      | "minimal" | "low" | "medium" | "high" | "xhigh" | "",
   },
 
   // Grok (xAI Voice Agent — A/B test alternative)
@@ -142,8 +151,11 @@ export const CONFIG = {
   // Vision analysis (screen/meeting screenshots via OpenRouter)
   // A/B eval showed Haiku 4.5 matches Sonnet quality (96% vs 100%) at 6x less cost.
   // Haiku also has native vision — no need for a separate Gemini Flash model.
+  // Fallback: current Gemini Flash (multimodal, fast, cheap) if the primary errors.
+  // Configurable via VISION_FALLBACK_MODEL (OpenRouter slug).
   vision: {
     model: process.env.VISION_MODEL || "anthropic/claude-haiku-4-5",
+    fallbackModel: process.env.VISION_FALLBACK_MODEL || "google/gemini-3.5-flash",
   },
 
   // Google OAuth (Calendar + Meet)

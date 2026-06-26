@@ -125,6 +125,11 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
         },
         output_modalities: ["audio"],
         instructions,
+        // gpt-realtime-2 reasoning effort. Field path per OpenAI Realtime docs +
+        // LiveKit plugin: session.reasoning.effort (nested object, mirrors the
+        // Responses API). Omitted entirely when CONFIG.openai.realtimeEffort === ""
+        // so non-reasoning models / older endpoints don't get an unknown field.
+        ...buildReasoning(CONFIG.openai.realtimeEffort),
         tools: tools.map((t) => ({
           type: "function",
           name: t.name,
@@ -135,6 +140,22 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
     };
   },
 };
+
+/**
+ * Build the optional `reasoning` session fragment for gpt-realtime-2.
+ * Returns `{ reasoning: { effort } }` for a non-empty effort, or `{}` to omit
+ * the field entirely (omitted-by-default-safe — see CONFIG.openai.realtimeEffort).
+ *
+ * Field name CONFIDENCE: medium-high. OpenAI's Realtime prompting guide and the
+ * LiveKit OpenAI plugin both reference `reasoning.effort` (nested), matching the
+ * Responses API shape. The exact GA session schema was not pinned from the public
+ * docs at wire time — if a future API rejects this field, set OPENAI_REALTIME_EFFORT=""
+ * to omit it (default behavior is otherwise the model's own default of "low").
+ */
+function buildReasoning(effort: string): Record<string, any> {
+  if (!effort) return {};
+  return { reasoning: { effort } };
+}
 
 // ── OpenAI Realtime GA Provider (gpt-realtime-2 default, 1.5 compatible) ──
 // GA API (no beta header), new event names, session.type required.
@@ -197,6 +218,9 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
         },
         output_modalities: ["audio"],
         instructions,
+        // gpt-realtime-2 reasoning effort (session.reasoning.effort); omitted when
+        // CONFIG.openai15.realtimeEffort === "". See buildReasoning() above OPENAI_PROVIDER.
+        ...buildReasoning(CONFIG.openai15.realtimeEffort),
         tools: tools.map((t) => ({
           type: "function",
           name: t.name,
@@ -346,7 +370,12 @@ export interface ContextItem {
 
 // ── Token Budget Tracking ────────────────────────────────────────
 
-/** Estimated context window size for the Realtime API */
+/**
+ * Context window size for the Realtime API token-budget tracking.
+ * gpt-realtime-2 provides a 128K context window (up from 32K on the 1.x
+ * preview), so long meetings use the larger budget before warn/compress fire.
+ * Layer-3 budget logic (MAX_CONTEXT_TOKENS_L3) is independent of this value.
+ */
 const TOTAL_CONTEXT_TOKENS = 128_000;
 const TOKEN_WARNING_THRESHOLD = 0.8;   // 80% → emit warning
 const TOKEN_COMPRESS_THRESHOLD = 0.9;  // 90% → auto-compress context queue
