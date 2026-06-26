@@ -38,6 +38,26 @@ const DEFAULT_PROFILE = resolve(process.env.CALLINGCLAW_HOME || resolve(homedir(
 const MAIN_CHROME_PROFILE = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
 const DEFAULT_PORT = 0; // 0 = random free port
 
+// ── Bot-detection evasion init script ────────────────────────────
+// Hides navigator.webdriver so Google Meet treats us as a normal browser.
+//
+// We deliberately do NOT pass the `--disable-blink-features=AutomationControlled`
+// command-line flag: although it keeps navigator.webdriver === false, Chrome
+// surfaces a yellow "You are using an unsupported command-line flag" infobar
+// that is visible during screen-share (looks unprofessional in demos).
+//
+// Instead we drop that flag and override navigator.webdriver here via
+// addInitScript (runs before any page JS, like CDP
+// Page.addScriptToEvaluateOnNewDocument). This is the standard
+// playwright-stealth approach: it removes the banner AND makes
+// navigator.webdriver `undefined` (even stealthier than the flag's `false`).
+// We still keep `ignoreDefaultArgs: ["--enable-automation"]` — without that,
+// Chrome sets navigator.webdriver = true (verified empirically), which Meet
+// would flag as a bot.
+const WEBDRIVER_STEALTH_SCRIPT = `
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+`;
+
 // ── Audio injection init script ──────────────────────────────────
 // This runs BEFORE any page JavaScript, intercepting getUserMedia
 // and wrapping RTCPeerConnection so audio injection works.
@@ -712,7 +732,9 @@ export class ChromeLauncher {
       args: [
         "--autoplay-policy=no-user-gesture-required",
         "--disable-infobars",
-        "--disable-blink-features=AutomationControlled",
+        // NOTE: --disable-blink-features=AutomationControlled is intentionally NOT
+        // passed — it triggers a visible yellow "unsupported command-line flag"
+        // banner. navigator.webdriver is hidden via WEBDRIVER_STEALTH_SCRIPT below.
         "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
@@ -726,9 +748,12 @@ export class ChromeLauncher {
       ignoreDefaultArgs: ["--mute-audio", "--enable-automation", "--no-sandbox"],
     });
 
+    // Hide navigator.webdriver (bot-detection evasion without the infobar flag)
+    await context.addInitScript(WEBDRIVER_STEALTH_SCRIPT);
+
     // Install the audio injection init script
     await context.addInitScript(AUDIO_INIT_SCRIPT);
-    console.log("[ChromeLauncher] Init script installed (getUserMedia + RTC interception)");
+    console.log("[ChromeLauncher] Init scripts installed (webdriver stealth + getUserMedia + RTC interception)");
 
     // Use first page (close ALL extras Chrome opened from previous session)
     // Aggressive cleanup: close every page except the one we keep, then navigate to blank
@@ -1986,10 +2011,13 @@ export class ChromeLauncher {
     const { chromium } = await import("playwright");
     const context = await chromium.launchPersistentContext(this.profileDir, {
       headless: false,
-      args: ["--no-sandbox", "--disable-web-security", "--disable-blink-features=AutomationControlled"],
+      // --disable-blink-features=AutomationControlled omitted (triggers infobar);
+      // navigator.webdriver hidden via WEBDRIVER_STEALTH_SCRIPT instead.
+      args: ["--no-sandbox", "--disable-web-security"],
       viewport: { width: 1280, height: 900 },
       ignoreDefaultArgs: ["--enable-automation"],
     });
+    await context.addInitScript(WEBDRIVER_STEALTH_SCRIPT);
     this._context = context;
     this._page = context.pages()[0] || await context.newPage();
     console.log("[ChromeLauncher] Standalone browser launched");
