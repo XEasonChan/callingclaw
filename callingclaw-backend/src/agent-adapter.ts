@@ -15,6 +15,7 @@
 // Implementations:
 //   OpenClawAdapter   — Gateway WS + subprocess fallback (original)
 //   ClaudeCodeAdapter — claude -p subprocess for all cognitive tasks
+//   CodexAdapter      — codex exec subprocess for all cognitive tasks
 //   HermesAdapter     — hermes -z subprocess for all cognitive tasks
 //   StandaloneAdapter — No external agent, internal scheduling only
 //
@@ -26,7 +27,7 @@ import type { MeetingSummary } from "./modules/meeting";
 
 // ── Agent Adapter Interface ──
 
-export type AgentPlatform = "openclaw" | "claude-code" | "hermes" | "standalone";
+export type AgentPlatform = "openclaw" | "claude-code" | "codex" | "hermes" | "standalone";
 
 export interface AgentAdapter {
   /** Platform identifier */
@@ -249,6 +250,10 @@ export function createAgentAdapter(platform: AgentPlatform, deps?: any): AgentAd
     case "claude-code": {
       const { ClaudeCodeAdapter } = require("./adapters/claude-code-adapter");
       return new ClaudeCodeAdapter(deps?.onJobFire);
+    }
+    case "codex": {
+      const { CodexAdapter } = require("./adapters/codex-adapter");
+      return new CodexAdapter(deps?.onJobFire);
     }
     case "hermes": {
       const { HermesAdapter } = require("./adapters/hermes-adapter");

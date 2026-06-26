@@ -60,8 +60,10 @@ fi
 ok "Bun $(bun --version)"
 
 # ── Agent Platform Detection ──
-# CallingClaw works with any agentic backend: OpenClaw, Claude Code, or standalone
+# CallingClaw works with any agentic backend: OpenClaw, Claude Code, Codex,
+# Hermes, or standalone
 AGENT_PLATFORM="standalone"
+CODEX_APP_BIN="/Applications/Codex.app/Contents/Resources/codex"
 
 if command -v openclaw &>/dev/null; then
   OPENCLAW_VERSION=$(openclaw --version 2>/dev/null || echo "unknown")
@@ -71,11 +73,20 @@ elif command -v claude &>/dev/null; then
   CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
   ok "Claude Code $CLAUDE_VERSION (agent platform: claude-code)"
   AGENT_PLATFORM="claude-code"
+elif command -v codex &>/dev/null || [[ -x "$CODEX_APP_BIN" ]]; then
+  CODEX_CMD=$(command -v codex || echo "$CODEX_APP_BIN")
+  CODEX_VERSION=$("$CODEX_CMD" --version 2>/dev/null || echo "unknown")
+  ok "Codex $CODEX_VERSION (agent platform: codex)"
+  AGENT_PLATFORM="codex"
+elif command -v hermes &>/dev/null || [[ -x "$HOME/.local/bin/hermes" ]]; then
+  ok "Hermes detected (agent platform: hermes)"
+  AGENT_PLATFORM="hermes"
 else
-  warn "No agent platform detected (OpenClaw or Claude Code)"
+  warn "No agent platform detected (OpenClaw, Claude Code, Codex, or Hermes)"
   warn "CallingClaw will work in standalone mode (voice, notes, screen — all work)"
   warn "For full features (meeting prep, deep reasoning, auto-execution):"
   warn "  - Install Claude Code: npm install -g @anthropic-ai/claude-code"
+  warn "  - Or install Codex:    npm install -g @openai/codex"
   warn "  - Or install OpenClaw: npm install -g openclaw"
 fi
 
@@ -170,6 +181,16 @@ except: pass
       ok "OpenClaw gateway token configured in .env"
     fi
   fi
+fi
+
+# Register the CallingClaw MCP server so you can talk to CallingClaw from
+# inside your agent (status, transcripts, join meetings, prep briefs).
+if [[ "$AGENT_PLATFORM" == "claude-code" ]]; then
+  "$PROJECT_DIR/scripts/setup-claude-code.sh" || warn "Claude Code MCP registration failed — run ./scripts/setup-claude-code.sh manually"
+elif [[ "$AGENT_PLATFORM" == "codex" ]]; then
+  "$PROJECT_DIR/scripts/setup-codex.sh" || warn "Codex MCP registration failed — run ./scripts/setup-codex.sh manually"
+elif [[ "$AGENT_PLATFORM" == "hermes" ]]; then
+  "$PROJECT_DIR/scripts/setup-hermes.sh" || warn "Hermes MCP registration failed — run ./scripts/setup-hermes.sh manually"
 fi
 
 # ═══════════════════════════════════════════════
