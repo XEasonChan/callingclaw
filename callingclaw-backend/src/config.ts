@@ -113,9 +113,16 @@ export const CONFIG = {
   },
 
   // Anthropic Computer Use (direct API — optional, falls back to OpenRouter Haiku)
+  // `model` is the OFF-MEETING computer-use model (used outside meetings, where
+  // latency is not user-facing). Sonnet 5 (released 2026-06-30) is a "Fast"-class
+  // model — faster than Opus 4.8, and its stronger reasoning is worth the modest
+  // latency cost for the deep, out-of-meeting screen-control tasks CallingClaw runs.
+  // In-meeting computer-use is a SEPARATE, latency-sensitive path — see
+  // meetingAutomation.computerUseModel below (defaults to Haiku 4.5, unchanged).
+  // Override with ANTHROPIC_COMPUTERUSE_MODEL.
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
-    model: "claude-haiku-4-5-20251001",
+    model: process.env.ANTHROPIC_COMPUTERUSE_MODEL || "claude-sonnet-5",
   },
 
   // OpenRouter (unified gateway — one key for all models)
@@ -141,11 +148,25 @@ export const CONFIG = {
     //   SEARCH_MODEL=anthropic/claude-haiku-4-5      # or same Haiku for both
   },
 
-  // Meeting automation — model for Computer Use during meetings
-  // Haiku is fast (~500ms) vs Sonnet (~2-3s) — prioritize speed during live meetings
-  // OpenClaw handles deep reasoning (prep/summary/todo execution) outside meetings
+  // Meeting automation — model for Computer Use during meetings.
+  // The meeting harness is LATENCY-SENSITIVE: in-meeting computer-use must stay
+  // fast, so Haiku 4.5 is the DEFAULT + fallback. OpenClaw handles deep reasoning
+  // (prep/summary/todo execution) outside meetings.
+  //
+  // `computerUseModel` is an OPT-IN A/B flag for the in-meeting computer-use path.
+  // Default = Haiku 4.5 (anthropic/claude-haiku-4-5), i.e. UNCHANGED behavior.
+  // Set IN_MEETING_COMPUTERUSE_MODEL=claude-sonnet-5 to A/B Sonnet 5 in-meeting
+  // (runs with computer_20251124 + enable_zoom, effort low/omitted for latency —
+  // Sonnet 5 is "Fast"-class, faster than Opus 4.8 but slower than Haiku 4.5).
+  // Latency logging (model + wall-clock ms per turn) makes the A/B measurable.
+  //
+  // `model` is retained for backward compatibility (was the sole in-meeting knob).
   meetingAutomation: {
     model: process.env.MEETING_AUTOMATION_MODEL || "anthropic/claude-haiku-4-5",
+    computerUseModel:
+      process.env.IN_MEETING_COMPUTERUSE_MODEL ||
+      process.env.MEETING_AUTOMATION_MODEL ||
+      "anthropic/claude-haiku-4-5",
   },
 
   // Vision analysis (screen/meeting screenshots via OpenRouter)
