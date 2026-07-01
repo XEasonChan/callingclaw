@@ -39,9 +39,11 @@ OpenClaw has its own config at `~/.openclaw/openclaw.json` — manage it via `op
 
 ### Agent platform (cognitive backend)
 
-`AGENT_PLATFORM` selects the agentic backend: `openclaw | claude-code | hermes | standalone` (auto-detected if unset). Each is an `AgentAdapter` (`src/agent-adapter.ts` + `src/adapters/`). To converse with CallingClaw / launch meetings *from* an agent, the agent registers the universal MCP server `plugins/callingclaw-events` (tools: status, transcript, summary, recent_events, join_meeting, prepare_meeting, list_calendar) — works with any MCP client (Hermes, Claude Code, opencode, Cursor).
+`AGENT_PLATFORM` selects the agentic backend: `openclaw | claude-code | codex | hermes | raven | standalone` (auto-detected if unset). Each is an `AgentAdapter` (`src/agent-adapter.ts` + `src/adapters/`). To converse with CallingClaw / launch meetings *from* an agent, the agent registers the universal MCP server `plugins/callingclaw-events` (tools: status, transcript, summary, recent_events, join_meeting, prepare_meeting, list_calendar) — works with any MCP client (Hermes, Raven, Claude Code, opencode, Cursor).
 
+- **Codex** (OpenAI): `./scripts/setup-codex.sh` installs the Codex CLI and registers the MCP server in `~/.codex/config.toml`. Adapter shells out to `codex exec "<prompt>"` (per-run model via `-m`, defaulting to `~/.codex/config.toml`). Talk to it via `codex exec "..."`.
 - **Hermes** (NousResearch): `./scripts/setup-hermes.sh` installs Hermes, wires OpenRouter, registers the MCP server in `~/.hermes/config.yaml`. Adapter shells out to `hermes -z "<prompt>" -m <model> --provider openrouter`. Talk to it via `./scripts/start-hermes.sh`. Live E2E: `bun scripts/e2e-hermes.ts`. Design + gotchas: `docs/superpowers/specs/2026-05-28-hermes-agent-integration-design.md`.
+- **Raven** (EverMind-AI): `./scripts/setup-raven.sh` installs Raven (pipx), injects the MCP client dependency, seeds an OpenRouter provider + model into `~/.raven/config.json`, and registers the `callingclaw-events` MCP server. Talk to it via `./scripts/start-raven.sh`. Live E2E: `bun scripts/e2e-raven.ts`. Adapter shells out to `raven agent -m "<prompt>"`; model/provider are config-file based (`~/.raven/config.json`, NOT CLI flags). Design: `docs/raven-adapter-design.md`.
 
 ## Architecture
 

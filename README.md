@@ -243,7 +243,7 @@ CallingClaw ships with an MCP server — 25 tools that let any MCP-compatible ag
 }
 ```
 
-Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, **Hermes**, and any MCP client.
+Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, **Hermes**, **Raven**, and any MCP client.
 
 **Zero-GUI onboarding:** The agent handles everything through conversation — API keys, Google OAuth, macOS permissions, readiness checks. No manual config needed.
 
@@ -285,6 +285,17 @@ bun <repo>/plugins/callingclaw-events/index.ts   # stdio MCP server
 ```bash
 hermes skills install https://raw.githubusercontent.com/XEasonChan/callingclaw/main/.agents/skills/callingclaw-onboarding/SKILL.md
 ```
+
+### Raven (EverMind-AI)
+
+[Raven](https://github.com/EverMind-AI/Raven) users get the same conversational surface — talk to CallingClaw from the Raven CLI:
+
+```bash
+./scripts/setup-raven.sh    # installs Raven (pipx), seeds an OpenRouter provider into ~/.raven/config.json, registers the events MCP server
+./scripts/start-raven.sh    # interactive session ("join my 3pm meeting", "any summaries?")
+```
+
+Model and provider are configured in `~/.raven/config.json` (not CLI flags); the setup script seeds them from `OPENROUTER_API_KEY`. The integration is E2E-verified via `bun scripts/e2e-raven.ts`.
 
 ---
 
