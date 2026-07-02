@@ -16,6 +16,53 @@ Your AI agent is smart but it can't join your meetings. CallingClaw fixes that. 
 
 ---
 
+## Use Cases
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/readme/use-cases/build-live-with-agent.png" alt="CallingClaw builds live with your agent during a meeting" />
+
+### Build live with your agent
+
+CallingClaw turns live meeting requests into recognized tasks, then hands them to a local coding agent that edits code, webpages, decks, and working documents in the background.
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/readme/use-cases/connected-user-research.png" alt="CallingClaw runs connected user research with transcript, evidence, data, and workflow screenshots" />
+
+### Run connected user research
+
+Interview users at scale, extract themes and evidence, connect data back to the full experience, and return the screenshots that explain the why.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<img src="docs/assets/readme/use-cases/ai-meeting-flow.png" alt="CallingClaw runs routine meeting walkthroughs and waits to answer when pinged" />
+
+### Let AI run the meeting flow
+
+CallingClaw joins the call, remembers each attendee's role and the meeting context, runs the standard walkthrough, and only speaks when it is needed.
+
+</td>
+<td width="50%" valign="top">
+
+<img src="docs/assets/readme/use-cases/sales-demo-automation.png" alt="CallingClaw automates repeatable sales demos with a local knowledge base and live customer Q&A" />
+
+### Automate repeatable sales demos
+
+Let AI present the repeatable demo, search your local knowledge base, answer live customer questions, and show product-specific selling points.
+
+</td>
+</tr>
+</table>
+
+---
+
 ## Start here: paste this into Claude Code
 
 Copy this block into [Claude Code](https://claude.ai/code). The agent will clone the repo, install everything, walk you through API key setup, and verify the system is healthy. Do not skip steps.
