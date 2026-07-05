@@ -24,8 +24,17 @@ import { EventBuffer } from "./event-buffer";
 import { TOOL_DEFINITIONS, handleToolCall } from "./tools";
 
 // ── Events that matter to the user (filter out noisy internal events) ──
+//
+// CALLINGCLAW_EVENTS_LEVEL controls how much of CallingClaw's live activity
+// is surfaced to the connected agent (env read once at startup):
+//   "lifecycle" — quiet: only meeting/voice/calendar milestones (old default).
+//   "live"      — (default) lifecycle + research/auditor/computer-use/stage
+//                 activity, so an agent can narrate what CallingClaw is doing
+//                 mid-meeting instead of only polling before/after.
+// Deliberately excluded even at "live": transcript-level events and
+// voice.tool_call — too high-volume/noisy to push per-event.
 
-const IMPORTANT_EVENTS = new Set([
+const LIFECYCLE_EVENTS = [
   // Meeting lifecycle
   "meeting.started",
   "meeting.ended",
@@ -36,9 +45,32 @@ const IMPORTANT_EVENTS = new Set([
   "voice.stopped",
   // Calendar
   "calendar.updated",
-]);
+];
 
-const buffer = new EventBuffer(100);
+const LIVE_ONLY_EVENTS = [
+  // Deep research (OpenClaw/agent delegated web search during a meeting)
+  "research.started",
+  "research.completed",
+  // TranscriptAuditor intent classification (System 2)
+  "auditor.intent",
+  "auditor.suggest",
+  "auditor.fast_lane",
+  // ComputerUseModule screen-control actions
+  "computer.task_started",
+  "computer.task_done",
+  // Meeting Stage working documents
+  "stage.documents_updated",
+  // No-show detection
+  "meeting.no_show",
+];
+
+const EVENTS_LEVEL = process.env.CALLINGCLAW_EVENTS_LEVEL === "lifecycle" ? "lifecycle" : "live";
+
+const IMPORTANT_EVENTS = new Set(
+  EVENTS_LEVEL === "lifecycle" ? LIFECYCLE_EVENTS : [...LIFECYCLE_EVENTS, ...LIVE_ONLY_EVENTS],
+);
+
+const buffer = new EventBuffer(300);
 
 // ── MCP Server ──
 
@@ -63,10 +95,23 @@ const mcp = new Server(
       "",
       "If your client supports Claude channels, events also arrive as",
       "<channel source=\"callingclaw-events\" type=\"...\" ...>:",
-      "  meeting.summary_ready → call callingclaw_status + callingclaw_transcript, format a summary, reply to the user",
-      "  meeting.prep_ready    → read the prep brief at `filepath`, send a concise notification",
-      "  meeting.started       → notify that CallingClaw joined",
-      "  meeting.ended         → wait for meeting.summary_ready before the full summary",
+      "  meeting.summary_ready   → call callingclaw_status + callingclaw_transcript, format a summary, reply to the user",
+      "  meeting.prep_ready      → read the prep brief at `filepath`, send a concise notification",
+      "  meeting.started         → notify that CallingClaw joined",
+      "  meeting.ended           → wait for meeting.summary_ready before the full summary",
+      "  meeting.no_show         → the user hasn't joined 5min in; offer to leave/rejoin",
+      "  research.started        → CallingClaw is running a background web search mid-meeting (fyi only, no action needed)",
+      "  research.completed      → search finished; the findings markdown path is `meta.filepath` (may be absent on error)",
+      "  auditor.intent          → CallingClaw detected a voice command and is about to act on it (fyi only)",
+      "  auditor.suggest         → CallingClaw noticed a possible intent but wants user confirmation first",
+      "  auditor.fast_lane       → a low-latency action (click/scroll) just fired (fyi only)",
+      "  computer.task_started   → screen-control action started",
+      "  computer.task_done      → screen-control action finished; summary is in the event payload",
+      "  stage.documents_updated → the Meeting Stage's Working Documents changed; call callingclaw_status if curious",
+      "",
+      "By default (CALLINGCLAW_EVENTS_LEVEL=live) all of the above are pushed live.",
+      "Set CALLINGCLAW_EVENTS_LEVEL=lifecycle for only the meeting/voice/calendar milestones.",
+      "Transcript text and voice.tool_call are never pushed (too high-volume) — use callingclaw_transcript instead.",
       "",
       "Agents WITHOUT channel support should poll callingclaw_recent_events on a schedule.",
     ].join("\n"),
@@ -125,7 +170,11 @@ function connectEventBus() {
           meta: {
             type: event.type,
             ...(event.data?.meetingId && { meeting_id: event.data.meetingId }),
-            ...(event.data?.filepath && { filepath: event.data.filepath }),
+            // research.completed / stage.documents_updated use `filePath` (capital P);
+            // meeting.prep_ready uses `filepath`. Normalize both onto `meta.filepath`.
+            ...((event.data?.filepath || event.data?.filePath) && {
+              filepath: event.data.filepath || event.data.filePath,
+            }),
             ...(event.data?.meet_url && { meet_url: event.data.meet_url }),
           },
         },

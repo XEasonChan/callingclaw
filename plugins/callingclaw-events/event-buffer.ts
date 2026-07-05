@@ -14,7 +14,7 @@ export class EventBuffer {
   private seq = 0;
   private readonly max: number;
 
-  constructor(max = 100) {
+  constructor(max = 300) {
     this.max = max;
   }
 
