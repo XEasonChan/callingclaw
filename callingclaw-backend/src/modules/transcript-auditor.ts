@@ -48,6 +48,175 @@ export const AUDITOR_MANAGED_TOOLS = new Set([
   // Auditor manages only the autonomous tools (computer_action, browser_action).
 ]);
 
+// ── Agent-Address Fast Lane (deterministic, no LLM) ──
+//
+// When a user EXPLICITLY addresses the background agent
+// ("让agent查一下X" / "ask the agent to look up X"), the classification is
+// unambiguous — waiting 1200ms of debounce plus a 0.3-1.2s Haiku round-trip
+// is pure overhead. These patterns detect that explicit address and route
+// straight to the research_task execution path with confidence 1.0.
+//
+// Precision rules (false positives auto-trigger research, so be strict):
+//   - An explicit agent/AI/助手 token is REQUIRED. A bare "查一下X" or
+//     "search for X" must NOT match — those go through the normal Haiku lane.
+//   - Queries that reference local files / meeting recall fall through to the
+//     Haiku lane (it has prep + screen context to pick search_and_open /
+//     recall_context instead of web research).
+//   - Hypothetical / deferred phrasing ("如果…", "比如…", "how do we get the
+//     AI to search…") falls through to the Haiku lane.
+
+// Research verbs. zh: reduplications + compound verbs first, then bare 查/搜/找.
+// 查(?!看) so "查看一下屏幕" (view the screen) never reads as bare 查.
+// The trailing (?!了) rejects past/completed aspect — "查了一下竞品" reports past
+// research, it doesn't request new research (and used to extract the garbage
+// query "了一下竞品"). The extra per-verb lookaheads (查(?!…询), 搜(?!…索))
+// stop the bare verb from re-matching the first char of a compound that the
+// trailing (?!了) just rejected (e.g. "查询了" must not become 查 + "询了…").
+const AGENT_VERBS_ZH =
+  "(?:查查|找找|搜搜|查询|查詢|搜索|搜寻|搜尋|研究|调研|調研|查(?!看|查|询|詢|了)|搜(?!索|寻|尋|搜|了)|找(?!找|了))(?:一下|下)?(?!了)";
+// en: longer forms before bare "find".
+const AGENT_VERBS_EN =
+  "look\\s+up|look\\s+into|search(?:\\s+(?:for|about))?|research|find\\s+out(?:\\s+about)?|investigate|dig\\s+into|check\\s+out|find";
+// Agent tokens — compound forms first so "AI助手" doesn't stop at "AI".
+// The IMPERATIVE form drops bare 助手/助理: "麻烦助理查一下会议室安排" almost
+// certainly addresses a HUMAN assistant. Unambiguous AI compounds stay.
+const AGENT_TOKEN_IMPERATIVE = "(?:ai\\s*助手|智能助手|agent|ai|智能体|智能體)";
+// The punctuation-anchored VOCATIVE form ("助手，查一下…") keeps 助手/助理 —
+// an utterance-initial token followed by punctuation is unambiguous enough.
+const AGENT_TOKEN_VOCATIVE = "(?:ai\\s*助手|智能助手|agent|ai|助手|助理|智能体|智能體)";
+
+// Internal matcher list. `checkPrefix: true` marks the imperative forms whose
+// regex is not ^-anchored: matchAgentResearchAddress() additionally requires
+// the trigger to sit at (or near) the utterance start AND runs the
+// negation/reported-speech guard on the text before the trigger.
+const ADDRESS_MATCHERS: Array<{ re: RegExp; checkPrefix: boolean }> = [
+  // zh imperative: 让/叫/请/麻烦 + agent/AI (+去/来/帮我/帮忙/再) + verb + query
+  //   "让agent查一下竞品定价" / "请AI搜索最新的行业报告"
+  {
+    checkPrefix: true,
+    re: new RegExp(
+      `(?:让|讓|叫|请|請|麻烦|麻煩)\\s*(?:那个|那個|这个|這個|你的|你们的|你們的|我们的|我們的|咱们的|咱們的)?\\s*${AGENT_TOKEN_IMPERATIVE}\\s*(?:去|来|來)?\\s*(?:帮我|幫我|帮忙|幫忙)?\\s*(?:再)?\\s*(?:${AGENT_VERBS_ZH})\\s*(.*)`,
+      "i",
+    ),
+  },
+  // zh direct address (needs punctuation after the token): "agent，查一下X" / "助手：搜索一下Y"
+  {
+    checkPrefix: false,
+    re: new RegExp(
+      `^\\s*${AGENT_TOKEN_VOCATIVE}\\s*[,，:：、]\\s*(?:请|請)?\\s*(?:帮我|幫我|帮忙|幫忙)?\\s*(?:${AGENT_VERBS_ZH})\\s*(.*)`,
+      "i",
+    ),
+  },
+  // en imperative: ask/tell/get the agent TO <verb> + query, or have the agent (to) <verb>.
+  // "to" is REQUIRED for ask/tell/get — without it, incidental "get AI search
+  // working" phrasings match with no actual address.
+  {
+    checkPrefix: true,
+    re: new RegExp(
+      `\\b(?:(?:ask|tell|get)\\s+(?:the\\s+|your\\s+|our\\s+)?(?:agent|ai|assistant)\\s+to\\b|have\\s+(?:the\\s+|your\\s+|our\\s+)?(?:agent|ai|assistant)\\s+(?:to\\s+)?)\\s*(?:please\\s+)?(?:go\\s+)?(?:${AGENT_VERBS_EN})\\s+(.+)`,
+      "i",
+    ),
+  },
+  // en direct address with punctuation: "Agent, look up X" / "AI: search for Y"
+  {
+    checkPrefix: false,
+    re: new RegExp(
+      `^\\s*(?:hey\\s+|okay\\s+|ok\\s+)?(?:agent|ai|assistant)\\s*[,，:：]\\s*(?:please\\s+)?(?:can\\s+you\\s+)?(?:${AGENT_VERBS_EN})\\s+(.+)`,
+      "i",
+    ),
+  },
+  // en "hey agent …" is unambiguous even without punctuation
+  {
+    checkPrefix: false,
+    re: new RegExp(
+      `^\\s*hey\\s+(?:agent|ai|assistant)[,，]?\\s+(?:please\\s+)?(?:${AGENT_VERBS_EN})\\s+(.+)`,
+      "i",
+    ),
+  },
+];
+
+export const AGENT_ADDRESS_PATTERNS: RegExp[] = ADDRESS_MATCHERS.map((m) => m.re);
+
+// Queries about local files / meeting memory → NOT web research. Fall through
+// to the Haiku lane, which has context to route search_and_open/recall_context.
+const LOCAL_CONTEXT_GUARD =
+  /(?:文件|文档|文檔|档案|檔案|资料库|資料庫|会议记录|會議記錄|会议纪要|會議紀要|刚才|剛才|之前(?:说|說|讨论|討論|提到)|\bfiles?\b|\bfolders?\b|\bdocs?\b|\bdocuments?\b|\bour\s+(?:notes?|meetings?|repo)\b|\bwhat\s+we\s+(?:discussed|said|decided)\b)/i;
+
+// Hypothetical / deferred / meta discussion / declarative plans → don't
+// auto-fire research NOW. (Matched against the FULL utterance, not just the
+// query — "让AI搜索变得更快是我们的目标" carries the plan marker AFTER the trigger.)
+const DISCUSSION_GUARD =
+  /(?:how\s+(?:do|would|can|could)\s+(?:we|you|i)\b|how\s+to\b|can\s+we\b|could\s+we\b|should\s+we\b|would\s+be\b|it'?d\s+be\b|it\s+would\b|imagine\b|for\s+example|e\.g\.|whether\b|we\s+want\s+to\b|we'?re\s+(?:trying|planning|hoping)\s+to\b|let'?s\b|要是|如果|假如|比如|比方|例如|以后|以後|将来|將來|下次|回头|回頭|我们的目标|我們的目標|目标是|目標是)/i;
+
+// Negation / reported-speech / instructional phrasing scanned in the window
+// BEFORE the trigger. Any hit means the utterance is not a live request:
+//   "别让agent搜索这个" / "不用让agent查了" / "don't ask the agent to search"
+//   "当用户说让agent搜索…" / "she says ask the agent to…" / "你可以让agent查…"
+const PRE_TRIGGER_GUARD =
+  /(?:别|別|不要|不用|甭|无需|無需|不必|先不|说|說|你可以|您可以|\bdon'?t\b|\bdo\s+not\b|\bdidn'?t\b|\bdid\s+not\b|\bnever\b|\bwon'?t\b|\bwouldn'?t\b|\bshouldn'?t\b|\bno\s+need\b|\bsays?\b|\bsaid\b|\bsaying\b)/i;
+
+// The imperative (non-^-anchored) forms must sit at or near the utterance
+// start. Allowed lead-in: short spoken fillers, then an optional first-person
+// subject ("我让agent查一下X" is a live request; "昨天我让agent查了…" is not).
+const LEADING_FILLER_RE =
+  /^(?:(?:那个|那個|那|嗯+|好的|好|呃+|哦|欸|诶|誒|嘿|okay|ok|so|um+|uh+|well|alright|right|yeah|yes|please|hey|hi|hello)[\s,，、!！.。:：]*)*(?:我们|我們|咱们|咱們|我)?[\s,，、]*$/i;
+
+/** True when a mid-sentence-capable trigger is effectively utterance-initial. */
+function isTriggerAnchored(prefix: string): boolean {
+  if (LEADING_FILLER_RE.test(prefix)) return true;
+  // A fresh clause right after sentence punctuation also counts as
+  // utterance-initial ("关于竞品定价的情况，让agent查一下").
+  return /[,，。;；!！?？:：、]\s*$/.test(prefix);
+}
+
+/** Strip leading/trailing punctuation and trailing politeness filler. */
+function cleanExtractedQuery(raw: string): string {
+  let q = (raw || "").trim();
+  q = q.replace(/^[\s,，.。:：;；、!！?？'"''""()（）\-—]+/, "");
+  // Two passes: filler can hide behind trailing punctuation ("…吧。", "…, thanks")
+  for (let i = 0; i < 2; i++) {
+    q = q.replace(/[\s,，.。:：;；、!！?？'"''""]+$/, "");
+    q = q.replace(/(?:吧|呗|呢|哈|啊|好吗|好嗎|行吗|行嗎|可以吗|可以嗎|谢谢|謝謝|thanks|thank\s+you|please)$/i, "");
+  }
+  return q.trim();
+}
+
+/**
+ * Detect an explicit agent-address research request. Deterministic — no LLM.
+ * Returns the extracted query, or null when the utterance should go through
+ * the normal (regex fast lane + debounced Haiku) pipeline instead.
+ */
+export function matchAgentResearchAddress(text: string): { query: string } | null {
+  if (!text) return null;
+  const t = text.trim();
+  if (t.length < 4) return null;
+  if (DISCUSSION_GUARD.test(t)) return null;
+
+  for (const { re, checkPrefix } of ADDRESS_MATCHERS) {
+    const m = t.match(re);
+    if (!m) continue;
+    if (checkPrefix) {
+      const prefix = t.slice(0, m.index ?? 0);
+      // Precision over recall: a mid-sentence trigger ("在demo里你可以让agent
+      // 查一下天气") is NOT a live address — fall through to the Haiku lane,
+      // which still handles genuine requests, just slower.
+      if (!isTriggerAnchored(prefix)) continue;
+      // Negation / reported speech before the trigger → not a live request.
+      if (PRE_TRIGGER_GUARD.test(prefix)) continue;
+    }
+    let query = cleanExtractedQuery(m[1] || "");
+    if (!query) {
+      // Fallback: current sentence minus the trigger phrase
+      const trigger = m[0].slice(0, m[0].length - (m[1]?.length || 0));
+      query = cleanExtractedQuery(t.replace(trigger, " "));
+    }
+    if (!query || query.length < 2) return null; // nothing to research
+    if (LOCAL_CONTEXT_GUARD.test(query)) return null; // local files / recall → Haiku lane
+    return { query };
+  }
+  return null;
+}
+
 // ── Module ──
 
 export class TranscriptAuditor {
@@ -69,8 +238,10 @@ export class TranscriptAuditor {
   private _recentActions: string[] = []; // dedup ring buffer (last 5)
   private _lastExecutionTs = 0;
   private _fastLaneProcessing = false; // prevent concurrent fast lane executions
+  private _lastAgentFastLaneTs = 0; // cooldown anchor for the agent-address fast lane
   private _researchGeneration = 0; // incremented on deactivate() to cancel stale research callbacks
   private _activeResearch = new Map<string, number>(); // in-flight research: normalized query → taskId timestamp
+  private _consumedUtterances = new Set<string>(); // agent fast-lane consumed entries (ts:text) — excluded from Haiku audit window
 
   // ── Tuning knobs ──
   private DEBOUNCE_MS = 1200;         // Wait 1.2s after last user utterance (was 2.5s, reduced for meeting responsiveness)
@@ -116,6 +287,8 @@ export class TranscriptAuditor {
     this._lastAuditedTs = Date.now();
     this._recentActions = [];
     this._lastExecutionTs = 0;
+    this._lastAgentFastLaneTs = 0;
+    this._consumedUtterances.clear();
 
     // Subscribe to transcript events
     this.context.on("transcript", this._onTranscript);
@@ -173,6 +346,7 @@ export class TranscriptAuditor {
     this.automationRouter.fileIndex.clear();
     this._researchGeneration++; // Cancel any in-flight research callbacks from this meeting
     this._activeResearch.clear();
+    this._consumedUtterances.clear();
     this.voice = null;
     console.log("[TranscriptAuditor] Deactivated (research gen: ${this._researchGeneration})");
     this.eventBus.emit("auditor.deactivated", {});
@@ -196,6 +370,24 @@ export class TranscriptAuditor {
     if (!this._active) return;
     if (entry.role !== "user") return; // Only audit on user speech
 
+    // ── AGENT FAST LANE: explicit agent address → research_task, no debounce, no LLM ──
+    // "让agent查一下X" / "ask the agent to look up X": the user explicitly
+    // addressed the background agent, so classification is unambiguous.
+    // Dispatch immediately (async — never blocks this handler) and consume
+    // the utterance: skip both the regex fast lane and the debounced Haiku
+    // audit. Saves ~1.7-2.4s (1200ms debounce + 0.3-1.2s Haiku round-trip).
+    const agentAddress = matchAgentResearchAddress(entry.text);
+    if (agentAddress) {
+      // Mark the utterance consumed BEFORE the async dispatch: a debounce
+      // timer from a previous utterance may fire in between, and its Haiku
+      // window would otherwise still contain "让agent查一下X" — the prompt
+      // tells the model to research such requests, so it would re-dispatch
+      // with rephrased params that byte-compare dedup can't catch.
+      this.markUtteranceConsumed(entry);
+      void this.tryAgentFastLane(entry.text, agentAddress.query);
+      return;
+    }
+
     // ── FAST LANE: regex pre-check, 0ms debounce ──
     // If AutomationRouter regex matches with high confidence, execute immediately
     // without waiting for Haiku LLM call. Target: <500ms from utterance to action.
@@ -212,6 +404,26 @@ export class TranscriptAuditor {
   private scheduleAudit() {
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this.runAudit(), this.DEBOUNCE_MS);
+  }
+
+  /** Key matching a transcript entry in the consumed-utterance set. */
+  private utteranceKey(e: TranscriptEntry): string {
+    return `${e.ts}:${e.text}`;
+  }
+
+  /**
+   * Record an utterance the agent fast lane consumed so subsequent Haiku
+   * audits exclude it from their transcript window (FINDING-3 fix: prevents
+   * the next audit from re-dispatching the same research with rephrased params).
+   */
+  private markUtteranceConsumed(e: TranscriptEntry) {
+    this._consumedUtterances.add(this.utteranceKey(e));
+    // Bound the set — the audit window is only WINDOW_ENTRIES long
+    while (this._consumedUtterances.size > 40) {
+      const oldest = this._consumedUtterances.values().next().value;
+      if (oldest === undefined) break;
+      this._consumedUtterances.delete(oldest);
+    }
   }
 
   // ── Fast Lane: regex-only execution, no LLM call ──
@@ -302,6 +514,183 @@ export class TranscriptAuditor {
     }
   }
 
+  // ── Agent Fast Lane: explicit agent address → research_task, no LLM ──
+
+  /**
+   * Dispatch research immediately when the user explicitly addressed the
+   * agent ("让agent查一下X" / "ask the agent to look up X"). Bypasses both
+   * the 1200ms debounce and the Haiku classification — the query was already
+   * extracted deterministically by matchAgentResearchAddress().
+   *
+   * Protections (mirrors the existing lanes):
+   *   - dedup ring: exact query already dispatched recently → skip
+   *   - COOLDOWN_MS between agent fast-lane dispatches — STT often re-emits
+   *     the same sentence in expanding chunks with slightly different text,
+   *     which exact-key dedup can't catch
+   *   - in-flight guard + generation check live inside dispatchResearchTask
+   */
+  private async tryAgentFastLane(text: string, query: string) {
+    if (!this._active || !query) return;
+
+    const actionKey = `research_task:${JSON.stringify({ query })}`;
+    if (this._recentActions.includes(actionKey)) {
+      console.log(`[TranscriptAuditor] Agent fast lane: skipping duplicate ${actionKey}`);
+      return;
+    }
+    if (Date.now() - this._lastAgentFastLaneTs < this.COOLDOWN_MS) {
+      console.log(`[TranscriptAuditor] Agent fast lane: cooldown active, skipping "${query}"`);
+      return;
+    }
+    this._lastAgentFastLaneTs = Date.now();
+    const startTs = Date.now();
+
+    try {
+      this.eventBus.emit("auditor.fast_lane", {
+        action: "research_task",
+        layer: "agent",
+        confidence: 1.0,
+        text: text.slice(0, 60),
+      });
+      this.eventBus.emit("auditor.executing", {
+        action: "research_task",
+        params: { query },
+        confidence: 1.0,
+      });
+
+      const { started, status } = await this.dispatchResearchTask(query);
+
+      if (started) {
+        this._recentActions.push(actionKey);
+        if (this._recentActions.length > 5) this._recentActions.shift();
+        this._lastExecutionTs = Date.now();
+      }
+      console.log(
+        `[TranscriptAuditor] Agent fast lane: research_task "${query}" → ${status} (${Date.now() - startTs}ms)`
+      );
+    } catch (err: any) {
+      console.error(`[TranscriptAuditor] Agent fast lane error: ${err.message}`);
+      this.eventBus.emit("auditor.error", { action: "research_task", error: err.message });
+    }
+  }
+
+  // ── Research dispatch (shared by medium lane + agent fast lane) ──
+
+  /**
+   * Dispatch a research_task to the background agent. Returns quickly —
+   * the agent work itself is fire-and-forget; results land via
+   * voice.injectContext / replaceContext and research.* EventBus events.
+   * Codex findings #1-16: full production-safe implementation.
+   */
+  /**
+   * Normalization for the in-flight research guard. Whitespace-split
+   * normalization is useless for Chinese (no word spaces): strip ALL
+   * whitespace + punctuation and compare the raw char sequence instead.
+   */
+  private normalizeResearchQuery(q: string): string {
+    const n = q
+      .toLowerCase()
+      .replace(/[\s　,，.。:：;；、!！?？'"''""()（）\[\]【】《》<>\-—_·~`]+/g, "");
+    return n || q.toLowerCase().trim();
+  }
+
+  private async dispatchResearchTask(query: string): Promise<{ started: boolean; status: string }> {
+    const taskId = `research_${Date.now()}`;
+    const normalizedQuery = this.normalizeResearchQuery(query);
+
+    // #6: Agent disconnected → emit proper research events, not generic done
+    if (!this.agentAdapter?.connected) {
+      this.eventBus.emit("research.started", { taskId, query });
+      this.eventBus.emit("research.completed", { taskId, query, error: "No agent connected" });
+      // #12: Don't push to dedup ring on failure
+      return { started: false, status: "No agent available for research" };
+    }
+
+    // #11: In-flight guard — prevent duplicate research. Containment-based:
+    // "查一下竞品定价" and "竞品定价" are the same request rephrased, and
+    // exact-compare on a whitespace split never catches that in Chinese.
+    for (const [existingQuery, ts] of this._activeResearch) {
+      if (Date.now() - ts >= 120000) continue;
+      if (
+        existingQuery === normalizedQuery ||
+        existingQuery.includes(normalizedQuery) ||
+        normalizedQuery.includes(existingQuery)
+      ) {
+        return { started: false, status: `Research already running: "${query}"` };
+      }
+    }
+    this._activeResearch.set(normalizedQuery, Date.now());
+
+    // Capture generation for stale callback detection (#4)
+    const gen = this._researchGeneration;
+
+    // 1. Emit started → S2 panel shows task card
+    this.eventBus.emit("research.started", { taskId, query });
+
+    // 2. Tell voice AI (non-blocking)
+    if (this.voice?.connected) {
+      this.voice.injectContext(`[RESEARCH_STARTED] Searching: ${query}`);
+    }
+
+    // 3. Delegate to slow brain (fire-and-forget, don't block the auditor)
+    this.agentAdapter.executeTask(
+      `Search the web for: "${query}". Find relevant posts, articles, or discussions. ` +
+      `Summarize the top 3-5 findings with key opinions and sources. Be concise.`
+    ).then(async (result: string) => {
+      // #4: Check generation — if meeting changed, discard stale result
+      if (gen !== this._researchGeneration) {
+        console.log(`[Auditor] Research result discarded (stale, gen ${gen} vs ${this._researchGeneration})`);
+        return;
+      }
+      this._activeResearch.delete(normalizedQuery);
+
+      // #5: Check for error/timeout patterns in result string
+      const ERROR_PATTERNS = /timed out|no external agent|failed|error:|unavailable|billing error/i;
+      if (ERROR_PATTERNS.test(result) && result.length < 200) {
+        if (this.voice?.connected) {
+          this.voice.injectContext(`[RESEARCH] Search for "${query}" returned an error: ${result.slice(0, 200)}`);
+        }
+        this.eventBus.emit("research.completed", { taskId, query, error: result.slice(0, 200) });
+        console.warn(`[Auditor] Research error detected: "${query}" → ${result.slice(0, 100)}`);
+        return;
+      }
+
+      // 4. Save as Working Document
+      const filePath = `${process.env.HOME}/.callingclaw/shared/research-${Date.now()}.md`;
+      await Bun.write(filePath, `# Research: ${query}\n\n${result}`);
+      this.context.addStageDocument(filePath, "new");
+      // #7: Emit EventBus event so Stage WS listener picks up the new doc
+      this.eventBus.emit("stage.documents_updated", { filePath, badge: "new" });
+
+      // #15: Use replaceContext with fixed ID — don't accumulate in FIFO
+      if (this.voice?.connected) {
+        this.voice.replaceContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`, "ctx_research_result");
+        // #2/#3: Don't force response.create — queue it, only flush when voice is idle
+        if (this.voice.audioState === "listening") {
+          this.voice.client.sendEvent("response.create", {});
+        } else {
+          this.voice.client.queuePendingResponse();
+        }
+      }
+
+      // 6. Emit completed → S2 shows ✅
+      this.eventBus.emit("research.completed", {
+        taskId, query, filePath,
+        resultPreview: result.slice(0, 200),
+      });
+      console.log(`[Auditor] Research completed: "${query}" → ${filePath}`);
+    }).catch((err: any) => {
+      if (gen !== this._researchGeneration) return; // #4: Stale
+      this._activeResearch.delete(normalizedQuery);
+      if (this.voice?.connected) {
+        this.voice.injectContext(`[RESEARCH] Search for "${query}" failed: ${err.message}`);
+      }
+      this.eventBus.emit("research.completed", { taskId, query, error: err.message });
+      console.error(`[Auditor] Research failed: "${query}"`, err.message);
+    });
+
+    return { started: true, status: `Research dispatched: "${query}"` };
+  }
+
   // ── Core audit loop (medium lane — Haiku LLM) ──
 
   private async runAudit() {
@@ -310,7 +699,11 @@ export class TranscriptAuditor {
     // Cooldown: don't fire too rapidly
     if (Date.now() - this._lastExecutionTs < this.COOLDOWN_MS) return;
 
-    const entries = this.context.getRecentTranscript(this.WINDOW_ENTRIES);
+    // Exclude utterances the agent fast lane already consumed — they were
+    // fully handled; letting Haiku see them again causes duplicate dispatch.
+    const entries = this.context
+      .getRecentTranscript(this.WINDOW_ENTRIES)
+      .filter((e) => !this._consumedUtterances.has(this.utteranceKey(e)));
 
     // Only audit if there are new user entries since last audit
     const hasNewUserSpeech = entries.some(
@@ -383,7 +776,7 @@ export class TranscriptAuditor {
     // Context enrichment: give Haiku full picture (screen + prep + recent actions)
     const screenDesc = this.context?.screen?.description || "";
     const pageUrl = this.context?.screen?.url || "";
-    const recentActions = this._dedupRing?.slice(-3).map((d: string) => d.split(":")[0]).join(", ") || "";
+    const recentActions = this._recentActions?.slice(-3).map((d: string) => d.split(":")[0]).join(", ") || "";
     const prepTopic = brief?.topic || "";
     const enrichment = [
       screenDesc ? `[Current screen: ${screenDesc.slice(0, 120)}]` : "",
@@ -787,100 +1180,12 @@ Respond with JSON only:
         }
 
         // ── Research delegation (background, async) ──
-        // Codex findings #1-16: full production-safe implementation
+        // Dispatch body lives in dispatchResearchTask() — shared with the
+        // explicit agent-address fast lane (tryAgentFastLane).
         case "research_task": {
           const query = params.query || "";
           if (!query) { executionResult = "No research query provided"; break; }
-
-          const taskId = `research_${Date.now()}`;
-          const normalizedQuery = query.toLowerCase().split(/\s+/).slice(0, 5).join(" ");
-
-          // #6: Agent disconnected → emit proper research events, not generic done
-          if (!this.agentAdapter?.connected) {
-            this.eventBus.emit("research.started", { taskId, query });
-            this.eventBus.emit("research.completed", { taskId, query, error: "No agent connected" });
-            executionResult = "No agent available for research";
-            // #12: Don't push to dedup ring on failure
-            return; // #1: Early return — skip generic post-switch done path
-          }
-
-          // #11: In-flight guard — prevent duplicate research
-          for (const [existingQuery, ts] of this._activeResearch) {
-            if (existingQuery === normalizedQuery && Date.now() - ts < 120000) {
-              executionResult = `Research already running: "${query}"`;
-              return; // Skip generic done path
-            }
-          }
-          this._activeResearch.set(normalizedQuery, Date.now());
-
-          // Capture generation for stale callback detection (#4)
-          const gen = this._researchGeneration;
-
-          // 1. Emit started → S2 panel shows task card
-          this.eventBus.emit("research.started", { taskId, query });
-
-          // 2. Tell voice AI (non-blocking)
-          if (this.voice?.connected) {
-            this.voice.injectContext(`[RESEARCH_STARTED] Searching: ${query}`);
-          }
-
-          // 3. Delegate to slow brain (fire-and-forget, don't block the auditor)
-          this.agentAdapter.executeTask(
-            `Search the web for: "${query}". Find relevant posts, articles, or discussions. ` +
-            `Summarize the top 3-5 findings with key opinions and sources. Be concise.`
-          ).then(async (result: string) => {
-            // #4: Check generation — if meeting changed, discard stale result
-            if (gen !== this._researchGeneration) {
-              console.log(`[Auditor] Research result discarded (stale, gen ${gen} vs ${this._researchGeneration})`);
-              return;
-            }
-            this._activeResearch.delete(normalizedQuery);
-
-            // #5: Check for error/timeout patterns in result string
-            const ERROR_PATTERNS = /timed out|no external agent|failed|error:|unavailable|billing error/i;
-            if (ERROR_PATTERNS.test(result) && result.length < 200) {
-              if (this.voice?.connected) {
-                this.voice.injectContext(`[RESEARCH] Search for "${query}" returned an error: ${result.slice(0, 200)}`);
-              }
-              this.eventBus.emit("research.completed", { taskId, query, error: result.slice(0, 200) });
-              console.warn(`[Auditor] Research error detected: "${query}" → ${result.slice(0, 100)}`);
-              return;
-            }
-
-            // 4. Save as Working Document
-            const filePath = `${process.env.HOME}/.callingclaw/shared/research-${Date.now()}.md`;
-            await Bun.write(filePath, `# Research: ${query}\n\n${result}`);
-            this.context.addStageDocument(filePath, "new");
-            // #7: Emit EventBus event so Stage WS listener picks up the new doc
-            this.eventBus.emit("stage.documents_updated", { filePath, badge: "new" });
-
-            // #15: Use replaceContext with fixed ID — don't accumulate in FIFO
-            if (this.voice?.connected) {
-              this.voice.replaceContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`, "ctx_research_result");
-              // #2/#3: Don't force response.create — queue it, only flush when voice is idle
-              if (this.voice.audioState === "listening") {
-                this.voice.client.sendEvent("response.create", {});
-              } else {
-                this.voice.client.queuePendingResponse();
-              }
-            }
-
-            // 6. Emit completed → S2 shows ✅
-            this.eventBus.emit("research.completed", {
-              taskId, query, filePath,
-              resultPreview: result.slice(0, 200),
-            });
-            console.log(`[Auditor] Research completed: "${query}" → ${filePath}`);
-          }).catch((err: any) => {
-            if (gen !== this._researchGeneration) return; // #4: Stale
-            this._activeResearch.delete(normalizedQuery);
-            if (this.voice?.connected) {
-              this.voice.injectContext(`[RESEARCH] Search for "${query}" failed: ${err.message}`);
-            }
-            this.eventBus.emit("research.completed", { taskId, query, error: err.message });
-            console.error(`[Auditor] Research failed: "${query}"`, err.message);
-          });
-
+          await this.dispatchResearchTask(query);
           // #1: Return early — do NOT fall through to generic post-switch done path
           return;
         }
