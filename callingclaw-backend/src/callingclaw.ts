@@ -386,6 +386,11 @@ eventBus.on("meeting.started", (data) => {
     || sessionManager.generateId();
   // Reset incremental context injection state for new meeting
   resetContextInjectionState();
+  // Pre-warm per-meeting agent workers (e.g. persistent claude CLI processes)
+  // so in-meeting recall/task calls skip the 1-3s CLI cold boot.
+  // Optional per adapter; failures never block the meeting (cold path remains).
+  Promise.resolve(agentAdapter.warmUp?.()).catch((e: any) =>
+    console.warn(`[Init] Agent adapter warmUp failed — cold path remains: ${e?.message || e}`));
   // Only reset transcript if joining a DIFFERENT meeting (not re-joining same one)
   // This preserves conversation history across multiple join/leave cycles in the same meeting
   const currentUrl = data?.url || "";
@@ -608,6 +613,10 @@ eventBus.on("voice.stopped", () => {
 
 eventBus.on("meeting.ended", async () => {
   noShowDetector.deactivate();
+
+  // Release per-meeting warm agent workers — one meeting's worker must never
+  // serve another (context isolation). In-flight warm calls fall back to cold.
+  Promise.resolve(agentAdapter.cooldown?.()).catch(() => {});
 
   // Safety net: ensure recording is stopped even if autoLeaveMeeting() failed mid-way
   if (meeting.getNotes().isRecording) {
