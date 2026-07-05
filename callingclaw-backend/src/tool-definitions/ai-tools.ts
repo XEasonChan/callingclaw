@@ -10,6 +10,7 @@ import type { EventBus } from "../modules/event-bus";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { OC002_PROMPT, parseOC002, type OC002_Request } from "../openclaw-protocol";
 import { detectLanguage } from "../prompt-constants";
+import { extractMatchTokens, countTokenHits, keywordOverlapScore } from "../utils/text-match";
 
 export interface AIToolDeps {
   contextSync: ContextSync;
@@ -71,39 +72,55 @@ export function aiTools(deps: AIToolDeps): ToolModule {
           eventBus.emit("voice.tool_call", { tool: "recall_context", query: query.slice(0, 80), urgency });
 
           // Path -1: Check prep brief sections (instant, <0.1ms)
-          // If the query matches prep content, return immediately without any API call
+          // If the query matches prep content, return immediately without any API call.
+          // Zero-token queries (pure interrogatives like "是什么") skip this path
+          // entirely — `hits >= min(2, 0)` is trivially true and would return
+          // the first section for ANY query.
           if (meetingPrepSkill?.currentBrief) {
             const brief = meetingPrepSkill.currentBrief;
-            const kws = query.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2);
-            const sections = [
-              { name: "decisions", text: brief.architectureDecisions?.map((d) => `${d.decision}: ${d.rationale}`).join("\n") || "" },
-              { name: "questions", text: brief.expectedQuestions?.map((q) => `Q: ${q.question} A: ${q.suggestedAnswer}`).join("\n") || "" },
-              { name: "history", text: brief.previousContext || "" },
-              { name: "key_points", text: brief.keyPoints?.join("\n") || "" },
-              { name: "resources", text: [...(brief.filePaths?.map((f) => `${f.description} ${f.path}`) || []), ...(brief.browserUrls?.map((u) => `${u.description} ${u.url}`) || [])].join("\n") },
-            ];
-            for (const s of sections) {
-              if (!s.text) continue;
-              const lower = s.text.toLowerCase();
-              const hits = kws.filter((kw) => lower.includes(kw));
-              if (hits.length >= Math.min(2, kws.length)) {
-                console.log(`[RecallContext] Hit from prep brief (${s.name}): "${query.slice(0, 60)}"`);
-                return `[Prep brief — ${s.name}]\n${s.text}`;
+            const queryTokens = extractMatchTokens(query);
+            if (queryTokens.length > 0) {
+              const sections = [
+                { name: "decisions", text: brief.architectureDecisions?.map((d) => `${d.decision}: ${d.rationale}`).join("\n") || "" },
+                { name: "questions", text: brief.expectedQuestions?.map((q) => `Q: ${q.question} A: ${q.suggestedAnswer}`).join("\n") || "" },
+                { name: "history", text: brief.previousContext || "" },
+                { name: "key_points", text: brief.keyPoints?.join("\n") || "" },
+                { name: "resources", text: [...(brief.filePaths?.map((f) => `${f.description} ${f.path}`) || []), ...(brief.browserUrls?.map((u) => `${u.description} ${u.url}`) || [])].join("\n") },
+              ];
+              for (const s of sections) {
+                if (!s.text) continue;
+                const hits = countTokenHits(queryTokens, s.text);
+                if (hits >= Math.min(2, queryTokens.length)) {
+                  console.log(`[RecallContext] Hit from prep brief (${s.name}): "${query.slice(0, 60)}"`);
+                  return `[Prep brief — ${s.name}]\n${s.text}`;
+                }
               }
             }
           }
 
           // Path 0: Check ContextRetriever's already-retrieved contexts (instant, <1ms)
-          // These are contexts proactively fetched by Haiku gap analysis during the meeting
+          // These are contexts proactively fetched by Haiku gap analysis during the meeting.
+          // Require >=2 token hits OR >=30% overlap (a single coincidental token is a
+          // false-positive risk — it would confidently return the wrong cached context).
+          // The score branch needs >=3 query tokens: a 1-2 token query hits score
+          // 0.5-1.0 off a single coincidental token, matching anything containing it.
+          // Pick the best-scoring context, not just the first one that clears the bar.
           if (contextRetriever?.active) {
-            const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-            const cached = contextRetriever.retrievedContexts.find((r) => {
-              const lower = (r.query + " " + r.content).toLowerCase();
-              return keywords.some((kw) => lower.includes(kw));
-            });
-            if (cached) {
-              console.log(`[RecallContext] Hit from ContextRetriever cache: "${cached.query.slice(0, 60)}"`);
-              return `[Retrieved context]\n${cached.content}`;
+            const queryTokens = extractMatchTokens(query);
+            let best: { query: string; content: string; score: number } | null = null;
+            for (const r of contextRetriever.retrievedContexts) {
+              const text = `${r.query} ${r.content}`;
+              const hits = countTokenHits(queryTokens, text);
+              const score = keywordOverlapScore(queryTokens, text);
+              if (hits >= 2 || (queryTokens.length >= 3 && score >= 0.3)) {
+                if (!best || score > best.score) {
+                  best = { query: r.query, content: r.content, score };
+                }
+              }
+            }
+            if (best) {
+              console.log(`[RecallContext] Hit from ContextRetriever cache: "${best.query.slice(0, 60)}"`);
+              return `[Retrieved context]\n${best.content}`;
             }
           }
 

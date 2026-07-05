@@ -43,12 +43,15 @@ export interface TopicClassification {
   shifted: boolean;     // true if topic changed from last classification
 }
 
-/** Layer 2: What information does this topic need? (only runs on topic shift) */
+/** Layer 2: What information does this topic need? (only acted on when topic shifts) */
 export interface NeedInference {
   needsRetrieval: boolean;
   queries: string[];    // Need-based, not noun-based: "memdex blog conversion metrics Q1"
   reasoning: string;
 }
+
+/** Merged Layer 1+2 result — ONE model call classifies the topic AND infers needs */
+export interface ConversationAnalysis extends TopicClassification, NeedInference {}
 
 // Combined result (backward-compatible)
 export interface GapAnalysis {
@@ -61,6 +64,137 @@ export interface RetrievedContext {
   query: string;
   content: string;
   retrievedAt: number;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Pure helpers — module-level, exported for unit tests
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Detect utterances that signal a context need — literal questions plus
+ * discussion triggers that reference retrievable history. Cast a wide-ish
+ * net so background retrieval stays ahead of the conversation, BUT the
+ * discussion triggers require co-occurrence with a question form: bare
+ * nouns (数据/设计/方案/bug) and fillers (那个) appear in nearly every
+ * product-meeting sentence, and matching them alone made QUESTION_BOOST
+ * fire on almost every utterance — the retriever ran at max cadence
+ * (one Haiku analysis per MIN_INTERVAL) instead of being event-driven.
+ */
+export function looksLikeQuestion(text: string): boolean {
+  const trimmed = text.trim();
+
+  // ── Literal question forms ──
+  if (
+    trimmed.endsWith("?") ||
+    trimmed.endsWith("？") ||
+    /[吗呢么嘛][\s。？?]*$/.test(trimmed) ||
+    /^(什么|怎么|为什么|哪|谁|几|多少|是不是|有没有|能不能)/.test(trimmed)
+  ) {
+    return true;
+  }
+
+  // ── Past-reference shapes that are interrogative by construction ──
+  // "记不记得X" / "还记得X" / "上次X怎么定的" ask for history even without
+  // a trailing question mark (STT often drops punctuation).
+  if (
+    /记不记得|还记得|想不起来/.test(trimmed) ||
+    /(之前|上次|当时)(.{0,12})(吗|来着|是什么|怎么|如何|多少)/.test(trimmed) ||
+    /\b(do you remember|remember when)\b/i.test(trimmed)
+  ) {
+    return true;
+  }
+
+  // ── Domain-noun triggers — ONLY with a question form in the same utterance ──
+  // "这个数据是哪来的" triggers; bare mentions like "我们设计上再想想" or
+  // "数据我回头发你" are everyday meeting filler and must NOT.
+  // (?<!没)什么 / (?<!不)怎么 exclude "没什么" / "不怎么样" statements.
+  const hasQuestionForm =
+    /[?？]|吗|(?<!没)什么|(?<!不)怎么|为啥|多少|几个|是不是|有没有|能不能|来着|如何|怎样|哪来|哪个|哪些/.test(trimmed) ||
+    /\b(what|how|why|which|where|who|whether)\b/i.test(trimmed);
+  if (!hasQuestionForm) return false;
+
+  return (
+    /之前|上次|当时|记得/.test(trimmed) ||                                // past reference (zh)
+    /last time|previously|back when/i.test(trimmed) ||                    // past reference (en)
+    /决定|决策|方案|架构|设计/.test(trimmed) ||                           // decision/architecture reference
+    /数据|指标|成本|定价|价格|ROI|转化|metrics|numbers/i.test(trimmed) || // metrics reference
+    /bug|issue|问题|修了|修复|fix/i.test(trimmed) ||                      // bug reference
+    /对比|竞品|compare|competitor/i.test(trimmed)                         // competitor reference
+  );
+}
+
+// ── CJK-aware tokenization for cache matching ──
+// question.split(/\s+/) breaks for Chinese: no spaces means the whole
+// question becomes ONE token that almost never substring-matches, so the
+// topic prefetch cache (the 316x-speedup path) never hit for Chinese.
+// Instead: CJK runs → character bigrams ("定价策略" → 定价/价策/策略),
+// latin/digit runs → whole words (>2 chars, stopword-filtered).
+
+/** Interrogative words carry no topical signal — stripped before bigramming */
+const CJK_INTERROGATIVES = /为什么|是不是|有没有|能不能|怎么样|什么|怎么|怎样|多少|哪个|哪些|哪里|如何|来着/g;
+
+/** Function chars — CJK runs are split on these so bigrams don't span them */
+const CJK_SEGMENT_SPLIT = /[\s的了在是有和就不也都这那你我他她它谁吗呢吧啊嘛么之与及或]+/;
+
+const EN_STOPWORDS = new Set([
+  "the", "and", "for", "are", "was", "were", "but", "not", "you", "this", "that", "with",
+  "have", "has", "had", "did", "does", "can", "could", "should", "would", "about",
+  "what", "how", "why", "when", "where", "which", "who",
+]);
+
+function extractOverlapTokens(text: string): Set<string> {
+  const tokens = new Set<string>();
+  const lower = text.toLowerCase();
+
+  // Latin/digit words (>2 chars, stopword-filtered)
+  for (const m of lower.matchAll(/[a-z0-9]+/g)) {
+    if (m[0].length > 2 && !EN_STOPWORDS.has(m[0])) tokens.add(m[0]);
+  }
+
+  // CJK runs: strip interrogatives, split on function chars, emit bigrams.
+  // Single leftover chars are dropped — too noisy ("价" would match 涨价/价值).
+  for (const m of lower.matchAll(/[一-鿿]+/g)) {
+    for (const seg of m[0].replace(CJK_INTERROGATIVES, " ").split(CJK_SEGMENT_SPLIT)) {
+      if (seg.length < 2) continue;
+      for (let i = 0; i < seg.length - 1; i++) tokens.add(seg.slice(i, i + 2));
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Search cached contexts for content relevant to a user's question.
+ * Token-overlap scoring — no API call, <1ms.
+ *
+ * Threshold 0.2 (was 0.3 with space-split words): bigram tokens are much
+ * higher-precision than split words — a spurious hit needs an exact 2-char
+ * substring collision, not just a shared character — and a single topical
+ * concept now expands into several bigrams (4-char word → 3 bigrams),
+ * diluting its per-token weight. One matched concept in a typical 5-8 token
+ * Chinese question lands around 0.15-0.35 while unrelated questions score
+ * ~0, so 0.2 keeps single-concept matches without admitting noise.
+ */
+export function searchCache(cached: RetrievedContext[], question: string): RetrievedContext[] {
+  if (!question || cached.length === 0) return [];
+
+  const questionTokens = extractOverlapTokens(question);
+  if (questionTokens.size === 0) return [];
+
+  // Score each cached context by token overlap with the question
+  const scored = cached.map((ctx) => {
+    const ctxText = `${ctx.query} ${ctx.content}`.toLowerCase();
+    let hits = 0;
+    for (const token of questionTokens) {
+      if (ctxText.includes(token)) hits++;
+    }
+    return { ctx, score: hits / questionTokens.size };
+  });
+
+  return scored
+    .filter((s) => s.score >= 0.2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((s) => s.ctx);
 }
 
 // ── Module ──
@@ -169,7 +303,7 @@ export class ContextRetriever {
 
     this._charsSinceLastAnalysis += entry.text.length;
 
-    const isQuestion = this.QUESTION_BOOST && entry.role === "user" && this.looksLikeQuestion(entry.text);
+    const isQuestion = this.QUESTION_BOOST && entry.role === "user" && looksLikeQuestion(entry.text);
     if (isQuestion) this._pendingQuestion = true;
 
     const shouldTrigger =
@@ -198,31 +332,6 @@ export class ContextRetriever {
     this._lastScreenUrl = url;
   };
 
-  /**
-   * Detect utterances that signal a context need — not just literal questions,
-   * but also discussion triggers like mentioning a project name, referencing
-   * a past decision, or bringing up metrics. Cast a wide net so background
-   * retrieval stays ahead of the conversation.
-   */
-  private looksLikeQuestion(text: string): boolean {
-    const trimmed = text.trim();
-    const lower = trimmed.toLowerCase();
-    return (
-      // Literal questions
-      trimmed.endsWith("?") ||
-      trimmed.endsWith("？") ||
-      /[吗呢么嘛][\s。？?]*$/.test(trimmed) ||
-      /^(什么|怎么|为什么|哪|谁|几|多少|是不是|有没有|能不能)/.test(trimmed) ||
-      // Discussion triggers — someone is referencing context the AI should have ready
-      /之前|上次|当时|那个|记得/.test(trimmed) ||                     // past reference (zh)
-      /last time|previously|remember when|back when/i.test(trimmed) || // past reference (en)
-      /决定|决策|方案|架构|设计/.test(trimmed) ||                     // decision/architecture reference
-      /数据|指标|成本|ROI|转化|metrics|numbers/i.test(trimmed) ||     // metrics reference
-      /bug|issue|问题|修了|修复|fix/i.test(trimmed) ||               // bug reference
-      /对比|竞品|compare|competitor/i.test(trimmed)                   // competitor reference
-    );
-  }
-
   private scheduleAnalysis() {
     const elapsed = Date.now() - this._lastAnalysisTs;
     if (elapsed < this.MIN_INTERVAL_MS) {
@@ -238,18 +347,18 @@ export class ContextRetriever {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // Core analysis loop — Two-Layer Gap Detection
+  // Core analysis loop — Merged Gap Detection (ONE model call)
   //
-  //   Layer 1: classifyTopic (~50 tokens out, ALWAYS runs)
-  //     "What specific topic is being discussed right now?"
-  //     → If same topic as last time → SKIP (context still adequate)
-  //     → If topic shifted → proceed to Layer 2
-  //
-  //   Layer 2: inferNeeds (~100 tokens out, only on topic shift)
-  //     "Given this topic + conversation direction, what information
-  //      would help the AI respond better?"
-  //     → Need-based queries: "memdex blog conversion metrics" not "memdex"
-  //     → Then: semantic search → inject into Voice
+  //   analyzeConversation (~256 tokens out) answers both questions
+  //   that used to be two SERIAL Haiku calls (classifyTopic →
+  //   inferNeeds, each ~1-1.5s, each embedding the transcript —
+  //   2x latency + cost on every topic shift):
+  //     1. "What specific topic is being discussed right now?"
+  //        → Same topic → SKIP retrieval (cache lookup on question)
+  //     2. "What information would help the AI respond better?"
+  //        → Need-based queries: "memdex blog conversion metrics"
+  //          not "memdex"
+  //   On topic shift: semantic search → inject into Voice.
   // ══════════════════════════════════════════════════════════════
 
   private async runAnalysis() {
@@ -264,25 +373,26 @@ export class ContextRetriever {
       const entries = this.context.getRecentTranscript(20);
       if (entries.length < 2) return;
 
-      // ── Layer 1: Topic Classification (cheap, always runs) ──
-      const topicResult = await this.classifyTopic(entries);
+      // ── Merged Layer 1+2: topic classification + need inference ──
+      const analysis = await this.analyzeConversation(entries);
+      const analysisMs = Date.now() - startTs;
 
       this.eventBus.emit("retriever.topic", {
-        topic: topicResult.topic,
-        direction: topicResult.direction,
-        shifted: topicResult.shifted,
-        durationMs: Date.now() - startTs,
+        topic: analysis.topic,
+        direction: analysis.direction,
+        shifted: analysis.shifted,
+        durationMs: analysisMs,
       });
 
       const hadQuestion = this._pendingQuestion;
       this._pendingQuestion = false;
 
-      if (!topicResult.shifted) {
+      if (!analysis.shifted) {
         // ── Same topic: try cache if user asked a question ──
         if (hadQuestion && this._topicCache.has(this._currentTopic)) {
           const cached = this._topicCache.get(this._currentTopic)!;
           const lastUserText = entries.filter(e => e.role === "user").pop()?.text || "";
-          const cacheHits = this.searchCache(cached, lastUserText);
+          const cacheHits = searchCache(cached, lastUserText);
           if (cacheHits.length > 0) {
             this.injectIntoVoice(cacheHits, { answeredQuestion: true });
             console.log(`[ContextRetriever] Cache hit: ${cacheHits.length} results for question in "${this._currentTopic.slice(0, 30)}" (<1ms)`);
@@ -295,44 +405,41 @@ export class ContextRetriever {
             console.log(`[ContextRetriever] Cache miss for question in "${this._currentTopic.slice(0, 30)}" — no relevant cached content`);
           }
         } else {
-          console.log(`[ContextRetriever] L1: Same topic "${this._currentTopic.slice(0, 40)}" — skip (${Date.now() - startTs}ms)`);
+          console.log(`[ContextRetriever] Same topic "${this._currentTopic.slice(0, 40)}" — skip (${Date.now() - startTs}ms)`);
         }
         return;
       }
 
       // ── Topic shifted ──
-      this._currentTopic = topicResult.topic;
-      this._currentDirection = topicResult.direction;
+      this._currentTopic = analysis.topic;
+      this._currentDirection = analysis.direction;
       this._topicStableSince = Date.now();
-      console.log(`[ContextRetriever] L1: Topic shift → "${topicResult.topic}" (${topicResult.direction})`);
-
-      // ── Layer 2: Need Inference (only on topic shift) ──
-      const needsResult = await this.inferNeeds(entries, topicResult);
+      console.log(`[ContextRetriever] Topic shift → "${analysis.topic}" (${analysis.direction})`);
 
       this.eventBus.emit("retriever.analysis", {
-        needsRetrieval: needsResult.needsRetrieval,
-        queries: needsResult.queries,
-        reasoning: needsResult.reasoning,
+        needsRetrieval: analysis.needsRetrieval,
+        queries: analysis.queries,
+        reasoning: analysis.reasoning,
         durationMs: Date.now() - startTs,
       });
 
-      if (!needsResult.needsRetrieval || needsResult.queries.length === 0) {
-        console.log(`[ContextRetriever] L2: No gaps for "${topicResult.topic}" (${Date.now() - startTs}ms)`);
+      if (!analysis.needsRetrieval || analysis.queries.length === 0) {
+        console.log(`[ContextRetriever] No gaps for "${analysis.topic}" (${Date.now() - startTs}ms)`);
         return;
       }
 
-      console.log(`[ContextRetriever] L2: ${needsResult.queries.length} need-based queries (${Date.now() - startTs}ms)`);
+      console.log(`[ContextRetriever] ${analysis.queries.length} need-based queries (${Date.now() - startTs}ms)`);
 
       // ── P2: Emit searching event for filler mechanism ──
       this.eventBus.emit("retriever.searching", {
-        topic: topicResult.topic,
-        direction: topicResult.direction,
-        queries: needsResult.queries,
+        topic: analysis.topic,
+        direction: analysis.direction,
+        queries: analysis.queries,
       });
 
       // ── Semantic search + inject + cache ──
       const searchStartTs = Date.now();
-      const results = await this.semanticSearch(needsResult.queries);
+      const results = await this.semanticSearch(analysis.queries);
 
       if (results.length === 0) {
         console.log(`[ContextRetriever] Search: no results (${Date.now() - searchStartTs}ms)`);
@@ -343,18 +450,18 @@ export class ContextRetriever {
       while (this._retrievedContexts.length > this.MAX_RETRIEVED_CONTEXTS) this._retrievedContexts.shift();
 
       // ── P1: Cache results under current topic for follow-up questions ──
-      this.cacheForTopic(topicResult.topic, results);
+      this.cacheForTopic(analysis.topic, results);
 
       this.injectIntoVoice(results, { answeredQuestion: hadQuestion });
 
       const totalMs = Date.now() - startTs;
       console.log(
-        `[ContextRetriever] Done: ${results.length} contexts (L1: ${searchStartTs - startTs}ms, search: ${Date.now() - searchStartTs}ms, total: ${totalMs}ms)`
+        `[ContextRetriever] Done: ${results.length} contexts (analysis: ${analysisMs}ms, search: ${Date.now() - searchStartTs}ms, total: ${totalMs}ms)`
       );
 
       this.eventBus.emit("retriever.complete", {
-        topic: topicResult.topic,
-        queriesCount: needsResult.queries.length,
+        topic: analysis.topic,
+        queriesCount: analysis.queries.length,
         resultsCount: results.length,
         totalMs,
       });
@@ -373,68 +480,15 @@ export class ContextRetriever {
   // LLM calls now use shared callModel from ai_gateway/llm-client.ts
 
   // ══════════════════════════════════════════════════════════════
-  // Layer 1: Topic Classification
-  // ── Cheap (~50 tokens output), always runs ──
-  // Answers: "What specific topic is being discussed RIGHT NOW?"
-  // If topic hasn't changed → skip Layer 2 entirely (saves cost)
+  // Merged Layer 1+2: Topic Classification + Need Inference
+  // ── ONE call (~256 tokens out), always runs ──
+  // Job 1: "What specific topic is being discussed RIGHT NOW?"
+  //   If topic hasn't changed → caller skips retrieval (saves cost)
+  // Job 2: Instead of searching for nouns ("memdex"), infers what
+  //   the conversation NEEDS: "memdex blog conversion metrics Q1"
   // ══════════════════════════════════════════════════════════════
 
-  private async classifyTopic(entries: TranscriptEntry[]): Promise<TopicClassification> {
-    // Use only last 8 entries for topic classification (cheaper + more focused)
-    const recent = entries.slice(-8);
-    const transcriptText = recent
-      .map((e) => `[${e.role}] ${e.text}`)
-      .join("\n");
-
-    const screen = this.context.screen;
-    const screenLine = screen.description
-      ? `[screen] ${screen.description}${screen.url ? ` (${screen.url})` : ""}`
-      : "";
-    // Context enrichment: add prep topic so retriever knows the meeting's purpose
-    const prepTopic = this.meetingPrepSkill?.currentBrief?.topic || "";
-    const prepLine = prepTopic ? `[meeting prep: ${prepTopic}]` : "";
-
-    const prompt = `What specific topic is being discussed RIGHT NOW in this meeting conversation?
-
-${transcriptText}
-${screenLine}
-${prepLine}
-
-Previous topic: "${this._currentTopic || "none"}"
-
-Reply with JSON only (no other text):
-{"topic": "specific topic in 3-8 words", "direction": "what the user wants to know or decide", "shifted": true/false}
-
-"shifted" = true ONLY if the topic is meaningfully different from the previous topic. Subtopic shifts within the same area count as shifted. Small talk → topic = "small talk", shifted = true only if previous wasn't small talk.`;
-
-    try {
-      const text = await callModel(prompt, {
-        model: CONFIG.analysis.model,
-        maxTokens: 100,
-      });
-      const parsed = parseJSON<{ topic?: string; direction?: string; shifted?: boolean }>(text);
-      if (!parsed) return { topic: this._currentTopic, direction: "", shifted: false };
-      return {
-        topic: parsed.topic || this._currentTopic,
-        direction: parsed.direction || "",
-        shifted: this._currentTopic === "" ? true : !!parsed.shifted,
-      };
-    } catch {
-      return { topic: this._currentTopic, direction: "", shifted: false };
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════
-  // Layer 2: Need Inference
-  // ── Only runs when topic shifted ──
-  // Instead of searching for nouns ("memdex"), infers what the
-  // conversation NEEDS: "memdex blog conversion metrics Q1 2026"
-  // ══════════════════════════════════════════════════════════════
-
-  private async inferNeeds(
-    entries: TranscriptEntry[],
-    topic: TopicClassification,
-  ): Promise<NeedInference> {
+  private async analyzeConversation(entries: TranscriptEntry[]): Promise<ConversationAnalysis> {
     const transcriptText = entries
       .map((e) => `[${e.role}${e.speaker ? ` (${e.speaker})` : ""}] ${e.text}`)
       .join("\n");
@@ -444,28 +498,29 @@ Reply with JSON only (no other text):
       ? `\n## Current Screen\n${screen.description}${screen.url ? ` (${screen.url})` : ""}${screen.title ? ` — ${screen.title}` : ""}`
       : "";
 
-    const brief = this.meetingPrepSkill.currentBrief;
+    const brief = this.meetingPrepSkill?.currentBrief;
     const briefContext = brief
       ? `Meeting topic: ${brief.topic}\nPrep covers: ${brief.keyPoints.join("; ")}`
       : "No meeting brief.";
 
     const alreadyRetrieved = this._retrievedContexts.map((r) => r.query).join("; ") || "nothing yet";
 
-    const prompt = `The meeting just shifted to a new topic. Determine what specific information would help the AI assistant respond well.
-
-## New Topic
-Topic: ${topic.topic}
-Direction: ${topic.direction}
-
-## Meeting Context
-${briefContext}
-Already retrieved: ${alreadyRetrieved}
+    const prompt = `Analyze this live meeting conversation. Two jobs in ONE pass: classify the current topic, then determine what information the AI assistant needs.
 
 ## Recent Transcript
 ${transcriptText}
 ${screenContext}
 
-## Task
+## Meeting Context
+${briefContext}
+Already retrieved: ${alreadyRetrieved}
+Previous topic: "${this._currentTopic || "none"}"
+
+## Job 1: Topic
+What specific topic is being discussed RIGHT NOW?
+"shifted" = true ONLY if the topic is meaningfully different from the previous topic. Subtopic shifts within the same area count as shifted. Small talk → topic = "small talk", shifted = true only if previous wasn't small talk.
+
+## Job 2: Information needs (if shifted=false, return needsRetrieval=false with empty queries)
 Think about what the AI assistant NEEDS to know to be helpful on this topic.
 - NOT: search for the noun that was mentioned ("memdex")
 - YES: search for what the conversation needs ("memdex blog performance metrics and conversion data")
@@ -481,25 +536,36 @@ Return needsRetrieval=false if ANY of these apply:
 Only return needsRetrieval=true when the conversation genuinely needs specific facts, numbers, decisions, or history that aren't in the prep brief.
 
 ## Output
-JSON only:
-{"needsRetrieval": true/false, "queries": ["need-based search query 1", "need-based search query 2"], "reasoning": "what info is missing and why it matters for this conversation"}
+JSON only (no other text):
+{"topic": "specific topic in 3-8 words", "direction": "what the user wants to know or decide", "shifted": true/false, "needsRetrieval": true/false, "queries": ["need-based search query 1", "need-based search query 2"], "reasoning": "what info is missing and why it matters for this conversation"}
 
 Max 3 queries. Each query should be a specific information need, not a keyword.`;
+
+    // Fallback on error/parse failure: treat as "no shift, no retrieval" —
+    // same semantics the two old layers had separately; next trigger retries.
+    const noop: ConversationAnalysis = {
+      topic: this._currentTopic, direction: "", shifted: false,
+      needsRetrieval: false, queries: [], reasoning: "parse_error",
+    };
 
     try {
       const text = await callModel(prompt, {
         model: CONFIG.analysis.model,
         maxTokens: 256,
       });
-      const parsed = parseJSON<{ needsRetrieval?: boolean; queries?: string[]; reasoning?: string }>(text);
-      if (!parsed) return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
+      const parsed = parseJSON<Partial<ConversationAnalysis>>(text);
+      if (!parsed) return noop;
       return {
+        topic: parsed.topic || this._currentTopic,
+        direction: parsed.direction || "",
+        // First classification of the meeting always counts as a shift
+        shifted: this._currentTopic === "" ? true : !!parsed.shifted,
         needsRetrieval: !!parsed.needsRetrieval,
         queries: Array.isArray(parsed.queries) ? parsed.queries.slice(0, 3) : [],
         reasoning: parsed.reasoning || "",
       };
     } catch {
-      return { needsRetrieval: false, queries: [], reasoning: "parse_error" };
+      return noop;
     }
   }
 
@@ -1035,40 +1101,8 @@ RULES:
     console.log(`[ContextRetriever] Cached ${results.length} results for topic "${topic.slice(0, 30)}" (${deduped.length} total cached)`);
   }
 
-  /**
-   * Search the cache for content relevant to a user's question.
-   * Uses keyword overlap — no API call, <1ms.
-   */
-  private searchCache(cached: RetrievedContext[], question: string): RetrievedContext[] {
-    if (!question || cached.length === 0) return [];
-
-    // Extract significant words from the question (>2 chars, skip common words)
-    const stopWords = new Set(["the", "is", "at", "which", "on", "a", "an", "and", "or", "but", "in", "to", "for",
-      "的", "了", "在", "是", "有", "和", "就", "不", "也", "都", "这", "那", "你", "我", "他", "她", "吗", "呢"]);
-    const questionWords = new Set(
-      question.toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g, " ").split(/\s+/)
-        .filter((w) => w.length > 2 && !stopWords.has(w))
-    );
-
-    if (questionWords.size === 0) return [];
-
-    // Score each cached context by keyword overlap with the question
-    const scored = cached.map((ctx) => {
-      const ctxText = `${ctx.query} ${ctx.content}`.toLowerCase();
-      let hits = 0;
-      for (const word of questionWords) {
-        if (ctxText.includes(word)) hits++;
-      }
-      return { ctx, score: hits / questionWords.size };
-    });
-
-    // Return contexts with >30% keyword overlap
-    return scored
-      .filter((s) => s.score > 0.3)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map((s) => s.ctx);
-  }
+  // Cache matching lives in the module-level searchCache() above
+  // (CJK-aware tokenization, exported for unit tests).
 
   // ── Status ──
 
