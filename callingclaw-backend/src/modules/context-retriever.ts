@@ -63,6 +63,14 @@ export interface RetrievedContext {
   retrievedAt: number;
 }
 
+/** A directory root the agentic search tools operate on */
+interface SearchRoot {
+  dir: string;          // absolute path
+  label: string;        // shown in list_workspace as "[label] "
+  rel: string;          // prefix for relative paths in search results (stripped in read_file)
+  skipTopDirs?: string[]; // top-level subdirs to skip (avoid double-listing nested roots)
+}
+
 // ── Module ──
 
 export class ContextRetriever {
@@ -96,6 +104,14 @@ export class ContextRetriever {
 
   // ── Retrieved context accumulator ──
   private _retrievedContexts: RetrievedContext[] = [];
+
+  // ── Per-meeting knowledge dirs (from prep brief folderPaths) ──
+  // Resolved lazily from the current prep brief so folders referenced by the
+  // meeting prep become searchable for that meeting only. Reset on
+  // activate/deactivate so directories never leak across meetings.
+  // Complements the statically configured KNOWLEDGE_DIR (unchanged).
+  private _meetingKnowledgeDirs: string[] = [];
+  private _meetingKnowledgeDirsKey = 0; // brief.generatedAt used as cache key (0 = unresolved)
 
   // ── Tuning knobs ──
   // Strategy: aggressive silent retrieval. Cast a wide net so the Voice AI
@@ -132,6 +148,9 @@ export class ContextRetriever {
     this._lastAnalysisTs = Date.now();
     this._retrievedContexts = [];
     this._lastScreenUrl = "";
+    // Fresh per-meeting knowledge dirs (re-resolved from the current prep brief)
+    this._meetingKnowledgeDirs = [];
+    this._meetingKnowledgeDirsKey = 0;
     // Reset topic tracking state to prevent leakage from previous meetings
     this._topicCache.clear();
     this._currentTopic = "";
@@ -156,6 +175,9 @@ export class ContextRetriever {
     // Unsubscribe listeners to prevent leaking handlers across meetings
     this.context.off("transcript", this._onTranscript);
     this.context.off("screen", this._onScreenChange);
+    // Drop per-meeting knowledge dirs (folderPaths from this meeting's prep)
+    this._meetingKnowledgeDirs = [];
+    this._meetingKnowledgeDirsKey = 0;
     this.voice = null;
     console.log("[ContextRetriever] Deactivated");
     this.eventBus.emit("retriever.deactivated", {});
@@ -533,23 +555,23 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
   private static readonly SEARCH_TOOLS = [
     {
       name: "list_workspace",
-      description: "List all files in the knowledge workspace + meeting prep/shared directories. Returns filenames with sizes. Call this first to see what's available.",
+      description: "List files (recursive, incl. subfolders like notes/ and meetings/) in the knowledge workspace + meeting prep/shared directories. Returns relative paths with sizes. Call this first to see what's available.",
       input_schema: { type: "object" as const, properties: {}, required: [] as string[] },
     },
     {
       name: "read_file",
-      description: "Read a file from the workspace, prep directory, shared directory, or a prep-referenced file. Returns content (truncated if large). Use for MEMORY.md, prep briefs, meeting notes, and files mentioned in the meeting prep.",
+      description: "Read a file from the workspace, prep directory, shared directory (incl. subfolders), or a prep-referenced file. Returns content (truncated if large). Use for MEMORY.md, prep briefs, meeting notes, and files mentioned in the meeting prep.",
       input_schema: {
         type: "object" as const,
         properties: {
-          path: { type: "string" as const, description: "Filename or relative path (e.g. 'MEMORY.md', 'prep/meeting-prep-callingclaw.md', or a full path from prep references)" },
+          path: { type: "string" as const, description: "Filename or relative path (e.g. 'MEMORY.md', 'notes/2026-06-30.md', 'prep/meeting-prep-callingclaw.md', or a full path from prep references)" },
         },
         required: ["path"],
       },
     },
     {
       name: "search_files",
-      description: "Search across workspace, prep, and shared files for a keyword/phrase. Returns matching lines with filenames. Good for finding which file contains specific info.",
+      description: "Search across workspace, prep, and shared files (recursive, incl. subfolders) for a keyword/phrase. Returns matching lines with relative file paths. Good for finding which file contains specific info.",
       input_schema: {
         type: "object" as const,
         properties: {
@@ -764,14 +786,107 @@ RULES:
   }
 
   /**
-   * Get the list of directories to search, plus prep-referenced file whitelist.
-   * Searches: workspace, shared, prep, and any files explicitly referenced in the prep brief.
+   * Directories the agentic search tools operate on, in priority order.
+   * Includes: workspace, prep, shared (recursive — notes/, meetings/, logs/),
+   * the statically configured knowledge dir (if configured), and per-meeting
+   * knowledge dirs adopted from the prep brief's folderPaths.
+   *
+   * `rel` is the path prefix used in search results/listings for this root
+   * (and stripped back off in read_file). `skipTopDirs` avoids double-listing
+   * roots nested inside another root (prep/ lives under shared/).
    */
-  private getSearchDirs(): string[] {
-    const dirs = [ContextRetriever.WORKSPACE_DIR, ContextRetriever.SHARED_DIR, ContextRetriever.PREP_DIR];
+  private getSearchRoots(): SearchRoot[] {
+    const roots: SearchRoot[] = [
+      { dir: ContextRetriever.WORKSPACE_DIR, label: "workspace", rel: "" },
+      { dir: ContextRetriever.PREP_DIR, label: "prep", rel: "prep/" },
+      { dir: ContextRetriever.SHARED_DIR, label: "shared", rel: "shared/", skipTopDirs: ["prep"] },
+    ];
     const knowledgeDir = ContextRetriever.KNOWLEDGE_DIR;
-    if (knowledgeDir) dirs.push(knowledgeDir);
-    return dirs;
+    if (knowledgeDir && !roots.some((r) => r.dir === knowledgeDir)) {
+      roots.push({ dir: knowledgeDir, label: "knowledge", rel: "knowledge/" });
+    }
+    for (const dir of this.resolveMeetingKnowledgeDirs()) {
+      if (roots.some((r) => r.dir === dir)) continue;
+      const base = dir.split("/").filter(Boolean).pop() || "folder";
+      // Dedup labels: two adopted dirs sharing a basename (or an adopted dir
+      // literally named "prep"/"shared"/"knowledge"/"workspace") would
+      // otherwise shadow each other's rel prefix in read_file resolution.
+      let label = base;
+      for (let suffix = 2; roots.some((r) => r.label === label); suffix++) {
+        label = `${base}-${suffix}`;
+      }
+      if (label !== base) {
+        console.log(`[ContextRetriever] Adopted dir "${dir}" label "${base}" collides with an existing search root — using "${label}" instead`);
+      }
+      roots.push({ dir, label, rel: `${label}/` });
+    }
+    return roots;
+  }
+
+  /**
+   * Per-meeting knowledgeDir auto-population: adopt validated, existing
+   * directories from the current prep brief's folderPaths (expand ~, cap 3).
+   * Cached per brief (keyed by generatedAt); cache is reset on
+   * activate/deactivate so folders never leak into other meetings.
+   */
+  private static readonly MAX_MEETING_KNOWLEDGE_DIRS = 3;
+
+  private resolveMeetingKnowledgeDirs(): string[] {
+    try {
+      const brief = this.meetingPrepSkill?.currentBrief;
+      if (!brief?.folderPaths?.length) return [];
+      const key = brief.generatedAt || 1;
+      if (this._meetingKnowledgeDirsKey === key) return this._meetingKnowledgeDirs;
+
+      const { statSync } = require("node:fs");
+      const path = require("node:path");
+      const home = process.env.HOME || "";
+      const homeResolved = home ? path.resolve(home) : "";
+      const dirs: string[] = [];
+      for (const fp of brief.folderPaths) {
+        if (dirs.length >= ContextRetriever.MAX_MEETING_KNOWLEDGE_DIRS) break;
+        const raw = (fp?.path || "").trim();
+        if (!raw) continue;
+        let p = raw;
+        if (p === "~") p = home;
+        else if (p.startsWith("~/")) p = `${home}/${p.slice(2)}`;
+        if (!p.startsWith("/")) continue; // only absolute paths after ~ expansion
+        // Normalize (collapses "..", trailing slashes, "." segments) so a
+        // traversal like "/foo/../.." can't dodge the $HOME check below.
+        p = path.resolve(p);
+
+        // Reject bare "~" (→ $HOME itself) and any path that resolves to
+        // $HOME or an ancestor of $HOME — adopting either turns list_workspace
+        // / search_files loose on the whole home directory. A subdir of
+        // $HOME (e.g. "~/proj") is unaffected: it resolves to a *descendant*
+        // of $HOME, not $HOME or an ancestor of it.
+        if (homeResolved) {
+          const relToHome = path.relative(p, homeResolved);
+          const isHomeOrAncestorOfHome = relToHome === "" || (!relToHome.startsWith("..") && !path.isAbsolute(relToHome));
+          if (isHomeOrAncestorOfHome) {
+            console.log(`[ContextRetriever] Rejected folderPath "${raw}" — resolves to $HOME or a parent of $HOME (${p}); refusing to adopt as a search root`);
+            continue;
+          }
+        }
+
+        if (dirs.includes(p)) continue;
+        try {
+          if (!statSync(p).isDirectory()) continue;
+        } catch {
+          continue; // doesn't exist — skip
+        }
+        dirs.push(p);
+      }
+
+      this._meetingKnowledgeDirs = dirs;
+      this._meetingKnowledgeDirsKey = key;
+      if (dirs.length > 0) {
+        console.log(`[ContextRetriever] Adopted ${dirs.length} knowledge dir(s) from prep folderPaths: ${dirs.join(", ")}`);
+      }
+      return dirs;
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -788,15 +903,83 @@ RULES:
     return paths;
   }
 
-  /** List files in a directory, returning entries with sizes */
-  private async listDir(dir: string, prefix: string): Promise<string[]> {
+  /**
+   * True if any path segment starts with "." (dot-file or dot-dir, e.g.
+   * ".env", ".git/config"). walkFiles() already refuses to descend into or
+   * list these for every root; read_file's candidate resolution below
+   * applies the same policy so a guessed relative path (e.g. read_file on
+   * an adopted project root's ".env") can't read what listing/search would
+   * never surface. Applied uniformly to ALL roots (built-in workspace/prep/
+   * shared/knowledge included), not just per-meeting adopted ones — a
+   * dotfile sitting in the static workspace dir is no more meant to be
+   * read_file-able than one in an adopted project dir.
+   */
+  private hasDotSegment(relPath: string): boolean {
+    return relPath.split("/").some((seg) => seg.length > 0 && seg.startsWith("."));
+  }
+
+  // ── Recursive walk bounds ──
+  // Recursive coverage (equivalent to "**/*.{md,txt,json,jsonl}") so files in
+  // subdirs like shared/notes/ and shared/meetings/{id}/ are reachable, with
+  // explicit bounds: depth cap, per-root file cap, dot-dir/node_modules skip.
+  private static readonly SEARCH_EXTENSIONS = new Set([".md", ".txt", ".json", ".jsonl"]);
+  private static readonly EXCLUDED_DIR_NAMES = new Set([
+    "node_modules", "dist", "build", "out", "coverage", "target", "__pycache__", "venv", "vendor",
+  ]);
+  private static readonly MAX_WALK_DEPTH = 3;        // subdirectory depth below each root
+  private static readonly MAX_FILES_PER_ROOT = 200;  // hard bound per directory root
+  private static readonly MAX_LIST_ENTRIES = 120;    // total lines from list_workspace
+  private static readonly MAX_SEARCH_FILE_BYTES = 512 * 1024; // skip huge files in search_files
+
+  /**
+   * Recursively collect files under a root (bounded: depth ≤ MAX_WALK_DEPTH,
+   * count ≤ MAX_FILES_PER_ROOT). Skips dot-dirs/dot-files and dependency dirs
+   * (node_modules etc.) WITHOUT descending into them. Returns paths relative
+   * to the root. `extensions === null` → all file types (used by list_workspace).
+   */
+  private async walkFiles(root: string, extensions: Set<string> | null, skipTopDirs?: string[]): Promise<string[]> {
+    const { readdir } = await import("node:fs/promises");
+    const found: string[] = [];
+    const walk = async (dir: string, rel: string, depth: number): Promise<void> => {
+      if (found.length >= ContextRetriever.MAX_FILES_PER_ROOT) return;
+      let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return; // dir doesn't exist or unreadable — skip
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      for (const e of entries) {
+        if (found.length >= ContextRetriever.MAX_FILES_PER_ROOT) return;
+        if (e.name.startsWith(".")) continue; // dot-dirs and dot-files
+        const relPath = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) {
+          if (depth >= ContextRetriever.MAX_WALK_DEPTH) continue;
+          if (ContextRetriever.EXCLUDED_DIR_NAMES.has(e.name.toLowerCase())) continue;
+          if (depth === 0 && skipTopDirs?.includes(e.name)) continue;
+          await walk(`${dir}/${e.name}`, relPath, depth + 1);
+        } else if (e.isFile()) {
+          if (extensions) {
+            const dot = e.name.lastIndexOf(".");
+            const ext = dot >= 0 ? e.name.slice(dot).toLowerCase() : "";
+            if (!extensions.has(ext)) continue;
+          }
+          found.push(relPath);
+        }
+      }
+    };
+    await walk(root, "", 0);
+    return found;
+  }
+
+  /** List files under a directory root (recursive, bounded), with sizes and relative paths */
+  private async listDir(dir: string, prefix: string, skipTopDirs?: string[]): Promise<string[]> {
     const entries: string[] = [];
     try {
-      const files = await Array.fromAsync(new Bun.Glob("*").scan({ cwd: dir, onlyFiles: true })) as string[];
-      for (const f of files.sort()) {
+      const files = await this.walkFiles(dir, null, skipTopDirs);
+      for (const f of files) {
         try {
-          const stat = Bun.file(`${dir}/${f}`);
-          const size = stat.size;
+          const size = Bun.file(`${dir}/${f}`).size;
           entries.push(`${prefix}${f} (${size > 1024 ? `${(size / 1024).toFixed(0)}KB` : `${size}B`})`);
         } catch {
           entries.push(`${prefix}${f}`);
@@ -808,17 +991,24 @@ RULES:
 
   /** Execute a tool call against local directories */
   private async executeTool(name: string, input: any): Promise<string> {
-    const ws = ContextRetriever.WORKSPACE_DIR;
-    const shared = ContextRetriever.SHARED_DIR;
-    const prep = ContextRetriever.PREP_DIR;
+    const roots = this.getSearchRoots();
 
     switch (name) {
       case "list_workspace": {
         try {
           const entries: string[] = [];
-          entries.push(...await this.listDir(ws, "[workspace] "));
-          entries.push(...await this.listDir(prep, "[prep] "));
-          entries.push(...await this.listDir(shared, "[shared] "));
+          let truncatedCount = 0;
+          for (const root of roots) {
+            const dirEntries = await this.listDir(root.dir, `[${root.label}] `, root.skipTopDirs);
+            const remaining = ContextRetriever.MAX_LIST_ENTRIES - entries.length;
+            if (remaining <= 0) {
+              truncatedCount += dirEntries.length;
+              continue;
+            }
+            entries.push(...dirEntries.slice(0, remaining));
+            truncatedCount += Math.max(0, dirEntries.length - remaining);
+          }
+          if (truncatedCount > 0) entries.push(`(+${truncatedCount} more files not shown)`);
 
           // Also list prep-referenced files
           const refFiles = this.getPrepReferencedFiles();
@@ -841,13 +1031,21 @@ RULES:
       case "read_file": {
         const path = input.path as string;
         const sanitized = path.replace(/\.\./g, "");
+        // Dot-file/dot-dir segments are never resolvable relative to a
+        // search root — matches the walk's skip policy (see hasDotSegment).
+        const sanitizedHasDotSegment = this.hasDotSegment(sanitized);
 
-        // Try multiple locations: workspace, shared, prep, then prep-referenced whitelist
-        const candidates = [
-          `${ws}/${sanitized}`,
-          `${shared}/${sanitized}`,
-          `${prep}/${sanitized}`,
-        ];
+        // Try each search root: first strip a matching listing prefix
+        // ("shared/notes/a.md" → <shared>/notes/a.md), then the direct join
+        // (supports nested relative paths like "notes/a.md").
+        const candidates: string[] = [];
+        for (const root of roots) {
+          if (root.rel && sanitized.startsWith(root.rel)) {
+            const relFromRoot = sanitized.slice(root.rel.length);
+            if (!this.hasDotSegment(relFromRoot)) candidates.push(`${root.dir}/${relFromRoot}`);
+          }
+          if (!sanitizedHasDotSegment) candidates.push(`${root.dir}/${sanitized}`);
+        }
 
         // If the path looks absolute or matches a prep-referenced file, allow it
         const refFiles = this.getPrepReferencedFiles();
@@ -855,7 +1053,7 @@ RULES:
           candidates.unshift(path);
         }
 
-        for (const fullPath of candidates) {
+        for (const fullPath of [...new Set(candidates)]) {
           try {
             const file = Bun.file(fullPath);
             if (!(await file.exists())) continue;
@@ -873,29 +1071,25 @@ RULES:
         const query = (input.query as string).toLowerCase();
         try {
           const results: string[] = [];
-          const searchDirs = [
-            { dir: ws, prefix: "" },
-            { dir: prep, prefix: "prep/" },
-            { dir: shared, prefix: "shared/" },
-          ];
 
-          for (const { dir, prefix } of searchDirs) {
+          outer:
+          for (const root of roots) {
             try {
-              const files = await Array.fromAsync(new Bun.Glob("*.{md,txt,json,jsonl}").scan({ cwd: dir, onlyFiles: true })) as string[];
+              const files = await this.walkFiles(root.dir, ContextRetriever.SEARCH_EXTENSIONS, root.skipTopDirs);
               for (const f of files) {
                 try {
-                  const content = await Bun.file(`${dir}/${f}`).text();
+                  const file = Bun.file(`${root.dir}/${f}`);
+                  if (file.size > ContextRetriever.MAX_SEARCH_FILE_BYTES) continue; // skip huge files
+                  const content = await file.text();
                   const lines = content.split("\n");
                   for (let i = 0; i < lines.length; i++) {
                     if (lines[i]!.toLowerCase().includes(query)) {
-                      results.push(`${prefix}${f}:${i + 1}: ${lines[i]!.slice(0, 200)}`);
-                      if (results.length >= 20) break;
+                      results.push(`${root.rel}${f}:${i + 1}: ${lines[i]!.slice(0, 200)}`);
+                      if (results.length >= 20) break outer;
                     }
                   }
-                  if (results.length >= 20) break;
                 } catch {}
               }
-              if (results.length >= 20) break;
             } catch { /* dir doesn't exist, skip */ }
           }
 

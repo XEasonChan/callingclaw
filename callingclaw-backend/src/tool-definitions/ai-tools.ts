@@ -55,7 +55,7 @@ export function aiTools(deps: AIToolDeps): ToolModule {
             urgency: {
               type: "string",
               enum: ["quick", "thorough"],
-              description: "quick = search local memory + already-retrieved contexts (<1s). thorough = delegate to OpenClaw agent for deep search with file access (5-15s).",
+              description: "quick = local memory + cached context lookup (<100ms). thorough = agent search with file access, typically 5-30s; may fall back to a slower deep-research pass taking several minutes if the fast path fails.",
             },
           },
           required: ["query"],

@@ -1,8 +1,10 @@
 // CallingClaw 2.0 — Unit Tests for Incremental Context Injection
-// Tests the FIFO context queue, inject/remove/replay without real WebSocket.
+// Tests the Layer-3 context queue (token-budgeted text eviction, separate
+// image-count cap — see CONTEXT-ENGINEERING.md), inject/remove/replay
+// without real WebSocket.
 
 import { test, expect, describe, beforeEach } from "bun:test";
-import { RealtimeClient } from "./realtime_client";
+import { RealtimeClient, getProvider } from "./realtime_client";
 
 // ── Mock WebSocket ──────────────────────────────────────────────────
 // We need to bypass the real WebSocket connection and manually control
@@ -110,53 +112,82 @@ describe("Incremental Context Injection", () => {
     expect(queue[2]!.text).toBe("context 3");
   });
 
-  test("FIFO eviction deletes oldest items when queue exceeds MAX (15)", () => {
+  // Text eviction is TOKEN-budgeted (MAX_CONTEXT_TOKENS_L3 = 3000 estimated
+  // tokens), not item-count FIFO. estimateTokens() is ~1 token per 3 chars,
+  // so a 3000-char item ≈ 1000 tokens — sized here for predictable math.
+  const TOKENS_1000 = "x".repeat(3000); // ceil(3000/3) = 1000 estimated tokens
+
+  test("text eviction deletes oldest item once the Layer-3 token budget is exceeded", () => {
     simulateConnected();
 
-    // Inject 16 items (exceeds MAX_CONTEXT_ITEMS = 15)
-    for (let i = 0; i < 16; i++) {
-      client.injectContext(`context ${i}`, `ctx_${i}`);
-    }
+    // 3 items @ ~1000 tokens = 3000 total, exactly at budget (not over) — no eviction yet
+    client.injectContext(TOKENS_1000, "ctx_0");
+    client.injectContext(TOKENS_1000, "ctx_1");
+    client.injectContext(TOKENS_1000, "ctx_2");
+    expect(client.getContextQueue().length).toBe(3);
+
+    // 4th item pushes total to ~4000 tokens (> 3000 budget) → evict oldest (ctx_0)
+    // until back under budget: evicting one 1000-token item brings it to 3000, which stops the loop.
+    client.injectContext(TOKENS_1000, "ctx_3");
 
     const queue = client.getContextQueue();
-    expect(queue.length).toBe(15);
+    expect(queue.length).toBe(3);
+    expect(queue[0]!.id).toBe("ctx_1"); // ctx_0 evicted
+    expect(queue[2]!.id).toBe("ctx_3"); // newest survives
 
-    // First item should have been evicted
-    expect(queue[0]!.id).toBe("ctx_1");
-    expect(queue[0]!.text).toBe("context 1");
-
-    // Last item should be the newest
-    expect(queue[14]!.id).toBe("ctx_15");
-    expect(queue[14]!.text).toBe("context 15");
-
-    // Should have sent a conversation.item.delete for ctx_0
     const deleteEvents = sentEvents.filter((e) => e.type === "conversation.item.delete");
     expect(deleteEvents.length).toBe(1);
     expect(deleteEvents[0]!.item_id).toBe("ctx_0");
   });
 
-  test("FIFO eviction handles multiple evictions at once", () => {
+  test("text eviction can evict multiple oldest items in a single call", () => {
     simulateConnected();
 
-    // Fill to exactly 15
-    for (let i = 0; i < 15; i++) {
-      client.injectContext(`context ${i}`, `ctx_${i}`);
-    }
-    expect(client.getContextQueue().length).toBe(15);
+    // 3 items @ ~1000 tokens = 3000 total (at budget, not over)
+    client.injectContext(TOKENS_1000, "ctx_0");
+    client.injectContext(TOKENS_1000, "ctx_1");
+    client.injectContext(TOKENS_1000, "ctx_2");
+    expect(client.getContextQueue().length).toBe(3);
 
-    // Now add 3 more → should evict 3 oldest
-    client.injectContext("new 1", "new_1");
-    client.injectContext("new 2", "new_2");
-    client.injectContext("new 3", "new_3");
+    // One big ~1500-token item pushes total to ~4500 → must evict ctx_0 (3500
+    // remaining, still over) then ctx_1 (2500 remaining, under budget) to settle.
+    const TOKENS_1500 = "x".repeat(4500); // ceil(4500/3) = 1500 estimated tokens
+    client.injectContext(TOKENS_1500, "ctx_3");
 
     const queue = client.getContextQueue();
-    expect(queue.length).toBe(15);
-    expect(queue[0]!.id).toBe("ctx_3"); // 0,1,2 evicted
-    expect(queue[14]!.id).toBe("new_3");
+    expect(queue.length).toBe(2);
+    expect(queue[0]!.id).toBe("ctx_2");
+    expect(queue[1]!.id).toBe("ctx_3");
 
     const deleteEvents = sentEvents.filter((e) => e.type === "conversation.item.delete");
-    expect(deleteEvents.length).toBe(3);
-    expect(deleteEvents.map((e) => e.item_id)).toEqual(["ctx_0", "ctx_1", "ctx_2"]);
+    expect(deleteEvents.length).toBe(2);
+    expect(deleteEvents.map((e) => e.item_id)).toEqual(["ctx_0", "ctx_1"]);
+  });
+
+  test("images are capped by count (MAX_IMAGE_ITEMS = 2), independent of the text token budget", () => {
+    simulateConnected();
+    // openai/grok have no image support and fall back to text captions —
+    // use a provider that supports input_image so injectImage exercises the
+    // real image-pool eviction path.
+    (client as any)._provider = getProvider("openai15");
+
+    // Small text item stays well under the token budget throughout.
+    client.injectContext("some retrieved context", "ctx_text");
+
+    client.injectImage("aGVsbG8=", "screenshot 1");
+    client.injectImage("aGVsbG8=", "screenshot 2");
+    expect(sentEvents.filter((e) => e.type === "conversation.item.delete").length).toBe(0);
+
+    // 3rd image exceeds MAX_IMAGE_ITEMS=2 → oldest image evicted, text item untouched
+    client.injectImage("aGVsbG8=", "screenshot 3");
+
+    const queue = client.getContextQueue();
+    const images = queue.filter((c) => c.kind === "image");
+    expect(images.length).toBe(2);
+    expect(queue.some((c) => c.id === "ctx_text")).toBe(true);
+
+    const deleteEvents = sentEvents.filter((e) => e.type === "conversation.item.delete");
+    expect(deleteEvents.length).toBe(1);
   });
 
   test("removeContext sends delete event and removes from queue", () => {

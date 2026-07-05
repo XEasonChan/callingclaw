@@ -25,7 +25,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "callingclaw_recent_events",
     description:
-      "Poll recent CallingClaw meeting lifecycle events (meeting.started/ended/summary_ready/prep_ready, voice.*, calendar.updated). Pass the `since` cursor from the previous call to get only new events. Use this to notify the user about meeting activity.",
+      "Poll recent CallingClaw events: meeting lifecycle (started/ended/summary_ready/prep_ready/no_show), voice.*, calendar.updated, and — by default (CALLINGCLAW_EVENTS_LEVEL=live) — live in-meeting activity (research.started/completed, auditor.intent/suggest/fast_lane, computer.task_started/done, stage.documents_updated). Pass the `since` cursor from the previous call to get only new events. Use this to notify the user about meeting activity.",
     inputSchema: {
       type: "object",
       properties: {
