@@ -18,6 +18,7 @@
 
 import type { AgentAdapter } from "../agent-adapter";
 import { InternalJobScheduler, type ScheduledJob } from "../agent-adapter";
+import { recordUsage } from "../modules/cost-meter";
 import {
   OC001_PROMPT, type OC001_Request,
   OC006_PROMPT, type OC006_Request,
@@ -291,6 +292,14 @@ export class HermesAdapter implements AgentAdapter {
     if (exitCode !== 0 && !stdout) {
       throw new Error(`hermes -z exited ${exitCode}: ${stderr.slice(0, 500)}`);
     }
+
+    // CostMeter: `agent` cost. `hermes -z` emits plain text only (no usage), so
+    // record the call with tokens unknown — at least it's counted. Fail-soft.
+    recordUsage({
+      component: "agent",
+      model: opts.model || "hermes",
+      meta: { adapter: "hermes" },
+    });
 
     // `-z` emits plain text only — no JSON envelope to parse.
     return stdout.trim();

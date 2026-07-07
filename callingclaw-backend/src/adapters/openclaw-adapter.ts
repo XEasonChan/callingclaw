@@ -4,6 +4,7 @@
 
 import { InternalJobScheduler, type AgentAdapter, type ScheduledJob } from "../agent-adapter";
 import type { OpenClawBridge } from "../openclaw_bridge";
+import { recordUsage } from "../modules/cost-meter";
 import {
   OC001_PROMPT, type OC001_Request,
   OC002_PROMPT, type OC002_Request,
@@ -26,6 +27,32 @@ export class OpenClawAdapter implements AgentAdapter {
 
   get connected() { return this.bridge.connected; }
 
+  /**
+   * CostMeter (Finding 3b): the OpenClaw path is the DOMINANT `agent` cost when
+   * AGENT_PLATFORM=openclaw, yet the Gateway/OC protocol returns only a text
+   * result — no token counts, no total_cost_usd. So we can only count the CALL
+   * (tokens-unknown), mirroring the plain-text CLI adapters (Hermes/Codex).
+   * Recorded at the adapter method level (never reaching into OpenClawBridge),
+   * attributed via the active meeting / withAttribution() scope. Fail-soft:
+   * metering must never break the underlying task, so the usage is recorded in a
+   * `finally` and the sendTask result/rejection is returned untouched.
+   */
+  private async sendTaskMetered(prompt: string): Promise<string> {
+    try {
+      return await this.bridge.sendTask(prompt);
+    } finally {
+      try {
+        recordUsage({
+          component: "agent",
+          // OpenClaw's model lives in ~/.openclaw/openclaw.json (not exposed by
+          // the bridge); OPENCLAW_MODEL is an optional hint, else undefined.
+          model: process.env.OPENCLAW_MODEL || undefined,
+          meta: { adapter: "openclaw" },
+        });
+      } catch { /* metering must never break a task */ }
+    }
+  }
+
   async connect(): Promise<void> {
     await this.bridge.connect();
   }
@@ -47,7 +74,7 @@ export class OpenClawAdapter implements AgentAdapter {
       userContext: opts.userContext,
       attendees: opts.attendees,
     };
-    return this.bridge.sendTask(OC001_PROMPT(req));
+    return this.sendTaskMetered(OC001_PROMPT(req));
   }
 
   async recallContext(query: string, localContext?: string): Promise<string> {
@@ -57,11 +84,11 @@ export class OpenClawAdapter implements AgentAdapter {
       localContext,
       language: "auto",
     };
-    return this.bridge.sendTask(OC002_PROMPT(req));
+    return this.sendTaskMetered(OC002_PROMPT(req));
   }
 
   async executeTask(instruction: string): Promise<string> {
-    return this.bridge.sendTask(instruction);
+    return this.sendTaskMetered(instruction);
   }
 
   // ── Scheduling (InternalJobScheduler — reliable setTimeout + disk persistence) ──
@@ -95,7 +122,7 @@ export class OpenClawAdapter implements AgentAdapter {
       todos: opts.todos,
       htmlPath: opts.htmlPath,
     };
-    const result = await this.bridge.sendTask(OC004_PROMPT(req));
+    const result = await this.sendTaskMetered(OC004_PROMPT(req));
     return result.toLowerCase().includes("sent");
   }
 
@@ -112,7 +139,7 @@ export class OpenClawAdapter implements AgentAdapter {
       decisions: opts.decisions,
       htmlPath: opts.htmlPath,
     };
-    const result = await this.bridge.sendTask(OC005_PROMPT(req));
+    const result = await this.sendTaskMetered(OC005_PROMPT(req));
     return result.toLowerCase().includes("sent");
   }
 
@@ -132,7 +159,7 @@ export class OpenClawAdapter implements AgentAdapter {
       todo: opts.todo,
       meeting: opts.meeting,
     };
-    return this.bridge.sendTask(OC006_PROMPT(req));
+    return this.sendTaskMetered(OC006_PROMPT(req));
   }
 
   async processTimeline(opts: {
@@ -150,7 +177,7 @@ export class OpenClawAdapter implements AgentAdapter {
       id: "OC-010",
       ...opts,
     };
-    return this.bridge.sendTask(OC010_PROMPT(req));
+    return this.sendTaskMetered(OC010_PROMPT(req));
   }
 
   // ── Activity Feed ──

@@ -20,6 +20,7 @@
 
 import type { AgentAdapter } from "../agent-adapter";
 import { InternalJobScheduler, type ScheduledJob } from "../agent-adapter";
+import { recordUsage } from "../modules/cost-meter";
 import {
   OC001_PROMPT, type OC001_Request,
   OC006_PROMPT, type OC006_Request,
@@ -310,6 +311,30 @@ export class CodexAdapter implements AgentAdapter {
 
     if (exitCode !== 0 && !lastMessage && !stdout) {
       throw new Error(`codex exec exited ${exitCode}: ${stderr.slice(0, 500)}`);
+    }
+
+    // CostMeter: `agent` cost. codex exec has no JSON usage envelope; best-effort
+    // parse token counts from its event log, else record the call with tokens
+    // unknown so it is at least counted. Fail-soft.
+    try {
+      const parseCount = (re: RegExp): number | undefined => {
+        const m = stdout.match(re);
+        if (!m) return undefined;
+        const n = parseInt(m[1]!.replace(/,/g, ""), 10);
+        return Number.isFinite(n) ? n : undefined;
+      };
+      const inTok = parseCount(/input[_\s]*tokens?["'\s:=]+([\d,]+)/i);
+      const outTok = parseCount(/output[_\s]*tokens?["'\s:=]+([\d,]+)/i);
+      const total = parseCount(/(?:total[_\s]*tokens?|tokens?\s+used)["'\s:=]+([\d,]+)/i);
+      recordUsage({
+        component: "agent",
+        model: opts.model || "codex",
+        inputTokens: inTok,
+        outputTokens: outTok,
+        meta: { adapter: "codex", totalTokens: total },
+      });
+    } catch {
+      /* fail-soft */
     }
 
     return lastMessage || stdout.trim();

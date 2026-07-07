@@ -35,6 +35,7 @@
 //   CLAUDE_WARM_WORKER=0.
 
 import { mkdirSync } from "node:fs";
+import { recordUsage } from "../modules/cost-meter";
 import type { AgentAdapter } from "../agent-adapter";
 import { InternalJobScheduler, type ScheduledJob } from "../agent-adapter";
 import {
@@ -188,6 +189,18 @@ export class WarmClaudeWorker {
       p.reject(new Error(`warm worker returned error result (subtype=${ev.subtype ?? "?"}, is_error=${ev.is_error === true})`));
       return;
     }
+    // CostMeter: warm-worker result events carry the same usage + total_cost_usd
+    // as the cold JSON path — record the exact cost (fail-soft).
+    recordUsage({
+      component: "agent",
+      model: this.model,
+      inputTokens: ev?.usage?.input_tokens,
+      outputTokens: ev?.usage?.output_tokens,
+      cacheReadTokens: ev?.usage?.cache_read_input_tokens,
+      cacheCreationTokens: ev?.usage?.cache_creation_input_tokens,
+      costUsd: typeof ev?.total_cost_usd === "number" ? ev.total_cost_usd : undefined,
+      meta: { adapter: "claude-code", path: "warm" },
+    });
     const text = typeof ev.result === "string" ? ev.result : "";
     if (text) p.resolve(text);
     else p.reject(new Error(`warm worker returned empty result (subtype=${ev.subtype ?? "?"})`));
@@ -743,6 +756,18 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     // Parse JSON output format
     try {
       const parsed = JSON.parse(stdout);
+      // CostMeter: the dominant `agent` cost. claude -p --output-format json
+      // reports EXACT total_cost_usd + usage — record it verbatim (fail-soft).
+      recordUsage({
+        component: "agent",
+        model,
+        inputTokens: parsed?.usage?.input_tokens,
+        outputTokens: parsed?.usage?.output_tokens,
+        cacheReadTokens: parsed?.usage?.cache_read_input_tokens,
+        cacheCreationTokens: parsed?.usage?.cache_creation_input_tokens,
+        costUsd: typeof parsed?.total_cost_usd === "number" ? parsed.total_cost_usd : undefined,
+        meta: { adapter: "claude-code", path: "cold" },
+      });
       return parsed.result || parsed.content || parsed.text || stdout;
     } catch {
       return stdout.trim();
