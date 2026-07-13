@@ -3,10 +3,10 @@ import { ActionOrchestrator } from "../../src/modules/action-orchestrator";
 import { SharedContext } from "../../src/modules/shared-context";
 import { EventBus } from "../../src/modules/event-bus";
 
-function setup() {
+function setup(taskTimeoutMs?: number) {
   const ctx = new SharedContext();
   const bus = new EventBus();
-  return { ctx, bus, orch: new ActionOrchestrator(ctx, bus) };
+  return { ctx, bus, orch: new ActionOrchestrator(ctx, bus, taskTimeoutMs) };
 }
 
 test("serializes tasks: one active at a time", async () => {
@@ -87,4 +87,62 @@ test("progress steps surface in SharedContext prompt", async () => {
   });
   await p;
   expect(ctx.getActiveTaskPrompt()).toBe("");
+});
+
+// ── P0.3: executor timeout must never wedge the orchestrator ──
+// A hung executor (stuck fetch / Playwright evaluate that never resolves or
+// rejects) must not leave `_active` set forever — that would fill MAX_QUEUE
+// and kill the orchestrator for the rest of the meeting.
+
+test("hung executor times out: its awaiter gets a timeout result, and _active frees so the next task drains", async () => {
+  const { orch, ctx, bus } = setup(50); // short override so the test doesn't wait 45s
+  const failedEvents: any[] = [];
+  bus.on("task.failed", (e) => failedEvents.push(e));
+
+  let hungTaskAborted = false;
+  const p1 = orch.submit("voice", "hung task", (task) => {
+    task.abort.signal.addEventListener("abort", () => { hungTaskAborted = true; });
+    // Simulates a stuck fetch / Playwright evaluate: this promise never
+    // resolves or rejects on its own.
+    return new Promise<string>(() => {});
+  });
+
+  let secondRan = false;
+  const p2 = orch.submit("voice", "second task", async () => {
+    secondRan = true;
+    return "second done";
+  });
+
+  // The hung task's own awaiter must not be left hanging — it settles with
+  // a timeout outcome instead of waiting forever.
+  const r1 = await p1;
+  expect(r1.toLowerCase()).toContain("timed out");
+  expect(hungTaskAborted).toBe(true); // executor's AbortController was aborted
+  expect(failedEvents.length).toBe(1);
+
+  // The queue must have kept draining: the second task actually ran and
+  // resolved normally — proving no wedge.
+  const r2 = await p2;
+  expect(secondRan).toBe(true);
+  expect(r2).toBe("second done");
+
+  // No task left dangling as "active" after both settle.
+  expect(ctx.activeTask).toBeNull();
+});
+
+test("happy path regression: executor well under the timeout resolves normally, no premature timeout", async () => {
+  const { orch } = setup(50); // same short override — proves it doesn't fire early
+  const r = await orch.submit("voice", "quick task", async () => {
+    await new Promise((res) => setTimeout(res, 10));
+    return "quick done";
+  });
+  expect(r).toBe("quick done");
+});
+
+test("happy path regression: default production timeout does not interfere with a normal executor", async () => {
+  const { orch } = setup(); // no override — exercises the real TASK_EXECUTOR_TIMEOUT_MS default
+  const r1 = await orch.submit("voice", "normal task one", async () => "one done");
+  expect(r1).toBe("one done");
+  const r2 = await orch.submit("voice", "normal task two", async () => "two done");
+  expect(r2).toBe("two done");
 });

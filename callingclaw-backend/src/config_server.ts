@@ -962,10 +962,17 @@ export function startConfigServer(services: Services) {
         return Response.json({ ok: true, id }, { headers });
       }
 
-      // POST /api/voice/respond — Trigger voice model to generate a response
+      // POST /api/voice/respond — Trigger voice model to generate a response.
+      // MUST route through requestDeliberateResponse() (→ VoiceResponseScheduler),
+      // NOT a raw sendEvent("response.create") — the scheduler is the sole
+      // authority for response.create (P1); a raw send here could collide with
+      // an in-flight response and truncate it. `ok` reflects the honest
+      // disposition: true when the trigger fired now OR was safely deferred to
+      // the next idle transition, false when there was no live session or the
+      // request was dropped (debounced/superseded).
       if (url.pathname === "/api/voice/respond" && req.method === "POST") {
-        services.realtime.sendEvent("response.create", {});
-        return Response.json({ ok: true }, { headers });
+        const ok = services.realtime.requestDeliberateResponse();
+        return Response.json({ ok }, { headers });
       }
 
       // ══════════════════════════════════════════════════════════════
