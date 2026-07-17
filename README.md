@@ -290,7 +290,7 @@ CallingClaw ships with an MCP server — 25 tools that let any MCP-compatible ag
 }
 ```
 
-Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, **Hermes**, and any MCP client.
+Works with **Claude Code**, **Cursor**, **Claude Desktop**, **VS Code Copilot**, **ChatGPT**, **Hermes**, **Raven**, and any MCP client.
 
 **Zero-GUI onboarding:** The agent handles everything through conversation — API keys, Google OAuth, macOS permissions, readiness checks. No manual config needed.
 
@@ -312,7 +312,7 @@ See [`mcp/README.md`](mcp/README.md) for full documentation.
 
 ### Event stream for long-running agents
 
-Besides the control-surface MCP above, [`plugins/callingclaw-events`](plugins/callingclaw-events) is a second, event-oriented MCP server (11 tools) for agents that *live alongside* CallingClaw — it buffers meeting lifecycle events (`meeting.started/ended/summary_ready/prep_ready`) so a chat agent can poll `callingclaw_recent_events` and proactively notify you, plus onboarding tools (`callingclaw_onboarding_status`, `callingclaw_request_auth`, `callingclaw_create_meeting`, `callingclaw_scan_claude_projects`).
+Besides the control-surface MCP above, [`plugins/callingclaw-events`](plugins/callingclaw-events) is a second, event-oriented MCP server (11 tools) for agents such as Claude Code, Hermes, and Raven that *live alongside* CallingClaw — it buffers meeting lifecycle events (`meeting.started/ended/summary_ready/prep_ready`) so a chat agent can poll `callingclaw_recent_events` and proactively notify you, plus onboarding tools (`callingclaw_onboarding_status`, `callingclaw_request_auth`, `callingclaw_create_meeting`, `callingclaw_scan_claude_projects`).
 
 ```bash
 bun <repo>/plugins/callingclaw-events/index.ts   # stdio MCP server
