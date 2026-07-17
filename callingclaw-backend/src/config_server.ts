@@ -43,6 +43,7 @@ import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
 import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
+import { handleJapanPricingApi } from "./pricing/japan-token-pricing";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
 
@@ -522,6 +523,11 @@ export function startConfigServer(services: Services) {
 
       if (req.method === "OPTIONS") {
         return new Response(null, { headers });
+      }
+
+      const japanPricingResponse = await handleJapanPricingApi(req, url, headers);
+      if (japanPricingResponse) {
+        return japanPricingResponse;
       }
 
       // ── WebSocket upgrade for /ws/events ──
@@ -3516,12 +3522,24 @@ STEP-BY-STEP FLOW:
         const interrupted = (log.match(/interrupted AI response/g) || []).length;
         const speechStarted = (log.match(/speech_started/g) || []).length;
         const audioDeltas = (log.match(/response\.audio\.d/g) || []).length;
+        let chrome: any = null;
+        try {
+          chrome = services.chromeLauncher ? await services.chromeLauncher.getStatus() : { error: "no_chrome_launcher" };
+        } catch (e: any) {
+          chrome = { error: e.message || "chrome_status_failed" };
+        }
         return Response.json({
           pipeline: pipelineReady ? "ready" : "not_ready",
           capture: { chunks: audioChunks, flowing: audioChunks > 0 },
           playback: { audioDeltas, hasOutput: audioDeltas > 0 },
           echo: { suppressed: echoSuppressed },
           vad: { speechStarted, interrupted },
+          clients: {
+            browserVoice: browserVoiceClients.size,
+            audioBridge: audioBridgeClients.size,
+            recallBridge: recallBridgeClients.size,
+          },
+          chrome,
         }, { headers });
       }
 
