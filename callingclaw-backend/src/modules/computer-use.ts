@@ -15,6 +15,7 @@ import type { ContextSync } from "./context-sync";
 import type { DesktopCaptureProvider } from "../capture/desktop-capture-provider";
 import { CONFIG } from "../config";
 import { OpenClawBridge } from "../openclaw_bridge";
+import { recordUsage } from "./cost-meter";
 
 // ── Screenshot dimensions for API ──
 // Full 1920x1080 PNG ~3-5MB base64 ~500k+ tokens per image.
@@ -326,6 +327,11 @@ export class ComputerUseModule {
     return {
       content,
       stop_reason: msg.tool_calls?.length ? "tool_use" : "end_turn",
+      // Normalize OpenRouter (OpenAI-shaped) usage to Anthropic field names so
+      // the caller records usage uniformly regardless of transport.
+      usage: data.usage
+        ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens }
+        : undefined,
     };
   }
 
@@ -592,6 +598,17 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
       const elapsedMs = Date.now() - turnStart;
       console.log(`[ComputerUse][latency] model=${model} meeting=${isMeeting} step=${step + 1} elapsedMs=${elapsedMs}`);
       this.emitActivity("ai.latency", `${model} turn: ${elapsedMs}ms`, `model=${model} meeting=${isMeeting} step=${step + 1} elapsedMs=${elapsedMs}`);
+
+      // CostMeter: computer-use turn usage (Anthropic stream .usage or normalized
+      // OpenRouter usage). meeting vs off-meeting cost is separable via `model`.
+      recordUsage({
+        component: "computer_use",
+        model,
+        inputTokens: (response as any).usage?.input_tokens,
+        outputTokens: (response as any).usage?.output_tokens,
+        cacheReadTokens: (response as any).usage?.cache_read_input_tokens,
+        cacheCreationTokens: (response as any).usage?.cache_creation_input_tokens,
+      });
 
       // Log what Claude returned
       const contentTypes = response.content.map((b: any) => b.type).join(", ");

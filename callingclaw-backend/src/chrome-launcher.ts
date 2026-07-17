@@ -264,6 +264,19 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   cc._lastNonZeroAt = Date.now();
   cc._cycleCount = 0;
 
+  // ── Audio-health telemetry (read by ChromeLauncher.getAudioHealth via __ccPipeline.health) ──
+  // These are updated live in the capture loop / receiver-cycle logic below.
+  cc._activeReceiverIndex = (typeof cc._activeReceiverIndex === 'number') ? cc._activeReceiverIndex : -1;
+  cc._lastChunkMaxAmp = cc._lastChunkMaxAmp || 0;   // max PCM16 amplitude of most-recent chunk
+  cc._speakerDetected = cc._speakerDetected || false; // ever seen non-silent audio this session
+  // Dedicated REAL-audio timestamp for health reporting. Bumped ONLY where an
+  // actual non-silent PCM chunk is observed (see the three sites below) — NEVER
+  // at pipeline init or by the silence-recovery watchdog (those bump the legacy
+  // cc._lastNonZeroAt, which must stay decoupled from the trust signal so we
+  // never report "healthy"/"Hearing you" while actually silent). 0 = never.
+  cc._lastRealAudioAt = cc._lastRealAudioAt || 0;
+  cc._SILENCE_FLOOR = 100; // amplitude below this is treated as silence
+
   function setupCapture(pc) {
     if (cc.captureActive) return;
     var receivers = pc.getReceivers();
@@ -276,6 +289,7 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       || audioRecvs.find(function(r) { return !cc._triedTrackIds.has(r.track.id); })
       || audioRecvs[0];
     var track = audioRecv.track;
+    cc._activeReceiverIndex = audioRecvs.indexOf(audioRecv); // health telemetry
     cc._triedTrackIds.add(track.id);
 
     // Reset tried set if we've exhausted all receivers (allow full re-scan)
@@ -303,6 +317,9 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       var maxAmp = 0;
       for (var i = 0; i < int16.length; i++) { var a = Math.abs(int16[i]); if (a > maxAmp) maxAmp = a; }
       if (maxAmp > cc.captureMaxAmp) cc.captureMaxAmp = maxAmp;
+      // ── Audio-health telemetry ──
+      cc._lastChunkMaxAmp = maxAmp;
+      if (maxAmp > cc._SILENCE_FLOOR) { cc._speakerDetected = true; cc._lastNonZeroAt = Date.now(); cc._lastRealAudioAt = Date.now(); }
       // Log every 50th chunk (~5s)
       if (cc.captureChunks % 50 === 1) {
         console.log('[CC-Audio] chunk#' + cc.captureChunks + ' maxAmp=' + maxAmp + ' peak=' + cc.captureMaxAmp);
@@ -425,13 +442,19 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
       zoomWorklet.port.onmessage = function(e) {
         cc.captureChunks++;
         var d = e.data;
+        var zMax = 0;
         for (var i = 0; i < d.length; i++) {
           var amp = Math.abs(d[i]);
+          if (amp > zMax) zMax = amp;
           if (amp > cc.captureMaxAmp) cc.captureMaxAmp = amp;
         }
+        // ── Audio-health telemetry ──
+        cc._lastChunkMaxAmp = zMax;
+        if (zMax > cc._SILENCE_FLOOR) { cc._speakerDetected = true; cc._lastNonZeroAt = Date.now(); cc._lastRealAudioAt = Date.now(); }
         sendAudioChunk(d);
       };
       cc.captureActive = true;
+      cc._activeReceiverIndex = -2; // -2 = Zoom destination tap (no RTC receiver index)
       cc.captureSource = 'zoom_destination_tap';
       console.log('[CC-Audio] Pipeline C active — capturing Zoom remote audio from destination tap');
     } catch(e) {
@@ -466,6 +489,10 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
             var amp = 0;
             for (var k = 0; k < d.length; k++) { var ab = Math.abs(d[k]); if (ab > amp) amp = ab; }
             if (amp > evtMaxAmp) evtMaxAmp = amp;
+            // ── Audio-health telemetry ──
+            cc.captureChunks++;
+            cc._lastChunkMaxAmp = amp;
+            if (amp > cc._SILENCE_FLOOR) { cc._speakerDetected = true; cc._lastNonZeroAt = Date.now(); cc._lastRealAudioAt = Date.now(); }
             if (evtChunks % 50 === 1) console.log('[CC-Track] chunk#' + evtChunks + ' maxAmp=' + amp + ' peak=' + evtMaxAmp);
             sendAudioChunk(d);  // Echo suppression applied inside sendAudioChunk
           };
@@ -584,6 +611,22 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     captureActive: function() { return cc.captureActive; },
     captureChunks: function() { return cc.captureChunks; },
     captureMaxAmp: function() { return cc.captureMaxAmp; },
+    // Live audio-health snapshot consumed by ChromeLauncher.getAudioHealth().
+    // Returns a plain JSON-able object (no functions/DOM refs).
+    health: function() {
+      return {
+        captureActive: !!cc.captureActive,
+        captureChunks: cc.captureChunks || 0,
+        lastChunkMaxAmp: cc._lastChunkMaxAmp || 0,
+        peakMaxAmp: cc.captureMaxAmp || 0,
+        // REAL-audio timestamp (NOT the watchdog's cc._lastNonZeroAt) — see init note.
+        lastNonzeroAt: cc._lastRealAudioAt || 0,
+        activeReceiverIndex: (typeof cc._activeReceiverIndex === 'number') ? cc._activeReceiverIndex : -1,
+        receiverCycleCount: cc._cycleCount || 0,
+        speakerDetected: !!cc._speakerDetected,
+        wsState: ws ? ws.readyState : -1,
+      };
+    },
   };
 
   // ── Zoom fallback: inject audio into existing PeerConnection senders ──
@@ -619,6 +662,176 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
   return 'pipeline_ready';
 })()`;
 
+// ── Whole-join retry: pure, unit-testable helpers ────────────────
+//
+// These are extracted as pure functions (no Playwright, no DOM) so the
+// retry/backoff policy can be tested without launching a browser.
+
+/** Result of classifying a join failure summary. */
+export type JoinFailureClass = "terminal" | "retryable";
+
+/** Outcome shape returned by joinGoogleMeet / _joinAttempt. */
+export interface JoinResult {
+  success: boolean;
+  summary: string;
+  steps: string[];
+  state: "in_meeting" | "waiting_room" | "failed";
+}
+
+/** Total number of whole-join attempts (the initial try + retries). */
+export const MAX_JOIN_ATTEMPTS = 3;
+
+/** Backoff schedule (ms) used before each retry; index = attempt number (0-based). */
+export const JOIN_BACKOFF_SCHEDULE_MS = [0, 2000, 6000, 15000] as const;
+
+/** Cap for any backoff delay beyond the explicit schedule. */
+export const JOIN_BACKOFF_CAP_MS = 15000;
+
+/**
+ * Delay (ms) to wait BEFORE the attempt at `attemptIndex` (0-based).
+ *   attemptIndex 0 → 0ms   (first attempt, no wait)
+ *   attemptIndex 1 → 2000ms
+ *   attemptIndex 2 → 6000ms
+ *   attemptIndex 3 → 15000ms
+ *   attemptIndex ≥4 → capped at 15000ms
+ * Pure function — no side effects.
+ */
+export function joinBackoffMs(attemptIndex: number): number {
+  if (!Number.isFinite(attemptIndex) || attemptIndex <= 0) return 0;
+  const i = Math.floor(attemptIndex);
+  if (i < JOIN_BACKOFF_SCHEDULE_MS.length) return JOIN_BACKOFF_SCHEDULE_MS[i] ?? JOIN_BACKOFF_CAP_MS;
+  return JOIN_BACKOFF_CAP_MS;
+}
+
+/**
+ * Classify a join-failure summary as `terminal` (never retry — the meeting
+ * actively rejected us or is gone) or `retryable` (transient — navigation
+ * error, button-not-found, timeout, load race, network/5xx).
+ *
+ * Terminal signals include being rejected/denied/kicked/removed, the meeting
+ * having ended, an expired/invalid code, or access being blocked — retrying
+ * any of these wastes time and can spam the host. Everything else defaults to
+ * retryable. Pure function — case-insensitive substring match.
+ */
+export function classifyJoinFailure(summary: string): JoinFailureClass {
+  const s = (summary || "").toLowerCase();
+  const terminalPatterns = [
+    // Rejected / removed from meeting or waiting room (must fail fast)
+    "rejected", "denied", "declined",
+    "kicked", "removed from", "removed you", "were removed", "you've been removed",
+    "not admitted", "admission denied", "banned", "blocked from",
+    // Meeting no longer joinable
+    "meeting has ended", "meeting ended", "has ended",
+    "code has expired", "expired", "invalid meeting", "invalid code",
+    "cannot access", "access denied", "not allowed", "no access",
+    // Precondition that a retry cannot fix
+    "no page",
+  ];
+  return terminalPatterns.some((p) => s.includes(p)) ? "terminal" : "retryable";
+}
+
+// ── Audio-health: live in-memory state + pure derivation ─────────
+//
+// The audio capture self-check runs inside the page (window.__cc). The
+// ChromeLauncher polls it and keeps a live in-memory snapshot exposed via
+// getAudioHealth() — replacing the old "grep the backend log file" approach.
+
+/** Raw per-poll snapshot read from the in-page audio pipeline (window.__ccPipeline.health()). */
+export interface AudioHealthRaw {
+  captureActive: boolean;
+  captureChunks: number;
+  /** Max PCM16 amplitude (0..32767) of the most-recent captured chunk. */
+  lastChunkMaxAmp: number;
+  /** Running peak amplitude (reset periodically by the in-page silence watchdog). */
+  peakMaxAmp: number;
+  /** Epoch ms of the last non-silent chunk; 0 if never. */
+  lastNonzeroAt: number;
+  /** Index of the RTC receiver in use (-1 none, -2 = Zoom destination tap). */
+  activeReceiverIndex: number;
+  /** Times the watchdog cycled to a different receiver (silence/mute recovery). */
+  receiverCycleCount: number;
+  /** True once any non-silent audio has been captured this session. */
+  speakerDetected: boolean;
+  /** Backend WebSocket readyState from the page (-1 none, 0..3 per WebSocket spec). */
+  wsState: number;
+}
+
+/** Derived, consumer-facing audio-health shape returned by getAudioHealth(). */
+export interface AudioHealth {
+  /** Pipeline instrumentation is live (page reported a snapshot). */
+  active: boolean;
+  /** Capture is active AND non-silent audio was seen within AUDIO_FLOW_WINDOW_MS. */
+  captureFlowing: boolean;
+  /** Max PCM16 amplitude (0..32767) of the most-recent chunk. */
+  lastMaxAmp: number;
+  /** Epoch ms of the last non-silent chunk; 0 if never. */
+  lastNonzeroAudioAt: number;
+  /** RTC receiver index in use (-1 none, -2 Zoom tap). */
+  activeReceiverIndex: number;
+  /** Receiver cycle count (silence/mute recovery). */
+  receiverCycleCount: number;
+  /** True once any non-silent audio has been captured this session. */
+  speakerDetected: boolean;
+  /** Total PCM chunks captured since pipeline activation. */
+  captureChunks: number;
+  /** Backend WS readyState from page (-1 none, 0..3). */
+  wsState: number;
+  /** Epoch ms this snapshot was last refreshed from the page; 0 if never polled. */
+  updatedAt: number;
+}
+
+/** How recently non-silent audio must have arrived for captureFlowing to be true. */
+export const AUDIO_FLOW_WINDOW_MS = 10000;
+
+/**
+ * Derive the consumer-facing AudioHealth from a raw page snapshot at time `now`.
+ * `raw === null` → inactive defaults (no page / pipeline not activated yet).
+ * Pure function — no side effects, unit-testable.
+ */
+export function computeAudioHealth(raw: AudioHealthRaw | null, now: number): AudioHealth {
+  if (!raw) {
+    return {
+      active: false,
+      captureFlowing: false,
+      lastMaxAmp: 0,
+      lastNonzeroAudioAt: 0,
+      activeReceiverIndex: -1,
+      receiverCycleCount: 0,
+      speakerDetected: false,
+      captureChunks: 0,
+      wsState: -1,
+      updatedAt: now,
+    };
+  }
+  // `lastNonzero` is the REAL-audio timestamp (page now sources it from
+  // cc._lastRealAudioAt, not the watchdog's cc._lastNonZeroAt). captureFlowing —
+  // the "Hearing you" trust signal — must reflect genuine audio only:
+  //   • speakerDetected gate → can't be true before ANY non-silent chunk was
+  //     ever seen (kills the post-activation false-positive window).
+  //   • freshness window on the REAL-audio timestamp → goes false during the
+  //     post-silence recovery cycle (which bumps only the watchdog timestamp),
+  //     so the "Recovering audio" state can render; it flips back to true only
+  //     once fresh real audio actually arrives after recovery.
+  const lastNonzero = raw.lastNonzeroAt || 0;
+  const captureFlowing =
+    !!raw.captureActive &&
+    !!raw.speakerDetected &&
+    lastNonzero > 0 &&
+    now - lastNonzero < AUDIO_FLOW_WINDOW_MS;
+  return {
+    active: true,
+    captureFlowing,
+    lastMaxAmp: raw.lastChunkMaxAmp || 0,
+    lastNonzeroAudioAt: lastNonzero,
+    activeReceiverIndex: typeof raw.activeReceiverIndex === "number" ? raw.activeReceiverIndex : -1,
+    receiverCycleCount: raw.receiverCycleCount || 0,
+    speakerDetected: !!raw.speakerDetected,
+    captureChunks: raw.captureChunks || 0,
+    wsState: typeof raw.wsState === "number" ? raw.wsState : -1,
+    updatedAt: now,
+  };
+}
+
 // ── ChromeLauncher class ─────────────────────────────────────────
 
 export class ChromeLauncher {
@@ -629,6 +842,10 @@ export class ChromeLauncher {
   private _googleLoginCache: { loggedIn: boolean; email: string | null; checkedAt: number } | null = null;
   /** Mutex: if a launch is in progress, subsequent callers await the same promise */
   private _launchPromise: Promise<{ port: number }> | null = null;
+
+  /** Live audio-health snapshot (refreshed by the poller while a pipeline is active). */
+  private _audioHealth: AudioHealth = computeAudioHealth(null, 0);
+  private _audioHealthInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts?: { profileDir?: string }) {
     this.profileDir = opts?.profileDir || DEFAULT_PROFILE;
@@ -737,13 +954,13 @@ export class ChromeLauncher {
     if (pages.length > 1) {
       console.log(`[ChromeLauncher] Closing ${pages.length - 1} extra tabs from previous session`);
       for (let i = pages.length - 1; i >= 1; i--) {
-        try { await pages[i].close(); } catch {}
+        try { await pages[i]?.close(); } catch {}
       }
     }
     await page.goto("about:blank");
 
     // Verify init script works
-    const check = await page.evaluate(() => !!(window as any).__cc);
+    const check = await page.evaluate(() => !!(globalThis as any).__cc);
     if (!check) {
       console.warn("[ChromeLauncher] Init script verification failed on about:blank");
     }
@@ -762,6 +979,7 @@ export class ChromeLauncher {
       this._page = null as any;
       this._context = null as any;
       if (this._admissionInterval) this.stopAdmissionMonitor();
+      this.stopAudioHealthMonitor();
       if (this._intentionalContextClose) return;
       console.warn("[ChromeLauncher] Chrome context closed unexpectedly (crash or manual quit)");
       this._onDisconnected?.();
@@ -814,11 +1032,63 @@ export class ChromeLauncher {
     try {
       const result = await this._page.evaluate(AUDIO_PIPELINE_SCRIPT);
       console.log("[ChromeLauncher] Audio pipeline activated:", result);
+      // Start (or keep) the live audio-health poller feeding getAudioHealth().
+      this.startAudioHealthMonitor();
       return result;
     } catch (e: any) {
       console.warn("[ChromeLauncher] Audio pipeline activation failed:", e.message);
       return "error: " + e.message;
     }
+  }
+
+  // ── Audio-health live counters ───────────────────────────────────
+  //
+  // The audio self-check runs inside the page (window.__cc). This poller
+  // reads window.__ccPipeline.health() every few seconds and keeps an
+  // in-memory AudioHealth snapshot. getAudioHealth() returns it synchronously
+  // so the status endpoint no longer needs to grep the backend log file.
+
+  /** Poll interval for the audio-health snapshot (ms). */
+  private static readonly AUDIO_HEALTH_POLL_MS = 3000;
+
+  /** Start the audio-health poller (idempotent — no-op if already running). */
+  private startAudioHealthMonitor(intervalMs = ChromeLauncher.AUDIO_HEALTH_POLL_MS): void {
+    if (this._audioHealthInterval) return;
+    console.log(`[AudioHealth] Monitor started (${intervalMs}ms)`);
+    this._audioHealthInterval = setInterval(async () => {
+      if (!this._page) return;
+      try {
+        const raw = await this._page.evaluate(
+          `(function(){ var p = window.__ccPipeline; if (!p || !p.health) return null; return JSON.stringify(p.health()); })()`,
+        );
+        if (raw) {
+          const parsed = JSON.parse(String(raw)) as AudioHealthRaw;
+          this._audioHealth = computeAudioHealth(parsed, Date.now());
+        }
+      } catch {
+        // Transient (page navigating / evaluate raced a close) — keep last snapshot.
+      }
+    }, intervalMs);
+  }
+
+  /** Stop the audio-health poller and reset the snapshot to inactive defaults. */
+  stopAudioHealthMonitor(): void {
+    if (this._audioHealthInterval) {
+      clearInterval(this._audioHealthInterval);
+      this._audioHealthInterval = null;
+      console.log("[AudioHealth] Monitor stopped");
+    }
+    this._audioHealth = computeAudioHealth(null, Date.now());
+  }
+
+  /**
+   * Live audio-health snapshot for the status endpoint. Synchronous — returns
+   * a copy of the latest polled state (refreshed ~every 3s while a meeting
+   * audio pipeline is active). Before any meeting / after teardown it reports
+   * inactive defaults (active:false, captureFlowing:false).
+   */
+  getAudioHealth(): AudioHealth {
+    return { ...this._audioHealth };
   }
 
   /** Get audio injection status from the page */
@@ -849,9 +1119,26 @@ export class ChromeLauncher {
   // Google Meet Join (replaces playwright-cli joinGoogleMeet)
   // ══════════════════════════════════════════════════════════════
 
+  /** Total whole-join attempts before giving up (see MAX_JOIN_ATTEMPTS). */
+  private static readonly MAX_JOIN_ATTEMPTS = MAX_JOIN_ATTEMPTS;
+
   /**
-   * Join a Google Meet meeting using the Playwright library page directly.
-   * Eliminates playwright-cli coexistence conflict (launchPersistentContext holds Chrome).
+   * Join a Google Meet (or Zoom web-client) meeting, with whole-join
+   * retry + exponential backoff.
+   *
+   * A single attempt already retries WITHIN itself (page reload, agentic DOM
+   * scan, 6× verify loop). This wrapper adds resilience when the entire attempt
+   * resolves state:"failed" for a transient reason (navigation error, join
+   * button not found, verify timeout, network/5xx): it re-attempts up to
+   * MAX_JOIN_ATTEMPTS times with backoff (0s → 2s → 6s, capped 15s).
+   *
+   * Failures are classified (classifyJoinFailure): terminal outcomes
+   * (rejected / denied / kicked / removed / meeting ended / expired code /
+   * access blocked) FAIL FAST and are never retried. A `waiting_room` result
+   * is a legitimate non-failure and returns immediately (the admission monitor
+   * takes over) — it is NOT retried.
+   *
+   * Google Meet behavior within an attempt is unchanged.
    */
   async joinGoogleMeet(
     url: string,
@@ -861,7 +1148,60 @@ export class ChromeLauncher {
       muteMic?: boolean;
       onStep?: (step: string) => void;
     },
-  ): Promise<{ success: boolean; summary: string; steps: string[]; state: "in_meeting" | "waiting_room" | "failed" }> {
+  ): Promise<JoinResult> {
+    if (!this._page) return { success: false, summary: "No page — call launch() first", steps: [], state: "failed" };
+
+    const onStep = opts?.onStep;
+    const allSteps: string[] = [];
+    const wlog = (msg: string) => { allSteps.push(msg); onStep?.(msg); console.log(`[MeetJoin] ${msg}`); };
+
+    let last: JoinResult = { success: false, summary: "join not attempted", steps: [], state: "failed" };
+
+    for (let attempt = 0; attempt < ChromeLauncher.MAX_JOIN_ATTEMPTS; attempt++) {
+      // Backoff before retries (attempt 0 has no delay).
+      const delay = joinBackoffMs(attempt);
+      if (delay > 0) {
+        wlog(`Retry backoff: waiting ${Math.round(delay / 1000)}s before attempt ${attempt + 1}/${ChromeLauncher.MAX_JOIN_ATTEMPTS}...`);
+        await new Promise((r) => setTimeout(r, delay));
+        if (!this._page) return { success: false, summary: "No page — Chrome closed during retry backoff", steps: allSteps, state: "failed" };
+      }
+
+      wlog(`Join attempt ${attempt + 1}/${ChromeLauncher.MAX_JOIN_ATTEMPTS} — ${url}`);
+      last = await this._joinAttempt(url, opts);
+      for (const s of last.steps) allSteps.push(s);
+
+      // Success or waiting room → done (never retry a legitimate outcome).
+      if (last.success || last.state === "waiting_room") {
+        return { ...last, steps: allSteps };
+      }
+
+      // Failed → classify.
+      const cls = classifyJoinFailure(last.summary);
+      wlog(`Attempt ${attempt + 1} failed (${cls}): ${last.summary}`);
+      if (cls === "terminal") {
+        return { ...last, steps: allSteps };
+      }
+      // retryable → loop again if attempts remain.
+    }
+
+    wlog(`All ${ChromeLauncher.MAX_JOIN_ATTEMPTS} join attempts exhausted`);
+    return { ...last, steps: allSteps, summary: `${last.summary} (after ${ChromeLauncher.MAX_JOIN_ATTEMPTS} attempts)` };
+  }
+
+  /**
+   * A single join attempt (the original join logic). Called by joinGoogleMeet's
+   * retry wrapper. Returns state:"failed" with a descriptive summary on failure
+   * so the wrapper can classify terminal vs retryable.
+   */
+  private async _joinAttempt(
+    url: string,
+    opts?: {
+      displayName?: string;
+      muteCamera?: boolean;
+      muteMic?: boolean;
+      onStep?: (step: string) => void;
+    },
+  ): Promise<JoinResult> {
     if (!this._page) return { success: false, summary: "No page — call launch() first", steps: [], state: "failed" };
 
     const page = this._page;
@@ -890,10 +1230,31 @@ export class ChromeLauncher {
           const webClientUrl = `https://app.zoom.us/wc/join/${meetingId}${pwd ? `?pwd=${pwd}` : ""}`;
           log(`Navigating to Zoom Web Client: ${webClientUrl}`);
           await page.goto(webClientUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-          await page.waitForTimeout(8000); // Zoom web client loads slowly (JS bundle + WebRTC init)
+
+          // Hardening: wait for the web client to actually render (name input,
+          // Join button, or an in-meeting toolbar) instead of a blind sleep.
+          // Zoom's SPA bundle + WASM init can take 5–15s; a fixed wait either
+          // wastes time or fires before the DOM exists.
+          const zoomReady = await this._waitForZoomWebClient(page, 25000);
+          log(`Zoom web client: ${zoomReady}`);
+          if (zoomReady === "timeout" || zoomReady === "error") {
+            // Clear, classifiable failure reason (retryable — transient load).
+            return {
+              success: false,
+              summary: "Zoom web client did not load (name/Join controls never appeared)",
+              steps,
+              state: "failed",
+            };
+          }
+          // Enter the display name on the pre-join screen if one is requested.
+          if (zoomReady === "name_required") {
+            const named = await this._fillZoomName(page, displayName);
+            log(`Zoom name entry: ${named}`);
+          }
         } else {
-          // Can't parse URL — try the landing page approach
-          await page.waitForTimeout(3000);
+          // Can't parse URL — try the landing page approach, then wait for the
+          // in-browser client controls to appear (no blind sleep).
+          await page.waitForTimeout(2000);
           const zoomLanding = await page.evaluate(`(() => {
             var els = document.querySelectorAll('a, button, [role="button"]');
             for (var i = 0; i < els.length; i++) {
@@ -907,7 +1268,27 @@ export class ChromeLauncher {
           })()`);
           log(`Zoom landing: ${zoomLanding}`);
           if (String(zoomLanding).includes("clicked")) {
-            await page.waitForTimeout(5000);
+            const zoomReady = await this._waitForZoomWebClient(page, 25000);
+            log(`Zoom web client: ${zoomReady}`);
+            if (zoomReady === "timeout" || zoomReady === "error") {
+              return {
+                success: false,
+                summary: "Zoom web client did not load after landing-page join (controls never appeared)",
+                steps,
+                state: "failed",
+              };
+            }
+            if (zoomReady === "name_required") {
+              const named = await this._fillZoomName(page, displayName);
+              log(`Zoom name entry: ${named}`);
+            }
+          } else {
+            return {
+              success: false,
+              summary: "Zoom 'Join from browser' link not found on landing page",
+              steps,
+              state: "failed",
+            };
           }
         }
       }
@@ -1101,13 +1482,49 @@ export class ChromeLauncher {
           var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"],[aria-label*="Start Video"],[aria-label*="Stop Video"]');
           var hasControls = (micBtn && camBtn) || zoomToolbar;
           if (leaveBtn || callEnd || hasControls) return 'in_meeting';
-          var t = document.body.innerText;
+          var t = document.body.innerText || '';
+          var lower = t.toLowerCase();
+          // Host denial / ejection — TERMINAL (do NOT re-knock). Checked before the
+          // waiting-room test and using phrases that cannot appear on a
+          // waiting-room-only screen ("asking to be let in" / "waiting for someone
+          // to let you in"), so a legitimate waiting room is never mis-flagged.
+          var denialPhrases = [
+            'request was denied', 'request to join was denied', 'denied your request',
+            "you can't join this call", "you can't join this video call", "can't join this call",
+            "you've been removed", 'you were removed', 'you have been removed',
+            'removed from the meeting', 'removed you from', 'not admitted',
+            '请求被拒绝', '拒绝了你的加入请求', '无法加入此通话', '你已被移出', '移出会议'
+          ];
+          for (var d = 0; d < denialPhrases.length; d++) {
+            if (lower.indexOf(denialPhrases[d]) !== -1) return 'denied';
+          }
           if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
           return 'loading';
         })()`);
 
         if (String(state).includes("in_meeting")) {
           log("Joined!");
+
+          // Zoom post-join: dismiss the "Join Audio by Computer" modal so our
+          // virtual mic actually connects (Zoom stays audio-muted otherwise).
+          if (isZoom) {
+            for (let audioRetry = 0; audioRetry < 3; audioRetry++) {
+              const audioJoin = await page.evaluate(`(() => {
+                var all = Array.from(document.querySelectorAll('button, [role="button"]'));
+                var btn = all.find(function(b) {
+                  var t = (b.textContent || '').trim();
+                  var a = (b.getAttribute('aria-label') || '');
+                  return t === 'Join Audio by Computer' || t === 'Join with Computer Audio'
+                    || t === '加入音频' || t === '通过电脑音频加入' || a.indexOf('Computer Audio') !== -1;
+                });
+                if (btn) { btn.click(); return 'audio_joined'; }
+                return 'no_audio_modal';
+              })()`);
+              log(`Zoom audio (attempt ${audioRetry + 1}): ${audioJoin}`);
+              if (audioJoin === "audio_joined") break;
+              await page.waitForTimeout(1200);
+            }
+          }
 
           // Post-join: ensure mic is unmuted (retry — Meet may auto-mute on entry)
           if (!muteMic) {
@@ -1128,6 +1545,13 @@ export class ChromeLauncher {
 
           return { success: true, summary: "Joined meeting — camera off, mic on", steps, state: "in_meeting" };
         }
+        if (String(state).includes("denied")) {
+          // Host denied the "Ask to join" request (or ejected us). This is
+          // terminal — re-knocking just spams the host. Summary contains "denied"
+          // so classifyJoinFailure() → "terminal" and the retry wrapper stops.
+          log("Join request denied by host — terminal, will not retry");
+          return { success: false, summary: "Join request was denied by the host", steps, state: "failed" };
+        }
         if (String(state).includes("waiting_room")) {
           log("In waiting room");
           return { success: false, summary: "In waiting room — waiting for host", steps, state: "waiting_room" };
@@ -1147,6 +1571,81 @@ export class ChromeLauncher {
     } catch (err: any) {
       log(`Error: ${err.message}`);
       return { success: false, summary: `Error: ${err.message}`, steps, state: "failed" };
+    }
+  }
+
+  // ── Zoom web-client helpers (used by _joinAttempt) ───────────────
+
+  /**
+   * Wait for the Zoom web client to render actual controls instead of a blind
+   * sleep. Resolves to:
+   *   "in_meeting"    — meeting toolbar already present
+   *   "name_required" — pre-join name input visible and empty (needs filling)
+   *   "ready_to_join" — a Join button (or filled name input) is present
+   *   "timeout"       — controls never appeared within `timeoutMs`
+   *   "error"         — page.waitForFunction threw for another reason
+   */
+  private async _waitForZoomWebClient(
+    page: any,
+    timeoutMs: number,
+  ): Promise<"in_meeting" | "name_required" | "ready_to_join" | "timeout" | "error"> {
+    try {
+      const handle = await page.waitForFunction(
+        `(() => {
+          // In-meeting toolbar already up?
+          var inMeeting = document.querySelector(
+            '.meeting-client, .footer__inner, .meeting-info-container,' +
+            '[aria-label*="Leave"], [aria-label*="Mute"], [aria-label*="mute" i]'
+          );
+          if (inMeeting) return 'in_meeting';
+          // Pre-join name input?
+          var nameInput = document.querySelector(
+            '#input-for-name, input#inputname, input[aria-label*="name" i], input[placeholder*="name" i]'
+          );
+          // Join button by text?
+          var joinBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(function(b) {
+            var t = (b.textContent || '').trim().toLowerCase();
+            return t === 'join' || t === 'join meeting' || t === 'join audio by computer'
+              || t === '加入' || t === '加入会议' || t === '加入音频';
+          });
+          if (nameInput && (!nameInput.value || nameInput.value.trim() === '')) return 'name_required';
+          if (joinBtn || nameInput) return 'ready_to_join';
+          return false; // keep polling
+        })()`,
+        { timeout: timeoutMs, polling: 500 },
+      );
+      const val = await handle.jsonValue();
+      return val as "in_meeting" | "name_required" | "ready_to_join";
+    } catch {
+      // waitForFunction rejects on timeout — treat as a (retryable) load failure.
+      return "timeout";
+    }
+  }
+
+  /** Fill the Zoom pre-join display-name input. Returns a status string for logging. */
+  private async _fillZoomName(page: any, displayName: string): Promise<string> {
+    try {
+      return String(await page.evaluate(`(() => {
+        var nameInput = document.querySelector(
+          '#input-for-name, input#inputname, input[aria-label*="name" i], input[placeholder*="name" i]'
+        );
+        if (!nameInput) {
+          var inputs = document.querySelectorAll('input[type="text"], input:not([type])');
+          for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].offsetWidth > 0) { nameInput = inputs[i]; break; }
+          }
+        }
+        if (!nameInput) return 'no_name_input';
+        nameInput.focus();
+        var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        if (setter && setter.set) setter.set.call(nameInput, ${JSON.stringify(displayName)});
+        else nameInput.value = ${JSON.stringify(displayName)};
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+        nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+        return 'name_set';
+      })()`));
+    } catch (e: any) {
+      return "error:" + e.message;
     }
   }
 
@@ -1505,6 +2004,9 @@ export class ChromeLauncher {
   async leaveMeeting(): Promise<boolean> {
     if (!this._page) return false;
     const page = this._page;
+
+    // Audio pipeline is torn down when we leave — stop reporting stale health.
+    this.stopAudioHealthMonitor();
 
     try {
       // Find the Leave/Hangup button.
@@ -1997,6 +2499,7 @@ export class ChromeLauncher {
 
   /** Clean shutdown */
   async close(): Promise<void> {
+    this.stopAudioHealthMonitor();
     if (this._context) {
       this._intentionalContextClose = true; // suppress crash-detection callback
       await this._context.close().catch(() => {});

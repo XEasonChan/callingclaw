@@ -29,6 +29,7 @@
 
 import { CONFIG } from "../config";
 import { GeminiProtocolAdapter } from "./gemini-adapter";
+import { recordUsage } from "../modules/cost-meter";
 
 // Load ws npm package at module level (not dynamic require at connection time).
 // MUST use require() — `import from "ws"` gives Bun's built-in shim which ignores proxy.
@@ -754,7 +755,30 @@ export class RealtimeClient {
 
   // ── Token Budget Tracking ────────────────────────────────────────
 
+  /** Model id to attribute voice cost to (provider-specific). */
+  private _voiceModelId(): string {
+    switch (this._provider.name) {
+      case "gemini": return CONFIG.gemini.realtimeModel;
+      case "grok": return "grok-voice";
+      case "openai": return CONFIG.openai.realtimeModel;
+      case "openai15": return CONFIG.openai15.realtimeModel;
+      default: return this._provider.name;
+    }
+  }
+
   private _updateTokenBudget(usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number }) {
+    // CostMeter: record this response's usage as a voice-component event.
+    // NOTE: Realtime/Live APIs report per-response usage where input_tokens is
+    // the (re-processed) context for that turn — so summing across turns tracks
+    // how these stateful APIs bill (minus caching). Voice rates are audio-blended
+    // approximations; treat voice USD as directional, not billing-exact.
+    recordUsage({
+      component: "voice",
+      model: this._voiceModelId(),
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+    });
+
     this._tokenBudget.inputTokens = usage.input_tokens || 0;
     this._tokenBudget.outputTokens = usage.output_tokens || 0;
     this._tokenBudget.totalTokens = usage.total_tokens || (this._tokenBudget.inputTokens + this._tokenBudget.outputTokens);

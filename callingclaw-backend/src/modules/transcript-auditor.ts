@@ -900,6 +900,7 @@ Respond with JSON only:
       const text = await callModel(prompt, {
         model: CONFIG.analysis.model,
         maxTokens: 256,
+        component: "auditor",
       });
       const parsed = parseJSON<{
         action?: string;
@@ -976,6 +977,7 @@ Respond with JSON only:
         prompt: `User wants to click: "${userIntent}"\n\nClickable elements on page:\n${elementList}`,
         maxTokens: 10,
         temperature: 0,
+        component: "auditor",
       });
       clickIndex = parseInt(String(response).trim()) - 1;
     } catch {
