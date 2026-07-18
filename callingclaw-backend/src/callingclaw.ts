@@ -11,6 +11,9 @@ if (CONFIG.audio.sampleRate !== 24000) {
 
 import { NativeBridge } from "./bridge";
 import { SharedContext, VoiceModule, VisionModule, ComputerUseModule, MeetingModule, EventBus, TaskStore, AutomationRouter, ActionOrchestrator, ContextSync, TranscriptAuditor, AUDITOR_MANAGED_TOOLS, BrowserActionLoop, MeetingScheduler, PostMeetingDelivery, ContextRetriever, appendToLiveLog } from "./modules";
+// ReconnectSupervisor is the P1 acting reconnect-supervisor (s1s2 §5). It is not
+// re-exported from ./modules, so import it directly from the voice module.
+import { ReconnectSupervisor } from "./modules/voice";
 import { GoogleCalendarClient } from "./mcp_client/google_cal";
 import { PlaywrightCLIClient } from "./mcp_client/playwright-cli";
 import { ChromeLauncher } from "./chrome-launcher";
@@ -402,16 +405,19 @@ eventBus.on("meeting.started", (data) => {
   // Optional per adapter; failures never block the meeting (cold path remains).
   Promise.resolve(agentAdapter.warmUp?.()).catch((e: any) =>
     console.warn(`[Init] Agent adapter warmUp failed — cold path remains: ${e?.message || e}`));
-  // Only reset transcript if joining a DIFFERENT meeting (not re-joining same one)
-  // This preserves conversation history across multiple join/leave cycles in the same meeting
-  const currentUrl = data?.url || "";
-  const prevUrl = context.workspace?.meetUrl || "";
-  if (currentUrl && prevUrl && currentUrl !== prevUrl) {
-    context.resetTranscript();
+  // ── Cross-meeting isolation (s1s2 §8) ──
+  // Reset the transcript only when joining a genuinely DIFFERENT meeting; a
+  // same-URL re-join preserves conversation history (v2.8.14 behaviour).
+  // Emitters disagree on the payload field name (meetUrl / url / meet_url), so
+  // read the current-meeting URL defensively from all known aliases.
+  // NOTE: the old guard read `context.workspace?.meetUrl`, which never existed
+  // (WorkspaceContext has no meetUrl) — it was always "" and the reset never
+  // fired. SharedContext now owns the current-meeting URL as first-class state.
+  const currentUrl = data?.meetUrl || data?.url || data?.meet_url || "";
+  const transcriptDisposition = context.applyMeetingStart(currentUrl);
+  if (transcriptDisposition === "reset") {
     console.log(`[Init] Transcript reset (new meeting URL: ${currentUrl.slice(-15)})`);
-  } else if (context.transcript.length === 0) {
-    // Fresh start, no need to log
-  } else {
+  } else if (transcriptDisposition === "preserved") {
     console.log(`[Init] Transcript preserved (${context.transcript.length} entries, same meeting)`);
   }
   // Mark meeting active for consumers that must not infer it (ComputerUse model split)
@@ -722,6 +728,20 @@ eventBus.on("meeting.ended", async () => {
   if (voice.connected) {
     voice.resetForNewMeeting();
   }
+
+  // ── Cross-meeting isolation (s1s2 §8) ──
+  // Clear the SharedContext transcript now that this meeting is over. The
+  // summary + markdown export already consumed the transcript before this event
+  // fired (every meeting.ended emitter generates its summary first), so meeting
+  // A's transcript must not survive into meeting B where it would be re-audited
+  // (TranscriptAuditor window) and replayed to the realtime model on reconnect.
+  // voice.resetForNewMeeting() above only clears the realtime context queue, not
+  // this store. meetUrl is intentionally left as the last-known URL so the
+  // different-URL guard still fires even if this reset is ever skipped.
+  if (context.transcript.length > 0) {
+    console.log(`[Init] Transcript reset on meeting.ended (${context.transcript.length} entries cleared)`);
+  }
+  context.resetTranscript();
 });
 eventBus.on("meeting.stopped", () => stopMeetingVisionAndFlush("Recording stopped"));
 
@@ -1103,6 +1123,43 @@ const voice = new VoiceModule({
     });
   },
 });
+
+// ── Reconnect supervisor (ACTING — s1s2 §5, the third authority tier) ──
+// `voice.reconnect_failed` fires only AFTER RealtimeClient has exhausted its own
+// per-drop retries (it owns those). The supervisor then owns the RE-INIT:
+// restart the whole voice session with exponential backoff + a hard cap. The
+// connection generation-token (voice.connectionGeneration) makes this safe — the
+// supervisor captures the generation when it schedules a restart and NO-OPs if it
+// advanced by fire time (the client reconnected on its own → no double-connect,
+// §14 risk 2). On the hard cap it emits `voice.dead` and stops (no restart storm).
+const reconnectSupervisor = new ReconnectSupervisor({
+  getGeneration: () => voice.connectionGeneration,
+  isConnected: () => voice.connected,
+  // Re-init = re-establish the realtime socket. Audio capture (Meet injection /
+  // audio bridge) persists independently, so restarting the voice session is the
+  // correct minimal recovery. client.connect() resets the client's own retry
+  // counter, so per-drop retries resume on the fresh session.
+  restart: async () => {
+    await voice.start(voice.getLastInstructions() || undefined, voice.provider);
+  },
+  onDead: ({ restarts }) => {
+    eventBus.emit("voice.dead", { provider: voice.provider, restarts, timestamp: Date.now() });
+  },
+});
+eventBus.on("voice.reconnect_failed", (data) => {
+  console.error(
+    `[Voice][reconnect-supervisor] voice.reconnect_failed — provider=${data?.provider ?? "unknown"} ` +
+    `at=${data?.timestamp ?? Date.now()}. Client gave up its per-drop retries; ` +
+    `supervisor taking over (backoff + cap, generation-guarded).`,
+  );
+  reconnectSupervisor.onReconnectFailed();
+});
+// Confirmed health (any normal (re)start) resets the supervisor's budget and
+// cancels a pending restart — "reset the retry counter appropriately on health".
+eventBus.on("voice.started", () => { reconnectSupervisor.notifyHealthy(); });
+// Intentional stop: cancel any pending supervised restart so we never resurrect a
+// deliberately-stopped session (the disconnect generation bump also guards this).
+eventBus.on("voice.stopped", () => { reconnectSupervisor.cancel(); });
 
 // Post-tool screenshot feedback: voice model sees the result of its visual actions
 voice.onScreenCapture(async () => {

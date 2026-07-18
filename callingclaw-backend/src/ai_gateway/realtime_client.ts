@@ -345,6 +345,45 @@ const RECONNECT_MAX_RETRIES = 3;
 const RECONNECT_DELAY_MS = 3000;       // 3s between retries
 const RECONNECT_CONTEXT_ENTRIES = 20;   // Replay last 20 transcript entries
 
+// ── Fix 1: session-health confirmation gate ──────────────────────
+// A raw `onopen` proves only that the TCP+WS handshake + auth succeeded — NOT
+// that the session is usable. The failure mode is "auth ok, session rejected":
+// the socket opens (onopen fires), we send session.update, the server rejects it
+// and closes. If `_reconnectRetries` resets on every onopen, RECONNECT_MAX_RETRIES
+// never bites and the client churns forever (3-9s linear backoff) without ever
+// firing `_onReconnectFailed`. So we only reset the retry counter once the session
+// is CONFIRMED HEALTHY: either a positive inbound event (first `session.updated`
+// or first inbound audio delta) OR the socket staying open this long.
+export const SESSION_HEALTH_CONFIRM_MS = 5000; // stable-for-N fallback confirmation
+
+// ── Fix 3: liveness watchdog (ACTING — s1s2 §5) ──────────────────
+// A half-open socket (TCP alive, no frames) never fires `onclose`, so the voice
+// AI can go silently deaf/mute with no recovery. We track the last-inbound-event
+// timestamp; if no inbound frames arrive for LIVENESS_TIMEOUT_MS *while a response
+// or audio is expected*, the socket is a suspected half-open and we force-close it
+// so the normal reconnect path fires (the death this watchdog exists to catch —
+// `onclose` may NEVER arrive, so we drive recovery ourselves).
+// TWO guards keep the action safe (§14 risk 2):
+//   1. the expectation gate (`_responseInFlight || _isSpeaking`) — legitimate
+//      quiet (long user monologue, idle meeting) never trips it; and
+//   2. the connection generation guard — a stale watchdog tick belonging to a
+//      socket that a newer generation already replaced NO-OPs instead of
+//      recycling the healthy newer socket.
+export const LIVENESS_TIMEOUT_MS = 10_000;      // inbound-silence threshold while active
+const LIVENESS_CHECK_INTERVAL_MS = 2_000;       // how often the watchdog samples
+
+// ── Watchdog mode (observe / enforce) — s1s2 §12 safety valve ─────────────
+// Governs whether the liveness watchdog ACTS (force-close a suspected half-open
+// socket → reconnect) or only OBSERVES (log what it WOULD recycle, socket
+// untouched). Read ONCE at module load from the S1S2_WATCHDOG_MODE env var (Bun
+// auto-loads .env), DEFAULT "enforce" — the branch's goal is ACTIVE watchdogs.
+// Setting S1S2_WATCHDOG_MODE=observe reverts to log-only WITHOUT a code change
+// (observe-a-day-then-flip, §12). VoiceModule's response-watchdog reads the same
+// env var independently.
+export type WatchdogMode = "observe" | "enforce";
+const WATCHDOG_MODE: WatchdogMode =
+  process.env.S1S2_WATCHDOG_MODE === "observe" ? "observe" : "enforce";
+
 // ── Incremental Context Injection ────────────────────────────────
 //
 // Layer 3 is TOKEN-budgeted (~3000 tokens per CONTEXT-ENGINEERING.md), with
@@ -409,6 +448,48 @@ export class RealtimeClient {
   private _transcriptContext: string[] = [];  // Recent transcript for context replay
   private _onReconnectFailed?: () => void;
 
+  // ── Connection generation-token (the safety foundation — s1s2 §5 / §14 risk 2) ─
+  // A monotonic integer bumped on EVERY connection-lifecycle transition: a fresh
+  // connect, an auto-reconnect attempt, a Gemini resume attempt, a forced close
+  // (liveness recycle), and an intentional disconnect. Every DEFERRED/async action
+  // that will mutate connection or response state CAPTURES this value when it is
+  // scheduled and NO-OPs at execution time if `captured !== current` — the
+  // connection moved on, so the action is stale. This ONE mechanism is what makes
+  // the three watchdogs safe to ACT: it prevents
+  //   (a) the response-watchdog (VoiceModule) truncating a response that belongs
+  //       to a NEWER generation (a reconnect already superseded it),
+  //   (b) the liveness watchdog recycling a healthy-but-NEWER socket, and
+  //   (c) the reconnect-supervisor (callingclaw) double-connecting against this
+  //       client's own _scheduleReconnect timers.
+  // The increment is single-sourced at the top of _connectInternal() (covers
+  // fresh connect + reconnect + Gemini resume, which all route through it) plus
+  // the forced-close and disconnect paths, so it can never be missed.
+  private _connectionGeneration = 0;
+
+  // Fix 1: session-health confirmation. `_reconnectRetries` is reset to 0 ONLY
+  // after this flips true (positive inbound event or stable-for-N). Re-armed
+  // false on every socket open so each reconnect attempt must re-confirm.
+  private _sessionConfirmedHealthy = false;
+  private _healthConfirmTimer: Timer | null = null;
+
+  // Fix 3: liveness watchdog state. `_lastInboundTs` is bumped on every inbound
+  // frame; `_responseInFlight` marks when the server owes us audio. `_livenessGen`
+  // is the connection generation this watchdog was armed for (captured in
+  // _startLivenessWatchdog) — a tick whose generation no longer matches the
+  // current one belongs to a socket that has been superseded and must NOT recycle
+  // the (newer) live socket. `_livenessClosing` guards against a second
+  // force-close within the same recycle.
+  private _lastInboundTs = 0;
+  private _livenessTimer: Timer | null = null;
+  private _livenessWarned = false;
+  private _responseInFlight = false;
+  private _livenessGen = 0;
+  private _livenessClosing = false;
+  // Observe/enforce valve (s1s2 §12). Defaults to the module-level env read;
+  // overridable per-instance (tests). In "observe" _runLivenessCheck detects +
+  // logs what it WOULD recycle but does NOT force-close the socket.
+  private _livenessMode: WatchdogMode = WATCHDOG_MODE;
+
   // Incremental context injection queue
   private _contextQueue: ContextItem[] = [];
 
@@ -445,6 +526,22 @@ export class RealtimeClient {
 
   get capabilities(): ProviderCapabilities {
     return this._provider.capabilities;
+  }
+
+  /**
+   * The current connection generation-token (see `_connectionGeneration`).
+   * Read by the response-watchdog (VoiceModule) and the reconnect-supervisor
+   * (callingclaw) to detect that the socket lifecycle has moved past the point at
+   * which a deferred action was scheduled → that action must no-op.
+   */
+  get connectionGeneration(): number { return this._connectionGeneration; }
+
+  /** Bump the connection generation on a lifecycle transition. Central so the
+   *  increment can never be missed by a new connect/reconnect/resume/close path. */
+  private _bumpGeneration(reason: string): number {
+    this._connectionGeneration++;
+    console.log(`[Realtime] connection generation → ${this._connectionGeneration} (${reason})`);
+    return this._connectionGeneration;
   }
 
   addTool(tool: RealtimeTool) {
@@ -514,6 +611,13 @@ export class RealtimeClient {
 
   private _connectInternal(instructions: string): Promise<void> {
     const provider = this._provider;
+
+    // Connection-lifecycle transition: a NEW socket is about to open. Bump the
+    // generation here — this is the single point every path (fresh connect,
+    // _scheduleReconnect, _scheduleGeminiResume) funnels through, so any deferred
+    // action captured against an older generation now correctly sees itself as
+    // stale. (See _connectionGeneration.)
+    this._bumpGeneration("connect");
 
     // Gemini: instantiate protocol adapter + append API key to URL
     if (provider.name === "gemini") {
@@ -596,7 +700,27 @@ export class RealtimeClient {
         clearTimeout(connectTimeout);
         console.log(`[Realtime] Connected to ${provider.name} Voice API`);
         this._connected = true;
-        this._reconnectRetries = 0;
+
+        // Fix 1: do NOT reset _reconnectRetries here. A raw onopen only proves the
+        // handshake + auth succeeded, not that the session is usable. Resetting on
+        // every open let an open-then-immediately-die socket churn forever without
+        // hitting RECONNECT_MAX_RETRIES. Retries reset only once the session is
+        // CONFIRMED HEALTHY (see _confirmSessionHealthy): a positive inbound event
+        // or the stable-for-N fallback timer armed just below.
+        this._sessionConfirmedHealthy = false;
+        this._lastInboundTs = Date.now();
+        if (this._healthConfirmTimer) clearTimeout(this._healthConfirmTimer);
+        this._healthConfirmTimer = setTimeout(() => {
+          if (this.ws === sock && this._connected) {
+            console.log(`[Realtime] Session stable for ${SESSION_HEALTH_CONFIRM_MS}ms — confirming healthy (${provider.name})`);
+            this._confirmSessionHealthy();
+          }
+        }, SESSION_HEALTH_CONFIRM_MS);
+
+        // Fix 3: begin the (acting, generation-guarded) liveness watchdog for
+        // this socket. It captures the current generation so a stale tick can't
+        // recycle a newer socket.
+        this._startLivenessWatchdog();
 
         // Use provider's default voice and VAD (no more hardcoded ternaries)
         const voice = provider.defaultVoice;
@@ -631,6 +755,10 @@ export class RealtimeClient {
 
       this.ws.onmessage = (event: MessageEvent) => {
         if (this.ws !== sock) return;
+        // Fix 3: any inbound frame proves the socket is live (truest liveness
+        // signal — includes Gemini keepalives and frames that parse to nothing).
+        this._lastInboundTs = Date.now();
+        this._livenessWarned = false;
         try {
           const data = typeof event.data === "string" ? event.data : String(event.data);
 
@@ -673,6 +801,11 @@ export class RealtimeClient {
         }
         console.log(`[Realtime] Disconnected from ${provider.name} (code: ${event.code}, reason: ${event.reason || "none"}, wasClean: ${event.wasClean})`);
         this._connected = false;
+        // Socket is gone: tear down per-socket watchdogs and clear the
+        // in-flight flag so a stale value can't trip the liveness log later.
+        this._stopLivenessWatchdog();
+        if (this._healthConfirmTimer) { clearTimeout(this._healthConfirmTimer); this._healthConfirmTimer = null; }
+        this._responseInFlight = false;
 
         // Auto-reconnect if not intentional.
         if (!this._intentionalClose) {
@@ -702,6 +835,23 @@ export class RealtimeClient {
       }
     } else {
       console.log(`[Realtime] Event: ${parsed.type}`);
+    }
+
+    // Fix 1: confirm session health on the first POSITIVE inbound event. An
+    // `error` event does NOT confirm (a rejected session emits error + close,
+    // which must NOT reset the retry cap). session.updated = server accepted our
+    // session config; response.audio.delta = it is actively producing audio.
+    if (!this._sessionConfirmedHealthy &&
+        (parsed.type === "session.updated" || parsed.type === "response.audio.delta")) {
+      this._confirmSessionHealthy();
+    }
+
+    // Fix 3: track whether the server currently owes us frames, so the liveness
+    // watchdog only warns when inbound silence is actually anomalous.
+    if (parsed.type === "response.created") {
+      this._responseInFlight = true;
+    } else if (parsed.type === "response.done") {
+      this._responseInFlight = false;
     }
 
     // Dispatch to handlers using normalized event name
@@ -841,11 +991,31 @@ export class RealtimeClient {
       return;
     }
 
+    // Only one reconnect timer in flight at a time — prevents overlapping
+    // reconnect attempts if _scheduleReconnect is entered twice before firing.
+    if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+
     this._reconnectRetries++;
     const delay = RECONNECT_DELAY_MS * this._reconnectRetries; // Linear backoff
     console.log(`[Realtime] Reconnecting to ${this._provider.name} in ${delay}ms (attempt ${this._reconnectRetries}/${RECONNECT_MAX_RETRIES})`);
 
+    // Fix 2: a fresh reconnect opens a BRAND-NEW server session — the accumulated
+    // token accounting from the dead session is stale. Re-baseline so a resumed
+    // "critical" warningLevel can't immediately force-evict Layer-3 context in the
+    // new session. (Gemini RESUME restores server-side state, so
+    // _scheduleGeminiResume deliberately does NOT re-baseline — see below.)
+    this._resetTokenBudget();
+
     this._reconnectTimer = setTimeout(async () => {
+      // Nit (tighten): null the fired timer BEFORE the await. Once a timer fires
+      // its handle is inert, but leaving `_reconnectTimer` non-null across the
+      // `await _connectInternal` below left the state dishonest — a concurrent
+      // `_scheduleReconnect` (e.g. a late onclose during the connect) would
+      // clearTimeout() an already-fired handle while believing it canceled a
+      // pending reconnect. Nulling here keeps `_reconnectTimer` truthful ("no
+      // scheduled reconnect") for the whole async body; the connection
+      // generation-token remains the primary guard against a racing double-connect.
+      this._reconnectTimer = null;
       try {
         // Reconnect with clean Layer 0 instructions (no transcript stuffing).
         // Context is restored via _replayContextQueue() after session.updated.
@@ -895,9 +1065,16 @@ export class RealtimeClient {
       return;
     }
 
+    // Single resume timer in flight at a time (mirrors _scheduleReconnect).
+    if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+
     this._reconnectRetries++;
     const delay = RECONNECT_DELAY_MS * this._reconnectRetries;
     console.log(`[Realtime] Gemini session resume in ${delay}ms (attempt ${this._reconnectRetries}/${RECONNECT_MAX_RETRIES}, handle: ${this._geminiSessionHandle.substring(0, 12)}...)`);
+
+    // Fix 2: NO token-budget re-baseline here. A Gemini RESUME restores the
+    // server-side session (context window carries over), so its accumulated token
+    // usage is still valid — zeroing it would under-report and defeat compaction.
 
     this._reconnectTimer = setTimeout(async () => {
       try {
@@ -919,6 +1096,155 @@ export class RealtimeClient {
     }, delay);
   }
 
+  // ── Fix 1: session-health confirmation ───────────────────────────
+  //
+  // The ONLY place (besides a fresh connect()) that resets `_reconnectRetries`.
+  // Called from _dispatchEvent on the first positive inbound event and from the
+  // stable-for-N fallback timer armed in onopen. Idempotent per socket.
+  private _confirmSessionHealthy() {
+    if (this._sessionConfirmedHealthy) return;
+    this._sessionConfirmedHealthy = true;
+    if (this._reconnectRetries > 0) {
+      console.log(`[Realtime] Session confirmed healthy — resetting reconnect retries (was ${this._reconnectRetries}, ${this._provider.name})`);
+    }
+    this._reconnectRetries = 0;
+    if (this._healthConfirmTimer) {
+      clearTimeout(this._healthConfirmTimer);
+      this._healthConfirmTimer = null;
+    }
+  }
+
+  // ── Fix 2: token-budget re-baseline ──────────────────────────────
+  //
+  // Reset token accounting to a clean baseline. Called on a FRESH reconnect
+  // (new server session); NOT on a Gemini resume (server-side state carries over).
+  private _resetTokenBudget() {
+    this._tokenBudget = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      contextCapacity: TOTAL_CONTEXT_TOKENS,
+      usagePercent: 0,
+      warningLevel: "ok",
+      responsesTracked: 0,
+    };
+  }
+
+  // ── Fix 3: liveness watchdog (ACTING) ────────────────────────────
+
+  private _startLivenessWatchdog() {
+    this._stopLivenessWatchdog();
+    this._lastInboundTs = Date.now();
+    this._livenessWarned = false;
+    this._livenessClosing = false;
+    // Capture the generation THIS watchdog is armed for. onopen runs after
+    // _connectInternal bumped the generation, so this is the current socket's gen.
+    // A later tick whose generation no longer matches belongs to a superseded
+    // socket and must not recycle the live one.
+    this._livenessGen = this._connectionGeneration;
+    this._livenessTimer = setInterval(() => this._runLivenessCheck(), LIVENESS_CHECK_INTERVAL_MS);
+  }
+
+  private _stopLivenessWatchdog() {
+    if (this._livenessTimer) {
+      clearInterval(this._livenessTimer);
+      this._livenessTimer = null;
+    }
+  }
+
+  /**
+   * ACTING liveness check. Returns true iff it detected the half-open signature
+   * this call (and, when un-superseded, force-closed → reconnect). Detects (once
+   * per silent episode) when the socket is connected, a response/audio is
+   * expected, yet no inbound frames have arrived for LIVENESS_TIMEOUT_MS.
+   *
+   * Two safety guards (§5 / §14 risk 2):
+   *   • expectation gate (`_responseInFlight || _isSpeaking`) — legitimate quiet
+   *     (long user monologue, no inbound) never trips it;
+   *   • GENERATION guard — a tick whose captured `_livenessGen` no longer equals
+   *     the current `_connectionGeneration` belongs to a socket a newer generation
+   *     already replaced → NO-OP (never recycle a healthy newer socket).
+   *
+   * Exposed (name-mangled private) for unit testing; the interval calls it with
+   * the default `now`.
+   */
+  private _runLivenessCheck(now: number = Date.now()): boolean {
+    if (!this._connected || this._intentionalClose) return false;
+    // GENERATION guard: this watchdog belongs to the socket that was live when it
+    // was armed. If the connection moved on (reconnect / resume / another
+    // force-close), recycling now would kill a healthy NEWER socket → step aside.
+    if (this._connectionGeneration !== this._livenessGen) return false;
+    if (this._livenessClosing) return false; // recycle already in progress
+    // "response/audio is expected" — the server owes us frames right now. Without
+    // this gate a long user monologue (no inbound) would false-positive.
+    const expected = this._responseInFlight || this._isSpeaking;
+    if (!expected) {
+      this._livenessWarned = false;
+      return false;
+    }
+    const silentMs = now - this._lastInboundTs;
+    if (silentMs <= LIVENESS_TIMEOUT_MS) return false;
+    if (this._livenessWarned) return false; // one detection per silent episode
+    this._livenessWarned = true;
+
+    // OBSERVE valve (s1s2 §12): detected + logged, but DO NOT recycle. Lets a day
+    // of dogfooding surface false positives (a healthy-but-quiet socket) BEFORE
+    // flipping to enforce, without a code change (S1S2_WATCHDOG_MODE=observe).
+    if (this._livenessMode !== "enforce") {
+      console.warn(
+        `[Realtime] LIVENESS (observe): WOULD recycle — no inbound frames for ${silentMs}ms ` +
+        `while a response/audio was expected (provider=${this._provider.name}, ` +
+        `speaking=${this._isSpeaking}, responseInFlight=${this._responseInFlight}). ` +
+        `Log only, not acting.`
+      );
+      return true;
+    }
+
+    console.warn(
+      `[Realtime] LIVENESS: no inbound frames for ${silentMs}ms ` +
+      `while a response/audio was expected (provider=${this._provider.name}, ` +
+      `speaking=${this._isSpeaking}, responseInFlight=${this._responseInFlight}). ` +
+      `Suspected half-open socket — recycling.`
+    );
+    this._forceCloseForLiveness();
+    return true;
+  }
+
+  /**
+   * Force-close the (suspected half-open) socket and drive the reconnect.
+   *
+   * AUTHORITY (§5 three-tier): recycling the socket is RealtimeClient's job
+   * alone. A half-open socket may NEVER fire `onclose` — the exact death the
+   * liveness watchdog exists to catch — so we cannot rely on onclose to trigger
+   * reconnect; we drive it ourselves. To avoid a DOUBLE reconnect if the socket's
+   * onclose DOES later fire, we DETACH `this.ws` first (the onclose identity
+   * guard then ignores the stale socket, exactly as the connect-timeout path does).
+   * Bumping the generation immediately invalidates any same-generation guarded
+   * action (a second liveness tick, or the response-watchdog for a response that
+   * lived on this dying socket).
+   */
+  private _forceCloseForLiveness() {
+    if (this._livenessClosing) return;
+    this._livenessClosing = true;
+    this._bumpGeneration("liveness-force-close");
+    this._stopLivenessWatchdog();
+    this._connected = false;
+    this._responseInFlight = false;
+    this._livenessWarned = false;
+    if (this._healthConfirmTimer) { clearTimeout(this._healthConfirmTimer); this._healthConfirmTimer = null; }
+    // Detach the dying socket so its late onclose (if any) is ignored → no double
+    // reconnect. Then close it best-effort.
+    const stale = this.ws;
+    this.ws = null as any;
+    try { stale?.close(); } catch {}
+    // Drive recovery — half-open means onclose won't come. Only when not an
+    // intentional teardown (mirrors the onclose reconnect branch).
+    if (!this._intentionalClose) {
+      if (this._provider.name === "gemini") this._scheduleGeminiResume();
+      else this._scheduleReconnect();
+    }
+  }
+
   // ── Event Handlers ───────────────────────────────────────────────
 
   on(eventType: string, handler: EventHandler) {
@@ -927,44 +1253,58 @@ export class RealtimeClient {
     this.handlers.set(eventType, list);
   }
 
-  private _lastResponseCreateTs = 0;
-  private _pendingResponseCreate: any | null = null;  // Queued response.create waiting for speech to finish
+  // Speaking flag — set by VoiceModule when the audio state changes. Retained
+  // ONLY as a liveness signal (Fix 3, _runLivenessCheck). It no longer gates
+  // response.create: see the note in sendEvent().
   private _isSpeaking = false;
 
-  /** Set by VoiceModule when audio state changes */
+  /** Set by VoiceModule when audio state changes (liveness signal only) */
   setSpeaking(speaking: boolean) { this._isSpeaking = speaking; }
 
-  /** Flush pending response.create — call when audio state leaves "speaking" */
-  flushPendingResponse() {
-    if (this._pendingResponseCreate) {
-      const pending = this._pendingResponseCreate;
-      this._pendingResponseCreate = null;
-      console.log(`[Realtime] Flushing queued response.create`);
-      this.sendEvent("response.create", pending);
-    }
+  /**
+   * Fix #2: VoiceModule's response-watchdog calls this when it RECOVERS a stuck
+   * response — one that never received an inbound `response.done` (e.g. a
+   * barge-in `response.cancel` for which the server never sent `response.done`).
+   * The two watchdogs otherwise share NO "the response is resolved" signal: the
+   * response-watchdog resets the VoiceModule scheduler gate, but the client's
+   * `_responseInFlight` would stay stuck true, keeping the liveness expectation
+   * gate open and letting a normal quiet gap force-close a HEALTHY socket. This
+   * clears it so the two agree. Idempotent / safe to call redundantly.
+   */
+  notifyResponseResolved() {
+    this._responseInFlight = false;
   }
 
   sendEvent(type: string, data: any = {}) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
 
-    // Guard response.create — the main source of audio truncation bugs
+    // ── response.create gate REMOVED (P1 STEP 1: single-owned response gate) ──
+    // RealtimeClient no longer independently gates/debounces/queues
+    // response.create. The SOLE authority for the response.create DECISION is
+    // now VoiceResponseScheduler (owned by VoiceModule, see modules/voice.ts):
+    // it owns acceptance, the single pending slot, the debounce, and the honest
+    // disposition. This layer only provides the RAW send + marks that inbound
+    // frames are now expected (for the Fix-3 liveness watchdog). The old dual
+    // gate — VoiceModule._responseActive + a *second* RealtimeClient
+    // debounce/_isSpeaking/_pendingResponseCreate — could disagree (caller told
+    // "sent" while it was only queued; debounce silently dropping a distinct
+    // payload while reporting success; two competing pending slots overwriting
+    // each other). Collapsing to one authority removes that class of bug.
     if (type === "response.create") {
-      const now = Date.now();
-      // Source tracking: log where this came from (helps debug truncation)
+      // Source tracking: log where this came from (helps debug truncation).
       const stack = new Error().stack?.split("\n").slice(2, 4).map(l => l.trim().replace(/^at /, "")).join(" ← ") || "unknown";
       console.log(`[Realtime] response.create from: ${stack}`);
-      // Debounce: skip if <500ms since last
-      if (now - this._lastResponseCreateTs < 500) {
-        console.log(`[Realtime] response.create debounced (${now - this._lastResponseCreateTs}ms)`);
-        return true;
-      }
-      // Queue if speaking
-      if (this._isSpeaking) {
-        this._pendingResponseCreate = data;
-        console.log(`[Realtime] response.create queued (AI is speaking)`);
-        return true;
-      }
-      this._lastResponseCreateTs = now;
+      // Fix 3: we asked the server to produce a response — inbound frames are now
+      // expected. Cleared on inbound response.done (see _dispatchEvent).
+      this._responseInFlight = true;
+    } else if (type === "response.cancel") {
+      // Fix #2: a barge-in cancels the in-progress response. The server may NEVER
+      // send the matching inbound `response.done` for a cancelled response, so we
+      // clear the in-flight expectation HERE. Otherwise `_responseInFlight` stays
+      // stuck true, keeps the liveness watchdog's expectation gate
+      // (`_responseInFlight || _isSpeaking`) open, and a normal ≥LIVENESS_TIMEOUT_MS
+      // quiet gap after the barge-in force-closes a perfectly HEALTHY socket.
+      this._responseInFlight = false;
     }
 
     // Gemini: route through protocol adapter for structural transform
@@ -1282,10 +1622,25 @@ export class RealtimeClient {
 
   disconnect() {
     this._intentionalClose = true;
+    // Connection-lifecycle transition: an intentional teardown. Bumping the
+    // generation lets the reconnect-supervisor's guard see that the socket moved
+    // on, so a restart it had scheduled before the stop NO-OPs (never resurrect a
+    // session the caller deliberately stopped).
+    this._bumpGeneration("disconnect");
+    this._livenessClosing = false;
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
     }
+    // Tear down the per-socket watchdogs (Fix 1 + Fix 3) so a deliberate
+    // teardown leaves no dangling timers.
+    this._stopLivenessWatchdog();
+    if (this._healthConfirmTimer) {
+      clearTimeout(this._healthConfirmTimer);
+      this._healthConfirmTimer = null;
+    }
+    this._responseInFlight = false;
+    this._livenessWarned = false;
     this.ws?.close();
     this._connected = false;
     // A new session must not inherit the previous one's state: a stale

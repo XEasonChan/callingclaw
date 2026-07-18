@@ -14,7 +14,8 @@
     "eval:tool": "bun eval/run.ts --suite tool",
     "eval:auditor": "bun eval/run.ts --suite auditor",
     "eval:export": "bun eval/run.ts --export",
-    "check": "bun scripts/check-wiring.ts"
+    "check": "bun scripts/check-wiring.ts",
+    "check:s1s2-tsc": "bun scripts/check-s1s2-tsc.ts"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^14.12.3",

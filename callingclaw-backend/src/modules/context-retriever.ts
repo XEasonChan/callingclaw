@@ -106,6 +106,10 @@ export class ContextRetriever {
   // ── Retrieved context accumulator ──
   private _retrievedContexts: RetrievedContext[] = [];
 
+  // Monotonic per-dispatch sequence for unique DeliberateResult ids (P1 STEP 3).
+  // Guards same-millisecond concurrent deliveries from colliding on id.
+  private _retrievalSeq = 0;
+
   // ── Per-meeting knowledge dirs (from prep brief folderPaths) ──
   // Resolved lazily from the current prep brief so folders referenced by the
   // meeting prep become searchable for that meeting only. Reset on
@@ -282,10 +286,16 @@ export class ContextRetriever {
     this._charsSinceLastAnalysis = 0;
 
     const startTs = Date.now();
+    // Turn-lease clock stamped AT DISPATCH (analysis start). Retrieval takes
+    // 6-13s; the sink compares this to the CURRENT user-turn id when results
+    // land to decide speak-now vs inject-silent vs drop (P1 STEP 3). Captured
+    // once here so the cache-hit (<1ms) and search (slow) paths share it.
+    const sourceTurnId = this.voice?.userTurnId;
 
     try {
       const entries = this.context.getRecentTranscript(20);
       if (entries.length < 2) return;
+      const lastUserText = entries.filter((e) => e.role === "user").pop()?.text || "";
 
       // ── Layer 1: Topic Classification (cheap, always runs) ──
       const topicResult = await this.classifyTopic(entries);
@@ -304,10 +314,11 @@ export class ContextRetriever {
         // ── Same topic: try cache if user asked a question ──
         if (hadQuestion && this._topicCache.has(this._currentTopic)) {
           const cached = this._topicCache.get(this._currentTopic)!;
-          const lastUserText = entries.filter(e => e.role === "user").pop()?.text || "";
           const cacheHits = this.searchCache(cached, lastUserText);
           if (cacheHits.length > 0) {
-            this.injectIntoVoice(cacheHits, { answeredQuestion: true });
+            this.injectIntoVoice(cacheHits, {
+              answeredQuestion: true, dispatchedAt: startTs, sourceTurnId, sourceUtterance: lastUserText,
+            });
             console.log(`[ContextRetriever] Cache hit: ${cacheHits.length} results for question in "${this._currentTopic.slice(0, 30)}" (<1ms)`);
             this.eventBus.emit("retriever.cache_hit", {
               topic: this._currentTopic,
@@ -368,7 +379,9 @@ export class ContextRetriever {
       // ── P1: Cache results under current topic for follow-up questions ──
       this.cacheForTopic(topicResult.topic, results);
 
-      this.injectIntoVoice(results, { answeredQuestion: hadQuestion });
+      this.injectIntoVoice(results, {
+        answeredQuestion: hadQuestion, dispatchedAt: startTs, sourceTurnId, sourceUtterance: lastUserText,
+      });
 
       const totalMs = Date.now() - startTs;
       console.log(
@@ -1178,10 +1191,16 @@ RULES:
   // Step 5: Inject into Voice AI
   // ══════════════════════════════════════════════════════════════
 
-  private injectIntoVoice(newContexts: RetrievedContext[], opts?: { answeredQuestion?: boolean }) {
+  private injectIntoVoice(
+    newContexts: RetrievedContext[],
+    opts?: { answeredQuestion?: boolean; dispatchedAt?: number; sourceTurnId?: number; sourceUtterance?: string },
+  ) {
     if (!this.voice?.connected || !this.meetingPrepSkill.currentBrief) return;
 
-    // Inject context data as persistent liveNotes (these stay in context)
+    // ── Side effects (PRESERVED, orthogonal to the return path) ──
+    // Inject context data as persistent liveNotes (Layer-2 mission memory —
+    // these stay in context, injected via pushContextUpdate). This is the
+    // actual CONTENT injection; it is NOT the voice-delivery/return path.
     for (const ctx of newContexts) {
       const note = `[CONTEXT] ${ctx.query}: ${ctx.content}`;
       this.meetingPrepSkill.addLiveNote(note);
@@ -1196,24 +1215,47 @@ RULES:
       }
     }
 
+    // ── Voice-DELIVERY path: the ONE unified sink (P1 STEP 3, §4.4) ──
+    // Replaces the ad-hoc `speakWithInstruction` (answered question) and
+    // `[CONTEXT_HINT]` injectContext (background hint). The content itself is
+    // already in Layer-2/3 via the liveNotes above, so this envelope carries a
+    // lean marker (not the body — no double-inject) plus the presentation intent:
+    //   • answered pending question → speak:"proactive". The "follow up NOW … else
+    //     stay silent" imperative is passed as an EPHEMERAL one-turn `instruction`
+    //     (response.create.instructions) — NOT persisted to Layer 3, so it can no
+    //     longer linger and re-fire on a later turn. On top of that, the sink's
+    //     DETERMINISTIC turn-lease still gates it: fresh → speaks the late
+    //     follow-up; topic moved on → downgraded to silent inject; long-stale →
+    //     dropped. (The imperative used to be the persisted `summary` — that is
+    //     the bug this restores to a guarded one-turn instruction, §4.2/§4.3.)
+    //   • background hint → speak:"silent". Inject-only; the model weaves it in
+    //     on its next natural turn (the [CONTEXT_HINT] behaviour).
     const topicSummary = newContexts.map((c) => c.query).join(", ");
+    const answered = !!opts?.answeredQuestion;
+    const dispatchedAt = opts?.dispatchedAt ?? Date.now();
+    // The concrete facts already reached Layer-2/3 via the liveNotes above. For
+    // the answered case the persisted `summary` is now only a lean NON-imperative
+    // marker; the imperative rides `instruction` (ephemeral). The silent hint
+    // keeps its soft mention-if-relevant guidance (it never triggers a response,
+    // so it cannot re-fire).
+    const summary = answered
+      ? `Background information is now available about: ${topicSummary}.`
+      : `You just learned relevant information about: ${topicSummary}. If it connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的…" or "that reminds me, we discussed…". If it is not relevant right now, ignore this.`;
+    const instruction = answered
+      ? `If a question about ${topicSummary} was just asked and you answered vaguely or said you'd check, follow up NOW with the concrete answer in one or two sentences. If you already answered it or the topic has moved on, stay silent.`
+      : undefined;
+    const disposition = this.voice.deliverDeliberateResult({
+      id: `retrieval_${dispatchedAt}_${++this._retrievalSeq}`,
+      kind: "retrieval",
+      summary,
+      sourceUtterance: opts?.sourceUtterance || topicSummary,
+      sourceTurnId: opts?.sourceTurnId,
+      dispatchedAt,
+      speak: answered ? "proactive" : "silent",
+      instruction,
+    });
 
-    if (opts?.answeredQuestion && typeof (this.voice as any).speakWithInstruction === "function") {
-      // Late-answer speak-back: retrieval takes 6-13s, so by the time results
-      // land the model has usually already answered ("I'm not sure"). Trigger
-      // a one-turn follow-up instead of letting the retrieval go to waste.
-      (this.voice as any).speakWithInstruction(
-        `You now have background information about: ${topicSummary}. If a question on this was just asked and you answered vaguely or said you'd check, follow up NOW with the concrete answer in one or two sentences. If your earlier answer was already complete, stay silent.`
-      );
-    } else {
-      // One-shot conversational hint — injected directly via conversation.item.create.
-      // NOT added to liveNotes (ephemeral, no baggage). The realtime model sees this
-      // once and can naturally weave it into conversation if relevant.
-      const hint = `[CONTEXT_HINT] You just learned relevant information about: ${topicSummary}. If this connects to the current discussion, naturally mention it — e.g., "刚好联想到之前提到的..." or "that reminds me, we discussed...". If it's not relevant right now, ignore this hint.`;
-      this.voice.injectContext(hint);
-    }
-
-    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI${opts?.answeredQuestion ? " (question follow-up requested)" : ""}`);
+    console.log(`[ContextRetriever] Injected ${newContexts.length} contexts into Voice AI (${answered ? "question follow-up" : "hint"} → ${disposition})`);
   }
 
   // ══════════════════════════════════════════════════════════════
