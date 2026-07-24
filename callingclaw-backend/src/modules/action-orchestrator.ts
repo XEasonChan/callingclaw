@@ -56,6 +56,23 @@ const COALESCE_WINDOW_MS = 10_000;
 const HEARTBEAT_INTERVAL_MS = 6_000;
 const HEARTBEAT_MIN_RUNTIME_MS = 4_000;
 const MAX_QUEUE = 5;
+/**
+ * Upper bound on a single executor await (`_runExecutor`'s `Promise.race`).
+ * A stuck fetch / hung Playwright evaluate must never wedge `_active` forever —
+ * that would fill MAX_QUEUE and kill the orchestrator for the rest of the
+ * meeting. See docs/s1s2-conversation-architecture.md P0.3.
+ */
+const TASK_EXECUTOR_TIMEOUT_MS = 45_000;
+
+/** Internal sentinel thrown when the timeout wins the race — never surfaced
+ *  to callers, only used inside `_runExecutor` to distinguish a timeout from
+ *  a genuine executor rejection. */
+class TaskTimeoutError extends Error {
+  constructor(taskId: string, timeoutMs: number) {
+    super(`task ${taskId} exceeded ${timeoutMs}ms`);
+    this.name = "TaskTimeoutError";
+  }
+}
 
 export class ActionOrchestrator {
   private context: SharedContext;
@@ -65,10 +82,17 @@ export class ActionOrchestrator {
   private _recentKeys: Array<{ key: string; ts: number; entry: QueueEntry }> = [];
   private _heartbeat: ReturnType<typeof setInterval> | null = null;
   private _idCounter = 0;
+  private _taskTimeoutMs: number;
 
-  constructor(context: SharedContext, eventBus: EventBus) {
+  /**
+   * @param taskTimeoutMs Override for TASK_EXECUTOR_TIMEOUT_MS — production
+   *   code should never pass this; it exists so tests can exercise the
+   *   timeout path without waiting 45s.
+   */
+  constructor(context: SharedContext, eventBus: EventBus, taskTimeoutMs: number = TASK_EXECUTOR_TIMEOUT_MS) {
     this.context = context;
     this.eventBus = eventBus;
+    this._taskTimeoutMs = taskTimeoutMs;
   }
 
   get activeTask(): ActionTask | null {
@@ -187,16 +211,46 @@ export class ActionOrchestrator {
     });
     this._startHeartbeat();
 
-    entry.executor(task).then((result) => {
+    this._runExecutor(entry);
+  }
+
+  /**
+   * Runs the executor bounded by TASK_EXECUTOR_TIMEOUT_MS via Promise.race so
+   * a stuck executor can never wedge the queue: if it hasn't settled in time,
+   * we abort its signal, settle the caller's promise with a timeout result,
+   * and let _finish() clear `_active` so draining continues with the next
+   * queued task. `finally` clears the timer on every path (including the
+   * happy path) so a stray timer never holds the process/tests open.
+   */
+  private async _runExecutor(entry: QueueEntry) {
+    const { task } = entry;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new TaskTimeoutError(task.id, this._taskTimeoutMs)), this._taskTimeoutMs);
+      });
+      const result = await Promise.race([entry.executor(task), timeout]);
       task.result = result;
       task.state = task.abort.signal.aborted ? "cancelled" : "done";
       this._finish(entry, result);
-    }).catch((e: any) => {
+    } catch (e: any) {
+      if (e instanceof TaskTimeoutError) {
+        console.warn(
+          `[Orchestrator] ${task.id} (${task.source}) timed out after ${this._taskTimeoutMs}ms: "${task.instruction.slice(0, 60)}" — aborting executor, freeing queue`
+        );
+        task.abort.abort(new Error("executor timeout"));
+        task.state = "failed";
+        task.result = `Action timed out after ${Math.round(this._taskTimeoutMs / 1000)}s and was abandoned so the queue could continue.`;
+        this._finish(entry, task.result);
+        return;
+      }
       const aborted = task.abort.signal.aborted;
       task.state = aborted ? "cancelled" : "failed";
       task.result = aborted ? `Cancelled: ${e?.message || "aborted"}` : `Error: ${e?.message || String(e)}`;
       this._finish(entry, task.result);
-    });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private _finish(entry: QueueEntry, result: string) {

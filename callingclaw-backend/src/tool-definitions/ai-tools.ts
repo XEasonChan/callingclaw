@@ -21,19 +21,48 @@ export interface AIToolDeps {
   meetingPrepSkill?: MeetingPrepSkill;
 }
 
+// ── Recall failure sentinels (P1 STEP 3, §4.4/§6) ─────────────────────────
+//
+// A recall RESULT string that must NEVER be spoken as a fact: an internal
+// dispatcher/gateway failure that leaked as if it were an answer ("All channels
+// failed", "Gateway not available", "Dispatch failed: …"), an OpenClaw error
+// sentinel, or the recall handler's own "couldn't find / retrieve" non-answer
+// apology. The voice recall producer reads this to set `DeliberateResult.error`
+// so the unified sink error-suppresses it (neutral internal note, never spoken).
+//
+// Deliberately PRECISE phrase matching (not a bare /failed/) so a genuine
+// recalled fact that merely CONTAINS a word like "failed" ("the deploy failed
+// last Tuesday") is not misclassified as a sentinel — the audited over-broad
+// backstop risk.
+export const RECALL_FAILURE_SENTINELS: readonly string[] = [
+  "all channels failed",
+  "dispatch failed:",
+  "gateway not available",
+  "openclaw error:",
+  "openclaw disconnected:",
+  "openclaw task timed out",
+  "openclaw is not running",
+  "(no response)",
+  "couldn't find specific information",
+  "couldn't retrieve reliable context",
+];
+
+/** True if a recall result is an unusable failure/non-answer that must not be
+ *  spoken as fact. Empty/whitespace-only counts as unusable. */
+export function isUnusableRecallResult(result: string | null | undefined): boolean {
+  const s = (result || "").trim().toLowerCase();
+  if (!s) return true;
+  return RECALL_FAILURE_SENTINELS.some((sen) => s.includes(sen));
+}
+
 export function aiTools(deps: AIToolDeps): ToolModule {
   const { contextSync, contextRetriever, openclawBridge, dispatcher, eventBus, meetingPrepSkill } = deps;
 
-  const isUsableOpenClawAnswer = (answer: string) => {
-    const normalized = answer.trim().toLowerCase();
-    if (!normalized) return false;
-    if (normalized === "(no response)") return false;
-    if (normalized.includes("openclaw error:")) return false;
-    if (normalized.includes("openclaw disconnected:")) return false;
-    if (normalized.includes("openclaw task timed out")) return false;
-    if (normalized.includes("openclaw is not running")) return false;
-    return true;
-  };
+  // Usable ⇔ NOT a recall failure sentinel. Broadened (P1 STEP 3) so a leaked
+  // dispatcher/gateway sentinel ("All channels failed" / "Gateway not available")
+  // is no longer wrapped and returned as a `[Recall via …]` answer — the leak is
+  // stopped at the source, and the voice sink error-suppresses any that slip past.
+  const isUsableOpenClawAnswer = (answer: string) => !isUnusableRecallResult(answer);
 
   return {
     definitions: [

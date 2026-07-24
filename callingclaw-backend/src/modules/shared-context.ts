@@ -101,6 +101,48 @@ export class SharedContext {
     this._inMeeting = value;
   }
 
+  // ── Current meeting URL (cross-meeting isolation — s1s2 §8) ──
+  // First-class state: the URL of the meeting we are currently in. Set on
+  // meeting.started, used to distinguish a genuinely DIFFERENT meeting (→ reset
+  // transcript) from a re-join of the SAME meeting (→ preserve history, v2.8.14).
+  // Historically the guard read `workspace.meetUrl`, which never existed, so the
+  // reset was dead code and meeting A's transcript bled into meeting B.
+
+  private _meetUrl = "";
+
+  get meetUrl(): string {
+    return this._meetUrl;
+  }
+
+  setMeetUrl(url: string) {
+    this._meetUrl = url;
+  }
+
+  /**
+   * Apply the cross-meeting isolation policy at the start of a meeting.
+   * Decides transcript disposition, performs the reset if needed, then records
+   * the new current-meeting URL (when provided). Centralized here so the policy
+   * lives with the state it protects and is unit-testable without a live session.
+   *
+   *   - different non-empty URL than the current one → resetTranscript() ("reset")
+   *   - same URL (re-join) with existing history      → preserve            ("preserved")
+   *   - no prior transcript                           → nothing to preserve ("fresh")
+   */
+  applyMeetingStart(url: string): "reset" | "preserved" | "fresh" {
+    const prevUrl = this._meetUrl;
+    let disposition: "reset" | "preserved" | "fresh";
+    if (url && prevUrl && url !== prevUrl) {
+      this.resetTranscript();
+      disposition = "reset";
+    } else if (this._transcript.length === 0) {
+      disposition = "fresh";
+    } else {
+      disposition = "preserved";
+    }
+    if (url) this._meetUrl = url;
+    return disposition;
+  }
+
   // ── Active task (the "hand" — single in-flight action) ──
 
   private _activeTask: ActiveTaskInfo | null = null;
@@ -342,5 +384,6 @@ export class SharedContext {
     this._workspace = null;
     this._browserContext = null;
     this._stageDocuments.clear();
+    this._meetUrl = "";
   }
 }
