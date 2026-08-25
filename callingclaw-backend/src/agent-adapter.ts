@@ -142,6 +142,23 @@ export interface AgentAdapter {
 
   /** Register callback for real-time activity events (streaming deltas, completions) */
   onActivity?(fn: (kind: string, summary: string, detail?: string) => void): void;
+
+  // ── Warm Lifecycle (optional) ──
+
+  /**
+   * Pre-warm per-meeting resources (e.g. persistent CLI worker processes) so
+   * in-meeting calls skip cold-start latency. Optional — adapters without warm
+   * state simply omit it (callers use `adapter.warmUp?.()`). Must be idempotent
+   * and must never throw into the caller's critical path.
+   */
+  warmUp?(): Promise<void>;
+
+  /**
+   * Release per-meeting warm resources (kill worker processes). Called on
+   * meeting.ended — one meeting's warm state must never serve another meeting
+   * (context isolation). Safe to call when not warm.
+   */
+  cooldown?(): Promise<void>;
 }
 
 // ── Scheduled Job Store (internal timer-based scheduling) ──

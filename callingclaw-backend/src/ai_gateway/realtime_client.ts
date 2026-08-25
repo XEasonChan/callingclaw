@@ -29,6 +29,7 @@
 
 import { CONFIG } from "../config";
 import { GeminiProtocolAdapter } from "./gemini-adapter";
+import { recordUsage } from "../modules/cost-meter";
 
 // Load ws npm package at module level (not dynamic require at connection time).
 // MUST use require() — `import from "ws"` gives Bun's built-in shim which ignores proxy.
@@ -125,6 +126,11 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
         },
         output_modalities: ["audio"],
         instructions,
+        // gpt-realtime-2 reasoning effort. Field path per OpenAI Realtime docs +
+        // LiveKit plugin: session.reasoning.effort (nested object, mirrors the
+        // Responses API). Omitted entirely when CONFIG.openai.realtimeEffort === ""
+        // so non-reasoning models / older endpoints don't get an unknown field.
+        ...buildReasoning(CONFIG.openai.realtimeEffort),
         tools: tools.map((t) => ({
           type: "function",
           name: t.name,
@@ -135,6 +141,22 @@ export const OPENAI_PROVIDER: RealtimeProviderConfig = {
     };
   },
 };
+
+/**
+ * Build the optional `reasoning` session fragment for gpt-realtime-2.
+ * Returns `{ reasoning: { effort } }` for a non-empty effort, or `{}` to omit
+ * the field entirely (omitted-by-default-safe — see CONFIG.openai.realtimeEffort).
+ *
+ * Field name CONFIDENCE: medium-high. OpenAI's Realtime prompting guide and the
+ * LiveKit OpenAI plugin both reference `reasoning.effort` (nested), matching the
+ * Responses API shape. The exact GA session schema was not pinned from the public
+ * docs at wire time — if a future API rejects this field, set OPENAI_REALTIME_EFFORT=""
+ * to omit it (default behavior is otherwise the model's own default of "low").
+ */
+function buildReasoning(effort: string): Record<string, any> {
+  if (!effort) return {};
+  return { reasoning: { effort } };
+}
 
 // ── OpenAI Realtime GA Provider (gpt-realtime-2 default, 1.5 compatible) ──
 // GA API (no beta header), new event names, session.type required.
@@ -197,6 +219,9 @@ export const OPENAI15_PROVIDER: RealtimeProviderConfig = {
         },
         output_modalities: ["audio"],
         instructions,
+        // gpt-realtime-2 reasoning effort (session.reasoning.effort); omitted when
+        // CONFIG.openai15.realtimeEffort === "". See buildReasoning() above OPENAI_PROVIDER.
+        ...buildReasoning(CONFIG.openai15.realtimeEffort),
         tools: tools.map((t) => ({
           type: "function",
           name: t.name,
@@ -346,7 +371,12 @@ export interface ContextItem {
 
 // ── Token Budget Tracking ────────────────────────────────────────
 
-/** Estimated context window size for the Realtime API */
+/**
+ * Context window size for the Realtime API token-budget tracking.
+ * gpt-realtime-2 provides a 128K context window (up from 32K on the 1.x
+ * preview), so long meetings use the larger budget before warn/compress fire.
+ * Layer-3 budget logic (MAX_CONTEXT_TOKENS_L3) is independent of this value.
+ */
 const TOTAL_CONTEXT_TOKENS = 128_000;
 const TOKEN_WARNING_THRESHOLD = 0.8;   // 80% → emit warning
 const TOKEN_COMPRESS_THRESHOLD = 0.9;  // 90% → auto-compress context queue
@@ -725,7 +755,30 @@ export class RealtimeClient {
 
   // ── Token Budget Tracking ────────────────────────────────────────
 
+  /** Model id to attribute voice cost to (provider-specific). */
+  private _voiceModelId(): string {
+    switch (this._provider.name) {
+      case "gemini": return CONFIG.gemini.realtimeModel;
+      case "grok": return "grok-voice";
+      case "openai": return CONFIG.openai.realtimeModel;
+      case "openai15": return CONFIG.openai15.realtimeModel;
+      default: return this._provider.name;
+    }
+  }
+
   private _updateTokenBudget(usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number }) {
+    // CostMeter: record this response's usage as a voice-component event.
+    // NOTE: Realtime/Live APIs report per-response usage where input_tokens is
+    // the (re-processed) context for that turn — so summing across turns tracks
+    // how these stateful APIs bill (minus caching). Voice rates are audio-blended
+    // approximations; treat voice USD as directional, not billing-exact.
+    recordUsage({
+      component: "voice",
+      model: this._voiceModelId(),
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+    });
+
     this._tokenBudget.inputTokens = usage.input_tokens || 0;
     this._tokenBudget.outputTokens = usage.output_tokens || 0;
     this._tokenBudget.totalTokens = usage.total_tokens || (this._tokenBudget.inputTokens + this._tokenBudget.outputTokens);

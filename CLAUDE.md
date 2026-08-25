@@ -58,7 +58,7 @@ callingclaw-desktop/     Electron desktop app — UI, audio bridge, tray
 All services instantiate once in `callingclaw.ts` and inject cross-module dependencies:
 
 1. **Infrastructure** — NativeBridge (osascript+cliclick), SharedContext (central state), EventBus, TaskStore, GoogleCalendarClient
-2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Haiku during meetings, Sonnet outside), ContextRetriever (Haiku gap detection), TranscriptAuditor (Haiku intent classification)
+2. **Voice & AI** — VoiceModule (wraps RealtimeClient), VisionModule (Gemini Flash), ComputerUseModule (Haiku 4.5 during meetings [latency-sensitive default]; Sonnet 5 outside meetings — `IN_MEETING_COMPUTERUSE_MODEL` is an opt-in in-meeting A/B flag, default Haiku), ContextRetriever (Haiku gap detection), TranscriptAuditor (Haiku intent classification)
 3. **Meeting** — MeetingModule (recording+action items), MeetingScheduler (calendar auto-join), PostMeetingDelivery, KeyFrameStore
 4. **Skills** — MeetingPrepSkill, OpenClawBridge (System 2 deep reasoning), BrowserActionLoop (Haiku + Playwright snapshot)
 5. **Browser (Dual Chrome)** — Chrome #1: ChromeLauncher (Playwright library: Meet join + audio injection + admission monitor + screen share). Chrome #2: OpenCLIBridge (fault-isolated execution: deterministic web adapters, CLI hub, operate mode). See `docs/opencli-experiment-findings.md` for architecture decision.
@@ -136,7 +136,7 @@ During meetings, CallingClaw uses its own fast models, NOT OpenClaw:
 | VisionModule | Gemini Flash (OpenRouter) → gpt-4o-mini fallback | Screenshot capture 1s, analysis every ~3s |
 | ContextRetriever | Haiku (OpenRouter) | Gap detection + agentic search |
 | TranscriptAuditor | Haiku (OpenRouter) | Real-time intent classification |
-| ComputerUseModule | Haiku/Sonnet (Anthropic API) | Screen control when voice AI requests |
+| ComputerUseModule | Haiku 4.5 in-meeting (default; latency-sensitive), Sonnet 5 off-meeting (Anthropic API) | Screen control when voice AI requests. In-meeting model is an opt-in A/B via `IN_MEETING_COMPUTERUSE_MODEL` (default Haiku 4.5). |
 
 OpenClaw is used **before** meetings (OC-001 prep) and **after** meetings (OC-004/005 summary delivery, OC-009 follow-up). During meetings, it is only a fallback for `recall_context` deep search when local + Haiku paths fail.
 

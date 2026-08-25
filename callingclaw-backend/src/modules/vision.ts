@@ -19,6 +19,7 @@ import type { SharedContext } from "./shared-context";
 import type { BrowserCaptureProvider } from "../capture/browser-capture-provider";
 import { CONFIG } from "../config";
 import { LANGUAGE_RULE } from "../prompt-constants";
+import { recordUsage } from "./cost-meter";
 import OpenAI from "openai";
 
 export type ScreenCaptureMode = "meeting" | "talk_locally";
@@ -259,7 +260,7 @@ export class VisionModule {
     this._analyzing = true;
     this._lastAnalysisAt = Date.now();
 
-    // Built outside the try — the gpt-4o-mini fallback in the catch block
+    // Built outside the try — the Gemini Flash fallback in the catch block
     // needs these (referencing try-scoped consts threw ReferenceError and
     // killed the fallback exactly when the primary call failed).
     const recentTranscript = this.context.getTranscriptText(5);
@@ -323,13 +324,28 @@ ${recentTranscript}`;
         ],
       });
 
+      // CostMeter: vision analysis usage (primary model) — fail-soft.
+      recordUsage({
+        component: "vision",
+        model: this.visionModel,
+        inputTokens: (response as any).usage?.prompt_tokens,
+        outputTokens: (response as any).usage?.completion_tokens,
+      });
+
       return response.choices[0]?.message?.content || null;
     } catch (e: any) {
       console.warn(`[Vision] Primary vision error: ${e.message}`);
-      // Fallback to OpenAI gpt-4o-mini if primary fails (OpenRouter down / no credits)
-      if (CONFIG.openai.apiKey && this.visionModel !== "gpt-4o-mini") {
+      // Fallback to current Gemini Flash (multimodal) via OpenRouter if primary fails.
+      // Both primary (Haiku) and fallback (Gemini Flash) ride OpenRouter, so the
+      // fallback is a model swap on the same gateway — only attempted when an
+      // OpenRouter key exists and the fallback differs from the primary model.
+      const fallbackModel = CONFIG.vision.fallbackModel;
+      if (CONFIG.openrouter.apiKey && fallbackModel && this.visionModel !== fallbackModel) {
         try {
-          const fallbackClient = new OpenAI({ apiKey: CONFIG.openai.apiKey });
+          const fallbackClient = new OpenAI({
+            apiKey: CONFIG.openrouter.apiKey,
+            baseURL: CONFIG.openrouter.baseUrl,
+          });
           const fbSystem = meetingMode
             ? "Describe what's on the meeting screen. Focus on shared/presented content. 1-3 sentences."
             : "Describe what's on screen concisely. Focus on active app and visible content. 1-3 sentences.";
@@ -337,7 +353,7 @@ ${recentTranscript}`;
             ? "What's currently shown on the meeting screen?"
             : "Describe what's currently on screen.";
           const fallbackResp = await fallbackClient.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: fallbackModel,
             max_tokens: meetingMode ? 300 : 500,
             messages: [
               { role: "system", content: fbSystem },
@@ -350,7 +366,14 @@ ${recentTranscript}`;
               },
             ],
           });
-          console.log("[Vision] Fallback to gpt-4o-mini succeeded");
+          console.log(`[Vision] Fallback to ${fallbackModel} succeeded`);
+          // CostMeter: vision analysis usage (fallback model) — fail-soft.
+          recordUsage({
+            component: "vision",
+            model: fallbackModel,
+            inputTokens: (fallbackResp as any).usage?.prompt_tokens,
+            outputTokens: (fallbackResp as any).usage?.completion_tokens,
+          });
           return fallbackResp.choices[0]?.message?.content || null;
         } catch (e2: any) {
           console.error(`[Vision] Fallback also failed: ${e2.message}`);

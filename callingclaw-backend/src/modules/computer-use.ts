@@ -15,6 +15,7 @@ import type { ContextSync } from "./context-sync";
 import type { DesktopCaptureProvider } from "../capture/desktop-capture-provider";
 import { CONFIG } from "../config";
 import { OpenClawBridge } from "../openclaw_bridge";
+import { recordUsage } from "./cost-meter";
 
 // ── Screenshot dimensions for API ──
 // Full 1920x1080 PNG ~3-5MB base64 ~500k+ tokens per image.
@@ -44,12 +45,12 @@ function pickApiResolution(): { width: number; height: number } {
 const { width: API_SCREEN_WIDTH, height: API_SCREEN_HEIGHT } = pickApiResolution();
 
 // ── Model → Tool Version mapping ──
-// Opus 4.6, Sonnet 4.6, Opus 4.5 → computer_20251124 + computer-use-2025-11-24
-// Sonnet 4.5, Haiku 4.5, older     → computer_20250124 + computer-use-2025-01-24
+// Sonnet 5, Opus 4.6, Sonnet 4.6, Opus 4.5 → computer_20251124 + computer-use-2025-11-24 (adds enable_zoom)
+// Sonnet 4.5, Haiku 4.5, older              → computer_20250124 + computer-use-2025-01-24
 const LATEST_MODELS = [
-  "claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-5",
-  "anthropic/claude-opus-4-6", "anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-5",
-  "anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-4.5",
+  "claude-sonnet-5", "claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-5",
+  "anthropic/claude-sonnet-5", "anthropic/claude-opus-4-6", "anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-5",
+  "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-4.6", "anthropic/claude-opus-4.5",
 ];
 
 function getToolVersionForModel(model: string): { toolType: string; betaFlag: string } {
@@ -326,6 +327,11 @@ export class ComputerUseModule {
     return {
       content,
       stop_reason: msg.tool_calls?.length ? "tool_use" : "end_turn",
+      // Normalize OpenRouter (OpenAI-shaped) usage to Anthropic field names so
+      // the caller records usage uniformly regardless of transport.
+      usage: data.usage
+        ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens }
+        : undefined,
     };
   }
 
@@ -367,11 +373,12 @@ export class ComputerUseModule {
     const steps: string[] = [];
     const recentTranscript = this.context.getTranscriptText(15);
 
-    // Use fast Haiku model during meetings (meetingAutomation config)
-    // Falls back to standard model for non-meeting Computer Use
+    // Use fast Haiku model during meetings (meetingAutomation config — LATENCY-SENSITIVE).
+    // `computerUseModel` is the opt-in A/B knob (default Haiku 4.5, unchanged).
+    // Falls back to standard model (Sonnet 5) for non-meeting Computer Use.
     const isMeeting = this.context.inMeeting;
     let model = isMeeting
-      ? CONFIG.meetingAutomation.model
+      ? CONFIG.meetingAutomation.computerUseModel
       : (this._mode === "openrouter" ? CONFIG.openrouter.model : CONFIG.anthropic.model);
 
     // Meeting model is configured as an OpenRouter slug ("anthropic/claude-haiku-4-5");
@@ -528,6 +535,10 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
       this.pruneOldImages(messages);
 
       let response: any;
+      // Latency A/B instrumentation: wall-clock ms per computer-use turn.
+      // Cheap (one Date.now() pair + one console line) so it's safe in-meeting.
+      // Lets us compare the in-meeting default (Haiku 4.5) vs the Sonnet 5 opt-in.
+      const turnStart = Date.now();
       try {
         if (this._mode === "anthropic") {
           // Direct Anthropic API — streaming for real-time activity feed
@@ -577,9 +588,27 @@ ${this.context.screen.description ? `Screen description: ${this.context.screen.d
         }
       } catch (e: any) {
         const msg = e.message || String(e);
+        const elapsedMs = Date.now() - turnStart;
+        console.error(`[ComputerUse][latency] model=${model} meeting=${isMeeting} step=${step + 1} elapsedMs=${elapsedMs} (FAILED)`);
         console.error(`[ComputerUse] API call failed:`, msg);
         return { summary: `API error: ${msg}`, steps };
       }
+
+      // Latency A/B log: model + wall-clock ms for this turn (measurable A/B).
+      const elapsedMs = Date.now() - turnStart;
+      console.log(`[ComputerUse][latency] model=${model} meeting=${isMeeting} step=${step + 1} elapsedMs=${elapsedMs}`);
+      this.emitActivity("ai.latency", `${model} turn: ${elapsedMs}ms`, `model=${model} meeting=${isMeeting} step=${step + 1} elapsedMs=${elapsedMs}`);
+
+      // CostMeter: computer-use turn usage (Anthropic stream .usage or normalized
+      // OpenRouter usage). meeting vs off-meeting cost is separable via `model`.
+      recordUsage({
+        component: "computer_use",
+        model,
+        inputTokens: (response as any).usage?.input_tokens,
+        outputTokens: (response as any).usage?.output_tokens,
+        cacheReadTokens: (response as any).usage?.cache_read_input_tokens,
+        cacheCreationTokens: (response as any).usage?.cache_creation_input_tokens,
+      });
 
       // Log what Claude returned
       const contentTypes = response.content.map((b: any) => b.type).join(", ");

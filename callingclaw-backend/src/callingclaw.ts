@@ -27,6 +27,7 @@ import { KeyFrameStore } from "./modules/key-frame-store";
 import { generateMeetingSummaryHtml } from "./modules/meeting-summary-html";
 import { OpenClawDispatcher } from "./openclaw-dispatcher";
 import { createAgentAdapter, type AgentAdapter, type AgentPlatform } from "./agent-adapter";
+import { CostMeter, setActiveCostMeter } from "./modules/cost-meter";
 import { startConfigServer } from "./config_server";
 import { buildAllTools } from "./tool-definitions";
 import { NoShowDetector } from "./modules/no-show-detector";
@@ -57,6 +58,14 @@ bridge.start();
 const context = new SharedContext();
 const calendar = new GoogleCalendarClient();
 const meetJoiner = new MeetJoiner(bridge);
+
+// CostMeter: per-meeting, per-component cost attribution. Installed process-wide
+// so the decoupled recordUsage() seam in model-calling modules forwards here.
+// Disable via COST_METER=0. Finalize delay lets post-meeting agent work (summary/
+// timeline) land in the same meeting's JSONL line before it is written.
+const costMeter = new CostMeter({ enabled: process.env.COST_METER !== "0" });
+setActiveCostMeter(costMeter);
+const COST_FINALIZE_DELAY_MS = Math.max(0, Number(process.env.COST_FINALIZE_DELAY_MS) || 120_000);
 const eventBus = new EventBus();
 const taskStore = new TaskStore(eventBus);
 
@@ -392,8 +401,15 @@ eventBus.on("meeting.started", (data) => {
     || sessionManager.list({ status: "active" })[0]?.meetingId
     || sessionManager.list({ status: "ready" })[0]?.meetingId
     || sessionManager.generateId();
+  // CostMeter: attribute subsequent usage to this meeting.
+  costMeter.setActiveMeeting(activeMeetingId);
   // Reset incremental context injection state for new meeting
   resetContextInjectionState();
+  // Pre-warm per-meeting agent workers (e.g. persistent claude CLI processes)
+  // so in-meeting recall/task calls skip the 1-3s CLI cold boot.
+  // Optional per adapter; failures never block the meeting (cold path remains).
+  Promise.resolve(agentAdapter.warmUp?.()).catch((e: any) =>
+    console.warn(`[Init] Agent adapter warmUp failed — cold path remains: ${e?.message || e}`));
   // Only reset transcript if joining a DIFFERENT meeting (not re-joining same one)
   // This preserves conversation history across multiple join/leave cycles in the same meeting
   const currentUrl = data?.url || "";
@@ -617,6 +633,26 @@ eventBus.on("voice.stopped", () => {
 eventBus.on("meeting.ended", async () => {
   noShowDetector.deactivate();
 
+  // CostMeter: persist this meeting's cost record. Delay the write so async
+  // post-meeting agent work (processTimeline summary/todos, dispatched below)
+  // lands in this meeting's JSONL line before it is written.
+  // Attribution correctness (Finding 3): snapshot the ended id and CLEAR the
+  // meter's active meeting now — so pre-join prep for the NEXT meeting can't be
+  // billed to this one — then attribute the post-meeting work EXPLICITLY via
+  // withAttribution(_endedMeetingId). That id survives even if a back-to-back
+  // meeting calls setActiveMeeting(B) before this async work finishes.
+  const _endedMeetingId = activeMeetingId;
+  costMeter.endActiveMeeting(_endedMeetingId);
+  if (_endedMeetingId) {
+    setTimeout(() => {
+      costMeter.finalizeMeeting(_endedMeetingId).catch(() => {});
+    }, COST_FINALIZE_DELAY_MS);
+  }
+
+  // Release per-meeting warm agent workers — one meeting's worker must never
+  // serve another (context isolation). In-flight warm calls fall back to cold.
+  Promise.resolve(agentAdapter.cooldown?.()).catch(() => {});
+
   // Safety net: ensure recording is stopped even if autoLeaveMeeting() failed mid-way
   if (meeting.getNotes().isRecording) {
     console.warn("[Init] meeting.ended fired but recording still active — forcing stopRecording()");
@@ -629,9 +665,11 @@ eventBus.on("meeting.ended", async () => {
     const timeline = await keyFrameStore.finalize(meetTopic).catch(() => null);
     if (timeline) {
       console.log(`[Init] Timeline finalized: ${timeline.frameCount} frames, ${timeline.priorityFrameCount} priority → ${timeline.meetingDir}`);
-      // Send timeline to agent adapter for visual action extraction (async, non-blocking)
+      // Send timeline to agent adapter for visual action extraction (async, non-blocking).
+      // CostMeter: pin this post-meeting agent cost to the ended meeting even
+      // though the active meeting was just cleared (and a next meeting may start).
       if (agentAdapter.connected) {
-        agentAdapter.processTimeline({
+        costMeter.withAttribution(_endedMeetingId, () => agentAdapter.processTimeline({
           meetingId: timeline.meetingId,
           meetingDir: timeline.meetingDir,
           topic: meetTopic,
@@ -640,7 +678,7 @@ eventBus.on("meeting.ended", async () => {
           transcriptEntries: timeline.transcriptEntries,
           priorityFrameCount: timeline.priorityFrameCount,
           timelineFile: timeline.timelineFile,
-        }).catch((e) => {
+        })).catch((e) => {
           console.warn(`[Init] Timeline processing failed: ${e.message}`);
         });
       }
@@ -723,6 +761,12 @@ async function autoLeaveMeeting() {
   _autoLeaveInProgress = true;
   console.log("[Meeting] Auto-leave triggered — meeting ended externally");
 
+  // CostMeter: snapshot the meeting id BEFORE emitting meeting.ended (which
+  // clears activeMeetingId). Post-meeting agent work below (timeline + delivery)
+  // is attributed to this id explicitly via withAttribution, so it lands in the
+  // right JSONL line even after the active meeting is cleared / a next one starts.
+  const _costMeetingId = activeMeetingId;
+
   try {
     // Stop admission monitor
     if (playwrightCli.isAdmissionMonitoring) {
@@ -775,8 +819,9 @@ async function autoLeaveMeeting() {
         console.log(`[AutoLeave] Timeline: ${timeline.frameCount} frames → ${timeline.htmlFile}`);
         // Dispatch timeline to agent here since the meeting.ended handler
         // will skip its finalize block once the store is stopped below.
+        // CostMeter: attribute this agent cost to the snapshotted meeting id.
         if (agentAdapter.connected) {
-          agentAdapter.processTimeline({
+          costMeter.withAttribution(_costMeetingId, () => agentAdapter.processTimeline({
             meetingId: timeline.meetingId,
             meetingDir: timeline.meetingDir,
             topic: summary.title || "Meeting",
@@ -785,7 +830,7 @@ async function autoLeaveMeeting() {
             transcriptEntries: timeline.transcriptEntries,
             priorityFrameCount: timeline.priorityFrameCount,
             timelineFile: timeline.timelineFile,
-          }).catch((e: any) => {
+          })).catch((e: any) => {
             console.warn(`[AutoLeave] Timeline processing failed: ${e.message}`);
           });
         }
@@ -823,9 +868,11 @@ async function autoLeaveMeeting() {
     eventBus.emit("meeting.ended", followUp);
     eventBus.endCorrelation();
 
-    // Post-meeting delivery (now includes screenshots + summary HTML)
+    // Post-meeting delivery (now includes screenshots + summary HTML).
+    // CostMeter: any agent cost incurred by delivery (todo hand-off, summary
+    // send) is attributed to the snapshotted meeting id, not a next meeting.
     const prepSummary = getPostMeetingSummary(meetingPrepSkill);
-    postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult, summaryHtmlPath, meetingId: activeMeetingId }).catch((e: any) => {
+    costMeter.withAttribution(_costMeetingId, () => postMeetingDelivery.deliver({ summary, notesFilePath: filepath, prepSummary, keyFrameResult, summaryHtmlPath, meetingId: activeMeetingId })).catch((e: any) => {
       console.error("[AutoLeave] Delivery failed:", e.message);
     });
 
@@ -1239,7 +1286,11 @@ import("./prompt-registrations").then(m => m.registerAllPrompts()).catch(() => {
 
 // ── 7. HTTP Config Server ───────────────────────────────────────
 
-startConfigServer({
+// Built as an intermediate object (not an inline literal) so the extra
+// `costMeter` field — which Lane C adds to the Services interface — does not
+// trip TypeScript's excess-property check before that lands. Structural typing
+// still validates every required Services field.
+const services = {
   bridge,
   realtime: voice,
   calendar,
@@ -1262,7 +1313,9 @@ startConfigServer({
   postMeetingDelivery,
   meetingDB,
   sessionManager,
-});
+  costMeter,
+};
+startConfigServer(services);
 
 // ── 8. Startup Cleanup ────────────────────────────────────────
 // Remove orphan test/eval files and stale sessions to prevent data contamination
@@ -1303,6 +1356,9 @@ async function shutdown(signal: string) {
       );
     }
   }
+
+  // CostMeter: flush any meetings not yet written to the JSONL log.
+  await costMeter.finalizeAllPending().catch(() => {});
 
   transcriptAuditor.deactivate();
   contextRetriever.deactivate();

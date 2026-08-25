@@ -99,6 +99,178 @@ export interface MeetingPrepBrief {
 // Prompt template moved to openclaw-protocol.ts (OC-001)
 // Use OC001_PROMPT(req) to generate the prompt.
 
+// ── Deterministic prep enrichment (no LLM) ──
+// After the agent generates a brief, structured local stores are consulted
+// programmatically: open TaskStore action items + the most recent meeting
+// summary on disk. Every step degrades gracefully — missing store, no
+// summaries, malformed files → no-op, never throws.
+
+/** Minimal structural view of TaskStore used by prep enrichment */
+export interface OpenTaskSource {
+  list(filters?: { status?: "pending" | "in_progress" | "done" | "cancelled" }): Array<{
+    task: string;
+    status: string;
+    sourceMeetingId?: string;
+    createdAt?: number;
+  }>;
+}
+
+export interface PrepEnrichmentResult {
+  addedTasks: number;    // open/pending task lines appended (0-5)
+  addedSummary: boolean; // recent *_summary.md snippet appended
+}
+
+const ENRICH_MAX_CHARS = 800;                       // total added-text budget
+const ENRICH_MAX_TASKS = 5;                         // open task lines cap
+const ENRICH_SUMMARY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const ENRICH_SUMMARY_SNIPPET_CHARS = 500;           // chars taken from the summary
+
+/**
+ * Append deterministic local context to a freshly generated brief:
+ *  (a) up to 5 open/pending TaskStore items (title + sourceMeetingId)
+ *  (b) the most recent `*_summary.md` in the shared dir (mtime ≤ 30 days)
+ * Both land in `previousContext` as clearly-labeled blocks, capped at
+ * ~800 added chars total. Never throws.
+ *
+ * @param opts.taskStore  injected store; `null` disables tasks; `undefined` auto-loads from disk
+ * @param opts.sharedDir  override for tests; defaults to config SHARED_DIR
+ */
+export async function enrichBriefWithLocalContext(
+  brief: MeetingPrepBrief,
+  opts: {
+    taskStore?: OpenTaskSource | null;
+    sharedDir?: string;
+    now?: number;
+    maxChars?: number;
+  } = {},
+): Promise<PrepEnrichmentResult> {
+  const result: PrepEnrichmentResult = { addedTasks: 0, addedSummary: false };
+  try {
+    const maxChars = opts.maxChars ?? ENRICH_MAX_CHARS;
+    const additions: Array<{ kind: "tasks" | "summary"; text: string }> = [];
+
+    // ── (a) Open/pending action items from the TaskStore ──
+    try {
+      let store = opts.taskStore;
+      if (store === undefined) store = await loadDefaultTaskStore();
+      if (store) {
+        const open = [
+          ...store.list({ status: "pending" }),
+          ...store.list({ status: "in_progress" }),
+        ]
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+          .slice(0, ENRICH_MAX_TASKS);
+        const lines = open
+          .map((t) => {
+            const title = String(t.task || "").replace(/\s+/g, " ").trim().slice(0, 120);
+            if (!title) return "";
+            return `- ${title}${t.sourceMeetingId ? ` (from meeting ${t.sourceMeetingId})` : ""}`;
+          })
+          .filter(Boolean);
+        if (lines.length > 0) {
+          additions.push({
+            kind: "tasks",
+            text: `[Auto-added] Open action items from previous meetings:\n${lines.join("\n")}`,
+          });
+          result.addedTasks = lines.length;
+        }
+      }
+    } catch { /* task store unavailable — skip */ }
+
+    // ── (b) Most recent *_summary.md in the shared dir ──
+    try {
+      const sharedDir = opts.sharedDir || (await import("../config")).SHARED_DIR;
+      const now = opts.now ?? Date.now();
+
+      let best: { path: string; name: string; mtime: number } | null = null;
+      const names = await Array.fromAsync(
+        new Bun.Glob("*_summary.md").scan({ cwd: sharedDir, onlyFiles: true }),
+      ) as string[];
+      for (const name of names) {
+        try {
+          const mtime = Bun.file(`${sharedDir}/${name}`).lastModified;
+          if (!mtime || now - mtime > ENRICH_SUMMARY_MAX_AGE_MS) continue;
+          if (!best || mtime > best.mtime) best = { path: `${sharedDir}/${name}`, name, mtime };
+        } catch { /* unreadable — skip */ }
+      }
+
+      if (best) {
+        const text = await Bun.file(best.path).text();
+        const snippet = (extractSummarySection(text) || text).trim()
+          .slice(0, ENRICH_SUMMARY_SNIPPET_CHARS).trim();
+        if (snippet.length >= 20 && !containsSubstantially(brief.previousContext || "", snippet)) {
+          additions.push({
+            kind: "summary",
+            text: `[Auto-added] Most recent meeting summary (${best.name}):\n${snippet}`,
+          });
+          result.addedSummary = true;
+        }
+      }
+    } catch { /* no summaries / dir missing — skip */ }
+
+    if (additions.length === 0) return result;
+
+    // ── Apply the total budget (tasks block gets priority) ──
+    const parts: string[] = [];
+    let used = 0;
+    for (const add of additions) {
+      const sepLen = parts.length > 0 ? 2 : 0; // "\n\n" between blocks
+      const remaining = maxChars - used - sepLen;
+      if (remaining < 40) { // not enough budget left to be useful — drop block
+        if (add.kind === "tasks") result.addedTasks = 0;
+        else result.addedSummary = false;
+        continue;
+      }
+      let text = add.text;
+      if (text.length > remaining) text = text.slice(0, remaining - 1) + "…";
+      parts.push(text);
+      used += text.length + sepLen;
+    }
+    if (parts.length === 0) return result;
+
+    const appended = parts.join("\n\n");
+    brief.previousContext = brief.previousContext
+      ? `${brief.previousContext}\n\n${appended}`
+      : appended;
+    return result;
+  } catch {
+    return result; // enrichment must never throw
+  }
+}
+
+/** Lazily load the on-disk TaskStore (read-only usage) — null on any failure */
+async function loadDefaultTaskStore(): Promise<OpenTaskSource | null> {
+  try {
+    const { TaskStore } = await import("../modules/task-store");
+    const store = new TaskStore();
+    await store.load();
+    return store;
+  } catch {
+    return null;
+  }
+}
+
+/** Extract the content under a "Summary"-like markdown heading, if present */
+function extractSummarySection(text: string): string | null {
+  try {
+    const m = text.match(/^#{1,3}\s*(?:summary|meeting summary|总结|会议总结|摘要)\s*$/im);
+    if (!m || m.index === undefined) return null;
+    const rest = text.slice(m.index + m[0].length);
+    const next = rest.search(/^#{1,3}\s+/m);
+    const section = (next >= 0 ? rest.slice(0, next) : rest).trim();
+    return section.length > 0 ? section : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True if `haystack` already contains the start of `snippet` (whitespace-normalized) */
+function containsSubstantially(haystack: string, snippet: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const probe = norm(snippet).slice(0, 80);
+  return probe.length > 0 && norm(haystack).includes(probe);
+}
+
 // ── Meeting Prep Skill ──
 
 export class MeetingPrepSkill {
@@ -108,6 +280,8 @@ export class MeetingPrepSkill {
   private _onPrepReady?: (brief: MeetingPrepBrief, meetingId: string, filePath: string) => void;
   private _liveLogPath: string | null = null;
   private _sessionManager: import("../modules/session-manager").SessionManager | null = null;
+  // undefined = auto-load TaskStore from disk during enrichment; null = disabled
+  private _taskStore: OpenTaskSource | null | undefined = undefined;
 
   constructor(adapter: AgentAdapter) {
     this.adapter = adapter;
@@ -116,6 +290,11 @@ export class MeetingPrepSkill {
   /** Inject SessionManager for atomic file+session updates */
   setSessionManager(sm: import("../modules/session-manager").SessionManager) {
     this._sessionManager = sm;
+  }
+
+  /** Inject a TaskStore for deterministic prep enrichment (optional — falls back to disk load; `null` disables) */
+  setTaskStore(store: OpenTaskSource | null) {
+    this._taskStore = store;
   }
 
   /** Get the current live log file path (for external writers) */
@@ -180,6 +359,15 @@ export class MeetingPrepSkill {
     brief.generatedAt = Date.now();
     brief.liveNotes = [];
     brief.attendees = attendees || [];
+
+    // Deterministic local enrichment (no LLM): open TaskStore items + most
+    // recent meeting summary → previousContext. Best-effort, never throws.
+    try {
+      const enriched = await enrichBriefWithLocalContext(brief, { taskStore: this._taskStore });
+      if (enriched.addedTasks > 0 || enriched.addedSummary) {
+        console.log(`[MeetingPrep] Local enrichment: ${enriched.addedTasks} open task(s)${enriched.addedSummary ? " + recent summary" : ""} appended to previousContext`);
+      }
+    } catch { /* enrichment is best-effort */ }
 
     // Generate STT aliases: scan brief for unusual keywords that STT will mangle.
     // Runs in parallel with file save (non-blocking, ~1-2s Haiku call).
