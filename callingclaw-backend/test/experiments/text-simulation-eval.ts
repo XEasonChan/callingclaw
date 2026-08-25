@@ -56,7 +56,7 @@ async function evalSection(sectionIdx: number, userMessage?: string): Promise<Ev
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5`, {
       headers: { "Authorization": `Bearer ${OPENAI_KEY}` },
-    });
+    } as any);
 
     const timeout = setTimeout(() => { ws.close(); reject(new Error("timeout")); }, 15000);
     let fullText = "";

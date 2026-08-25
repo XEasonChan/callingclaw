@@ -31,7 +31,7 @@ class RealtimeTextClient {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5`, {
         headers: { "Authorization": `Bearer ${OPENAI_KEY}` },
-      });
+      } as any);
       this.ws.onopen = () => {
         this.ws!.send(JSON.stringify({
           type: "session.update",
