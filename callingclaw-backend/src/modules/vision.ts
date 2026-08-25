@@ -19,6 +19,7 @@ import type { SharedContext } from "./shared-context";
 import type { BrowserCaptureProvider } from "../capture/browser-capture-provider";
 import { CONFIG } from "../config";
 import { LANGUAGE_RULE } from "../prompt-constants";
+import { recordUsage } from "./cost-meter";
 import OpenAI from "openai";
 
 export type ScreenCaptureMode = "meeting" | "talk_locally";
@@ -323,6 +324,14 @@ ${recentTranscript}`;
         ],
       });
 
+      // CostMeter: vision analysis usage (primary model) — fail-soft.
+      recordUsage({
+        component: "vision",
+        model: this.visionModel,
+        inputTokens: (response as any).usage?.prompt_tokens,
+        outputTokens: (response as any).usage?.completion_tokens,
+      });
+
       return response.choices[0]?.message?.content || null;
     } catch (e: any) {
       console.warn(`[Vision] Primary vision error: ${e.message}`);
@@ -358,6 +367,13 @@ ${recentTranscript}`;
             ],
           });
           console.log(`[Vision] Fallback to ${fallbackModel} succeeded`);
+          // CostMeter: vision analysis usage (fallback model) — fail-soft.
+          recordUsage({
+            component: "vision",
+            model: fallbackModel,
+            inputTokens: (fallbackResp as any).usage?.prompt_tokens,
+            outputTokens: (fallbackResp as any).usage?.completion_tokens,
+          });
           return fallbackResp.choices[0]?.message?.content || null;
         } catch (e2: any) {
           console.error(`[Vision] Fallback also failed: ${e2.message}`);

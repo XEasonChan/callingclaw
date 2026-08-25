@@ -4,6 +4,7 @@
 // Supports OpenRouter (all models) with Anthropic direct API fallback.
 
 import { CONFIG } from "../config";
+import { recordUsage, type CostComponent } from "../modules/cost-meter";
 
 export interface LLMCallOptions {
   /** Model id, or the alias "fast" for the configured fast analysis model */
@@ -26,6 +27,8 @@ export interface LLMCallOptions {
    * every call pays full input price. When this flag is set, cache activity
    * is logged per call as "[LLM] cache: created=X read=Y" (both 0 = inert). */
   cacheSystem?: boolean;
+  /** CostMeter attribution — which component this call belongs to (default "other"). */
+  component?: CostComponent;
 }
 
 /**
@@ -109,6 +112,13 @@ export async function callModel(
     if (!resp.ok) throw new Error(`OpenRouter ${resp.status}: ${await resp.text()}`);
     const data = (await resp.json()) as any;
     if (opts.cacheSystem) logCacheUsage(data.usage);
+    // CostMeter: capture OpenRouter usage (OpenAI-shaped) — fail-soft.
+    recordUsage({
+      component: opts.component || "other",
+      model,
+      inputTokens: data?.usage?.prompt_tokens,
+      outputTokens: data?.usage?.completion_tokens,
+    });
     return data.choices?.[0]?.message?.content || "";
   }
 
@@ -136,6 +146,15 @@ export async function callModel(
     if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${await resp.text()}`);
     const data = (await resp.json()) as any;
     if (opts.cacheSystem) logCacheUsage(data.usage);
+    // CostMeter: capture Anthropic-direct usage — fail-soft.
+    recordUsage({
+      component: opts.component || "other",
+      model: anthropicModel,
+      inputTokens: data?.usage?.input_tokens,
+      outputTokens: data?.usage?.output_tokens,
+      cacheReadTokens: data?.usage?.cache_read_input_tokens,
+      cacheCreationTokens: data?.usage?.cache_creation_input_tokens,
+    });
     return data.content?.[0]?.text || "";
   }
 

@@ -32,6 +32,7 @@ import type { ContextSync } from "./context-sync";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { pushContextUpdate } from "../voice-persona";
 import { callModel, parseJSON } from "../ai_gateway/llm-client";
+import { recordUsage } from "./cost-meter";
 import { CONFIG } from "../config";
 
 // ── Types ──
@@ -574,6 +575,7 @@ Max 3 queries. Each query should be a specific information need, not a keyword.`
       const text = await callModel(prompt, {
         model: CONFIG.analysis.model,
         maxTokens: 256,
+        component: "context",
       });
       const parsed = parseJSON<Partial<ConversationAnalysis>>(text);
       if (!parsed) return noop;
@@ -798,6 +800,13 @@ RULES:
       });
       if (!resp.ok) throw new Error(`OpenRouter ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
       const data = (await resp.json()) as any;
+      // CostMeter: agentic-search tool round (context component) — fail-soft.
+      recordUsage({
+        component: "context",
+        model,
+        inputTokens: data?.usage?.prompt_tokens,
+        outputTokens: data?.usage?.completion_tokens,
+      });
       const choice = data.choices?.[0];
       const msg = choice?.message;
 
@@ -835,6 +844,15 @@ RULES:
       });
       if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
       const data = (await resp.json()) as any;
+      // CostMeter: agentic-search tool round via Anthropic direct — fail-soft.
+      recordUsage({
+        component: "context",
+        model: anthropicModel,
+        inputTokens: data?.usage?.input_tokens,
+        outputTokens: data?.usage?.output_tokens,
+        cacheReadTokens: data?.usage?.cache_read_input_tokens,
+        cacheCreationTokens: data?.usage?.cache_creation_input_tokens,
+      });
 
       const textBlocks = (data.content || []).filter((b: any) => b.type === "text");
       const toolBlocks = (data.content || []).filter((b: any) => b.type === "tool_use");

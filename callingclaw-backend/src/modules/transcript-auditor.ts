@@ -1076,6 +1076,7 @@ ${enrichedTranscript}`;
         maxTokens: 192,
         system: CLASSIFY_SYSTEM,
         cacheSystem: true, // static block → Anthropic prompt caching via OpenRouter
+        component: "auditor",
       });
       const parsed = parseJSON<{
         action?: string;
@@ -1152,6 +1153,7 @@ ${enrichedTranscript}`;
         prompt: `User wants to click: "${userIntent}"\n\nClickable elements on page:\n${elementList}`,
         maxTokens: 10,
         temperature: 0,
+        component: "auditor",
       });
       clickIndex = parseInt(String(response).trim()) - 1;
     } catch {

@@ -1120,6 +1120,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     <div class="st-item" title="Bun Engine Status"><div class="st-dot" id="st-eng"></div><span id="st-eng-t">Engine</span></div>
     <div class="st-item" title="Realtime Voice Connection"><div class="st-dot" id="st-voice-dot"></div><span>Voice</span></div>
     <div class="st-item" title="OpenClaw Gateway"><div class="st-dot" id="st-oc"></div><span>OpenClaw</span></div>
+    <!-- Audio-health indicator (Lane D): only shown while a meeting is live -->
+    <div class="st-item" id="st-audio-item" title="Meeting audio health" style="display:none;"><div class="st-dot" id="st-audio-dot"></div><span id="st-audio-label">Audio</span></div>
   </div>
   <div class="st-right" style="display:flex;align-items:center;gap:8px;">
     <button class="btn btn-sm btn-primary" id="st-eng-btn" style="display:none" onclick="toggleEngine()">Start Engine</button>
@@ -1428,9 +1430,15 @@ function handleMeetingEvent(event) {
       if (!_audioBridgeWs || _audioBridgeWs.readyState !== WebSocket.OPEN) {
         startAudioBridge('meet_bridge');
       }
+      // Show the audio-health indicator immediately (don't wait for the ~10s status poll).
+      _ccMeetingLive = true;
+      startAudioHealthPoll();
       break;
     case 'meeting.ended':
       addMpActivity('done', 'Meeting ended');
+      // Hide the audio-health indicator immediately (authoritative "meeting over" signal).
+      _ccMeetingLive = false;
+      stopAudioHealthPoll();
       // Update data model
       if (S.activeMeetingId && S.meetingFiles[S.activeMeetingId]) {
         S.meetingFiles[S.activeMeetingId].status = 'ended';
@@ -1754,6 +1762,104 @@ function updateStatusBar() {
   } else if (!S.daemon) {
     ['st-voice-dot','st-oc'].forEach(id => document.getElementById(id).className = 'st-dot');
   }
+  // Reconcile the meeting-live gate from authoritative backend status. This runs on every
+  // refresh (~10s) and catches "app opened mid-meeting" + any missed WS lifecycle event.
+  // WS meeting.started/ended flip the gate faster in the common case (see handleMeetingEvent).
+  if (!S.daemon) {
+    _ccMeetingLive = false;
+  } else if (S.status && S.status.meeting) {
+    _ccMeetingLive = !!S.status.meeting.active;
+  }
+  // No fresh status this cycle (transient fetch fail) → keep the last WS-driven value.
+  if (_ccMeetingLive) startAudioHealthPoll(); else stopAudioHealthPoll();
+}
+
+// ── Audio-health indicator (Lane D) ──────────────────────────────────────────
+// Turns the (already self-healing) capture pipeline into a visible trust signal.
+// Polls GET /api/audio/status at ~2s ONLY while a meeting is live, maps the backend's
+// derived `status` to a colored dot + short label in the status bar. Fail-soft: any
+// fetch error → neutral "unknown" state; never throws, never spams the console.
+var _ccMeetingLive = false;
+var _ccAudioPollTimer = null;
+
+function ccAudioInMeeting() {
+  return _ccMeetingLive === true;
+}
+
+function startAudioHealthPoll() {
+  if (_ccAudioPollTimer) return;      // already running (idempotent)
+  pollAudioHealth();                  // immediate first sample (no 2s wait)
+  _ccAudioPollTimer = setInterval(pollAudioHealth, 2000);
+}
+
+function stopAudioHealthPoll() {
+  if (_ccAudioPollTimer) { clearInterval(_ccAudioPollTimer); _ccAudioPollTimer = null; }
+  renderAudioHealth(null);            // hide the indicator when idle
+}
+
+async function pollAudioHealth() {
+  // Defensive: if the meeting is no longer live, stop and hide.
+  if (!ccAudioInMeeting()) { stopAudioHealthPoll(); return; }
+  // fetchJSON already swallows errors and returns null on failure/timeout.
+  var data = await fetchJSON(API + '/api/audio/status');
+  renderAudioHealth(data);
+}
+
+function renderAudioHealth(data) {
+  var item = document.getElementById('st-audio-item');
+  var dot = document.getElementById('st-audio-dot');
+  var label = document.getElementById('st-audio-label');
+  if (!item || !dot || !label) return;
+
+  // Not in a meeting → hide entirely (idle).
+  if (!ccAudioInMeeting()) { item.style.display = 'none'; return; }
+  item.style.display = '';
+
+  // Fetch failed / malformed → neutral unknown state (never throw, never spam).
+  if (!data || typeof data.status !== 'string') {
+    dot.className = 'st-dot';
+    dot.style.animation = '';
+    label.textContent = 'Audio —';
+    item.title = 'Audio health unavailable';
+    return;
+  }
+
+  var status = data.status;
+  // receiverCycleCount > 0 while not yet healthy = the self-healing loop is actively
+  // re-selecting the audio source. Surface that as a distinct "recovering" hint.
+  var recovering = (data.receiverCycleCount || 0) > 0 && status !== 'healthy';
+  var cls = 'st-dot';
+  var text = 'Audio';
+  var tip = 'Meeting audio health';
+
+  if (status === 'healthy') {
+    cls = 'st-dot green';
+    text = 'Hearing you';
+    tip = 'AI is hearing meeting audio';
+  } else if (recovering) {
+    cls = 'st-dot yellow';
+    text = 'Recovering audio';
+    tip = 'Re-selecting the active audio source…';
+  } else if (status === 'silent') {
+    cls = 'st-dot yellow';
+    text = 'No audio — silent';
+    tip = 'Speaker detected earlier; currently silent';
+  } else if (status === 'no-speaker') {
+    cls = 'st-dot';   // grey / default
+    text = 'Waiting for speaker';
+    tip = 'Connected — waiting for someone to speak';
+  } else { // 'inactive' or anything unexpected
+    cls = 'st-dot';
+    text = 'Starting audio';
+    tip = 'Audio pipeline starting…';
+  }
+
+  dot.className = cls;
+  // Liveness pulse: gently pulse the green dot while actively hearing (matches the
+  // existing sp-voice-dot pulse language). Static otherwise.
+  dot.style.animation = (status === 'healthy') ? 'pulse 1.6s ease-in-out infinite' : '';
+  label.textContent = text;
+  item.title = tip;
 }
 
 async function toggleEngine() {

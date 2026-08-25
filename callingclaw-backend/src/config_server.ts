@@ -66,6 +66,8 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 2): P
 
 import type { MeetingScheduler } from "./modules/meeting-scheduler";
 import type { PostMeetingDelivery } from "./modules/post-meeting-delivery";
+import type { CostMeter } from "./modules/cost-meter";
+import { classifyJoinFailure, type AudioHealth } from "./chrome-launcher";
 
 interface Services {
   bridge: PythonBridge;
@@ -89,6 +91,53 @@ interface Services {
   postMeetingDelivery?: PostMeetingDelivery;
   meetingDB?: import("./modules/meeting-db").MeetingDB;
   sessionManager?: import("./modules/session-manager").SessionManager;
+  costMeter: CostMeter;
+}
+
+/**
+ * How stale an AudioHealth snapshot may be (ms) before we treat the pipeline as
+ * not-live. The ChromeLauncher poller refreshes `updatedAt` every ~3s; 15s lets a
+ * poll or two be missed before we flip to "inactive".
+ */
+const AUDIO_HEALTH_STALE_MS = 15000;
+
+/** UI-friendly derived audio-status fields consumed by the desktop (Lane D). */
+export interface DerivedAudioStatus {
+  /** Capture is active and non-silent audio arrived within the flow window. */
+  hearing: boolean;
+  /** Any non-silent audio has been captured this session. */
+  speakerDetected: boolean;
+  /** Pipeline live, hearing audio, and the snapshot is fresh — the "all good" flag. */
+  healthy: boolean;
+  /** Short label for direct rendering. */
+  status: "healthy" | "silent" | "no-speaker" | "inactive";
+}
+
+/**
+ * Pure mapping of a raw AudioHealth snapshot to UI-friendly derived fields.
+ * Exported for unit testing (avoids booting the whole HTTP server). No side effects.
+ *
+ * status precedence:
+ *   inactive   — pipeline not live, or the snapshot is stale (poller stopped/stalled)
+ *   healthy    — live and currently hearing non-silent audio
+ *   silent     — live, a speaker was heard earlier, but audio is not flowing right now
+ *   no-speaker — live and capturing, but no speaker has ever been detected
+ */
+export function deriveAudioStatus(
+  health: AudioHealth,
+  now: number = Date.now(),
+): DerivedAudioStatus {
+  const fresh = health.updatedAt > 0 && now - health.updatedAt < AUDIO_HEALTH_STALE_MS;
+  const live = !!health.active && fresh;
+  const hearing = !!health.captureFlowing;
+  const speakerDetected = !!health.speakerDetected;
+  const healthy = live && hearing;
+  let status: DerivedAudioStatus["status"];
+  if (!live) status = "inactive";
+  else if (hearing) status = "healthy";
+  else if (speakerDetected) status = "silent";
+  else status = "no-speaker";
+  return { hearing, speakerDetected, healthy, status };
 }
 
 // ── Tool Layer Definitions (for Voice Test toggles) ──
@@ -2167,7 +2216,42 @@ export function startConfigServer(services: Services) {
           }, { headers });
         }
 
-        // Zoom / unknown: use model-driven BrowserActionLoop
+        // Zoom: PRIMARY path is the hardened ChromeLauncher join (mirrors the live
+        // /api/meeting/join handler). Zoom is WebRTC like Meet, so joinGoogleMeet's
+        // navigate → "Join from browser" → admit flow + audio injection applies.
+        // Only a *retryable* hardened failure falls through to the brittle
+        // model-driven BrowserActionLoop below; terminal failures return as-is so we
+        // don't burn a 25-step model loop against a meeting that's already gone.
+        if (platform === "zoom" && services.chromeLauncher) {
+          services.eventBus.emit("meeting.joining", {
+            url: validated.url,
+            platform,
+            method: "chromelauncher",
+          });
+          try {
+            await services.chromeLauncher.launch(); // idempotent — installs audio init script
+          } catch (e: any) {
+            console.warn("[Meeting] ChromeLauncher launch failed:", e.message);
+          }
+          const result = await services.chromeLauncher.joinGoogleMeet(validated.url, {
+            muteCamera: true,
+            muteMic: false, // Mic ON for audio injection
+            onStep: (step) => services.eventBus.emit("browser_loop.step", { step, method: "chromelauncher" }),
+          });
+          // Success (in_meeting or waiting_room) OR terminal failure (rejected/ended/
+          // expired) → return the JoinResult verbatim. Do NOT fall back on a terminal
+          // failure — retrying a dead/rejected meeting wastes a full model loop.
+          if (result.state !== "failed" || classifyJoinFailure(result.summary) !== "retryable") {
+            return Response.json({ ...result, validated, method: "chromelauncher" }, { headers });
+          }
+          // Retryable hardened failure only → fall through to BrowserActionLoop.
+          // NOTE: this fallback may not connect because chromeLauncher.launch() now
+          // holds the persistent Chrome profile (v2.7.12 gotcha). Acceptable — it only
+          // runs after the hardened path has already failed retryably.
+          console.warn("[Meeting] ChromeLauncher Zoom join failed retryably — falling back to BrowserActionLoop");
+        }
+
+        // Zoom / unknown: use model-driven BrowserActionLoop (fallback)
         if (!services.browserLoop) {
           return Response.json({ error: "Browser action loop not initialized" }, { status: 500, headers });
         }
@@ -3513,34 +3597,49 @@ STEP-BY-STEP FLOW:
         }, { headers });
       }
 
-      // GET /api/audio/status — Audio pipeline diagnostic
+      // GET /api/audio/status — live audio-pipeline health (Lane A: ChromeLauncher.getAudioHealth).
+      // Replaces the old fragile `strings /tmp/callingclaw-backend.log` grep with the in-memory
+      // snapshot the ChromeLauncher poller maintains. Returns raw AudioHealth fields + derived,
+      // UI-friendly fields (hearing/speakerDetected/healthy/status) for Lane D to render directly.
       if (url.pathname === "/api/audio/status" && req.method === "GET") {
-        const log = (() => { try { return require("child_process").execSync("strings /tmp/callingclaw-backend.log | tail -100").toString(); } catch { return ""; } })();
-        const audioChunks = (log.match(/Mic audio chunk/g) || []).length;
-        const pipelineReady = log.includes("pipeline_ready");
-        const echoSuppressed = (log.match(/Echo suppressed/g) || []).length;
-        const interrupted = (log.match(/interrupted AI response/g) || []).length;
-        const speechStarted = (log.match(/speech_started/g) || []).length;
-        const audioDeltas = (log.match(/response\.audio\.d/g) || []).length;
-        let chrome: any = null;
-        try {
-          chrome = services.chromeLauncher ? await services.chromeLauncher.getStatus() : { error: "no_chrome_launcher" };
-        } catch (e: any) {
-          chrome = { error: e.message || "chrome_status_failed" };
-        }
-        return Response.json({
-          pipeline: pipelineReady ? "ready" : "not_ready",
-          capture: { chunks: audioChunks, flowing: audioChunks > 0 },
-          playback: { audioDeltas, hasOutput: audioDeltas > 0 },
-          echo: { suppressed: echoSuppressed },
-          vad: { speechStarted, interrupted },
-          clients: {
-            browserVoice: browserVoiceClients.size,
-            audioBridge: audioBridgeClients.size,
-            recallBridge: recallBridgeClients.size,
+        const clients = {
+          audioBridge: audioBridgeClients.size,
+          browserVoice: browserVoiceClients.size,
+          recallBridge: recallBridgeClients.size,
+        };
+        // No ChromeLauncher / not launched yet → inactive-default snapshot (never error).
+        const health: AudioHealth = services.chromeLauncher?.getAudioHealth?.() ?? {
+          active: false, captureFlowing: false, lastMaxAmp: 0, lastNonzeroAudioAt: 0,
+          activeReceiverIndex: -1, receiverCycleCount: 0, speakerDetected: false,
+          captureChunks: 0, wsState: -1, updatedAt: 0,
+        };
+        const derived = deriveAudioStatus(health, Date.now());
+        return Response.json(
+          {
+            ...health,        // raw AudioHealth fields
+            hearing: derived.hearing,
+            speakerDetected: derived.speakerDetected,
+            healthy: derived.healthy,
+            status: derived.status,
+            clients,          // live connected-client counts (not log-derived)
           },
-          chrome,
-        }, { headers });
+          { headers },
+        );
+      }
+
+      // GET /api/cost — CostMeter report (Lane B). ?meetingId=<id> for one meeting;
+      // no param → all retained meetings + aggregate totals. Fail-soft: never throws.
+      if (url.pathname === "/api/cost" && req.method === "GET") {
+        const meter = services.costMeter;
+        if (!meter || typeof meter.getReport !== "function") {
+          return Response.json({ error: "Cost metering unavailable" }, { status: 503, headers });
+        }
+        try {
+          const meetingId = url.searchParams.get("meetingId") || undefined;
+          return Response.json(meter.getReport(meetingId), { headers });
+        } catch (e: any) {
+          return Response.json({ error: `Cost report failed: ${e?.message || e}` }, { headers });
+        }
       }
 
       // GET /api/stage/documents — Working documents on the Meeting Stage
