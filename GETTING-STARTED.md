@@ -83,6 +83,7 @@ it delegates to whichever agent you already have installed — no OpenClaw requi
 | **Claude Code** | `./scripts/setup-claude-code.sh` | `claude "use callingclaw tools to report status"` |
 | **Codex** (CLI or desktop app) | `./scripts/setup-codex.sh` | `codex exec "use callingclaw tools to report status"` |
 | **Hermes** (NousResearch) | `./scripts/setup-hermes.sh` | `./scripts/start-hermes.sh` |
+| **Raven** (EverMind-AI) | `pipx install raven-agent` then `./scripts/setup-raven.sh` | `./scripts/start-raven.sh` |
 | **OpenClaw** | automatic in `setup.sh` | OpenClaw Control UI / Telegram |
 | **Standalone** | nothing — fallback | — (voice, notes, screen still work) |
 

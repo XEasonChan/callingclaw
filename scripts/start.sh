@@ -47,6 +47,8 @@ if [[ -z "$AGENT_PLATFORM" ]]; then
     AGENT_PLATFORM="codex"
   elif [[ -f "$HOME/.hermes/config.yaml" ]] || command -v hermes &>/dev/null || [[ -x "$HOME/.local/bin/hermes" ]]; then
     AGENT_PLATFORM="hermes"
+  elif [[ -f "$HOME/.raven/config.json" ]] || command -v raven &>/dev/null || [[ -x "$HOME/.local/bin/raven" ]]; then
+    AGENT_PLATFORM="raven"
   else
     AGENT_PLATFORM="standalone"
   fi
@@ -93,6 +95,14 @@ elif [[ "$AGENT_PLATFORM" == "hermes" ]]; then
     ok "Agent platform: Hermes ($("$HERMES_CMD" --version 2>/dev/null || echo 'unknown'))"
   else
     warn "Hermes CLI not found — run ./scripts/setup-hermes.sh (falling back to standalone)"
+  fi
+elif [[ "$AGENT_PLATFORM" == "raven" ]]; then
+  RAVEN_CMD=""
+  if command -v raven &>/dev/null; then RAVEN_CMD="raven"; elif [[ -x "$HOME/.local/bin/raven" ]]; then RAVEN_CMD="$HOME/.local/bin/raven"; fi
+  if [[ -n "$RAVEN_CMD" ]]; then
+    ok "Agent platform: Raven ($("$RAVEN_CMD" --version 2>/dev/null || echo 'unknown'))"
+  else
+    warn "Raven CLI not found — run ./scripts/setup-raven.sh (falling back to standalone)"
   fi
 else
   ok "Agent platform: standalone (voice, notes, screen — all work without external agent)"

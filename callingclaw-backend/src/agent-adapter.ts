@@ -17,6 +17,7 @@
 //   ClaudeCodeAdapter — claude -p subprocess for all cognitive tasks
 //   CodexAdapter      — codex exec subprocess for all cognitive tasks
 //   HermesAdapter     — hermes -z subprocess for all cognitive tasks
+//   RavenAdapter      — raven agent -m subprocess for all cognitive tasks
 //   StandaloneAdapter — No external agent, internal scheduling only
 //
 // ═══════════════════════════════════════════════════════════════════
@@ -27,7 +28,7 @@ import type { MeetingSummary } from "./modules/meeting";
 
 // ── Agent Adapter Interface ──
 
-export type AgentPlatform = "openclaw" | "claude-code" | "codex" | "hermes" | "standalone";
+export type AgentPlatform = "openclaw" | "claude-code" | "codex" | "hermes" | "raven" | "standalone";
 
 export interface AgentAdapter {
   /** Platform identifier */
@@ -275,6 +276,10 @@ export function createAgentAdapter(platform: AgentPlatform, deps?: any): AgentAd
     case "hermes": {
       const { HermesAdapter } = require("./adapters/hermes-adapter");
       return new HermesAdapter(deps?.onJobFire);
+    }
+    case "raven": {
+      const { RavenAdapter } = require("./adapters/raven-adapter");
+      return new RavenAdapter(deps?.onJobFire);
     }
     case "standalone": {
       const { StandaloneAdapter } = require("./adapters/standalone-adapter");

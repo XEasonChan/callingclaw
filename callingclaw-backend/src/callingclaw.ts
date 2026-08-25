@@ -103,7 +103,7 @@ calendar.onAuthError = (error: string) => {
 await taskStore.load();
 
 // ── 1b. ContextSync + Agent Adapter ─────────────────────────────
-// Detect agent platform: openclaw > claude-code > codex > hermes > standalone
+// Detect agent platform: openclaw > claude-code > codex > hermes > raven > standalone
 const _detectedPlatform: AgentPlatform = (() => {
   const envPlatform = process.env.AGENT_PLATFORM;
   if (
@@ -111,11 +111,12 @@ const _detectedPlatform: AgentPlatform = (() => {
     envPlatform === "claude-code" ||
     envPlatform === "codex" ||
     envPlatform === "hermes" ||
+    envPlatform === "raven" ||
     envPlatform === "standalone"
   ) {
     return envPlatform;
   }
-  // Auto-detect: prefer openclaw if config exists, then claude-code CLI, then codex, then hermes
+  // Auto-detect: prefer openclaw if config exists, then claude-code CLI, then codex, then hermes, then raven
   try {
     if (require("fs").existsSync(`${process.env.HOME}/.openclaw/openclaw.json`)) return "openclaw";
   } catch {}
@@ -137,6 +138,13 @@ const _detectedPlatform: AgentPlatform = (() => {
   try {
     require("child_process").execSync("which hermes", { stdio: "ignore" });
     return "hermes";
+  } catch {}
+  try {
+    if (require("fs").existsSync(`${process.env.HOME}/.raven/config.json`)) return "raven";
+  } catch {}
+  try {
+    require("child_process").execSync("which raven", { stdio: "ignore" });
+    return "raven";
   } catch {}
   return "standalone";
 })();

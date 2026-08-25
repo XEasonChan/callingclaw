@@ -61,7 +61,7 @@ ok "Bun $(bun --version)"
 
 # ── Agent Platform Detection ──
 # CallingClaw works with any agentic backend: OpenClaw, Claude Code, Codex,
-# Hermes, or standalone
+# Hermes, Raven, or standalone
 AGENT_PLATFORM="standalone"
 CODEX_APP_BIN="/Applications/Codex.app/Contents/Resources/codex"
 
@@ -81,8 +81,11 @@ elif command -v codex &>/dev/null || [[ -x "$CODEX_APP_BIN" ]]; then
 elif command -v hermes &>/dev/null || [[ -x "$HOME/.local/bin/hermes" ]]; then
   ok "Hermes detected (agent platform: hermes)"
   AGENT_PLATFORM="hermes"
+elif [[ -f "$HOME/.raven/config.json" ]] || command -v raven &>/dev/null || [[ -x "$HOME/.local/bin/raven" ]]; then
+  ok "Raven detected (agent platform: raven)"
+  AGENT_PLATFORM="raven"
 else
-  warn "No agent platform detected (OpenClaw, Claude Code, Codex, or Hermes)"
+  warn "No agent platform detected (OpenClaw, Claude Code, Codex, Hermes, or Raven)"
   warn "CallingClaw will work in standalone mode (voice, notes, screen — all work)"
   warn "For full features (meeting prep, deep reasoning, auto-execution):"
   warn "  - Install Claude Code: npm install -g @anthropic-ai/claude-code"
@@ -191,6 +194,8 @@ elif [[ "$AGENT_PLATFORM" == "codex" ]]; then
   "$PROJECT_DIR/scripts/setup-codex.sh" || warn "Codex MCP registration failed — run ./scripts/setup-codex.sh manually"
 elif [[ "$AGENT_PLATFORM" == "hermes" ]]; then
   "$PROJECT_DIR/scripts/setup-hermes.sh" || warn "Hermes MCP registration failed — run ./scripts/setup-hermes.sh manually"
+elif [[ "$AGENT_PLATFORM" == "raven" ]]; then
+  "$PROJECT_DIR/scripts/setup-raven.sh" || warn "Raven MCP registration failed — run ./scripts/setup-raven.sh manually"
 fi
 
 # ═══════════════════════════════════════════════
