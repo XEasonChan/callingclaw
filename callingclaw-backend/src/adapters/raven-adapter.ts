@@ -31,6 +31,7 @@ import {
   OC010_PROMPT, type OC010_Request,
 } from "../openclaw-protocol";
 import { LANGUAGE_RULE } from "../prompt-constants";
+import { recordUsage } from "../modules/cost-meter";
 
 // Shared docs dir — read by Desktop and OpenClaw. Todo/notes files land here.
 const WORKSPACE_DIR = `${process.env.HOME}/.callingclaw/shared`;
@@ -350,6 +351,16 @@ export class RavenAdapter implements AgentAdapter {
       const msg = (cleanStdout.trim() || stripAnsi(stderr).trim() || "(no output)").slice(0, 500);
       throw new Error(`raven agent exited ${exitCode}: ${msg}`);
     }
+
+    // CostMeter: `agent` cost. `raven agent -m` emits plain text only (no usage
+    // block), so record the call with tokens unknown — at least it's counted.
+    // Fail-soft. `opts.model` is normally "" (Option B: the model lives in
+    // ~/.raven/config.json, not the argv), so fall back to the adapter name.
+    recordUsage({
+      component: "agent",
+      model: opts.model || "raven",
+      meta: { adapter: "raven" },
+    });
 
     // Raven emits plain text (with --no-markdown --no-logs) — no JSON to parse.
     // …BUT even with `--no-logs`, Raven's stdout still carries a preamble BEFORE
