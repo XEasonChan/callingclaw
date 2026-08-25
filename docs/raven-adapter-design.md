@@ -1,9 +1,18 @@
 # Raven Agent Integration — Design Spec
 
-**Date:** 2026-06-30
+**Date:** 2026-06-30 (design) · updated 2026-08-25 (post-implementation corrections)
 **Author:** andrew@tanka.ai + Claude
-**Status:** Draft for review — DESIGN ONLY (no implementation in this branch)
+**Status:** IMPLEMENTED — shipped on `feat/raven-integration`
 **Branch:** `feat/raven-integration`
+
+> **Read this first.** This began as a pre-implementation design doc, and building it
+> disproved several of its guesses — most importantly the MCP config schema (§Decision 3),
+> where the assumed top-level `mcpServers` key would have **bricked Raven's config load**.
+> The wrong claims have been corrected in place and the open questions closed. Where this
+> doc and the code disagree, **the code wins**: `scripts/setup-raven.sh` and
+> `callingclaw-backend/src/adapters/raven-adapter.ts` are the authority, and the
+> discovered gotchas are collected in
+> `.agents/skills/agent-platform-integration/SKILL.md`.
 
 Add **Raven** (EverMind-AI's agent CLI) as a new agent-platform adapter (`"raven"`) so
 CallingClaw can use Raven as its cognitive backend for meeting prep, context recall,
@@ -70,7 +79,7 @@ Nothing about voice / audio / Meet-join changes — those live in the REST API o
    │  - StandaloneAdapter│    └──────────────────────────────────────┘
    └────────────────────┘                ▲
               ▲                           │ registered in Raven's MCP config
-     selected by AGENT_PLATFORM     ~/.raven/config.json (JSON, mcpServers)
+     selected by AGENT_PLATFORM  ~/.raven/config.json (JSON, tools.mcp_servers)
 ```
 
 Raven has **no channel-push equivalent** (that path is Anthropic-proprietary, Claude
@@ -283,24 +292,32 @@ other MCP servers, onboarding state) — never clobber the file.
 
 ### Target JSON shape
 
-Registering under the conventional `mcpServers` key (the de-facto MCP-client standard,
-same shape Claude/Cursor/opencode use; Raven follows LiteLLM+MCP conventions). The
-setup script MUST verify the exact key name against the installed Raven's schema on
-first run — see Open Question (e).
+**RESOLVED against the installed raven v0.1.1** (`raven/config/schema.py`, `config/update.py`).
+The design originally assumed the conventional top-level `mcpServers` key (the de-facto
+MCP-client standard that Claude/Cursor/opencode use). **That is WRONG for Raven** and is a
+hard failure, not a warning:
+
+- MCP servers live at **`tools.mcp_servers.<name>`** — **nested** under `tools`, and
+  **snake_case**. The root `Config` uses pydantic `extra="forbid"`, so a top-level
+  `mcpServers` key **fails schema validation and bricks config load entirely**.
+- Each entry is an `MCPServerConfig`: `{ command, args, env, type? }`. There is **no
+  `enabled` field** — adding one also trips `extra="forbid"`.
+- `type` auto-detects to `stdio` from the presence of `command`, so it can be omitted.
 
 ```jsonc
 {
   // ...user's existing provider/model/onboarding config preserved untouched...
-  "mcpServers": {
-    // ...user's other MCP servers preserved...
-    "callingclaw-events": {
-      "command": "bun",
-      "args": ["<PROJECT_DIR>/plugins/callingclaw-events/index.ts"],
-      "env": {
-        "CALLINGCLAW_HTTP": "http://localhost:4000",
-        "CALLINGCLAW_URL": "ws://localhost:4000/ws/events"
-      },
-      "enabled": true
+  "tools": {
+    "mcp_servers": {
+      // ...user's other MCP servers preserved...
+      "callingclaw-events": {
+        "command": "/absolute/path/to/bun",
+        "args": ["<PROJECT_DIR>/plugins/callingclaw-events/index.ts"],
+        "env": {
+          "CALLINGCLAW_HTTP": "http://localhost:4000",
+          "CALLINGCLAW_URL": "ws://localhost:4000/ws/events"
+        }
+      }
     }
   }
 }
@@ -335,7 +352,8 @@ let data = {};
 try { data = JSON.parse(fs.readFileSync(configPath, "utf8")); }
 catch { data = {}; }                       // missing or corrupt → start fresh (see note)
 
-const servers = (data.mcpServers ||= {});  // non-destructive: create only if absent
+const tools   = (data.tools ||= {});       // MCP lives NESTED under `tools`
+const servers = (tools.mcp_servers ||= {}); // snake_case; top-level would brick load
 servers["callingclaw-events"] = {          // idempotent: overwrite only OUR entry
   command: bunPath,
   args: [mcpIndex],
@@ -358,7 +376,7 @@ Safety notes:
   is non-empty and fails to parse, back it up to `config.json.bak` and warn, or abort.
   Recommend: **back up + warn**, then proceed with a fresh object seeded from backup-less
   defaults. (Match the "back up existing first" spirit in `setup-hermes.sh`.)
-- **Idempotent.** Re-running only rewrites `mcpServers["callingclaw-events"]`, keeping
+- **Idempotent.** Re-running only rewrites `tools.mcp_servers["callingclaw-events"]`, keeping
   the path pointed at *this* checkout (same guarantee Codex gets from `mcp remove` +
   `mcp add`). Safe to run repeatedly.
 - **`bun install` the plugin deps first** (same as Hermes/Codex):
@@ -391,11 +409,13 @@ if (key && !data.provider && !data.model) {
 NODE
 ```
 
-> The provider/model **key names above are placeholders.** LiteLLM-based configs vary;
-> the script must be reconciled with the real schema `raven onboard` writes. This is the
-> only part of the script that can't be finalized without inspecting an
-> onboarding-generated `~/.raven/config.json` (Open Question e). Everything else (the
-> `mcpServers` merge) is safe as designed.
+> **RESOLVED** — the provider/model key names were placeholders when this was written;
+> they have since been confirmed against raven v0.1.1: the key is
+> `providers.openrouter.apiKey` (**camelCase**, via raven's pydantic alias generator —
+> even though sibling keys are snake_case), and model/provider are
+> `agents.defaults.{model,provider}`. The MCP merge target is `tools.mcp_servers`, not
+> top-level `mcpServers` — see the corrected shape above. `scripts/setup-raven.sh` is the
+> authority; this doc follows it.
 
 ---
 
@@ -647,18 +667,22 @@ Raven picks the model from `~/.raven/config.json`; `setup-raven.sh` will seed it
 - **You decide:** if Raven should rank *higher* (e.g. above hermes/codex) when present,
   say so and I'll reorder.
 
-**(e) Confirm Raven's config schema + install/test details (needs a real install to verify).**
-These are the only items that can't be finalized from the repo alone; please confirm or
-let me install Raven to verify:
-- Exact MCP key name in `~/.raven/config.json` — is it `mcpServers` (assumed) or
-  something else (`mcp_servers`, `mcp.servers`)?
-- Exact provider/model config shape written by `raven onboard` (so the seed snippet in
-  Decision 3 matches — top-level `provider`/`model` vs a `providers`/`litellm` block).
-- Install command for the setup script: curl installer URL vs `pipx install <pkg>` — and
-  the PyPI package/console-script name.
-- Whether Raven honors a `RAVEN_HOME` / XDG config-dir override, or whether
-  `--config <tempfile>` fully overrides discovery — needed so `e2e-raven.ts` never
-  touches the user's real `~/.raven/config.json`.
+**(e) ~~Confirm Raven's config schema + install/test details~~ — CLOSED, verified against a
+real raven v0.1.1 install.** All four unknowns are now answered in code; no user decision
+is outstanding:
+- **MCP key name** — **`tools.mcp_servers`** (nested, snake_case), NOT top-level
+  `mcpServers`. The root `Config` uses pydantic `extra="forbid"`, so the originally
+  assumed key **bricks config load**. `MCPServerConfig` has no `enabled` field.
+- **Provider/model shape** — `providers.openrouter.apiKey` (camelCase) +
+  `agents.defaults.{model,provider}`; sandbox at `tools.sandbox.backend = "none"`.
+- **Install command** — `pipx install raven-agent` (or a pinned git ref); the console
+  script is `raven`. `setup-raven.sh` **locates** an existing install and exits with
+  instructions if absent — it does not install Raven itself.
+  It **must** also `pipx inject raven "mcp>=1.0.0"`: raven does not declare the `mcp`
+  client package but imports it lazily and swallows the `ImportError`, so without it the
+  integration silently registers **zero** tools.
+- **Config isolation** — `--config <tempfile>` makes raven derive all runtime dirs from
+  that file's parent, so `e2e-raven.ts` never touches the real `~/.raven/config.json`.
 
 **(f) Do you want a per-meeting Raven session key (`-s cc-<meetingId>`)?**
 - **Recommended default:** **no** — stateless per-call (avoids cross-meeting context
