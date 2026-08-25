@@ -338,11 +338,12 @@ hermes skills install https://raw.githubusercontent.com/XEasonChan/callingclaw/m
 [Raven](https://github.com/EverMind-AI/Raven) users get the same conversational surface — talk to CallingClaw from the Raven CLI:
 
 ```bash
-./scripts/setup-raven.sh    # installs Raven (pipx), seeds an OpenRouter provider into ~/.raven/config.json, registers the events MCP server
+pipx install raven-agent    # install Raven first — the setup script locates it, it does not install it
+./scripts/setup-raven.sh    # seeds an OpenRouter provider into ~/.raven/config.json, registers the events MCP server
 ./scripts/start-raven.sh    # interactive session ("join my 3pm meeting", "any summaries?")
 ```
 
-Model and provider are configured in `~/.raven/config.json` (not CLI flags); the setup script seeds them from `OPENROUTER_API_KEY`. The integration is E2E-verified via `bun scripts/e2e-raven.ts`.
+Model and provider are configured in `~/.raven/config.json` (not CLI flags); the setup script seeds them from `OPENROUTER_API_KEY`. It also injects the `mcp` client package into Raven's own environment — Raven doesn't declare it, and without it MCP silently registers zero tools. The integration is E2E-verified via `bun scripts/e2e-raven.ts`.
 
 ---
 
