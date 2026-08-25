@@ -38,23 +38,27 @@ const VERSION = `CC-RAVEN-E2E-${Date.now().toString().slice(-6)}`;
 const httpBase = `http://localhost:${PORT}`;
 const wsUrl = `ws://localhost:${PORT}/ws/events`;
 
-// ── OpenRouter key (read-only, from the MAIN repo .env; never mutated) ──
-// This worktree has no .env of its own; read the main checkout's .env.
-const MAIN_ENV = "/Users/admin/Library/Mobile Documents/com~apple~CloudDocs/CallingClaw 2.0/.env";
+// ── OpenRouter key (read-only; never mutated) ──
+// Resolution order: OPENROUTER_API_KEY in the environment → the repo-root .env
+// resolved RELATIVE to this script (ROOT) → an explicit CALLINGCLAW_ENV_FILE.
+// The env-file override exists for git worktrees, which have no .env of their
+// own: point it at the main checkout's .env instead of hardcoding any path.
 let key = process.env.OPENROUTER_API_KEY || "";
 if (!key) {
-  for (const envPath of [MAIN_ENV, join(ROOT, ".env")]) {
+  const envCandidates = [join(ROOT, ".env"), process.env.CALLINGCLAW_ENV_FILE].filter(Boolean) as string[];
+  for (const envPath of envCandidates) {
     try {
       const env = readFileSync(envPath, "utf-8");
       key =
         env.split("\n").find((l) => l.startsWith("OPENROUTER_API_KEY="))
-          ?.split("=").slice(1).join("=").trim() || "";
+          ?.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "") || "";
       if (key) break;
     } catch {}
   }
 }
 if (!key) {
-  console.error("✗ OPENROUTER_API_KEY not found (env or main .env). Cannot run real inference — stopping.");
+  console.error("✗ OPENROUTER_API_KEY not found (environment, ./.env, or $CALLINGCLAW_ENV_FILE).");
+  console.error("  Cannot run real inference — stopping.");
   process.exit(1);
 }
 
