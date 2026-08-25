@@ -21,7 +21,7 @@
 //   Chrome (with init script)
 //     ├── getUserMedia → returns virtual MediaStreamDestination (AI audio out)
 //     ├── RTCPeerConnection → captures remote tracks (meeting audio in)
-//     └── WebSocket ws://localhost:' + (window.__CC_PORT || 4000) + '/ws/voice-test
+//     └── WebSocket ws://127.0.0.1:' + (window.__CC_PORT || 4000) + '/ws/voice-test
 //           ├── sends: captured meeting audio (PCM16 24kHz base64)
 //           └── receives: AI response audio (PCM16 24kHz base64)
 
@@ -37,6 +37,26 @@ import { CURSOR_INJECT_JS } from "./utils/page-extract";
 const DEFAULT_PROFILE = resolve(process.env.CALLINGCLAW_HOME || resolve(homedir(), ".callingclaw"), "browser-profile");
 const MAIN_CHROME_PROFILE = resolve(homedir(), "Library", "Application Support", "Google", "Chrome");
 const DEFAULT_PORT = 0; // 0 = random free port
+
+// ── Bot-detection evasion init script ────────────────────────────
+// Hides navigator.webdriver so Google Meet treats us as a normal browser.
+//
+// We deliberately do NOT pass the `--disable-blink-features=AutomationControlled`
+// command-line flag: although it keeps navigator.webdriver === false, Chrome
+// surfaces a yellow "You are using an unsupported command-line flag" infobar
+// that is visible during screen-share (looks unprofessional in demos).
+//
+// Instead we drop that flag and override navigator.webdriver here via
+// addInitScript (runs before any page JS, like CDP
+// Page.addScriptToEvaluateOnNewDocument). This is the standard
+// playwright-stealth approach: it removes the banner AND makes
+// navigator.webdriver `undefined` (even stealthier than the flag's `false`).
+// We still keep `ignoreDefaultArgs: ["--enable-automation"]` — without that,
+// Chrome sets navigator.webdriver = true (verified empirically), which Meet
+// would flag as a bot.
+const WEBDRIVER_STEALTH_SCRIPT = `
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+`;
 
 // ── Audio injection init script ──────────────────────────────────
 // This runs BEFORE any page JavaScript, intercepting getUserMedia
@@ -193,8 +213,18 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     console.log('[CC-Audio] Created output dest manually (platform did not call getUserMedia)');
   }
 
-  var BACKEND_WS = 'ws://localhost:${CONFIG.port}/ws/voice-test';
+  var BACKEND_WS_CANDIDATES = [
+    'ws://127.0.0.1:${CONFIG.port}/ws/voice-test',
+    'ws://localhost:${CONFIG.port}/ws/voice-test'
+  ];
   var SAMPLE_RATE = 24000;
+  cc.wsConnected = false;
+  cc.wsUrl = '';
+  cc.wsErrorCount = cc.wsErrorCount || 0;
+  cc.wsCloseCount = cc.wsCloseCount || 0;
+  cc.playbackChunks = cc.playbackChunks || 0;
+  cc.playbackSamples = cc.playbackSamples || 0;
+  cc.lastPlaybackAt = cc.lastPlaybackAt || 0;
 
   // ── Playback worklet (ring buffer, Blob URL) ──
   var outputCtx = cc.outputCtx;
@@ -347,16 +377,27 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
 
   // ── WebSocket to backend ──
   var ws = null;
-  function connectWS() {
-    ws = new WebSocket(BACKEND_WS);
+  function connectWS(candidateIdx) {
+    candidateIdx = candidateIdx || 0;
+    var target = BACKEND_WS_CANDIDATES[candidateIdx % BACKEND_WS_CANDIDATES.length];
+    cc.wsUrl = target;
+    console.log('[CC-Audio] Connecting WS: ' + target);
+    ws = new WebSocket(target);
     ws.onopen = function() {
-      console.log('[CC-Audio] WS connected');
+      cc.wsConnected = true;
+      console.log('[CC-Audio] WS connected: ' + target);
       ws.send(JSON.stringify({ type: 'start', provider: undefined }));
+    };
+    ws.onerror = function() {
+      cc.wsErrorCount++;
+      console.log('[CC-Audio] WS error #' + cc.wsErrorCount + ': ' + target);
     };
     ws.onmessage = function(e) {
       try {
         var data = JSON.parse(e.data);
         if (data.type === 'audio' && data.audio) {
+          cc.playbackChunks++;
+          cc.lastPlaybackAt = Date.now();
           // ── Echo suppression: mark AI as speaking ──
           cc.isPlaying = true;
           if (cc._playingTimer) clearTimeout(cc._playingTimer);
@@ -369,6 +410,10 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
           var bytes = new Uint8Array(raw.length);
           for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
           var pcm16 = new Int16Array(bytes.buffer);
+          cc.playbackSamples += pcm16.length;
+          if (cc.playbackChunks === 1 || cc.playbackChunks % 25 === 0) {
+            console.log('[CC-Audio] playback chunk#' + cc.playbackChunks + ' samples=' + pcm16.length);
+          }
           var float32 = new Float32Array(pcm16.length);
           for (var j = 0; j < pcm16.length; j++) float32[j] = pcm16[j] / 32768;
           var FADE = 24;
@@ -384,9 +429,14 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
         }
       } catch(err) {}
     };
-    ws.onclose = function() { setTimeout(connectWS, 3000); };
+    ws.onclose = function(ev) {
+      cc.wsConnected = false;
+      cc.wsCloseCount++;
+      console.log('[CC-Audio] WS closed #' + cc.wsCloseCount + ' code=' + ev.code + ' url=' + target);
+      setTimeout(function() { connectWS(candidateIdx + 1); }, 3000);
+    };
   }
-  connectWS();
+  connectWS(0);
 
   // ── Monitor: set up capture when PC connects, re-inject if needed ──
   setInterval(function() {
@@ -605,62 +655,70 @@ const AUDIO_PIPELINE_SCRIPT = `(async function() {
     setInterval(pollCaptions, 3000);
   })();
 
-  window.__ccPipeline = {
-    ws: function() { return ws; },
-    playbackNode: playbackNode,
-    captureActive: function() { return cc.captureActive; },
-    captureChunks: function() { return cc.captureChunks; },
-    captureMaxAmp: function() { return cc.captureMaxAmp; },
-    // Live audio-health snapshot consumed by ChromeLauncher.getAudioHealth().
-    // Returns a plain JSON-able object (no functions/DOM refs).
-    health: function() {
-      return {
-        captureActive: !!cc.captureActive,
-        captureChunks: cc.captureChunks || 0,
-        lastChunkMaxAmp: cc._lastChunkMaxAmp || 0,
-        peakMaxAmp: cc.captureMaxAmp || 0,
-        // REAL-audio timestamp (NOT the watchdog's cc._lastNonZeroAt) — see init note.
-        lastNonzeroAt: cc._lastRealAudioAt || 0,
-        activeReceiverIndex: (typeof cc._activeReceiverIndex === 'number') ? cc._activeReceiverIndex : -1,
-        receiverCycleCount: cc._cycleCount || 0,
-        speakerDetected: !!cc._speakerDetected,
-        wsState: ws ? ws.readyState : -1,
-      };
-    },
-  };
+    window.__ccPipeline = {
+      ws: function() { return ws; },
+      playbackNode: playbackNode,
+      captureActive: function() { return cc.captureActive; },
+      captureChunks: function() { return cc.captureChunks; },
+      captureMaxAmp: function() { return cc.captureMaxAmp; },
+      playbackChunks: function() { return cc.playbackChunks; },
+      playbackSamples: function() { return cc.playbackSamples; },
+      // Live audio-health snapshot consumed by ChromeLauncher.getAudioHealth().
+      // Returns a plain JSON-able object (no functions/DOM refs).
+      health: function() {
+        return {
+          captureActive: !!cc.captureActive,
+          captureChunks: cc.captureChunks || 0,
+          lastChunkMaxAmp: cc._lastChunkMaxAmp || 0,
+          peakMaxAmp: cc.captureMaxAmp || 0,
+          // REAL-audio timestamp (NOT the watchdog's cc._lastNonZeroAt) — see init note.
+          lastNonzeroAt: cc._lastRealAudioAt || 0,
+          activeReceiverIndex: (typeof cc._activeReceiverIndex === 'number') ? cc._activeReceiverIndex : -1,
+          receiverCycleCount: cc._cycleCount || 0,
+          speakerDetected: !!cc._speakerDetected,
+          wsState: ws ? ws.readyState : -1,
+          playbackChunks: cc.playbackChunks || 0,
+          playbackSamples: cc.playbackSamples || 0,
+        };
+      },
+    };
 
-  // ── Zoom fallback: inject audio into existing PeerConnection senders ──
-  // If getUserMedia wasn't intercepted (Zoom), find the active PC and replace its audio track
-  // with our virtual mic track so Zoom sends AI audio to other participants.
-  if (cc.gumCalls === 0 && cc.outputTrack) {
-    console.log('[CC-Audio] Zoom path: replacing sender tracks on existing PeerConnections...');
-    // Find all PeerConnections (wrapped by init script, or scan global)
-    var allPCs = cc.pcs.length > 0 ? cc.pcs : [];
-    if (allPCs.length === 0) {
-      // Init script didn't wrap PCs (Zoom loaded before script). Try finding them via global state.
-      // Zoom stores PCs internally, but we can find audio senders on any RTCPeerConnection
-      console.log('[CC-Audio] No wrapped PCs found — Zoom may have created them before init script');
-    }
-    var replaced = 0;
-    for (var i = 0; i < allPCs.length; i++) {
-      try {
-        var senders = allPCs[i].getSenders();
-        for (var j = 0; j < senders.length; j++) {
-          if (senders[j].track && senders[j].track.kind === 'audio') {
-            senders[j].replaceTrack(cc.outputTrack);
-            replaced++;
-            console.log('[CC-Audio] Replaced audio sender track on PC #' + i);
+    // ── Ensure AI audio is what the meeting sends as microphone input ──
+    // Meet can create or replace senders after the initial getUserMedia call.
+    // Keep checking all tracked PeerConnections so generated voice does not
+    // stay local to the page without reaching remote participants.
+    function ensureVirtualMicSender(reason) {
+      if (!cc.outputTrack) return 0;
+      var allPCs = cc.pcs.length > 0 ? cc.pcs : [];
+      var replaced = 0;
+      var checked = 0;
+      for (var i = 0; i < allPCs.length; i++) {
+        try {
+          var senders = allPCs[i].getSenders();
+          for (var j = 0; j < senders.length; j++) {
+            if (senders[j].track && senders[j].track.kind === 'audio') {
+              checked++;
+              if (senders[j].track.id === cc.outputTrack.id) continue;
+              Promise.resolve(senders[j].replaceTrack(cc.outputTrack)).catch(function(e) {
+                console.warn('[CC-Audio] Sender replace promise failed: ' + (e && e.message ? e.message : e));
+              });
+              replaced++;
+              console.log('[CC-Audio] Replaced audio sender track on PC #' + i + ' reason=' + reason);
+            }
           }
-        }
-      } catch(e) { console.warn('[CC-Audio] PC sender replace failed:', e); }
+        } catch(e) { console.warn('[CC-Audio] PC sender replace failed:', e); }
+      }
+      if (checked > 0 && (replaced > 0 || !cc._senderEnsureLogged)) {
+        console.log('[CC-Audio] Sender ensure checked=' + checked + ' replaced=' + replaced + ' reason=' + reason);
+        cc._senderEnsureLogged = true;
+      }
+      return replaced;
     }
-    if (replaced === 0) {
-      console.log('[CC-Audio] No audio senders found to replace — AI audio may not reach Zoom participants');
-    }
-  }
+    setTimeout(function() { ensureVirtualMicSender('post_activate'); }, 500);
+    setInterval(function() { ensureVirtualMicSender('interval'); }, 5000);
 
-  return 'pipeline_ready';
-})()`;
+    return 'pipeline_ready';
+  })()`;
 
 // ── Whole-join retry: pure, unit-testable helpers ────────────────
 //
@@ -926,10 +984,18 @@ export class ChromeLauncher {
       headless: false,
       channel: "chrome",
       viewport: null,  // Use full window size — allows user to resize/maximize for presentation
+      // Meet's CSP can block injected loopback WebSockets. The bridge is
+      // injected by ChromeLauncher and only connects to the local backend.
+      bypassCSP: true,
       args: [
         "--autoplay-policy=no-user-gesture-required",
+        "--disable-web-security",
+        "--allow-running-insecure-content",
+        `--unsafely-treat-insecure-origin-as-secure=http://127.0.0.1:${CONFIG.port},http://localhost:${CONFIG.port}`,
         "--disable-infobars",
-        "--disable-blink-features=AutomationControlled",
+        // NOTE: --disable-blink-features=AutomationControlled is intentionally NOT
+        // passed — it triggers a visible yellow "unsupported command-line flag"
+        // banner. navigator.webdriver is hidden via WEBDRIVER_STEALTH_SCRIPT below.
         "--disable-session-crashed-bubble",      // Suppress "profile error" dialog
         "--hide-crash-restore-bubble",            // Suppress "restore pages" bar
         "--noerrdialogs",                         // Suppress error dialogs
@@ -943,14 +1009,53 @@ export class ChromeLauncher {
       ignoreDefaultArgs: ["--mute-audio", "--enable-automation", "--no-sandbox"],
     });
 
+    // Hide navigator.webdriver (bot-detection evasion without the infobar flag)
+    await context.addInitScript(WEBDRIVER_STEALTH_SCRIPT);
+
     // Install the audio injection init script
     await context.addInitScript(AUDIO_INIT_SCRIPT);
-    console.log("[ChromeLauncher] Init script installed (getUserMedia + RTC interception)");
+    console.log("[ChromeLauncher] Init scripts installed (webdriver stealth + getUserMedia + RTC interception)");
 
     // Use first page (close ALL extras Chrome opened from previous session)
     // Aggressive cleanup: close every page except the one we keep, then navigate to blank
     const pages = context.pages();
     const page = pages[0] || await context.newPage();
+    const attachDiagnostics = (p: any) => {
+        if (!p || p.__ccDiagnosticsAttached) return;
+        p.__ccDiagnosticsAttached = true;
+        let lastUrl = "";
+        p.on("console", (msg: any) => {
+          const text = msg.text();
+          if (/\[CC-|WebSocket|Mixed Content|Content Security Policy/i.test(text)) {
+            console.log(`[ChromePage:${msg.type()}] ${text}`);
+          }
+        });
+        p.on("framenavigated", (frame: any) => {
+          if (frame === p.mainFrame()) {
+            lastUrl = p.url();
+            console.log(`[ChromePage:navigated] ${lastUrl}`);
+          }
+        });
+        p.on("close", () => {
+          console.warn(`[ChromePage:close] ${lastUrl || "<unknown>"}`);
+        });
+        p.on("pageerror", (err: any) => {
+          console.warn(`[ChromePage:error] ${err.message}`);
+        });
+      p.on("websocket", (socket: any) => {
+        console.log(`[ChromePage:ws] ${socket.url()}`);
+        socket.on("socketerror", (err: any) => console.warn(`[ChromePage:ws-error] ${socket.url()} ${err.message}`));
+        socket.on("close", () => console.log(`[ChromePage:ws-close] ${socket.url()}`));
+      });
+      p.on("requestfailed", (req: any) => {
+        const requestUrl = req.url();
+        if (requestUrl.includes("/ws/voice-test") || requestUrl.includes("127.0.0.1") || requestUrl.includes("localhost")) {
+          console.warn(`[ChromePage:requestfailed] ${requestUrl} ${req.failure()?.errorText || ""}`);
+        }
+      });
+    };
+    context.on("page", attachDiagnostics);
+    attachDiagnostics(page);
     if (pages.length > 1) {
       console.log(`[ChromeLauncher] Closing ${pages.length - 1} extra tabs from previous session`);
       for (let i = pages.length - 1; i >= 1; i--) {
@@ -997,6 +1102,35 @@ export class ChromeLauncher {
     this._onDisconnected = cb;
   }
 
+  private _getActivePage(preferMeeting = false): any | null {
+    const current = this._page;
+    const isOpen = (p: any) => p && (typeof p.isClosed !== "function" || !p.isClosed());
+    const isMeetingPage = (p: any) => {
+      try {
+        const u = p.url?.() || "";
+        return u.includes("meet.google.com") || u.includes("zoom.us");
+      } catch {
+        return false;
+      }
+    };
+
+    if (isOpen(current) && (!preferMeeting || isMeetingPage(current))) return current;
+
+    const pages = this._context?.pages?.() || [];
+    const openPages = pages.filter(isOpen);
+    const meetingPage = openPages.find(isMeetingPage);
+    const next = (preferMeeting ? meetingPage : null) || meetingPage || openPages[0] || null;
+    if (next && next !== this._page) {
+      this._page = next;
+      try {
+        console.log(`[ChromeLauncher] Active page refreshed: ${next.url()}`);
+      } catch {
+        console.log("[ChromeLauncher] Active page refreshed");
+      }
+    }
+    return next;
+  }
+
   /**
    * After joining a meeting, call this to activate the audio pipeline.
    * Uses playwright-cli's evaluate to inject the audio bridge code.
@@ -1017,20 +1151,56 @@ export class ChromeLauncher {
       return JSON.stringify({
         gumCalls: cc.gumCalls,
         pcs: cc.pcs.length,
-        pcStates: cc.pcs.map(function(pc) { return pc.connectionState; }),
-        captureActive: cc.captureActive,
-        captureChunks: cc.captureChunks,
-        captureMaxAmp: cc.captureMaxAmp,
-        wsState: p && p.ws() ? p.ws().readyState : -1,
-      });
-    })()`;
+          pcStates: cc.pcs.map(function(pc) { return pc.connectionState; }),
+          captureActive: cc.captureActive,
+          captureChunks: cc.captureChunks,
+          captureMaxAmp: cc.captureMaxAmp,
+          wsConnected: !!cc.wsConnected,
+          wsUrl: cc.wsUrl || null,
+          wsErrorCount: cc.wsErrorCount || 0,
+          wsCloseCount: cc.wsCloseCount || 0,
+          wsState: p && p.ws() ? p.ws().readyState : -1,
+          playbackChunks: cc.playbackChunks || 0,
+          playbackSamples: cc.playbackSamples || 0,
+          lastPlaybackAt: cc.lastPlaybackAt || 0,
+          outputTrack: cc.outputTrack ? {
+            id: cc.outputTrack.id,
+            enabled: cc.outputTrack.enabled,
+            muted: cc.outputTrack.muted,
+            readyState: cc.outputTrack.readyState
+          } : null,
+          senders: cc.pcs.flatMap(function(pc) {
+            return pc.getSenders().filter(function(s) { return s.track && s.track.kind === 'audio'; }).map(function(s) {
+              return {
+                id: s.track.id,
+                label: s.track.label,
+                enabled: s.track.enabled,
+                muted: s.track.muted,
+                readyState: s.track.readyState,
+                sameAsOutput: !!(cc.outputTrack && s.track.id === cc.outputTrack.id)
+              };
+            });
+          }),
+          receivers: cc.pcs.flatMap(function(pc) {
+            return pc.getReceivers().filter(function(r) { return r.track && r.track.kind === 'audio'; }).map(function(r) {
+              return {
+                id: r.track.id,
+                label: r.track.label,
+                muted: r.track.muted,
+                readyState: r.track.readyState
+              };
+            });
+          }),
+        });
+      })()`;
   }
 
   /** Activate the audio pipeline on the current page (call after joining a meeting) */
   async activateAudioPipeline(): Promise<string> {
-    if (!this._page) return "no_page";
+    const page = this._getActivePage(true);
+    if (!page) return "no_page";
     try {
-      const result = await this._page.evaluate(AUDIO_PIPELINE_SCRIPT);
+      const result = await page.evaluate(AUDIO_PIPELINE_SCRIPT);
       console.log("[ChromeLauncher] Audio pipeline activated:", result);
       // Start (or keep) the live audio-health poller feeding getAudioHealth().
       this.startAudioHealthMonitor();
@@ -1093,9 +1263,10 @@ export class ChromeLauncher {
 
   /** Get audio injection status from the page */
   async getStatus(): Promise<any> {
-    if (!this._page) return { error: "no_page" };
+    const page = this._getActivePage(true);
+    if (!page) return { error: "no_page" };
     try {
-      const raw = await this._page.evaluate(`(function() {
+      const raw = await page.evaluate(`(function() {
         var cc = window.__cc;
         var p = window.__ccPipeline;
         if (!cc) return JSON.stringify({ error: 'no_init' });
@@ -1106,7 +1277,42 @@ export class ChromeLauncher {
           captureActive: cc.captureActive,
           captureChunks: cc.captureChunks,
           captureMaxAmp: cc.captureMaxAmp,
+          wsConnected: !!cc.wsConnected,
+          wsUrl: cc.wsUrl || null,
+          wsErrorCount: cc.wsErrorCount || 0,
+          wsCloseCount: cc.wsCloseCount || 0,
           wsState: p && p.ws() ? p.ws().readyState : -1,
+          playbackChunks: cc.playbackChunks || 0,
+          playbackSamples: cc.playbackSamples || 0,
+          lastPlaybackAt: cc.lastPlaybackAt || 0,
+          outputTrack: cc.outputTrack ? {
+            id: cc.outputTrack.id,
+            enabled: cc.outputTrack.enabled,
+            muted: cc.outputTrack.muted,
+            readyState: cc.outputTrack.readyState
+          } : null,
+          senders: cc.pcs.flatMap(function(pc) {
+            return pc.getSenders().filter(function(s) { return s.track && s.track.kind === 'audio'; }).map(function(s) {
+              return {
+                id: s.track.id,
+                label: s.track.label,
+                enabled: s.track.enabled,
+                muted: s.track.muted,
+                readyState: s.track.readyState,
+                sameAsOutput: !!(cc.outputTrack && s.track.id === cc.outputTrack.id)
+              };
+            });
+          }),
+          receivers: cc.pcs.flatMap(function(pc) {
+            return pc.getReceivers().filter(function(r) { return r.track && r.track.kind === 'audio'; }).map(function(r) {
+              return {
+                id: r.track.id,
+                label: r.track.label,
+                muted: r.track.muted,
+                readyState: r.track.readyState
+              };
+            });
+          }),
         });
       })()`);
       return JSON.parse(raw);
@@ -1204,12 +1410,19 @@ export class ChromeLauncher {
   ): Promise<JoinResult> {
     if (!this._page) return { success: false, summary: "No page — call launch() first", steps: [], state: "failed" };
 
-    const page = this._page;
+    let page = this._getActivePage() || this._page;
     const displayName = opts?.displayName || "CallingClaw";
     const muteCamera = opts?.muteCamera ?? true;
     const muteMic = opts?.muteMic ?? false;
     const steps: string[] = [];
     const log = (msg: string) => { steps.push(msg); opts?.onStep?.(msg); console.log(`[MeetJoin] ${msg}`); };
+    const refreshPage = (reason: string) => {
+      const next = this._getActivePage(true);
+      if (!next) throw new Error(`No active meeting page after ${reason}`);
+      if (next !== page) log(`Using refreshed page after ${reason}`);
+      page = next;
+      return page;
+    };
 
     try {
       // Step 1: Navigate
@@ -1306,7 +1519,7 @@ export class ChromeLauncher {
         });
 
         // 2. Detect page state
-        var body = document.body.innerText || '';
+        var body = document.body ? (document.body.innerText || '') : '';
         var btns = Array.from(document.querySelectorAll('button'));
         var btnTexts = btns.map(function(b) { return b.textContent.trim(); });
 
@@ -1471,36 +1684,48 @@ export class ChromeLauncher {
       await page.waitForTimeout(2000);
 
       for (let attempt = 0; attempt < 6; attempt++) {
-        const state = await page.evaluate(`(() => {
-          // Language-agnostic: check for leave button or control bar (Meet + Zoom)
-          var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"],[aria-label*="End Meeting"],[aria-label*="End"]');
-          var callEnd = document.querySelector('[aria-label*="call_end"],[aria-label*="Call controls"],[aria-label*="通话控件"]');
-          // Zoom web client: footer toolbar with meeting controls
-          var zoomToolbar = document.querySelector('.meeting-info-container,.footer__inner,.meeting-client');
-          // Generic: does the page have mic+camera buttons?
-          var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"],[aria-label*="Mute"],[aria-label*="mute"]');
-          var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"],[aria-label*="Start Video"],[aria-label*="Stop Video"]');
-          var hasControls = (micBtn && camBtn) || zoomToolbar;
-          if (leaveBtn || callEnd || hasControls) return 'in_meeting';
-          var t = document.body.innerText || '';
-          var lower = t.toLowerCase();
-          // Host denial / ejection — TERMINAL (do NOT re-knock). Checked before the
-          // waiting-room test and using phrases that cannot appear on a
-          // waiting-room-only screen ("asking to be let in" / "waiting for someone
-          // to let you in"), so a legitimate waiting room is never mis-flagged.
-          var denialPhrases = [
-            'request was denied', 'request to join was denied', 'denied your request',
-            "you can't join this call", "you can't join this video call", "can't join this call",
-            "you've been removed", 'you were removed', 'you have been removed',
-            'removed from the meeting', 'removed you from', 'not admitted',
-            '请求被拒绝', '拒绝了你的加入请求', '无法加入此通话', '你已被移出', '移出会议'
-          ];
-          for (var d = 0; d < denialPhrases.length; d++) {
-            if (lower.indexOf(denialPhrases[d]) !== -1) return 'denied';
+        let state = "loading";
+        try {
+          state = await page.evaluate(`(() => {
+            // Language-agnostic: check for leave button or control bar (Meet + Zoom)
+            var leaveBtn = document.querySelector('[aria-label*="Leave"],[aria-label*="退出"],[aria-label*="離開"],[aria-label*="End Meeting"],[aria-label*="End"]');
+            var callEnd = document.querySelector('[aria-label*="call_end"],[aria-label*="Call controls"],[aria-label*="通话控件"]');
+            // Zoom web client: footer toolbar with meeting controls
+            var zoomToolbar = document.querySelector('.meeting-info-container,.footer__inner,.meeting-client');
+            // Generic: does the page have mic+camera buttons?
+            var micBtn = document.querySelector('[aria-label*="microphone"],[aria-label*="麦克风"],[aria-label*="Mute"],[aria-label*="mute"]');
+            var camBtn = document.querySelector('[aria-label*="camera"],[aria-label*="摄像头"],[aria-label*="Turn on camera"],[aria-label*="Turn off camera"],[aria-label*="Start Video"],[aria-label*="Stop Video"]');
+            var hasControls = (micBtn && camBtn) || zoomToolbar;
+            if (leaveBtn || callEnd || hasControls) return 'in_meeting';
+            var t = document.body ? (document.body.innerText || '') : '';
+            var lower = t.toLowerCase();
+            // Host denial / ejection — TERMINAL (do NOT re-knock). Checked before the
+            // waiting-room test and using phrases that cannot appear on a
+            // waiting-room-only screen ("asking to be let in" / "waiting for someone
+            // to let you in"), so a legitimate waiting room is never mis-flagged.
+            var denialPhrases = [
+              'request was denied', 'request to join was denied', 'denied your request',
+              "you can't join this call", "you can't join this video call", "can't join this call",
+              "you've been removed", 'you were removed', 'you have been removed',
+              'removed from the meeting', 'removed you from', 'not admitted',
+              '请求被拒绝', '拒绝了你的加入请求', '无法加入此通话', '你已被移出', '移出会议'
+            ];
+            for (var d = 0; d < denialPhrases.length; d++) {
+              if (lower.indexOf(denialPhrases[d]) !== -1) return 'denied';
+            }
+            if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
+            return 'loading';
+          })()`);
+        } catch (e: any) {
+          const msg = e?.message || String(e);
+          if (/Execution context was destroyed|Cannot find context|Target closed/i.test(msg)) {
+            log(`Verify transient navigation (${attempt + 1}/6) — retrying`);
+            refreshPage("verify navigation");
+            if (attempt < 5) await page.waitForTimeout(3000);
+            continue;
           }
-          if (t.includes('Waiting for the host') || t.includes('Someone will let you in') || t.includes('等待主持人') || t.includes('等待主办人')) return 'waiting_room';
-          return 'loading';
-        })()`);
+          throw e;
+        }
 
         if (String(state).includes("in_meeting")) {
           log("Joined!");
@@ -2488,10 +2713,14 @@ export class ChromeLauncher {
     const { chromium } = await import("playwright");
     const context = await chromium.launchPersistentContext(this.profileDir, {
       headless: false,
-      args: ["--no-sandbox", "--disable-web-security", "--disable-blink-features=AutomationControlled"],
+      // --disable-blink-features=AutomationControlled omitted (triggers infobar);
+      // navigator.webdriver hidden via WEBDRIVER_STEALTH_SCRIPT instead.
+      args: ["--no-sandbox", "--disable-web-security"],
       viewport: { width: 1280, height: 900 },
+      bypassCSP: true,
       ignoreDefaultArgs: ["--enable-automation"],
     });
+    await context.addInitScript(WEBDRIVER_STEALTH_SCRIPT);
     this._context = context;
     this._page = context.pages()[0] || await context.newPage();
     console.log("[ChromeLauncher] Standalone browser launched");

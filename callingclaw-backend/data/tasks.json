@@ -1,5 +1,55 @@
 [
   {
+    "id": "task_mqtt3fdx_2llt",
+    "task": "Confirm all E2E capabilities passed across both rounds: join, present, scroll, speak, language-switch, screen-read",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2026-06-25",
+    "createdAt": 1782410338725,
+    "updatedAt": 1782410338725
+  },
+  {
+    "id": "task_mqtt3fdx_rfa6",
+    "task": "Investigate why Round 2 screen showed loading/transition page instead of summary content — possible timing or navigation issue",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2026-06-27",
+    "createdAt": 1782410338725,
+    "updatedAt": 1782410338725
+  },
+  {
+    "id": "task_mqtt3fdx_pkop",
+    "task": "Log baseline E2E test results and establish regression test criteria",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2026-06-27",
+    "createdAt": 1782410338725,
+    "updatedAt": 1782410338725
+  },
+  {
+    "id": "task_mqtt0okw_bgqi",
+    "task": "Confirm full E2E flow passed: join, present, scroll, speak all exercised",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2026-06-25",
+    "createdAt": 1782410210672,
+    "updatedAt": 1782410210672
+  },
+  {
+    "id": "task_mqtt0okw_46vw",
+    "task": "Log this session's results as baseline for future E2E regression tests",
+    "status": "pending",
+    "priority": "medium",
+    "assignee": "User",
+    "deadline": "2026-06-27",
+    "createdAt": 1782410210672,
+    "updatedAt": 1782410210672
+  },
+  {
     "id": "task_mnw273ah_xo0v",
     "task": "[P1] Add transcript segmentation — two separate meeting sessions appeared concatenated. Add meeting boundary markers (join/leave events) to properly segment transcripts",
     "status": "pending",

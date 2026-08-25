@@ -141,32 +141,27 @@ Analyze the transcript and determine if the user wants CallingClaw's AGENT to pe
   // ══════════════════════════════════════════════════════
 
   registerPrompt({
-    id: "retriever.topic_classify",
-    name: "Topic Classification",
+    id: "retriever.analyze_conversation",
+    name: "Conversation Analysis (Topic + Needs, merged)",
     category: "analysis",
     model: "Haiku 4.5",
-    scenario: "Runs every 20-30s. Detects topic shifts to trigger context retrieval. ~50 token output.",
+    scenario: "Runs on retrieval triggers (debounced). ONE call replacing the old classifyTopic → inferNeeds serial pair: classifies the current topic AND infers need-based retrieval queries. ~256 token output.",
     file: "src/modules/context-retriever.ts",
-    line: 376,
+    line: 508,
     dynamic: true,
-    defaultValue: `What specific topic is being discussed RIGHT NOW in this conversation?
-Focus on the most recent 2-3 exchanges, not the overall theme.
-Return JSON: {"topic": "specific topic", "direction": "what aspect", "shifted": true/false}`,
-  });
+    defaultValue: `Analyze this live meeting conversation. Two jobs in ONE pass: classify the current topic, then determine what information the AI assistant needs.
 
-  registerPrompt({
-    id: "retriever.need_inference",
-    name: "Need Inference",
-    category: "analysis",
-    model: "Haiku 4.5",
-    scenario: "Only runs on topic shift. Determines what context the AI needs. ~100 token output.",
-    file: "src/modules/context-retriever.ts",
-    line: 424,
-    dynamic: true,
-    defaultValue: `Based on this conversation topic, what SPECIFIC information would help the AI respond better?
-Think about: data points, past decisions, file contents, metrics, people involved.
-Generate NEEDS-BASED queries (not keywords): "memdex blog conversion metrics Q1" not "memdex"
-Return JSON: {"needsRetrieval": true/false, "queries": ["query1", "query2"], "reasoning": "why"}`,
+## Job 1: Topic
+What specific topic is being discussed RIGHT NOW?
+"shifted" = true ONLY if the topic is meaningfully different from the previous topic.
+
+## Job 2: Information needs (if shifted=false, return needsRetrieval=false with empty queries)
+Think about what the AI assistant NEEDS to know to be helpful on this topic.
+- NOT: search for the noun that was mentioned ("memdex")
+- YES: search for what the conversation needs ("memdex blog performance metrics and conversion data")
+Only return needsRetrieval=true when the conversation genuinely needs specific facts, numbers, decisions, or history that aren't in the prep brief.
+
+Return JSON: {"topic": "specific topic in 3-8 words", "direction": "what the user wants to know or decide", "shifted": true/false, "needsRetrieval": true/false, "queries": ["need-based search query 1", "need-based search query 2"], "reasoning": "what info is missing and why it matters"}`,
   });
 
   registerPrompt({

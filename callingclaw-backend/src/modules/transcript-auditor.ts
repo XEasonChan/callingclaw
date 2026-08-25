@@ -27,6 +27,7 @@ import { notifyTaskCompletion, pushContextUpdate } from "../voice-persona";
 import { callModel, parseJSON } from "../ai_gateway/llm-client";
 import { CONFIG } from "../config";
 import { PAGE_EXTRACT_JS, formatPageContext } from "../utils/page-extract";
+import { extractMatchTokens, countTokenHits } from "../utils/text-match";
 
 // ── Types ──
 
@@ -47,6 +48,220 @@ export const AUDITOR_MANAGED_TOOLS = new Set([
   // open_file: also kept — users say "打开文件" directly.
   // Auditor manages only the autonomous tools (computer_action, browser_action).
 ]);
+
+// ── Cross-lane dedup: action families (pure helpers, unit-tested) ──
+
+/** Entry in the recent-actions ring buffer. Both lanes (Realtime voice tools
+ * and Auditor fast/medium lane) normalize into this shape so an action
+ * executed by one lane suppresses the other lane re-executing it. */
+export interface RecentActionEntry {
+  action: string;        // tool/action name as executed (either lane)
+  family: string | null; // action family (see ACTION_FAMILIES); null = exact-key dedup only
+  key: string;           // exact dedup key (action + params snippet)
+  target: string;        // distinguishing target text (url/query/path/selector) for family dedup
+  ts: number;            // execution timestamp (ms)
+}
+
+/** An action executed within this window suppresses a same-family, same-target
+ * execution from the other lane (Realtime handles "打开定价页" in 200ms; the
+ * Auditor classifies it ~1.5-3s later — without this it opens the same page
+ * twice). 8s covers that Realtime→Auditor lag with margin; a wider window
+ * (was 15s) started swallowing genuinely new requests. */
+export const DEDUP_WINDOW_MS = 8_000;
+
+// Action families for cross-lane dedup. Two actions in the same family
+// within DEDUP_WINDOW_MS with overlapping targets are "the same thing already
+// handled" (see isDuplicateAction — a family match alone is NOT enough).
+// Groupings:
+// - present: everything that changes WHAT is shown to the meeting. In this
+//   codebase open_file / open_url / search_and_open all funnel to
+//   /api/screen/share just like share_* — so Realtime open_file must suppress
+//   Auditor share_file / search_and_open (same page would land twice).
+//   search_files is deliberately NOT here: it only LISTS matching paths (its
+//   result instructs "Use open_file to open one"), so it must not suppress
+//   the follow-up open_file/share_file that actually presents something.
+// - navigate: own family — navigating the presenting page to a NEW url right
+//   after a share is legitimate, so it must not collide with `present`.
+// - research: recall_context (Realtime, internal memory) and research_task
+//   (Auditor, external web) answer the same user question — never run both.
+// - stop_share / mute / camera: toggles — firing twice undoes the action.
+// Repeatable actions (scroll*, clicks, tab switches) are exempt from dedup
+// entirely (see isRepeatableAction) and intentionally have no family.
+const ACTION_FAMILIES: Record<string, string> = {
+  // present: open/search/share all end up presenting content
+  open_file: "present",
+  open_url: "present",
+  search_and_open: "present",
+  share_screen: "present",
+  share_url: "present",
+  share_file: "present",
+  "zoom:start_share": "present",
+  // navigate: presenting-tab URL change, separate from present (see above)
+  navigate: "navigate",
+  // stop sharing
+  stop_sharing: "stop_share",
+  "zoom:stop_share": "stop_share",
+  // meeting toggles
+  meet_mute: "mute",
+  "meet:toggle_mute": "mute",
+  "zoom:toggle_mute": "mute",
+  meet_camera: "camera",
+  "meet:toggle_video": "camera",
+  "zoom:toggle_video": "camera",
+  // research: internal recall + external research answer the same question
+  research_task: "research",
+  recall_context: "research",
+};
+
+export function actionFamily(action: string): string | null {
+  return ACTION_FAMILIES[action] ?? null;
+}
+
+/** Repeatable actions are never dedup-suppressed — "scroll down" x3 means
+ * scroll 3 times, and "next tab" x2 means advance two tabs. */
+export function isRepeatableAction(action: string): boolean {
+  return (
+    action.startsWith("scroll") ||
+    action === "browser_click" ||
+    action === "click" ||
+    action === "next_tab" ||
+    action === "prev_tab" ||
+    action === "switch_tab"
+  );
+}
+
+/** Distinguishing target text for an action — what the action operates ON
+ * (url/query/path/selector, falling back to a raw instruction). Used by the
+ * family dedup to tell "打开PRD" apart from "打开pitch deck". */
+export function actionTarget(params: Record<string, any> | undefined): string {
+  if (!params) return "";
+  return String(params.url ?? params.query ?? params.path ?? params.selector ?? params.instruction ?? "");
+}
+
+/** Pure dedup check: is `action` a duplicate of a recent execution?
+ * Same FAMILY within the window → duplicate ONLY if the targets overlap
+ * (share match tokens) or the new action carries no distinguishing target —
+ * "打开PRD" then "打开pitch deck" are both `present` but must BOTH run.
+ * Unfamilied actions fall back to exact-key match within the window. */
+export function isDuplicateAction(
+  action: string,
+  key: string,
+  ring: readonly RecentActionEntry[],
+  now: number = Date.now(),
+  target: string = "",
+): boolean {
+  if (isRepeatableAction(action)) return false;
+  const family = actionFamily(action);
+  const targetTokens = extractMatchTokens(target);
+  for (const e of ring) {
+    if (now - e.ts > DEDUP_WINDOW_MS) continue;
+    if (family !== null && e.family === family) {
+      // No distinguishing target on the new action ("share the screen") →
+      // trust the family match. Otherwise require token overlap with the
+      // recent entry's target before suppressing.
+      if (targetTokens.length === 0) return true;
+      if (countTokenHits(targetTokens, e.target) > 0) return true;
+      continue; // same family, different target → not a duplicate
+    }
+    if (e.key === key) return true;
+  }
+  return false;
+}
+
+// ── Pre-gate: ack/filler utterances (pure helper, unit-tested) ──
+
+// Single ack/filler token — bare acknowledgments never carry actionable intent
+const ACK_TOKEN_RE = /^(嗯+|哦+|噢|好的?|好啊|好呀|是的?|对的?|对啊|ok|okay|yep|yes|yeah|sure|没问题|行|可以|谢谢|thanks|thank you)$/i;
+
+/** Pure ack/filler utterances ("嗯", "好的，没问题", "OK") skip the audit
+ * pipeline entirely — no fast lane, no LLM call. Compound utterances are
+ * gated only if EVERY comma-separated segment is an ack, so
+ * "好的，帮我打开PRD" is NOT gated (it carries a verb after the ack). */
+export function isAckOrFiller(text: string): boolean {
+  const segments = (text || "")
+    .split(/[,，、;；]+/)
+    .map((s) => s.replace(/[。.!！?？~～\s]+$/g, "").trim())
+    .filter((s) => s.length > 0);
+  if (segments.length === 0) return false;
+  return segments.every((s) => ACK_TOKEN_RE.test(s));
+}
+
+// ── Static system block for intent classification ──
+// Built once at module load and sent via `callModel({ system, cacheSystem })`
+// so OpenRouter/Anthropic prompt caching can reuse it across audits (the
+// per-meeting context — prep files, presentation state, transcript — goes in
+// the dynamic user message instead). Keep this block STABLE: any edit
+// invalidates the cache.
+//
+// CACHING STATUS: this block is ~1.4K tokens, BELOW Anthropic's minimum
+// cacheable prefix of 4096 tokens for Haiku-tier models (Sonnet-tier: 1024).
+// cache_control is accepted but silently ignored, so caching is currently
+// INERT for this prompt — it activates only if this block grows past the
+// minimum or a Sonnet-tier ANALYSIS_MODEL is configured. Watch the
+// "[LLM] cache: created=X read=Y" log line (llm-client.ts) for activation.
+const CLASSIFY_SYSTEM = `You are CallingClaw's meeting agent — a fast background assistant. You monitor the conversation and execute actions when the voice AI or participants request something.
+
+## Your Tools (choose the RIGHT one)
+
+### File & URL Tools
+- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone asks to open/show/find a file but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
+- **open_url**: Open an exact URL. Use when a full URL is mentioned. Params: { "url": "https://..." }
+- **open_file**: Open a file by exact path. Only use if you know the full path. Params: { "path": "/abs/path", "app": "browser"|"vscode" }
+
+### Screen Sharing Tools
+- **share_url**: Open a URL and present it in the meeting (screen share). Params: { "url": "https://..." }
+- **share_file**: Search for a SPECIFIC named file and present it in the meeting. Only when concrete content is named. Params: { "query": "keywords" }
+- **stop_sharing**: Stop presenting. Params: {}
+
+### Presenting Tab Tools (operate on the currently shared content)
+- **click**: Click a button/link on the presenting page. Params: { "selector": "button text or link text", "targetTab": "presenting" }
+- **scroll**: Scroll the presenting page. Params: { "direction": "up"|"down", "targetTab": "presenting" }
+- **navigate**: Navigate the presenting page to a new URL. Params: { "url": "https://...", "targetTab": "presenting" }
+
+### Meeting Control Tools
+- **share_screen**: Start sharing (no URL = entire screen). "共享一下屏幕" / "share the screen" with no specific file or page named → share_screen, NOT share_file. Params: {}
+- **meet_mute**: Toggle mute. Params: {}
+- **meet_camera**: Toggle camera. Params: {}
+
+### Research Tools (background, 10-30s)
+- **research_task**: Delegate web research to the background agent. ONLY for genuinely EXTERNAL/current information. Params: { "query": "what to research" }
+  USE research_task for:
+    - "search X/Twitter for Y" (external web search)
+    - "what are people saying about Z" (public opinion)
+    - "find recent news about Q" (current events)
+  DO NOT use research_task for INTERNAL-memory questions — our own products, our meetings, past decisions, our metrics, or competitor analyses the team already did. Those belong to recall_context (handled elsewhere, NOT your job) → action=null:
+    - "what did we discuss about X" → null (meeting history)
+    - "what was the decision on Y" → null (meeting history)
+    - "竞品有哪些？他们和我们的差异是什么？" → null (the team's own competitive analysis)
+    - "look up in our files" → search_and_open (local files), not research
+
+## When to Act
+1. Someone asks to open, show, display, share screen, or find something → ACT (search_and_open, share_file, open_url)
+2. Someone says "点击/click/登录/login/下一步/next" → ACT (click on presenting tab)
+3. Someone says "往下/scroll down/翻页" → ACT (scroll)
+4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
+5. Discussion/opinion (expressing views, suggestions for future) → DO NOT ACT, confidence=0
+6. Bare acknowledgments AND acceptances of an action the AI itself just OFFERED → DO NOT ACT, action=null. The Realtime voice AI owns actions it offered; if you also act, the action executes twice. Example: AI says "需要我把定价页打开吗？", user replies "好的，没问题" → action=null. Same for "是/好的/对/嗯/OK/sure/没问题".
+7. **ALREADY HANDLED**: If you see [Tool Call] or [Tool Result] in the transcript for the same action → DO NOT ACT, confidence=0. The voice AI already executed it.
+8. **When in doubt, don't act.** A bad action (clicking the wrong thing, opening the wrong file) is worse than a missed action. Only act when you're confident the user wants something done.
+9. **Internal vs external research**: Questions about OUR OWN products, meetings, past decisions, metrics, or analyses the team already did are internal-memory questions → action=null. research_task is ONLY for live web/social/news. When uncertain between internal and external → action=null.
+10. "共享一下屏幕" / "share the screen" with no specific content named → share_screen, NOT share_file.
+
+## STT Name Aliases (speech-to-text often mangles these)
+The transcription is from live STT, which frequently misspells proper nouns. Default examples (a meeting-specific list may appear in the user message):
+- CallingClaw = "calling claw" / "colin claw" / "calling call" / "calling clause"
+- OpenClaw = "open claw" / "open call" / "open clause"
+When a fuzzy match to a known product/person/term appears, interpret it as the canonical name.
+
+## File Name Resolution Examples
+- "landing page html" / "官网html" → search "callingclaw-landing.html" or "callingclaw-landing"
+- "vision page" → search "vision.html"
+- "meeting summary" → search "meeting-summary"
+- "PRD" / "需求文档" → search "PRD" or "callingclaw-v2.5-PRD"
+- "prep file" / "会议准备" → search in ~/.callingclaw/shared/prep/
+
+Respond with JSON only. Keep "reasoning" to 10 words or fewer:
+{"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<≤10 words>","targetTab":"presenting"|"meet"}`;
 
 // ── Agent-Address Fast Lane (deterministic, no LLM) ──
 //
@@ -235,7 +450,7 @@ export class TranscriptAuditor {
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastAuditedTs = 0;
   private _processing = false;
-  private _recentActions: string[] = []; // dedup ring buffer (last 5)
+  private _recentActions: RecentActionEntry[] = []; // cross-lane dedup ring buffer (last 8)
   private _lastExecutionTs = 0;
   private _fastLaneProcessing = false; // prevent concurrent fast lane executions
   private _lastAgentFastLaneTs = 0; // cooldown anchor for the agent-address fast lane
@@ -357,18 +572,31 @@ export class TranscriptAuditor {
   private _onVoiceToolCall = (data: any) => {
     const tool = data?.tool || "";
     const key = `realtime:${tool}:${JSON.stringify(data?.summary || data?.instruction || "").slice(0, 80)}`;
-    if (!this._recentActions.includes(key)) {
-      this._recentActions.push(key);
-      if (this._recentActions.length > 5) this._recentActions.shift();
-    }
+    // Target text for family dedup — voice.tool_call emitters pass the payload
+    // as summary (share_screen/open_file/search_files), instruction
+    // (computer_action) or query (recall_context)
+    const target = String(data?.summary ?? data?.instruction ?? data?.query ?? "").slice(0, 120);
+    this.rememberAction(tool, key, target);
     // Don't set global cooldown here — ring buffer handles dedup for same actions.
     // Global cooldown would block DIFFERENT actions (e.g., "open PRD" → "open Pika")
     console.log(`[TranscriptAuditor] Dedup: Realtime executed ${tool} — added to ring buffer`);
   };
 
+  /** Push an executed action into the cross-lane dedup ring (max 8 entries) */
+  private rememberAction(action: string, key: string, target: string = "") {
+    this._recentActions.push({ action, family: actionFamily(action), key, target, ts: Date.now() });
+    if (this._recentActions.length > 8) this._recentActions.shift();
+  }
+
   private _onTranscript = (entry: TranscriptEntry) => {
     if (!this._active) return;
     if (entry.role !== "user") return; // Only audit on user speech
+
+    // ── PRE-GATE: pure ack/filler ("嗯", "好的", "OK") never carries intent ──
+    // Skip both lanes — no fast lane, no scheduleAudit (saves an LLM call).
+    // Deliberately does NOT touch the debounce timer: an ack right after
+    // substantive speech must not reset (or cancel) the already-scheduled audit.
+    if (isAckOrFiller(entry.text)) return;
 
     // ── AGENT FAST LANE: explicit agent address → research_task, no debounce, no LLM ──
     // "让agent查一下X" / "ask the agent to look up X": the user explicitly
@@ -440,19 +668,18 @@ export class TranscriptAuditor {
     if (this._fastLaneProcessing) return;
 
     // Action-level dedup (not utterance-level — a single utterance can trigger
-    // both fast lane action AND slow lane retrieval)
-    // Scroll actions are repeatable — "scroll down" x3 means scroll 3 times.
-    // Only dedup non-repeatable actions (share_screen, navigate, etc.)
-    // Scroll/click are repeatable — "scroll down" x3 means scroll 3 times.
-    // Only dedup non-repeatable actions (share_screen, navigate, etc.)
-    const isRepeatableAction = intent.action.startsWith("scroll") || intent.action === "browser_click";
+    // both fast lane action AND slow lane retrieval).
+    // Same action FAMILY + overlapping target executed by either lane within
+    // DEDUP_WINDOW_MS → skip. Repeatable actions (scroll/click/tab) are
+    // exempt — "scroll down" x3 means scroll 3 times.
     const actionKey = `${intent.action}:${JSON.stringify(intent.params)}`;
-    if (!isRepeatableAction && this._recentActions.includes(actionKey)) {
+    const target = actionTarget(intent.params);
+    if (isDuplicateAction(intent.action, actionKey, this._recentActions, Date.now(), target)) {
       console.log(`[TranscriptAuditor] Skipping duplicate: ${actionKey}`);
       return;
     }
     // For repeatable actions, enforce a 2s cooldown to prevent STT chunk duplication
-    if (isRepeatableAction && Date.now() - this._lastExecutionTs < 2000) return;
+    if (isRepeatableAction(intent.action) && Date.now() - this._lastExecutionTs < 2000) return;
 
     this._fastLaneProcessing = true;
     const startTs = Date.now();
@@ -502,8 +729,7 @@ export class TranscriptAuditor {
       }
 
       // Add to dedup ring buffer
-      this._recentActions.push(actionKey);
-      if (this._recentActions.length > 5) this._recentActions.shift();
+      this.rememberAction(intent.action, actionKey, target);
       this._lastExecutionTs = Date.now();
 
       console.log(`[TranscriptAuditor] Fast lane: ${intent.action} (${Date.now() - startTs}ms)`);
@@ -533,7 +759,13 @@ export class TranscriptAuditor {
     if (!this._active || !query) return;
 
     const actionKey = `research_task:${JSON.stringify({ query })}`;
-    if (this._recentActions.includes(actionKey)) {
+    // Exact-query dedup within the ring: only an IDENTICAL agent-address query
+    // is a duplicate (different queries — "A股走势" vs "欧股走势" — must BOTH
+    // dispatch). Rapid same/different STT re-chunks are gated by COOLDOWN_MS
+    // below. rememberAction() stores entries as RecentActionEntry objects, so
+    // match on `.key` (the string ring was replaced by the cross-lane object
+    // ring in the intent-recognition refactor).
+    if (this._recentActions.some((e) => e.key === actionKey)) {
       console.log(`[TranscriptAuditor] Agent fast lane: skipping duplicate ${actionKey}`);
       return;
     }
@@ -560,8 +792,7 @@ export class TranscriptAuditor {
       const { started, status } = await this.dispatchResearchTask(query);
 
       if (started) {
-        this._recentActions.push(actionKey);
-        if (this._recentActions.length > 5) this._recentActions.shift();
+        this.rememberAction("research_task", actionKey, query);
         this._lastExecutionTs = Date.now();
       }
       console.log(
@@ -719,10 +950,11 @@ export class TranscriptAuditor {
 
       if (!result.action) return; // No actionable intent
 
-      // Dedup: skip if we just did this exact action (repeatable actions exempt)
+      // Dedup: skip if either lane just executed this action's FAMILY with an
+      // overlapping target (repeatable actions exempt — see isDuplicateAction)
       const actionKey = `${result.action}:${JSON.stringify(result.params)}`;
-      const isRepeatable = result.action?.startsWith("scroll") || result.action === "browser_click";
-      if (!isRepeatable && this._recentActions.includes(actionKey)) {
+      const target = actionTarget(result.params);
+      if (isDuplicateAction(result.action, actionKey, this._recentActions, Date.now(), target)) {
         console.log(`[TranscriptAuditor] Skipping duplicate: ${actionKey}`);
         return;
       }
@@ -740,8 +972,7 @@ export class TranscriptAuditor {
           `[TranscriptAuditor] Auto-executing: ${result.action} (confidence: ${result.confidence})`
         );
         await this.executeAction(result);
-        this._recentActions.push(actionKey);
-        if (this._recentActions.length > 5) this._recentActions.shift();
+        this.rememberAction(result.action, actionKey, target);
         this._lastExecutionTs = Date.now();
       } else if (result.confidence >= this.CONFIDENCE_SUGGEST) {
         // ── Medium confidence → suggest to Voice AI ──
@@ -776,7 +1007,7 @@ export class TranscriptAuditor {
     // Context enrichment: give Haiku full picture (screen + prep + recent actions)
     const screenDesc = this.context?.screen?.description || "";
     const pageUrl = this.context?.screen?.url || "";
-    const recentActions = this._recentActions?.slice(-3).map((d: string) => d.split(":")[0]).join(", ") || "";
+    const recentActions = this._recentActions.slice(-3).map((e) => e.action).join(", ");
     const prepTopic = brief?.topic || "";
     const enrichment = [
       screenDesc ? `[Current screen: ${screenDesc.slice(0, 120)}]` : "",
@@ -786,43 +1017,9 @@ export class TranscriptAuditor {
     ].filter(Boolean).join("\n");
     const enrichedTranscript = enrichment ? `${enrichment}\n\n${transcriptText}` : transcriptText;
 
-    const prompt = `You are CallingClaw's meeting agent — a fast background assistant. You monitor the conversation and execute actions when the voice AI or participants request something.
-
-## Your Tools (choose the RIGHT one)
-
-### File & URL Tools
-- **search_and_open**: Search for a file by fuzzy name, then open it in browser. Use when someone asks to open/show/find a file but doesn't give an exact path. Params: { "query": "keywords to search for", "app": "browser" }
-- **open_url**: Open an exact URL. Use when a full URL is mentioned. Params: { "url": "https://..." }
-- **open_file**: Open a file by exact path. Only use if you know the full path. Params: { "path": "/abs/path", "app": "browser"|"vscode" }
-
-### Screen Sharing Tools
-- **share_url**: Open a URL and present it in the meeting (screen share). Params: { "url": "https://..." }
-- **share_file**: Search for a file and present it in the meeting. Params: { "query": "keywords" }
-- **stop_sharing**: Stop presenting. Params: {}
-
-### Presenting Tab Tools (operate on the currently shared content)
-- **click**: Click a button/link on the presenting page. Params: { "selector": "button text or link text", "targetTab": "presenting" }
-- **scroll**: Scroll the presenting page. Params: { "direction": "up"|"down", "targetTab": "presenting" }
-- **navigate**: Navigate the presenting page to a new URL. Params: { "url": "https://...", "targetTab": "presenting" }
-
-### Meeting Control Tools
-- **share_screen**: Start sharing (no URL = entire screen). Params: {}
-- **meet_mute**: Toggle mute. Params: {}
-- **meet_camera**: Toggle camera. Params: {}
-
-### Research Tools (background, 10-30s)
-- **research_task**: Delegate web/deep research to the background agent. Params: { "query": "what to research" }
-  USE research_task for:
-    - "search X/Twitter for Y" (external web search)
-    - "what are people saying about Z" (public opinion)
-    - "research competitors of W" (market research)
-    - "find recent news about Q" (current events)
-  DO NOT use research_task for:
-    - "what did we discuss about X" → this is recall_context (internal memory)
-    - "look up in our files" → this is search_and_open (local files)
-    - "what was the decision on Y" → this is recall_context (meeting history)
-
-## Known Files & URLs (from meeting prep)
+    // Dynamic per-meeting context only — the static role/tools/rules block
+    // lives in CLASSIFY_SYSTEM (module constant) so prompt caching can reuse it
+    const prompt = `## Known Files & URLs (from meeting prep)
 ${
   brief
     ? [
@@ -861,45 +1058,24 @@ ${(() => {
   const bc = this.context.browserContext;
   return bc ? `Active page: ${bc.title} (${bc.url})` : "";
 })()}
-
-## Transcript (most recent at bottom, with current screen + action context)
-${enrichedTranscript}
-
-## When to Act
-1. Someone asks to open, show, display, share screen, or find something → ACT (search_and_open, share_file, open_url)
-2. Someone says "点击/click/登录/login/下一步/next" → ACT (click on presenting tab)
-3. Someone says "往下/scroll down/翻页" → ACT (scroll)
-4. CallingClaw says "let me pull that up" / "我让agent查一下" → ACT (your cue!)
-5. Discussion/opinion (expressing views, suggestions for future) → DO NOT ACT, confidence=0
-6. Response to AI question ("是/好的/对/嗯") → DO NOT ACT, confidence=0
-7. **ALREADY HANDLED**: If you see [Tool Call] or [Tool Result] in the transcript for the same action → DO NOT ACT, confidence=0. The voice AI already executed it.
-8. **When in doubt, don't act.** A bad action (clicking the wrong thing, opening the wrong file) is worse than a missed action. Only act when you're confident the user wants something done.
-
-## STT Name Aliases (speech-to-text often mangles these)
-The transcription is from live STT, which frequently misspells proper nouns. Treat these as equivalent:
 ${
   brief?.sttAliases && brief.sttAliases.length > 0
-    ? brief.sttAliases.map((a: any) => `- ${a.canonical} = ${a.variants.map((v: string) => `"${v}"`).join(" / ")}`).join("\n")
-    : `- CallingClaw = "calling claw" / "colin claw" / "calling call" / "calling clause"
-- OpenClaw = "open claw" / "open call" / "open clause"`
+    ? `\n## STT Name Aliases (from prep — treat as equivalent)
+${brief.sttAliases.map((a: any) => `- ${a.canonical} = ${a.variants.map((v: string) => `"${v}"`).join(" / ")}`).join("\n")}\n`
+    : ""
 }
-When a fuzzy match to a known product/person/term appears, interpret it as the canonical name above.
-
-## File Name Resolution Examples
-- "landing page html" / "官网html" → search "callingclaw-landing.html" or "callingclaw-landing"
-- "vision page" → search "vision.html"
-- "meeting summary" → search "meeting-summary"
-- "PRD" / "需求文档" → search "PRD" or "callingclaw-v2.5-PRD"
-- "prep file" / "会议准备" → search in ~/.callingclaw/shared/prep/
-
-Respond with JSON only:
-{"action":"<action_name or null>","params":{...},"confidence":<0.0-1.0>,"reasoning":"<brief>","targetTab":"presenting"|"meet"}`;
+## Transcript (most recent at bottom, with current screen + action context)
+${enrichedTranscript}`;
 
     // Use shared LLM client instead of duplicated API call code
     try {
       const text = await callModel(prompt, {
         model: CONFIG.analysis.model,
-        maxTokens: 256,
+        // 192, not 128: params with long URLs + the JSON envelope can exceed
+        // 128 tokens, and parseJSON needs the closing brace to survive
+        maxTokens: 192,
+        system: CLASSIFY_SYSTEM,
+        cacheSystem: true, // static block → Anthropic prompt caching via OpenRouter
         component: "auditor",
       });
       const parsed = parseJSON<{

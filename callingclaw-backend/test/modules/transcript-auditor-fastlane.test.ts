@@ -415,11 +415,11 @@ test("classifyIntent: prompt enrichment surfaces recent actions from the dedup r
   callModelCalls.length = 0;
 
   // Simulate prior fast-lane/auto-executed actions populating the ring
-  // buffer, exactly as tryFastLane()/runAudit() do at runtime.
-  (auditor as any)._recentActions = [
-    'open_url:{"url":"https://example.com"}',
-    'click:{"selector":"Next"}',
-  ];
+  // buffer, exactly as tryFastLane()/runAudit() do at runtime — via
+  // rememberAction(), which stores RecentActionEntry objects (the cross-lane
+  // dedup ring), not raw string keys.
+  (auditor as any).rememberAction("open_url", 'open_url:{"url":"https://example.com"}', "https://example.com");
+  (auditor as any).rememberAction("click", 'click:{"selector":"Next"}', "Next");
 
   await (auditor as any).classifyIntent([
     { role: "user", text: "open the doc", ts: Date.now() },

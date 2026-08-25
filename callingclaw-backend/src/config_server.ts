@@ -43,6 +43,7 @@ import { scanForGoogleCredentials } from "./mcp_client/google_cal";
 import { validateMeetingUrl } from "./meet_joiner";
 import { readSessions, readSharedFile, listPrepFiles } from "./modules/shared-documents";
 import { SHARED_PREP_DIR, SHARED_NOTES_DIR } from "./config";
+import { handleJapanPricingApi } from "./pricing/japan-token-pricing";
 
 const ENV_PATH = `${import.meta.dir}/../../.env`;
 
@@ -571,6 +572,11 @@ export function startConfigServer(services: Services) {
 
       if (req.method === "OPTIONS") {
         return new Response(null, { headers });
+      }
+
+      const japanPricingResponse = await handleJapanPricingApi(req, url, headers);
+      if (japanPricingResponse) {
+        return japanPricingResponse;
       }
 
       // ── WebSocket upgrade for /ws/events ──

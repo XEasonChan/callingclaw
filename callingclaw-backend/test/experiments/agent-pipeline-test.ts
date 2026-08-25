@@ -113,7 +113,7 @@ async function classifyIntent(transcript: string, userCommand: string): Promise<
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5`, {
       headers: { "Authorization": `Bearer ${OPENAI_KEY}` },
-    });
+    } as any);
     let text = "";
     const timeout = setTimeout(() => { ws.close(); resolve({ action: null, confidence: 0, raw: "timeout" }); }, 15000);
 

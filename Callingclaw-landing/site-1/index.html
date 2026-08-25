@@ -191,9 +191,10 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(20, 20, 19, 0.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      /* Sticky nav: dropped backdrop-filter blur — it re-blurred the page
+         behind the pill on every scroll frame. Bg is ~opaque so it's a
+         no-visual-change swap. */
+      background: rgba(20, 20, 19, 0.95);
       border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
@@ -953,8 +954,9 @@
     }
 
     .action-card {
+      /* Dropped backdrop-filter: these cards scrub-animate on scroll, so the
+         blur re-evaluated each frame. Bg is 95% opaque → blur was invisible. */
       background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(8px);
       border-radius: 12px;
       padding: 0.75rem 1rem;
       display: flex;
@@ -2292,7 +2294,7 @@
     <div class="hero-image-wrapper">
       <div class="hero-pin-spacer" id="heroPinSpacer">
         <div class="hero-image-container" id="heroImageContainer">
-          <img src="../Assests/HeroPage_Background.png" alt="AI agent in meeting room" class="hero-image" id="heroImage">
+          <img src="../Assests/HeroPage_Background.png" alt="AI agent in meeting room" class="hero-image" id="heroImage" width="1232" height="928" fetchpriority="high" decoding="async">
           <!-- Mobile: YouTube play button overlay (shown via JS) -->
           <button class="hero-yt-play" id="heroYtPlay" aria-label="Play demo video"></button>
 
@@ -2377,7 +2379,7 @@
         </div>
 
         <div class="bandwidth-image-container">
-          <img src="../Assests/Bandwidth_Benefit.png" alt="AI agent pointing at screen" class="bandwidth-image">
+          <img src="../Assests/Bandwidth_Benefit.png" alt="AI agent pointing at screen" class="bandwidth-image" width="1024" height="1024" loading="lazy" decoding="async">
 
           <!-- Voice Wave Indicator -->
           <div class="voice-wave-indicator">
@@ -2903,7 +2905,7 @@
   <!-- CTA Section -->
   <section class="cta-section">
     <div class="cta-bg">
-      <img src="../Assests/Footer_CTA_new.png" alt="Video call your agent">
+      <img src="../Assests/Footer_CTA_new.png" alt="Video call your agent" width="1440" height="720" loading="lazy" decoding="async">
     </div>
 
     <!-- Telephone Line Animation -->
@@ -3601,9 +3603,13 @@
           }
         }
 
-        // Visibility optimization
+        // Visibility optimization.
+        // NOTE: observe a real in-flow element when given (opts.observeTarget).
+        // The hero grids are position:fixed; inset:0, so observing the canvas
+        // itself always reports isIntersecting=true → the rAF loop would never
+        // pause and would keep redrawing ~20k rects/frame for the whole page.
         const io = new IntersectionObserver(([e]) => { inView = e.isIntersecting; }, { threshold: 0 });
-        io.observe(canvas);
+        io.observe(opts.observeTarget || canvas);
 
         // Resize handling
         const ro = new ResizeObserver(() => resize());
@@ -3621,6 +3627,7 @@
       }
 
       // ── Base grid: subtle pink/coral flickering ─────
+      const heroSectionEl = document.querySelector('.hero');
       const baseCanvas = document.getElementById('flickeringGridBase');
       if (baseCanvas) {
         createGrid(baseCanvas, {
@@ -3629,6 +3636,7 @@
           flickerChance: 0.1,
           squareSize: 4,
           gridGap: 4,
+          observeTarget: heroSectionEl, // pause draw loop once hero scrolls away
         });
       }
 
@@ -3642,6 +3650,7 @@
           flickerChance: 0.3,
           squareSize: 4,
           gridGap: 4,
+          observeTarget: heroSectionEl, // pause draw loop once hero scrolls away
         });
 
         // Mouse tracking — radial mask follows cursor (throttled to ~30fps)
