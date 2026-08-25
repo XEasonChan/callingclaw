@@ -151,9 +151,12 @@ fi
 ok "Verified: Raven can import 'mcp' ($RAVEN_PY)"
 
 # ── 3. Read OpenRouter key from .env ──
+# Strip surrounding quotes and whitespace: a .env written as KEY="sk-or-..." would
+# otherwise seed the quotes INTO ~/.raven/config.json and fail auth at first inference.
 OPENROUTER_KEY=""
 if [ -f "$PROJECT_DIR/.env" ]; then
-  OPENROUTER_KEY=$(grep "^OPENROUTER_API_KEY=" "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- || true)
+  OPENROUTER_KEY=$(grep "^OPENROUTER_API_KEY=" "$PROJECT_DIR/.env" 2>/dev/null | cut -d= -f2- \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" || true)
 fi
 if [ -z "$OPENROUTER_KEY" ]; then
   warn "OPENROUTER_API_KEY not found in .env — Raven inference won't work until a"
@@ -170,7 +173,11 @@ CONFIG="$RAVEN_HOME/config.json"
 if [ -f "$CONFIG" ]; then
   BACKUP="$CONFIG.bak.$(date +%Y%m%d%H%M%S)"
   cp "$CONFIG" "$BACKUP"
+  chmod 600 "$BACKUP" 2>/dev/null || true   # backups carry the provider key
   ok "Backed up existing config → $BACKUP"
+  # Keep only the 3 most recent backups — each one contains the provider API key,
+  # and re-running this script would otherwise accumulate them forever.
+  ls -1t "$CONFIG".bak.* 2>/dev/null | tail -n +4 | while read -r old; do rm -f "$old"; done
 fi
 
 # ── 5. Non-destructive NODE merge: register callingclaw-events ──
@@ -217,9 +224,13 @@ console.log("✓ Registered callingclaw-events under tools.mcp_servers in " + co
 NODE
 
 # ── 6. Seed provider + default model + direct executor (only fill gaps) ──
-"$JS_RUNTIME" - "$CONFIG" "$OPENROUTER_KEY" "$RAVEN_DEFAULT_MODEL" <<'NODE'
+# The provider key travels via the ENVIRONMENT, never argv: argv is world-readable
+# through `ps` for the lifetime of the process. Only non-secret args go positionally.
+CC_OPENROUTER_KEY="$OPENROUTER_KEY" \
+"$JS_RUNTIME" - "$CONFIG" "$RAVEN_DEFAULT_MODEL" <<'NODE'
 const fs = require("fs");
-const [configPath, key, defaultModel] = process.argv.slice(2);
+const [configPath, defaultModel] = process.argv.slice(2);
+const key = process.env.CC_OPENROUTER_KEY || "";
 
 // Read existing config. If the file is non-empty but unparseable, refuse to
 // proceed (mirroring the MCP-merge heredoc above) — never clobber a corrupt
@@ -269,6 +280,8 @@ if (touched) {
   console.log("• Provider/model/sandbox already configured — left as-is");
 }
 NODE
+# The config now holds the provider API key in plaintext — keep it owner-only.
+chmod 600 "$CONFIG" 2>/dev/null || true
 ok "Configured $CONFIG"
 
 # ── 7. Set AGENT_PLATFORM=raven in .env ──
