@@ -1,5 +1,13 @@
 // CallingClaw 2.0 — Page Extract + Virtual Cursor Tests
-// happy-dom globals are preloaded via bunfig.toml → happy-dom-setup.ts
+// happy-dom globals are registered by this file-scoped import — it MUST stay first.
+//
+// Deliberately NOT a bunfig.toml `[test] preload`: that registers happy-dom
+// globally for every test file, which makes this server-side codebase look like
+// a browser and breaks unrelated suites — the OpenAI SDK's browser-environment
+// guard throws inside `new VisionModule()` (test/capture/vision-change-detect),
+// and happy-dom's `fetch` cannot parse the local CDP server's responses
+// (test/capture/browser-capture-provider). Measured: 16 tests lost that way.
+import "./happy-dom-setup";
 
 import { test, expect, beforeEach } from "bun:test";
 import {
