@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S1 ↔ S2 Conversation Architecture — Robustness &amp; Unification</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5f6b76;
+      --faint: #8592a0;
+      --line: #d7dde3;
+      --paper: #fbfcfd;
+      --band: #eef4f6;
+      --surface: #ffffff;
+      --accent: #dc4a3a;
+      --accent-ink: #b0301f;
+      --accent-tint: rgba(220, 74, 58, 0.08);
+      --accent-line: rgba(220, 74, 58, 0.45);
+      --blue: #2563eb;
+      --green: #0f766e;
+      --amber: #b45309;
+      --violet: #6d28d9;
+      --red: #b42318;
+      --chip: #e7eef8;
+      --chip-ink: #24466b;
+      --code-bg: #f4f7f9;
+      --code-ink: #22303c;
+      --code-line: #e0e6ea;
+      /* diagram */
+      --svg-surface: #ffffff;
+      --svg-zone: #f1f5f7;
+      --svg-stroke: #c3ccd4;
+      --svg-ink: #17212b;
+      --svg-muted: #5f6b76;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #e7edf2;
+        --muted: #9fabb6;
+        --faint: #74828e;
+        --line: #2a3742;
+        --paper: #0e141a;
+        --band: #151e26;
+        --surface: #131c24;
+        --accent: #f0725f;
+        --accent-ink: #f5897a;
+        --accent-tint: rgba(240, 114, 95, 0.14);
+        --accent-line: rgba(240, 114, 95, 0.55);
+        --blue: #6ea8ff;
+        --green: #4bc0b0;
+        --amber: #e0a458;
+        --violet: #b79cf0;
+        --red: #f0725f;
+        --chip: #1b2a39;
+        --chip-ink: #a9c6ee;
+        --code-bg: #0b1219;
+        --code-ink: #d2dce4;
+        --code-line: #23303b;
+        --svg-surface: #16212b;
+        --svg-zone: #0f171e;
+        --svg-stroke: #35434f;
+        --svg-ink: #e7edf2;
+        --svg-muted: #9fabb6;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+    .wrap { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+
+    header { border-bottom: 1px solid var(--line); background: var(--surface); }
+
+    .hero { padding: 36px 0 28px; }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-ink);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(26px, 3.8vw, 40px);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      font-weight: 750;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: clamp(20px, 2.6vw, 26px);
+      line-height: 1.2;
+      letter-spacing: -0.015em;
+      font-weight: 720;
+    }
+
+    h2 .n {
+      display: inline-block;
+      min-width: 1.9em;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    h3 { margin: 22px 0 8px; font-size: 17px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 680; }
+    h4 { margin: 16px 0 6px; font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+    p { margin: 0 0 12px; }
+    .lead { font-size: 16px; color: var(--ink); }
+    .muted { color: var(--muted); }
+
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+
+    .pill {
+      display: inline-flex; align-items: center; min-height: 30px;
+      padding: 4px 11px; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--surface); color: var(--muted); font-size: 12.5px; white-space: nowrap;
+    }
+    .pill.accent { border-color: var(--accent-line); color: var(--accent-ink); background: var(--accent-tint); font-weight: 600; }
+
+    .toc { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 20px; }
+    .toc a {
+      display: inline-flex; align-items: center; padding: 5px 11px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+      font-size: 12.5px; text-decoration: none;
+    }
+    .toc a:hover { border-color: var(--accent-line); color: var(--accent-ink); }
+
+    section { padding: 30px 0; border-bottom: 1px solid var(--line); }
+    .section-band { background: var(--band); }
+
+    .grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;
+    }
+    .card strong.title { display: block; margin-bottom: 8px; font-size: 15px; }
+
+    .callout {
+      background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+      border-radius: 8px; padding: 16px 18px; margin: 4px 0 14px;
+    }
+    .callout.summary { border-left-color: var(--green); }
+    .callout.warn { border-left-color: var(--amber); }
+    .callout.blocker { border-left-color: var(--red); }
+
+    .kicker { display: block; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); font-size: 13.5px; }
+    th, td { padding: 10px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--band); font-weight: 680; }
+    td code, th code, p code, li code { background: var(--code-bg); border: 1px solid var(--code-line); border-radius: 4px; padding: 1px 5px; font-size: 12px; font-family: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; }
+
+    .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; }
+    .scroll-x table { min-width: 720px; }
+
+    .risk { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 680; white-space: nowrap; border: 1px solid transparent; }
+    .risk.high { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
+    .risk.mid { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+    .risk.low { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); background: color-mix(in srgb, var(--green) 12%, transparent); }
+
+    .rule { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 12px; font-weight: 680; white-space: nowrap; }
+    .rule.acc { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+    .rule.def { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+
+    pre {
+      margin: 10px 0 14px; background: var(--code-bg); border: 1px solid var(--code-line);
+      border-radius: 10px; padding: 15px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    pre code {
+      font-family: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+      font-size: 12.5px; line-height: 1.6; color: var(--code-ink); white-space: pre;
+    }
+    .c-com { color: var(--muted); }
+    .c-key { color: var(--accent-ink); }
+    .c-str { color: var(--green); }
+
+    ul.tight { margin: 6px 0 12px; padding-left: 20px; }
+    ul.tight li { margin: 0 0 7px; }
+    ol.tight { margin: 6px 0 12px; padding-left: 22px; }
+    ol.tight li { margin: 0 0 7px; }
+
+    .diagram-block { margin: 8px 0 6px; }
+    .diagram-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; background: var(--svg-surface); padding: 10px; }
+    svg.diagram { display: block; width: 100%; min-width: 840px; height: auto; }
+    .diagram-cap { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
+
+    /* SVG element styling — theme-aware via CSS vars */
+    .d-zone { fill: var(--svg-zone); stroke: var(--svg-stroke); stroke-dasharray: 5 4; }
+    .d-zone-label { fill: var(--svg-muted); font: 700 12px -apple-system, sans-serif; letter-spacing: 0.06em; }
+    .d-box { fill: var(--svg-surface); stroke: var(--svg-stroke); }
+    .d-box-voice { fill: var(--svg-surface); stroke: var(--accent); stroke-width: 1.6; }
+    .d-sched { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.6; }
+    .d-lane { fill: var(--svg-surface); stroke: var(--svg-stroke); }
+    .d-title { fill: var(--svg-ink); font: 700 13px -apple-system, sans-serif; }
+    .d-t { fill: var(--svg-ink); font: 12.5px -apple-system, sans-serif; }
+    .d-sub { fill: var(--svg-muted); font: 11px -apple-system, sans-serif; }
+    .d-badge-red { fill: var(--red); font: 700 11px -apple-system, sans-serif; }
+    .d-badge-amber { fill: var(--amber); font: 700 11px -apple-system, sans-serif; }
+    .d-flow { fill: none; stroke-width: 2; }
+    .d-flow-gray { fill: none; stroke: var(--svg-muted); stroke-width: 1.6; stroke-dasharray: 4 4; }
+    .d-flow-accent { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .d-dash-gov { fill: none; stroke: var(--svg-muted); stroke-width: 1.4; stroke-dasharray: 3 4; }
+
+    .decision {
+      background: var(--accent-tint); border: 1.5px solid var(--accent-line); border-radius: 12px; padding: 20px 22px;
+    }
+    .decision h2 { margin-top: 0; }
+    .choice { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--accent-line); }
+    .choice:first-of-type { border-top: none; }
+    .choice .mark { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; background: var(--surface); border: 1px solid var(--accent-line); color: var(--accent-ink); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    .choice .body { flex: 1; }
+    .choice .body b { display: block; margin-bottom: 2px; }
+
+    footer { padding: 26px 0 46px; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 860px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap hero">
+      <span class="eyebrow">CallingClaw · Architecture Review — for approval</span>
+      <h1>S1 ↔ S2 Conversation Architecture:<br>Robustness &amp; Unification</h1>
+      <p class="lead">Reconciled final plan for the live in-meeting voice loop — a single owner for every deliberate result, deterministic staleness, and a proper connection lifecycle. This is the plan of record after codex cross-review.</p>
+      <div class="meta">
+        <span class="pill accent">Status: reconciled — awaiting founder sign-off</span>
+        <span class="pill">Scope: <code style="background:none;border:none;padding:0">callingclaw-backend/</code> voice loop</span>
+        <span class="pill">Cross-review: codex → SOUND-WITH-CHANGES (folded in)</span>
+        <span class="pill">Owner: principal architect synthesis</span>
+        <span class="pill">2026-07-10</span>
+      </div>
+      <nav class="toc" aria-label="Contents">
+        <a href="#summary">1 · Summary</a>
+        <a href="#problem">2 · The problem</a>
+        <a href="#diagrams">3 · Diagrams</a>
+        <a href="#contract">4 · Unified contract</a>
+        <a href="#reliability">5 · Reliability layer</a>
+        <a href="#phasing">6 · Phasing</a>
+        <a href="#codex">7 · Codex review</a>
+        <a href="#risk">8 · Risk &amp; rollout</a>
+        <a href="#decision">9 · Decision for you</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 1 · SUMMARY -->
+  <section id="summary">
+    <div class="wrap">
+      <h2><span class="n">1</span>Executive summary</h2>
+      <div class="callout summary">
+        <p>CallingClaw thinks in two systems: <b>System 1 (S1)</b> — the fast real-time voice model plus two Haiku helpers riding the transcript — and <b>System 2 (S2)</b> — slow, deliberate work (web/deep research, memory recall, screen actions). Every S2 result has to re-enter the live conversation, but <b>there is no contract for how it does so</b>. Five ad-hoc return paths have grown, each with a different injection layer, speech trigger, staleness rule, and dedup. The damage is concrete: a shipped <code>TypeError</code> that makes the AI <b>announce a search failed while the real answer sits unspoken beside it</b>, late answers spoken into dead air, and a loop that can silently go mute for the rest of a meeting because no liveness watchdog exists.</p>
+        <p style="margin-bottom:0">We fix this with <b>one owner</b>. A single <b>VoiceResponseScheduler</b> inside <code>VoiceModule</code> becomes the sole authority over response acceptance, debounce, and disposition; the unified result sink sits <b>on the scheduler</b> (not on today's two uncoordinated gates). Staleness becomes <b>deterministic turn/question leases</b> — a late result is silent by default unless its lease is still open — with the model's "stay silent if irrelevant" reduced to a politeness layer. A <b>connection-lifecycle owner with generation tokens</b> lands before we let watchdogs act, and all three watchdogs ship <b>observe-only first</b>. The shape of the answer, in one line: <b>collapse the gate first, then let the sink promise delivery.</b></p>
+      </div>
+      <div class="grid grid-4">
+        <div class="card"><strong class="title">Blocker</strong><span class="muted" style="font-size:13.5px">Ship-broken <code>TypeError</code>: AI holds the answer, reports failure.</span></div>
+        <div class="card"><strong class="title">5 → 1 paths</strong><span class="muted" style="font-size:13.5px">Five divergent S2→S1 returns collapse to one gated sink.</span></div>
+        <div class="card"><strong class="title">Deterministic staleness</strong><span class="muted" style="font-size:13.5px">Turn-leases, late-default-silent — not a prompt request.</span></div>
+        <div class="card"><strong class="title">Liveness</strong><span class="muted" style="font-size:13.5px">Watchdogs + generation-token connection owner, observe-first.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · PROBLEM -->
+  <section id="problem" class="section-band">
+    <div class="wrap">
+      <h2><span class="n">2</span>The problem</h2>
+
+      <h3>The live blocker (shipped today)</h3>
+      <div class="callout blocker">
+        <span class="kicker">P0 · <code>transcript-auditor.ts:671</code></span>
+        <p>The research-completion path calls <code>this.voice.client.queuePendingResponse()</code> — a method that <b>does not exist</b> (TS2551; the client only exposes <code>flushPendingResponse()</code>) through a <b>private</b> field (TS2341, <code>voice.ts:52</code>). The result is already injected into Layer 3 first; then in the common non-idle case (AI mid-sentence) the call throws a <code>TypeError</code>, control jumps to the <code>.catch()</code>, and a contradictory <b>"search failed"</b> note is injected next to the real answer. On the next turn the model may read the failure note and tell the user the search failed — <b>while the answer is right there.</b></p>
+        <p style="margin-bottom:0">It shipped because <b>tsc is not a CI gate</b> and ~379 pre-existing type errors mask new ones.</p>
+      </div>
+
+      <h3>Five divergent S2 → S1 return paths</h3>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Producer</th><th>Injection layer</th><th>Speech trigger</th><th>Staleness</th><th>Dedup</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><code>research_task</code> (auditor)</td><td>Fixed-id (singleton)</td><td class="status"><span style="color:var(--red);font-weight:680">Conditional — broken</span></td><td>none</td><td>fixed id (2nd clobbers 1st)</td></tr>
+            <tr><td>2</td><td><code>recall_context</code> (voice tool)</td><td>FIFO append</td><td>Always</td><td>none</td><td>partial</td></tr>
+            <tr><td>3</td><td>Action / ComputerUse completion</td><td>Live note (L2/L3)</td><td>Silent</td><td>note TTL</td><td>—</td></tr>
+            <tr><td>4</td><td><code>ContextRetriever</code> retrieval</td><td>FIFO + live notes</td><td>Sometimes (guarded)</td><td class="status"><span style="color:var(--green);font-weight:680">the only guard</span></td><td>topic cache</td></tr>
+            <tr><td>5</td><td>Deep / thorough recall fallback</td><td>via #2's path</td><td>via #2</td><td>none</td><td>none</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:13.5px;margin-top:10px">Consequences fall straight out of the table: inconsistent layer choice, inconsistent speech, only path #4 guards staleness, and <b>no single place</b> enforces "never speak a failure sentinel as fact" (both #5's <code>[Recall via …]</code> strings and #1's error branch leak).</p>
+
+      <div class="grid grid-3" style="margin-top:18px">
+        <div class="card">
+          <strong class="title">The dual-gate falsehood</strong>
+          <p class="muted" style="font-size:13.5px;margin:0">Codex proved the sink's delivery guarantees are <b>false</b> on today's two uncoordinated gates (<code>VoiceModule._responseActive</code> + <code>RealtimeClient._isSpeaking</code>/debounce). A result judged "spoken" may only be queued, debounced away, or overwritten — a false-positive disposition. So the gate must collapse <b>before</b> the sink can promise anything.</p>
+        </div>
+        <div class="card">
+          <strong class="title">No liveness floor</strong>
+          <p class="muted" style="font-size:13.5px;margin:0">Four missing mechanisms let the loop die mid-meeting: mute-forever after a barge-in, an executor lane stuck for the whole meeting, a half-open socket where <code>onclose</code> never fires, and <code>voice.reconnect_failed</code> emitted at <code>callingclaw.ts:1062</code> with <b>zero listeners</b>. Plus cross-meeting bleed — the transcript reset is dead code (<code>meetUrl</code> is always <code>""</code>).</p>
+        </div>
+        <div class="card">
+          <strong class="title">Generality gap</strong>
+          <p class="muted" style="font-size:13.5px;margin:0">~30 timing/gating magic numbers scattered as class fields; none in <code>CONFIG</code>, none adaptive to language/provider. S1/S2 logic is welded to the meeting + Meet + prep-brief scenario. Real, but <b>not</b> in the "can mute a live meeting" class — so it is sequenced after the robustness core.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · DIAGRAMS -->
+  <section id="diagrams">
+    <div class="wrap">
+      <h2><span class="n">3</span>Architecture: before &amp; after</h2>
+      <p class="muted">The whole plan reduces to one visual contrast — five tangled returns through two uncoordinated gates, versus four identical envelopes into one scheduler.</p>
+
+      <h3>Current state — five paths, dual gate, a blocker and a staleness hole</h3>
+      <div class="diagram-block">
+        <div class="diagram-scroll">
+          <svg class="diagram" viewBox="0 0 980 662" role="img" aria-label="Current-state diagram: System 1 escalates to four System-2 producers; five divergent return paths flow back through an uncoordinated dual gate; path 1 carries a blocker badge and only one path guards staleness.">
+            <defs>
+              <marker id="c-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc4a3a"/></marker>
+              <marker id="c-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+              <marker id="c-teal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0f9488"/></marker>
+              <marker id="c-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+              <marker id="c-amber" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c9820a"/></marker>
+              <marker id="c-gray" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8592a0"/></marker>
+            </defs>
+
+            <!-- S1 zone -->
+            <rect class="d-zone" x="250" y="20" width="490" height="212" rx="12"/>
+            <text class="d-zone-label" x="268" y="42">SYSTEM 1 — FAST, REAL-TIME LOOP</text>
+            <rect class="d-box-voice" x="278" y="54" width="200" height="50" rx="8"/>
+            <text class="d-title" x="378" y="76" text-anchor="middle">Realtime voice model</text>
+            <text class="d-sub" x="378" y="92" text-anchor="middle">OpenAI · Gemini (S1)</text>
+            <rect class="d-box" x="502" y="54" width="216" height="50" rx="8"/>
+            <text class="d-t" x="610" y="75" text-anchor="middle">TranscriptAuditor +</text>
+            <text class="d-t" x="610" y="91" text-anchor="middle">ContextRetriever (Haiku)</text>
+
+            <rect class="d-box" x="298" y="128" width="384" height="90" rx="8" style="stroke-dasharray:0"/>
+            <text class="d-title" x="490" y="148" text-anchor="middle" fill="#b42318">DUAL GATE — two uncoordinated gates</text>
+            <rect class="d-lane" x="312" y="158" width="176" height="50" rx="6"/>
+            <text class="d-sub" x="400" y="178" text-anchor="middle">VoiceModule</text>
+            <text class="d-sub" x="400" y="193" text-anchor="middle">_responseActive (+1 pending)</text>
+            <rect class="d-lane" x="494" y="158" width="176" height="50" rx="6"/>
+            <text class="d-sub" x="582" y="178" text-anchor="middle">RealtimeClient _isSpeaking</text>
+            <text class="d-sub" x="582" y="193" text-anchor="middle">+ 500ms debounce + own pending</text>
+
+            <!-- gate -> voice -->
+            <path class="d-flow" stroke="#8592a0" marker-end="url(#c-gray)" d="M490,128 L490,106"/>
+
+            <!-- legend -->
+            <rect class="d-box" x="712" y="120" width="236" height="98" rx="8"/>
+            <text class="d-sub" x="724" y="139" style="font-weight:700">Return paths (divergent)</text>
+            <line x1="724" y1="151" x2="744" y2="151" stroke="#dc4a3a" stroke-width="2.5"/><text class="d-sub" x="750" y="155">1 research — fixed-id · broken</text>
+            <line x1="724" y1="167" x2="744" y2="167" stroke="#2563eb" stroke-width="2.5"/><text class="d-sub" x="750" y="171">2 recall — FIFO · always speaks</text>
+            <line x1="724" y1="183" x2="744" y2="183" stroke="#0f9488" stroke-width="2.5"/><text class="d-sub" x="750" y="187">3 retrieval — guarded (only one)</text>
+            <line x1="724" y1="199" x2="744" y2="199" stroke="#7c3aed" stroke-width="2.5"/><text class="d-sub" x="750" y="203">4 action — silent live note</text>
+            <line x1="724" y1="215" x2="744" y2="215" stroke="#c9820a" stroke-width="2.5" stroke-dasharray="4 3"/><text class="d-sub" x="750" y="219">5 deep recall — rides #2 · leaks</text>
+
+            <!-- escalation (left margin) -->
+            <path class="d-flow-gray" marker-end="url(#c-gray)" d="M262,232 C120,300 90,360 96,432"/>
+            <text class="d-sub" x="70" y="330" transform="rotate(-90 70 330)">escalate: auditor / retriever triggers</text>
+
+            <!-- S2 zone -->
+            <rect class="d-zone" x="40" y="438" width="900" height="196" rx="12"/>
+            <text class="d-zone-label" x="58" y="460">SYSTEM 2 — DELIBERATE PRODUCERS</text>
+            <rect class="d-box" x="60" y="488" width="196" height="80" rx="8"/>
+            <text class="d-t" x="158" y="522" text-anchor="middle">research_task</text>
+            <text class="d-sub" x="158" y="540" text-anchor="middle">executeTask (web/deep)</text>
+            <rect class="d-box" x="290" y="488" width="196" height="80" rx="8"/>
+            <text class="d-t" x="388" y="522" text-anchor="middle">recall_context</text>
+            <text class="d-sub" x="388" y="540" text-anchor="middle">memory / file / agent</text>
+            <rect class="d-box" x="520" y="488" width="196" height="80" rx="8"/>
+            <text class="d-t" x="618" y="522" text-anchor="middle">ContextRetriever</text>
+            <text class="d-sub" x="618" y="540" text-anchor="middle">proactive gap-fill</text>
+            <rect class="d-box" x="750" y="488" width="190" height="80" rx="8"/>
+            <text class="d-t" x="845" y="522" text-anchor="middle">action / ComputerUse</text>
+            <text class="d-sub" x="845" y="540" text-anchor="middle">completion</text>
+
+            <!-- return paths -->
+            <path class="d-flow" stroke="#dc4a3a" marker-end="url(#c-red)" d="M158,488 C205,380 300,300 358,220"/>
+            <path class="d-flow" stroke="#2563eb" marker-end="url(#c-blue)" d="M388,488 C405,400 445,300 468,220"/>
+            <path class="d-flow" stroke="#0f9488" marker-end="url(#c-teal)" d="M618,488 C610,400 585,300 560,220"/>
+            <path class="d-flow" stroke="#7c3aed" marker-end="url(#c-violet)" d="M845,488 C845,430 840,392 838,354"/>
+            <path class="d-flow" stroke="#c9820a" stroke-dasharray="5 4" marker-end="url(#c-amber)" d="M300,470 C360,400 460,300 500,220"/>
+
+            <!-- action side box -->
+            <rect class="d-box" x="748" y="300" width="184" height="50" rx="8"/>
+            <text class="d-sub" x="840" y="320" text-anchor="middle">Live note (Layer 2/3)</text>
+            <text class="d-sub" x="840" y="336" text-anchor="middle">silent — never speaks</text>
+
+            <!-- badges -->
+            <rect x="70" y="352" width="196" height="52" rx="7" fill="none" stroke="#dc4a3a" stroke-dasharray="4 3"/>
+            <text class="d-badge-red" x="80" y="371">⚠ BLOCKER — TS2551 + TS2341</text>
+            <text class="d-sub" x="80" y="387" fill="#b42318">TypeError → answer injected,</text>
+            <text class="d-sub" x="80" y="400" fill="#b42318">then "search failed" announced</text>
+
+            <rect x="540" y="352" width="196" height="52" rx="7" fill="none" stroke="#c9820a" stroke-dasharray="4 3"/>
+            <text class="d-badge-amber" x="550" y="371">STALENESS HOLE</text>
+            <text class="d-sub" x="550" y="387" fill="#b45309">only 1 of 5 paths guards age /</text>
+            <text class="d-sub" x="550" y="400" fill="#b45309">relevance · sentinels can speak</text>
+          </svg>
+        </div>
+        <p class="diagram-cap">Five producers, five bespoke return mechanisms, converging on two gates that don't know about each other. Path&nbsp;1 is the shipped blocker; only path&nbsp;3 guards staleness; the deep-recall fallback (5) can speak a failure string as fact.</p>
+      </div>
+
+      <h3>Target state — one envelope, one scheduler, one connection owner</h3>
+      <div class="diagram-block">
+        <div class="diagram-scroll">
+          <svg class="diagram" viewBox="0 0 980 626" role="img" aria-label="Target-state diagram: four System-2 producers each emit one identical DeliberateResult envelope into a single VoiceResponseScheduler that owns accept-and-dedupe, a turn-lease staleness guard, a collapsed single gate, and disposition; a connection-lifecycle owner with generation tokens governs the socket and hosts three observe-first watchdogs.">
+            <defs>
+              <marker id="t-acc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc4a3a"/></marker>
+              <marker id="t-gray" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8592a0"/></marker>
+            </defs>
+
+            <!-- voice model -->
+            <rect class="d-box-voice" x="360" y="34" width="260" height="52" rx="8"/>
+            <text class="d-title" x="490" y="56" text-anchor="middle">Realtime voice model (S1)</text>
+            <text class="d-sub" x="490" y="73" text-anchor="middle">one clean, gated response stream</text>
+
+            <!-- scheduler -->
+            <rect class="d-sched" x="308" y="150" width="364" height="234" rx="12"/>
+            <text class="d-title" x="490" y="174" text-anchor="middle" fill="#dc4a3a">VoiceResponseScheduler — single owner</text>
+            <rect class="d-lane" x="324" y="188" width="332" height="40" rx="6"/>
+            <text class="d-t" x="490" y="213" text-anchor="middle">1 · accept + dedupe (id / sourceTurnId)</text>
+            <rect class="d-lane" x="324" y="234" width="332" height="40" rx="6"/>
+            <text class="d-t" x="490" y="259" text-anchor="middle">2 · turn-lease staleness guard → late ⇒ silent</text>
+            <rect class="d-lane" x="324" y="280" width="332" height="40" rx="6"/>
+            <text class="d-t" x="490" y="305" text-anchor="middle">3 · single gate + debounce (collapsed)</text>
+            <rect class="d-lane" x="324" y="326" width="332" height="48" rx="6"/>
+            <text class="d-sub" x="490" y="345" text-anchor="middle">4 · disposition: response-requested · injected ·</text>
+            <text class="d-sub" x="490" y="360" text-anchor="middle">dropped-stale · dropped-dup · no-session→queue/Stage</text>
+
+            <!-- scheduler -> voice -->
+            <path class="d-flow-accent" marker-end="url(#t-acc)" d="M490,150 L490,90"/>
+
+            <!-- connection lifecycle owner -->
+            <rect class="d-box" x="40" y="150" width="234" height="234" rx="12" style="stroke:var(--accent);stroke-dasharray:0"/>
+            <text class="d-title" x="157" y="174" text-anchor="middle">Connection lifecycle owner</text>
+            <text class="d-sub" x="157" y="190" text-anchor="middle">generation tokens · single socket authority</text>
+            <rect class="d-lane" x="56" y="202" width="202" height="34" rx="6"/>
+            <text class="d-sub" x="157" y="223" text-anchor="middle">response watchdog</text>
+            <rect class="d-lane" x="56" y="242" width="202" height="34" rx="6"/>
+            <text class="d-sub" x="157" y="263" text-anchor="middle">liveness (expected-inbound)</text>
+            <rect class="d-lane" x="56" y="282" width="202" height="34" rx="6"/>
+            <text class="d-sub" x="157" y="303" text-anchor="middle">reconnect supervisor (backoff+cap)</text>
+            <rect x="56" y="326" width="202" height="42" rx="6" fill="none" stroke="var(--svg-stroke)" stroke-dasharray="4 3"/>
+            <text class="d-sub" x="157" y="345" text-anchor="middle">observe-first → enforce</text>
+            <text class="d-sub" x="157" y="360" text-anchor="middle">stale generation ⇒ ignored</text>
+
+            <!-- governance dashes -->
+            <path class="d-dash-gov" d="M274,250 L308,250"/>
+            <path class="d-dash-gov" d="M157,150 C160,110 300,74 358,66"/>
+            <text class="d-sub" x="196" y="128" transform="rotate(-32 196 128)">owns socket</text>
+
+            <!-- S2 zone -->
+            <rect class="d-zone" x="40" y="442" width="900" height="158" rx="12"/>
+            <text class="d-zone-label" x="58" y="464">SYSTEM 2 — PRODUCERS (unchanged; now emit ONE envelope)</text>
+            <rect class="d-box" x="60" y="476" width="196" height="66" rx="8"/>
+            <text class="d-t" x="158" y="504" text-anchor="middle">research_task</text>
+            <text class="d-sub" x="158" y="521" text-anchor="middle">build envelope</text>
+            <rect class="d-box" x="290" y="476" width="196" height="66" rx="8"/>
+            <text class="d-t" x="388" y="504" text-anchor="middle">recall_context</text>
+            <text class="d-sub" x="388" y="521" text-anchor="middle">build envelope</text>
+            <rect class="d-box" x="520" y="476" width="196" height="66" rx="8"/>
+            <text class="d-t" x="618" y="504" text-anchor="middle">ContextRetriever</text>
+            <text class="d-sub" x="618" y="521" text-anchor="middle">build envelope</text>
+            <rect class="d-box" x="750" y="476" width="190" height="66" rx="8"/>
+            <text class="d-t" x="845" y="504" text-anchor="middle">action / ComputerUse</text>
+            <text class="d-sub" x="845" y="521" text-anchor="middle">build envelope</text>
+
+            <!-- converging envelope arrows -->
+            <path class="d-flow-accent" marker-end="url(#t-acc)" d="M158,476 C300,430 380,410 418,384"/>
+            <path class="d-flow-accent" marker-end="url(#t-acc)" d="M388,476 C430,436 452,410 460,384"/>
+            <path class="d-flow-accent" marker-end="url(#t-acc)" d="M618,476 C560,436 540,410 522,384"/>
+            <path class="d-flow-accent" marker-end="url(#t-acc)" d="M845,476 C700,428 620,410 566,384"/>
+            <text class="d-sub" x="726" y="452" fill="#dc4a3a" style="font-weight:700">one DeliberateResult envelope</text>
+
+            <!-- escalation right margin -->
+            <path class="d-flow-gray" marker-end="url(#t-gray)" d="M620,60 C910,150 928,300 900,442"/>
+            <text class="d-sub" x="912" y="270" transform="rotate(90 912 270)">escalate (unified)</text>
+          </svg>
+        </div>
+        <p class="diagram-cap">Every producer shrinks to "build envelope, call the scheduler." The scheduler is the only code that touches the client, the context queue, or <code>response.create</code>; the connection-lifecycle owner is the only authority over the socket, and its watchdogs observe before they act.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · CONTRACT -->
+  <section id="contract" class="section-band">
+    <div class="wrap">
+      <h2><span class="n">4</span>The unified contract</h2>
+      <p>Two objects. A <b>lean envelope</b> every producer builds, and a <b>scheduler</b> that owns everything else. The envelope is deliberately small in P1 — codex flagged the full kind/staleness enum set as premature — and grows only when a producer needs more.</p>
+
+      <div class="grid grid-2">
+        <div>
+          <h4>The lean envelope (P1 first-cut)</h4>
+          <pre><code><span class="c-com">// Deliberately LEAN. Grows in P2+ only when needed.</span>
+<span class="c-key">export interface</span> DeliberateResult {
+  id: <span class="c-key">string</span>;           <span class="c-com">// dedupe + correlation</span>
+  sourceTurnId: <span class="c-key">string</span>; <span class="c-com">// the lease anchor</span>
+  kind: <span class="c-str">"research"</span> | <span class="c-str">"recall"</span>
+      | <span class="c-str">"retrieval"</span> | <span class="c-str">"action"</span>;
+  summary: <span class="c-key">string</span>;      <span class="c-com">// spoken-ready, never a sentinel</span>
+  detail: <span class="c-key">string</span>;       <span class="c-com">// L3 inject (sink caps length)</span>
+  speakPolicy: <span class="c-str">"proactive"</span> | <span class="c-str">"silent"</span>;
+  error?: <span class="c-key">string</span>;        <span class="c-com">// → internal note, never spoken</span>
+}
+<span class="c-com">// Later (P2+): documentPath, topicId,
+// full stalenessPolicy enum, Stage events.</span></code></pre>
+        </div>
+        <div>
+          <h4>The scheduler &amp; its dispositions</h4>
+          <pre><code><span class="c-com">// SINGLE owner of acceptance, pending-
+// replacement, debounce, disposition.
+// Producers never touch the client or
+// response.create directly.</span>
+<span class="c-key">class</span> VoiceResponseScheduler {
+  postS2Result(r: DeliberateResult)
+    : DeliveryDisposition;
+}
+
+<span class="c-key">type</span> DeliveryDisposition =
+  | <span class="c-str">"response-requested"</span> <span class="c-com">// speech TRIGGERED</span>
+  | <span class="c-str">"injected"</span>          <span class="c-com">// silent inject</span>
+  | <span class="c-str">"dropped-stale"</span>     <span class="c-com">// NOT injected</span>
+  | <span class="c-str">"dropped-dup"</span>       <span class="c-com">// already served</span>
+  | <span class="c-str">"no-session"</span>;       <span class="c-com">// → queue / Stage doc</span></code></pre>
+        </div>
+      </div>
+
+      <div class="grid grid-3" style="margin-top:6px">
+        <div class="card">
+          <strong class="title">Honest disposition</strong>
+          <p class="muted" style="font-size:13.5px;margin:0"><code>"spoken"</code> was a lie — it meant "we triggered speech," not "the model spoke." Renamed <b><code>"response-requested"</code></b>. No claim we can't verify.</p>
+        </div>
+        <div class="card">
+          <strong class="title">No inject-then-drop</strong>
+          <p class="muted" style="font-size:13.5px;margin:0"><code>dropped-stale</code> now means <b>not injected</b>. Stale detail can't be silently picked up on the next natural turn — the old design injected first, then decided.</p>
+        </div>
+        <div class="card">
+          <strong class="title">No-session ≠ lost</strong>
+          <p class="muted" style="font-size:13.5px;margin:0">S2 results often finish <b>during a reconnect</b>. Instead of dropping, the scheduler bounded-queues across short reconnects or persists to a Stage document.</p>
+        </div>
+      </div>
+
+      <div class="callout" style="margin-top:16px">
+        <span class="kicker">The generality proof</span>
+        <p style="margin-bottom:0">A hypothetical 6th capability (say, live term-gloss lookup) writes its fetch, builds one envelope, and calls <code>postS2Result</code>. No new injection code, no <code>response.create</code>, no staleness logic, no dedup, no EventBus wiring, no private access. If adding a producer needs anything beyond an envelope, the contract has failed — that is the acceptance test.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · RELIABILITY -->
+  <section id="reliability">
+    <div class="wrap">
+      <h2><span class="n">5</span>The reliability layer</h2>
+      <p>Staleness and liveness were the two areas codex judged "hard state problems treated as heuristics." Both are re-grounded on <b>deterministic state</b>, with model judgment demoted to a final courtesy.</p>
+
+      <h3>Deterministic turn / question leases (the primary control)</h3>
+      <div class="callout">
+        <p>Every S2 dispatch attaches to a <b><code>sourceTurnId</code></b>, a <b><code>topicId</code></b>, and an optional explicit <b>"user asked me to report back"</b> flag. When the result returns, the scheduler checks the lease:</p>
+        <ul class="tight" style="margin-bottom:0">
+          <li><b>Lease still open</b> → proactive speech permitted (subject to the gate).</li>
+          <li><b>Lease superseded</b> (the turn/topic moved on) → <b>default to silent injection</b> or a Stage/document update. Never a bare proactive trigger.</li>
+          <li>The realtime model's "stay silent if this is irrelevant" instruction is a <b>politeness layer only</b> — a last filter, not the mechanism. Once you call <code>response.create</code> you have already invited output; "stay silent" is a preference, not a protocol guarantee.</li>
+        </ul>
+      </div>
+
+      <h3>Liveness mechanisms — each with one home and one invariant</h3>
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>Mechanism</th><th>Lives in</th><th>Invariant</th><th>Activation</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Response watchdog</b></td>
+              <td><code>VoiceModule</code></td>
+              <td><code>_responseActive</code> never persists past <code>maxResponseMs</code> without a <code>response.done</code> (fixes mute-forever after barge-in).</td>
+              <td>Observe-only until the scheduler exists; then enforce. Never unlocks a new response into one still streaming.</td>
+            </tr>
+            <tr>
+              <td><b>Executor timeouts</b></td>
+              <td><code>ActionOrchestrator</code> + auditor lanes</td>
+              <td>No lane/hand stuck for the whole meeting; <code>_active</code>/<code>_processing</code> always freed.</td>
+              <td>Ships in P0 (not connection-coupled). Per-task <code>Promise.race</code> settles + drains the queue.</td>
+            </tr>
+            <tr>
+              <td><b>Reconnect supervisor</b></td>
+              <td><code>callingclaw.ts</code></td>
+              <td>Exhausted reconnect → supervised restart with backoff+cap, not permanent death; emits <code>voice.dead</code> after cap.</td>
+              <td>Waits for the single connection-lifecycle owner. Restarts only after <code>RealtimeClient</code> gives up.</td>
+            </tr>
+            <tr>
+              <td><b>Liveness / keepalive</b></td>
+              <td><code>RealtimeClient</code></td>
+              <td>A half-open socket is detected and recycled (catches the silent death where <code>onclose</code> never fires).</td>
+              <td>Waits for generation tokens. Keys on <b>expected-inbound after an outstanding request</b> — <b>not</b> global inbound silence (a healthy socket is quiet during a long monologue).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:16px">
+        <div class="card">
+          <strong class="title">Connection generation tokens</strong>
+          <p class="muted" style="font-size:13.5px;margin:0">Every reconnect, forced close, watchdog reset, and <code>voice.start()</code> is tagged with the current generation and <b>ignored if stale</b>. This is the hard invariant that "three watchdogs, one socket" needs — without it, "supervisor only after client gives up" is an aspiration, not a guarantee. Codex was explicit: separating <i>who mutates which variable</i> is not the same as a single socket-lifecycle owner.</p>
+        </div>
+        <div class="card">
+          <strong class="title">Observe-first activation</strong>
+          <p class="muted" style="font-size:13.5px;margin:0">All three watchdogs land in P0 <b>observe-only</b> — they log <code>would-reset</code> / <code>would-recycle</code> with the triggering state, but take no action. They flip to enforce only after the scheduler and generation tokens exist in P1, and after a day of real-meeting dogfood tunes the windows. Prevents a too-tight timeout from truncating a legitimately long response or recycling a healthy-but-quiet socket.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · PHASING -->
+  <section id="phasing" class="section-band">
+    <div class="wrap">
+      <h2><span class="n">6</span>Phasing — the plan of record</h2>
+      <p>Reconciled after codex: <b>gate-collapse moved to the front of P1</b> (the sink can't promise delivery on the dual gate), watchdogs land observe-only in P0, and coalescing + sentinel safety pulled into P1. Config and OpenClaw decoupling stay valuable but are re-tiered to P2 — they don't gate the robustness work.</p>
+      <p class="muted" style="font-size:13px;margin-bottom:14px">Risk legend: <span class="risk high">High</span> live audio path · <span class="risk mid">Med</span> · <span class="risk low">Low</span></p>
+
+      <h3>P0 — Can't-ship-broken (blocker + reliability floor)</h3>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th style="width:34%">Change</th><th style="width:34%">Files</th><th>Risk</th></tr></thead>
+          <tbody>
+            <tr><td>Fix the blocker: <code>client.queuePendingResponse()</code> + private access → public gated <code>requestDeliberateResponse()</code></td><td><code>transcript-auditor.ts:664-673</code>, new method in <code>voice.ts</code></td><td><span class="risk mid">Med</span></td></tr>
+            <tr><td>Executor / auditor timeouts (per-task + lane <code>Promise.race</code>)</td><td><code>action-orchestrator.ts:190</code>, <code>transcript-auditor.ts:697,440</code></td><td><span class="risk mid">Med</span></td></tr>
+            <tr><td>Cross-meeting isolation — first-class <code>SharedContext.meetUrl</code></td><td><code>shared-context.ts</code>, <code>callingclaw.ts:394-405</code></td><td><span class="risk low">Low</span></td></tr>
+            <tr><td>Scoped tsc CI gate — S1/S2 file set, fail on <b>new</b> error only</td><td>pre-commit hook + CI (no legacy fixes)</td><td><span class="risk low">Low</span></td></tr>
+            <tr><td>Land the three watchdogs <b>OBSERVE-ONLY</b> (log, don't act)</td><td><code>voice.ts</code>, <code>realtime_client.ts</code>, <code>callingclaw.ts:1062</code></td><td><span class="risk low">Low</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>P1 — The robust core (structural keystone)</h3>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th style="width:6%">Order</th><th style="width:32%">Change</th><th style="width:32%">Files</th><th>Risk</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><b>VoiceResponseScheduler</b> — collapse the dual gate into one owner</td><td><code>voice.ts</code>, <code>realtime_client.ts:906-943</code></td><td><span class="risk high">High</span></td></tr>
+            <tr><td>2</td><td>Connection <b>generation-token</b> lifecycle owner</td><td><code>realtime_client.ts</code>, <code>callingclaw.ts</code></td><td><span class="risk high">High</span></td></tr>
+            <tr><td>3</td><td>Unified sink + <b>lean envelope</b> ON the scheduler</td><td>new <code>modules/deliberate-result.ts</code>, <code>voice.ts</code></td><td><span class="risk high">High</span></td></tr>
+            <tr><td>4</td><td>Deterministic <b>turn-leases</b> (late-default-silent)</td><td><code>voice.ts</code> / scheduler</td><td><span class="risk mid">Med</span></td></tr>
+            <tr><td>5</td><td><b>Semantic coalescing</b> (cross-source double-answer dedup) + <b>uniform sentinel/error classification</b></td><td><code>voice.ts</code>, <code>ai-tools.ts</code></td><td><span class="risk mid">Med</span></td></tr>
+            <tr><td>6</td><td>Migrate all 5 producers onto the sink; <b>activate</b> watchdogs + reconnect supervisor</td><td>producers + <code>voice.ts</code>, <code>realtime_client.ts</code>, <code>callingclaw.ts</code></td><td><span class="risk high">High</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>P2 — Generality</h3>
+      <ul class="tight">
+        <li><b>Config centralization</b> — <code>CONFIG.conversation</code> + per-language / per-provider profiles (snapshot current values exactly). Still done — it's the generality goal — but doesn't gate robustness. <span class="risk mid">Med</span></li>
+        <li><b>OpenClaw decoupling</b> — route thorough recall via <code>adapter.recallContext()</code> instead of <code>openclawBridge.connected</code> gates / hardcoded <code>claude</code> binary; revives the dead warm-worker. <span class="risk mid">Med</span></li>
+        <li><b>Richer envelope</b> — grow <code>documentPath</code>, full <code>stalenessPolicy</code> enum, <code>topicId</code>, Stage events onto the lean base. <span class="risk low">Low</span></li>
+        <li>Language-aware <code>estimateTokens</code> · align fast-lane vs router confidence · <code>idempotencyKey</code> correlation in <code>openclaw_bridge.ts:270</code>. <span class="risk mid">Med</span></li>
+      </ul>
+
+      <h3>P3 — Nice-to-have</h3>
+      <ul class="tight">
+        <li><b>Pluggable</b> <code>ToolClassifier</code> / <code>ContextProvider</code> (deep decoupling of S1/S2 from the meeting scenario) — extract seams only, no alternate implementations.</li>
+        <li>EventBus durability — at-least-once / replay / backpressure / webhook timeout.</li>
+        <li>Deeper provider parity — Gemini resume symmetry (preserve/replay context queue on resume).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 · CODEX REVIEW -->
+  <section id="codex">
+    <div class="wrap">
+      <h2><span class="n">7</span>Codex cross-review — verdict &amp; rulings</h2>
+
+      <div class="callout warn">
+        <span class="kicker">⚠ Model caveat — read before weighting this review</span>
+        <p style="margin-bottom:0">Codex ran on gpt-5.5, NOT the requested gpt-5.6-sol, because the installed Codex CLI (0.142.0) is too old for the 5.6 models. Option available: upgrade the Codex CLI and re-run the cross-review on gpt-5.6-sol before implementation.</p>
+      </div>
+
+      <p>Codex returned <b>SOUND-WITH-CHANGES</b>. The four load-bearing changes — collapse the gate before the sink claims delivery guarantees; replace prompt-only staleness with deterministic turn leases + late-default-silent; add connection generation/mutex ownership before enforcing watchdog reconnects; move semantic coalescing and uniform sentinel safety into P1 — are <b>all accepted</b> and are why the phasing above differs from the original draft.</p>
+
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th style="width:30%">Codex point</th><th style="width:12%">Ruling</th><th>Our rationale</th></tr></thead>
+          <tbody>
+            <tr><td>P1-before-gate-collapse is the biggest flaw; sink guarantees are false on the dual gate</td><td><span class="rule acc">Accepted</span></td><td>Gate-collapse moved to the <b>front of P1</b> as the VoiceResponseScheduler. The sink now sits on the scheduler, which is the single owner of acceptance / debounce / disposition.</td></tr>
+            <tr><td>Staleness §4.3 is prompt-only; "stay silent" is not a control surface</td><td><span class="rule acc">Accepted</span></td><td>Replaced with deterministic <code>sourceTurnId</code> + <code>topicId</code> + user-follow-up leases; late ⇒ silent by default. Model instruction demoted to a politeness layer.</td></tr>
+            <tr><td>"Two controllers" is insufficient — need a single connection-lifecycle state machine with generation tokens</td><td><span class="rule acc">Accepted</span></td><td>Generation tokens + single lifecycle owner land before any watchdog is allowed to act; watchdogs are observe-only until then.</td></tr>
+            <tr><td>Cross-source double-answer deferred to P2.8</td><td><span class="rule acc">Accepted</span></td><td>Semantic coalescing pulled into <b>P1</b> — it is load-bearing for the speech/staleness guarantees P1 makes.</td></tr>
+            <tr><td>Sentinel safety incomplete if uniform classification is P3</td><td><span class="rule acc">Accepted</span></td><td>Uniform sentinel / error classification pulled into <b>P1</b>; the sink can't enforce "never speak a failure" without consistent producer-side error detection.</td></tr>
+            <tr><td><code>DeliveryDisposition "spoken"</code> is too optimistic</td><td><span class="rule acc">Accepted</span></td><td>Renamed <code>"response-requested"</code> — it means speech was triggered, not that the model spoke.</td></tr>
+            <tr><td><code>dropped-stale</code> still injects before the guard</td><td><span class="rule acc">Accepted</span></td><td><code>dropped-stale</code> now means <b>not injected</b>. No inject-then-drop.</td></tr>
+            <tr><td><code>no-session</code> drops results that finish during reconnect</td><td><span class="rule acc">Accepted</span></td><td>Bounded queue across short reconnects, or persist to a Stage document — never a silent drop.</td></tr>
+            <tr><td>Gemini is not semantically equivalent (inject + auto-respond can break <code>silent</code>)</td><td><span class="rule acc">Accepted</span></td><td>Add Gemini provider-equivalence tests asserting "silent injection does not speak."</td></tr>
+            <tr><td>No untrusted-content boundary for injected research/detail text</td><td><span class="rule acc">Accepted</span></td><td>Add a prompt-injection / untrusted-content boundary note + rendering limits to the sink contract.</td></tr>
+            <tr><td>Liveness on global inbound-silence is too blunt</td><td><span class="rule acc">Accepted</span></td><td>Keyed on expected-inbound after an outstanding request, not global silence; enforced only after generation tokens exist.</td></tr>
+            <tr><td>Over-engineered: full kind/staleness enum, config centralization, pluggable classifier/provider</td><td><span class="rule def">Re-tiered</span></td><td>Envelope kept (the generality win) but <b>leaner first</b>. Config centralization stays but → <b>P2</b>. Pluggable <code>ToolClassifier</code>/<code>ContextProvider</code> → <b>P3+</b>.</td></tr>
+            <tr><td>OpenClaw decoupling was in P0</td><td><span class="rule def">Deferred → P2</span></td><td>Important, but not in the "can mute a live meeting" class unless multi-platform recall is a current release blocker. Moved out of the P0 floor.</td></tr>
+            <tr><td>Simpler alternative: scheduler → thin <code>postS2Result</code> → turn leases → grow envelope later</td><td><span class="rule acc">Accepted</span></td><td>Adopted verbatim as the structural foundation of P1.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · RISK & ROLLOUT -->
+  <section id="risk" class="section-band">
+    <div class="wrap">
+      <h2><span class="n">8</span>Risk &amp; rollout</h2>
+      <p>This plan edits the live, latency-sensitive, in-meeting voice path. Every change is judged first on "can it make the AI go silent, mute, or wrong in a real meeting."</p>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <strong class="title">Guardrails</strong>
+          <ul class="tight" style="margin-bottom:0">
+            <li><b>Observe-before-enforce</b> for every reliability mechanism (<code>mode: "observe" | "enforce"</code>). Ship, watch, tune windows on real meetings, then flip.</li>
+            <li><b>Restart-storm protection</b> — supervisor has a hard cap + exponential backoff + <code>maxDelayMs</code>; after cap it emits <code>voice.dead</code> and stops. Never runs during an intentional <code>stop()</code>.</li>
+            <li><b>Flag the highest blast radius</b> — the gate collapse (now the foundation of P1) ships behind <code>CONVERSATION_SINGLE_GATE</code> and is A/B'd against the historical "did the action, said nothing" symptom before defaulting on.</li>
+            <li><b>Scoped tsc gate first</b> — the reason the blocker shipped. Lands as the first commit of P0 so the rest of the work is under the gate.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <strong class="title">How each change is verified</strong>
+          <p class="muted" style="font-size:13.5px;margin:0 0 6px"><b>Unit-testable without a live session:</b> sink dispositions, turn-lease logic, watchdog fire/clear, supervisor backoff schedule, cross-meeting reset, generation-token staleness, orchestrator timeout freeing <code>_active</code>.</p>
+          <p class="muted" style="font-size:13.5px;margin:0"><b>Requires dogfood in a real meeting:</b> barge-in mute recovery, late-answer staleness feel, half-open recovery, gate-collapse behaviour, multi-platform recall. These depend on realtime-model judgment and provider timing and cannot be fully asserted in unit tests.</p>
+        </div>
+      </div>
+
+      <h3>What we are deliberately NOT doing this cycle</h3>
+      <div class="grid grid-2">
+        <ul class="tight">
+          <li><b>Not</b> replacing the Realtime provider abstraction or the 5-layer context model — sound and reusable; we build on top.</li>
+          <li><b>Not</b> building non-meeting <code>ToolClassifier</code> / <code>ContextProvider</code> implementations — P3, seams only.</li>
+          <li><b>Not</b> hardening EventBus durability (replay / backpressure / webhook timeout) — P3.</li>
+        </ul>
+        <ul class="tight">
+          <li><b>Not</b> achieving OpenAI ↔ Gemini reconnect parity for the context queue — P3.</li>
+          <li><b>Not</b> replacing the auditor's regex fast-lane or Haiku classification — only aligning its confidence threshold (P2).</li>
+          <li><b>Not</b> a new persistence layer for deliberate results — in-memory; the bounded no-session queue and Stage-doc persistence use what already exists.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · DECISION -->
+  <section id="decision">
+    <div class="wrap">
+      <div class="decision">
+        <h2><span class="n">9</span>Decision for you</h2>
+        <p class="muted" style="margin-top:-6px">The structural direction is settled and codex-hardened. What remains is a scope-and-sequencing call, plus whether you want a stronger second opinion first.</p>
+        <div class="choice">
+          <div class="mark">A</div>
+          <div class="body"><b>Approve as-is</b><span class="muted"> — start P0 immediately: scoped tsc gate → blocker fix → timeouts → cross-meeting isolation → observe-only watchdogs. P1 follows with the scheduler-first sequence.</span></div>
+        </div>
+        <div class="choice">
+          <div class="mark">B</div>
+          <div class="body"><b>Adjust scope</b><span class="muted"> — e.g. pull OpenClaw decoupling back into P0 if multi-platform recall is a release blocker for you, or push config centralization out entirely. Tell me the reordering and I'll re-cut the phasing.</span></div>
+        </div>
+        <div class="choice">
+          <div class="mark">C</div>
+          <div class="body"><b>Re-run codex on gpt-5.6-sol first</b><span class="muted"> — upgrade the Codex CLI past 0.142.0 and re-run the cross-review on the originally requested model before we write code. Adds a short cycle; may surface additional structural notes.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <p>Source of record: <code>docs/s1s2-conversation-architecture.md</code> (487-line plan, all code anchors re-read against the worktree at synthesis time). Cross-review: codex, SOUND-WITH-CHANGES, folded into the phasing above. This document is a review surface — no code was changed to produce it.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,5 @@
+4	src/ai_gateway/realtime_client.ts::TS2531::Object is possibly 'null'.
+1	src/modules/context-retriever.ts::TS2345::Argument of type 'string | undefined' is not assignable to parameter of type 'string'. Type 'undefined' is not assignable to type 'string'.
+1	src/modules/transcript-auditor.ts::TS2322::Type 'Promise<string | undefined>' is not assignable to type 'Promise<string>'. Type 'string | undefined' is not assignable to type 'string'. Type 'undefined' is not assignable to type 'string'.
+1	src/modules/transcript-auditor.ts::TS2322::Type 'string | undefined' is not assignable to type 'string'. Type 'undefined' is not assignable to type 'string'.
+2	src/modules/transcript-auditor.ts::TS2339::Property 'filePath' does not exist on type '{ layer: AutomationLayer; success: boolean; result: string; durationMs: number; fallback?: boolean | undefined; }'.

@@ -21,6 +21,7 @@ import type { EventBus } from "./event-bus";
 import type { AutomationRouter } from "./automation-router";
 import type { ComputerUseModule } from "./computer-use";
 import type { VoiceModule } from "./voice";
+import type { DeliberateResult } from "./deliberate-result";
 import type { MeetJoiner } from "../meet_joiner";
 import type { MeetingPrepSkill } from "../skills/meeting-prep";
 import { notifyTaskCompletion, pushContextUpdate } from "../voice-persona";
@@ -455,6 +456,7 @@ export class TranscriptAuditor {
   private _fastLaneProcessing = false; // prevent concurrent fast lane executions
   private _lastAgentFastLaneTs = 0; // cooldown anchor for the agent-address fast lane
   private _researchGeneration = 0; // incremented on deactivate() to cancel stale research callbacks
+  private _researchSeq = 0; // monotonic suffix → unique per-task replaceId even for same-ms concurrent dispatch
   private _activeResearch = new Map<string, number>(); // in-flight research: normalized query → taskId timestamp
   private _consumedUtterances = new Set<string>(); // agent fast-lane consumed entries (ts:text) — excluded from Haiku audit window
 
@@ -465,6 +467,11 @@ export class TranscriptAuditor {
   private CONFIDENCE_SUGGEST = 0.6;   // Suggest to Voice AI threshold
   private WINDOW_ENTRIES = 15;        // Transcript entries to analyze
   private COOLDOWN_MS = 3000;          // Short cooldown (3s) to batch rapid speech. Dedup relies on ring buffer, not this timer.
+  // P0.2: bound executor lanes. A hung fetch / Playwright / orchestrator call
+  // must NOT strand _processing / _fastLaneProcessing (and thus kill the medium
+  // lane) for the rest of the meeting. On timeout the guard is cleared in the
+  // lane's `finally`, a warning is logged, and auditor.error is emitted.
+  private AUDITOR_LANE_TIMEOUT_MS = 25000;
 
   constructor(opts: {
     context: SharedContext;
@@ -697,7 +704,8 @@ export class TranscriptAuditor {
         (intent.action === "browser_click" || intent.action.startsWith("scroll")) &&
         this.chromeLauncher?.presentingPage
       ) {
-        const result = await this.executeAction({
+        // P0.2: bound so a hung Playwright call can't strand _fastLaneProcessing.
+        const result = await this.withLaneTimeout(`fastLane:${intent.action}`, this.executeAction({
           action: intent.action === "browser_click" ? "click" : "scroll",
           params: {
             selector: text,
@@ -707,7 +715,7 @@ export class TranscriptAuditor {
           confidence: intent.confidence,
           reasoning: `fast_lane: ${intent.reason}`,
           targetTab: "presenting",
-        });
+        }));
       } else {
         // Route through AutomationRouter for other actions (meet shortcuts,
         // tab management, etc.) — serialized via the orchestrator so the fast
@@ -717,9 +725,13 @@ export class TranscriptAuditor {
           const r = await this.automationRouter.execute(text);
           return r.success ? r.result : `Error: ${r.result}`;
         };
-        const summary = this.orchestrator
-          ? await this.orchestrator.submit("auditor", text, runRouter)
-          : await runRouter();
+        // P0.2: bound so a hung router/orchestrator call can't strand the lane.
+        const summary = await this.withLaneTimeout(
+          `fastLane:${intent.action}`,
+          this.orchestrator
+            ? this.orchestrator.submit("auditor", text, runRouter)
+            : runRouter(),
+        );
 
         if (!summary.startsWith("Error:") && this.voice?.connected && this.meetingPrepSkill.currentBrief) {
           // 方向A: silent injection only — the model picks up the [DONE] note on
@@ -735,6 +747,8 @@ export class TranscriptAuditor {
       console.log(`[TranscriptAuditor] Fast lane: ${intent.action} (${Date.now() - startTs}ms)`);
     } catch (err: any) {
       console.error(`[TranscriptAuditor] Fast lane error: ${err.message}`);
+      // P0.2: surface the failure (incl. lane timeout) on the existing channel.
+      this.eventBus.emit("auditor.error", { action: intent.action, error: err.message });
     } finally {
       this._fastLaneProcessing = false;
     }
@@ -825,7 +839,17 @@ export class TranscriptAuditor {
   }
 
   private async dispatchResearchTask(query: string): Promise<{ started: boolean; status: string }> {
-    const taskId = `research_${Date.now()}`;
+    const dispatchedAt = Date.now();
+    // Per-dispatch id + PER-TASK replaceId. Was the shared singleton
+    // "ctx_research_result" — the concurrent-clobber bug (§10 / §4.4): a 2nd
+    // research overwrote the 1st in Layer 3. Each task now owns a unique id;
+    // the seq suffix guards same-millisecond concurrent dispatch.
+    const taskId = `research_${dispatchedAt}_${++this._researchSeq}`;
+    const replaceId = `ctx_${taskId}`;
+    // Stamp the user-turn id AT DISPATCH — the sink's deterministic turn-lease
+    // compares it to the current turn when the (slow) result lands, to decide
+    // speak-now vs inject-silently vs drop.
+    const sourceTurnId = this.voice?.userTurnId;
     const normalizedQuery = this.normalizeResearchQuery(query);
 
     // #6: Agent disconnected → emit proper research events, not generic done
@@ -874,12 +898,24 @@ export class TranscriptAuditor {
       }
       this._activeResearch.delete(normalizedQuery);
 
-      // #5: Check for error/timeout patterns in result string
+      // #5: Check for error/timeout patterns in result string. P1 STEP 2:
+      // route the failure through the unified contract with `error` set — the
+      // sink injects a NEUTRAL internal note and never speaks the error as fact
+      // (was: injectContext of a "[RESEARCH] … returned an error" note the model
+      // could read aloud as if it were the answer).
       const ERROR_PATTERNS = /timed out|no external agent|failed|error:|unavailable|billing error/i;
       if (ERROR_PATTERNS.test(result) && result.length < 200) {
-        if (this.voice?.connected) {
-          this.voice.injectContext(`[RESEARCH] Search for "${query}" returned an error: ${result.slice(0, 200)}`);
-        }
+        this.voice?.deliverDeliberateResult({
+          id: taskId,
+          kind: "research",
+          summary: `Research for "${query}" did not return a usable result.`,
+          sourceUtterance: query,
+          sourceTurnId,
+          dispatchedAt,
+          speak: "proactive",
+          replaceId,
+          error: result.slice(0, 200),
+        });
         this.eventBus.emit("research.completed", { taskId, query, error: result.slice(0, 200) });
         console.warn(`[Auditor] Research error detected: "${query}" → ${result.slice(0, 100)}`);
         return;
@@ -892,18 +928,36 @@ export class TranscriptAuditor {
       // #7: Emit EventBus event so Stage WS listener picks up the new doc
       this.eventBus.emit("stage.documents_updated", { filePath, badge: "new" });
 
-      // #15: Use replaceContext with fixed ID — don't accumulate in FIFO
-      if (this.voice?.connected) {
-        this.voice.replaceContext(`[RESEARCH] ${query}\n\n${result.slice(0, 1200)}`, "ctx_research_result");
-        // #2/#3: Don't force response.create — queue it, only flush when voice is idle
-        if (this.voice.audioState === "listening") {
-          this.voice.client.sendEvent("response.create", {});
-        } else {
-          this.voice.client.queuePendingResponse();
-        }
-      }
+      // #15 → P1 STEP 2: the UNIFIED contract. Build a DeliberateResult envelope
+      // and hand it to the ONE sink (voice.deliverDeliberateResult) instead of
+      // the hand-rolled replaceContext + requestDeliberateResponse. The sink owns
+      // the injection-layer choice, the gated response trigger, the turn-lease
+      // staleness guard, sentinel safety, and dedup — in one place. This proves
+      // the contract on the primary producer AND fixes three audited bugs:
+      //   • concurrent-clobber — per-task `replaceId` (not the singleton
+      //     "ctx_research_result"), so two in-flight researches coexist;
+      //   • no-staleness-guard — the sink's turn-lease downgrades a late answer
+      //     to silent injection instead of barging into a moved-on topic;
+      //   • false-"failed" — failures set `error` and are suppressed (below).
+      const summary =
+        result.split("\n").find((l) => l.trim())?.trim().slice(0, 200) || result.slice(0, 200);
+      const envelope: DeliberateResult = {
+        id: taskId,
+        kind: "research",
+        summary,
+        detail: result,
+        sourceUtterance: query,
+        sourceTurnId,
+        dispatchedAt,
+        speak: "proactive",
+        replaceId,
+      };
+      this.voice?.deliverDeliberateResult(envelope);
 
       // 6. Emit completed → S2 shows ✅
+      // (SEAM: P1.7 moves completion emission into the sink as
+      // `deliberate.delivered`; kept here for now so the Stage S2 panel + tests
+      // keep receiving research.* during the migration.)
       this.eventBus.emit("research.completed", {
         taskId, query, filePath,
         resultPreview: result.slice(0, 200),
@@ -912,14 +966,49 @@ export class TranscriptAuditor {
     }).catch((err: any) => {
       if (gen !== this._researchGeneration) return; // #4: Stale
       this._activeResearch.delete(normalizedQuery);
-      if (this.voice?.connected) {
-        this.voice.injectContext(`[RESEARCH] Search for "${query}" failed: ${err.message}`);
-      }
+      // P1 STEP 2: failure → envelope with `error` → sink error-suppressed
+      // (neutral internal note, never a spoken "[RESEARCH] … failed"). Was a
+      // direct injectContext of a false failure note the model could read aloud.
+      this.voice?.deliverDeliberateResult({
+        id: taskId,
+        kind: "research",
+        summary: `Research for "${query}" failed.`,
+        sourceUtterance: query,
+        sourceTurnId,
+        dispatchedAt,
+        speak: "proactive",
+        replaceId,
+        error: err?.message || String(err),
+      });
       this.eventBus.emit("research.completed", { taskId, query, error: err.message });
       console.error(`[Auditor] Research failed: "${query}"`, err.message);
     });
 
     return { started: true, status: `Research dispatched: "${query}"` };
+  }
+
+  // ── Executor timeout guard (P0.2) ──
+
+  /**
+   * Bound a lane's executor body so a hung awaited call (stuck fetch,
+   * Playwright, orchestrator) can't keep a lane's guard flag set forever.
+   * Rejects with a timeout error after AUDITOR_LANE_TIMEOUT_MS; the caller's
+   * try/catch/finally then logs, emits auditor.error, and clears the flag —
+   * letting the lane recover for the rest of the meeting.
+   */
+  private async withLaneTimeout<T>(label: string, work: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`lane timeout after ${this.AUDITOR_LANE_TIMEOUT_MS}ms: ${label}`)),
+        this.AUDITOR_LANE_TIMEOUT_MS,
+      );
+    });
+    try {
+      return await Promise.race([work, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   // ── Core audit loop (medium lane — Haiku LLM) ──
@@ -946,7 +1035,8 @@ export class TranscriptAuditor {
     this._lastAuditedTs = Date.now();
 
     try {
-      const result = await this.classifyIntent(entries);
+      // P0.2: bound the classifier so a hung LLM round-trip can't strand _processing
+      const result = await this.withLaneTimeout("classifyIntent", this.classifyIntent(entries));
 
       if (!result.action) return; // No actionable intent
 
@@ -971,7 +1061,11 @@ export class TranscriptAuditor {
         console.log(
           `[TranscriptAuditor] Auto-executing: ${result.action} (confidence: ${result.confidence})`
         );
-        await this.executeAction(result);
+        // P0.2 (PR #37): bound execution so a hung fetch/Playwright/orchestrator
+        // call can't strand _processing (killing the medium lane for the meeting).
+        // Ring update via HEAD's rememberAction() — _recentActions holds
+        // RecentActionEntry objects now, not raw strings (see :454,:593).
+        await this.withLaneTimeout(`executeAction:${result.action}`, this.executeAction(result));
         this.rememberAction(result.action, actionKey, target);
         this._lastExecutionTs = Date.now();
       } else if (result.confidence >= this.CONFIDENCE_SUGGEST) {
